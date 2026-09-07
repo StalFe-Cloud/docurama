@@ -486,10 +486,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 pb-20">
       
-      {/* Top Command Tab Bar Matching Production Exactly */}
+      {/* Top Command Tab Bar */}
       <div className="w-full settings-horizontal-nav-wrapper">
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2 border border-slate-200/80 shadow-sm flex items-center justify-between overflow-x-auto gap-2 scrollbar-none">
-          <div className="flex items-center space-x-1 sm:space-x-1.5 flex-nowrap">
+        <div className="bg-[#191919] rounded-full p-1.5 border border-[#212327] flex items-center justify-between overflow-x-auto gap-2 scrollbar-none">
+          <div className="flex items-center space-x-1 flex-nowrap">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -497,10 +497,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 <button
                   key={item.id}
                   onClick={() => handleTabChange(item.id as any)}
-                  className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-normal whitespace-nowrap transition-all ${
                     isActive
-                      ? 'bg-[#1D72FE] text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                      ? 'bg-white text-[#0a0a0a] shadow-none'
+                      : 'text-[#dadbdf] hover:text-white hover:bg-[#1a1c20]'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -510,10 +510,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
             })}
           </div>
 
-          <div className="hidden lg:flex items-center space-x-2 pl-4 border-l border-slate-200 shrink-0">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Docurama Control Center
+          <div className="hidden lg:flex items-center space-x-2 pl-4 pr-3 border-l border-[#212327] shrink-0">
+            <span className="caption-mono-sm text-[10px] text-[#7d8187] tracking-[1.2px]">
+              CONTROL CENTER
             </span>
           </div>
         </div>
@@ -1257,127 +1256,127 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
           </div>
 
           {/* Card 1: Verify Signed PDF */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#1D72FE] flex items-center justify-center font-bold">
-                <ShieldCheck className="w-5 h-5" />
+          <div className="bg-[#191919] rounded-lg p-6 border border-[#212327]">
+            <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-[#212327]">
+              <div className="w-8 h-8 rounded-full bg-[#1a1c20] border border-[#212327] text-[#a0c3ec] flex items-center justify-center font-bold">
+                <ShieldCheck className="w-4 h-4 stroke-[1.5]" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-[#0F172A]">Verify Signed PDF</h2>
-                <p className="text-xs text-slate-500">Upload any signed document to cryptographically verify its signature validity and timestamp</p>
+                <h2 className="text-sm sm:text-base font-normal text-white">Verify Signed PDF</h2>
+                <p className="text-xs text-[#7d8187]">Upload any signed document to cryptographically verify its signature validity and timestamp</p>
               </div>
             </div>
 
-            <label className="w-full block p-8 text-center bg-slate-50/60 hover:bg-blue-50/30 rounded-2xl border-2 border-slate-200/80 hover:border-[#1D72FE]/40 border-dashed cursor-pointer transition-all group">
+            <label className="w-full block p-8 text-center bg-[#1a1c20] hover:bg-[#1a1c20]/80 rounded-lg border border-[#212327] hover:border-white/40 border-dashed cursor-pointer transition-all group">
               <div className="flex flex-col items-center justify-center">
-                <div className="w-12 h-12 rounded-xl bg-white shadow-sm border border-slate-200 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform text-[#1D72FE]">
-                  <UploadCloud className="w-6 h-6" />
+                <div className="w-10 h-10 rounded-full bg-[#191919] border border-[#212327] flex items-center justify-center mb-3 group-hover:scale-105 transition-transform text-white">
+                  <UploadCloud className="w-5 h-5 stroke-[1.5]" />
                 </div>
-                <div className="text-sm font-semibold text-slate-800 mb-1">Verify Signed PDF</div>
-                <div className="text-xs text-slate-500">Click to upload or drag and drop signed PDF files</div>
+                <div className="text-sm font-normal text-white mb-1">Verify Signed PDF</div>
+                <div className="text-xs text-[#7d8187]">Click to upload or drag and drop signed PDF files</div>
               </div>
               <input type="file" accept="application/pdf" className="hidden" onChange={handleSimulatePdfVerify} />
             </label>
 
             {verifyingPdf && (
-              <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200 flex items-center space-x-3 text-xs text-blue-800">
-                <RefreshCw className="w-4 h-4 animate-spin text-[#1D72FE]" />
+              <div className="mt-4 p-4 rounded-lg bg-[#1a1c20] border border-[#212327] flex items-center space-x-3 text-xs text-[#a0c3ec]">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#a0c3ec]" />
                 <span>Parsing PDF digital signatures, validating X.509 chains, and checking RFC 3161 timestamp authority...</span>
               </div>
             )}
 
             {verifyResult && (
-              <div className="mt-4 p-4 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-start justify-between">
+              <div className="mt-4 p-4 rounded-lg bg-[#1a1c20] border border-emerald-500/30 flex items-start justify-between">
                 <div className="flex items-start space-x-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                   <div>
-                    <h4 className="text-xs font-bold text-emerald-900 uppercase tracking-wider">Cryptographic Seal Verified (PAdES-LTV)</h4>
-                    <p className="text-xs text-emerald-800 mt-1">
-                      File: <span className="font-semibold">{verifyResult.fileName}</span> • Signer: {verifyResult.signerName}
+                    <h4 className="caption-mono-sm text-[10px] text-emerald-400">CRYPTOGRAPHIC SEAL VERIFIED (PADES-LTV)</h4>
+                    <p className="text-xs text-white mt-1">
+                      File: <span className="font-mono text-[#dadbdf]">{verifyResult.fileName}</span> &bull; Signer: {verifyResult.signerName}
                     </p>
-                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                    <p className="text-[11px] text-[#7d8187] mt-0.5 font-mono">
                       TSA Server: Verified at {verifyResult.timestampTime} via RFC 3161 DigiCert Authority. Document has not been modified since signing.
                     </p>
                   </div>
                 </div>
-                <span className="badge badge-success text-white text-[10px] font-bold">PAdES Valid</span>
+                <span className="badge badge-success text-[10px]">PAdES Valid</span>
               </div>
             )}
           </div>
 
-          {/* Card 2: Signing Certificates Table (The 3 Exact Certificates Requested) */}
-          <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+          {/* Card 2: Signing Certificates Table */}
+          <div className="bg-[#191919] rounded-lg p-6 border border-[#212327]">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#212327]">
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                  <FileCheck className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-full bg-[#1a1c20] border border-[#212327] text-emerald-400 flex items-center justify-center">
+                  <FileCheck className="w-4 h-4 stroke-[1.5]" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-[#0F172A]">Signing Certificates (X.509 / PKCS#12)</h2>
-                  <p className="text-xs text-slate-500">Certificates used to digitally seal and timestamp completed PDF documents</p>
+                  <h2 className="text-sm sm:text-base font-normal text-white">Signing Certificates (X.509 / PKCS#12)</h2>
+                  <p className="text-xs text-[#7d8187]">Certificates used to digitally seal and timestamp completed PDF documents</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowUploadCertModal(true)}
-                className="btn btn-primary text-xs font-semibold px-4 py-2 rounded-xl flex items-center space-x-1.5 shadow-sm"
+                className="btn btn-outline text-xs px-4 py-1.5 flex items-center space-x-1.5"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5 stroke-[1.5]" />
                 <span>Upload Certificate</span>
               </button>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50/80 text-[11px] font-bold uppercase text-slate-500 border-b border-slate-200">
+            <div className="overflow-x-auto rounded-lg border border-[#212327]">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#1a1c20] caption-mono-sm text-[10px] text-[#7d8187] border-b border-[#212327]">
                   <tr>
-                    <th className="py-3 px-4">Name</th>
-                    <th className="py-3 px-4">Valid To</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-2.5 px-4 font-normal">Name</th>
+                    <th className="py-2.5 px-4 font-normal">Valid To</th>
+                    <th className="py-2.5 px-4 font-normal">Status</th>
+                    <th className="py-2.5 px-4 text-right font-normal">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
+                <tbody className="divide-y divide-[#212327] text-xs">
                   {certsList.map((cert) => (
-                    <tr key={cert.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-slate-800">
+                    <tr key={cert.id} className="hover:bg-[#1a1c20]/50 transition-colors">
+                      <td className="py-3 px-4 font-normal text-white">
                         <div className="flex items-center space-x-2">
                           {cert.isTrustedDocurama && (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                           )}
                           <span>{cert.name}</span>
                           {cert.isTrustedDocurama && (
                             <div className="relative group cursor-pointer">
-                              <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:block w-64 p-2 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl z-20 pointer-events-none">
+                              <HelpCircle className="w-3.5 h-3.5 text-[#7d8187]" />
+                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:block w-64 p-2 bg-[#0a0a0a] border border-[#212327] text-white text-[11px] rounded-lg shadow-none z-20 pointer-events-none">
                                 Sign documents with trusted certificate provided by Docurama. Your documents and data are never shared with third parties.
                               </div>
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 text-xs font-mono">
+                      <td className="py-3 px-4 text-[#7d8187] font-mono text-[11px]">
                         {cert.validTo}
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3 px-4">
                         {cert.status === 'default' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-[#1D72FE]">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-normal bg-white text-[#0a0a0a]">
                             Default
                           </span>
                         )}
                         {cert.status === 'active' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-normal bg-[#1a1c20] text-[#a0c3ec] border border-[#a0c3ec]/30">
                             Active
                           </span>
                         )}
                         {cert.status === 'available' && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border border-slate-300 text-slate-600">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-normal bg-transparent text-[#dadbdf] border border-white/20">
                             Available
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3 px-4 text-right">
                         {cert.status === 'default' ? (
-                          <span className="text-xs text-slate-400 font-mono">In Use</span>
+                          <span className="text-xs text-[#7d8187] font-mono">In Use</span>
                         ) : (
                           <button
                             onClick={() => handleMakeDefaultCert(cert.id)}
