@@ -82,7 +82,7 @@ def deploy():
     run_ssh("mkdir -p /opt/docurama/backend/certs")
 
     print("[4/5] Building and launching completely isolated Docurama stack (Port 3002, network docurama_net)...")
-    run_ssh("cd /opt/docurama && docker compose build && docker compose up -d")
+    run_ssh("cd /opt/docurama && docker compose build --no-cache docurama && docker compose up -d")
 
     print("\n[5/5] Updating Nexa Nginx reverse proxy to point to isolated 172.17.0.1:3002...")
     nginx_update_cmd = (
