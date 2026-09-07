@@ -57,7 +57,7 @@ export const App: React.FC = () => {
   if (path.startsWith('/d/')) {
     const slug = path.replace('/d/', '').split('?')[0];
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white p-4 sm:p-8">
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] p-4 sm:p-8">
         <PublicFormPage slug={slug} />
       </div>
     );
@@ -67,7 +67,7 @@ export const App: React.FC = () => {
   if (path.startsWith('/s/') || path.startsWith('/sign/')) {
     const token = (path.startsWith('/s/') ? path.replace('/s/', '') : path.replace('/sign/', '')).split('?')[0];
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white p-2 sm:p-6">
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] p-2 sm:p-6">
         <SigningStudioPage token={token} onDone={() => { window.location.href = '/verify'; }} />
       </div>
     );
@@ -76,7 +76,7 @@ export const App: React.FC = () => {
   // 3. Direct Public Verification Route: /verify
   if (path === '/verify') {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <Header
           currentTab="verify"
           onSelectTab={(tab) => {
@@ -98,7 +98,7 @@ export const App: React.FC = () => {
   // 4. Direct Sign-In Route: /sign_in
   if (path === '/sign_in' || currentTab === 'signin') {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <Header
           currentTab="signin"
           onSelectTab={(tab) => setCurrentTab(tab)}
@@ -123,7 +123,7 @@ export const App: React.FC = () => {
   // 5. Direct API Documentation Route: /docs/api or /api/docs
   if (path.startsWith('/docs/api') || path.startsWith('/api/docs')) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <Header
           currentTab="settings"
           onSelectTab={(tab) => {
@@ -146,7 +146,7 @@ export const App: React.FC = () => {
   if (path.startsWith('/settings')) {
     const subtab = path.replace('/settings', '').replace('/', '') || 'account';
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <Header
           currentTab="settings"
           onSelectTab={(tab) => {
@@ -166,7 +166,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
       <Header
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}

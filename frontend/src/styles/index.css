@@ -3,251 +3,394 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   DOCURAMA xAI-INSPIRED DESIGN SYSTEM
-   Engineered-cosmic, unmarketed dark canvas broken only by white pill outlines,
-   hairline borders (#212327), 8px content cards (#191919), and tracked Geist Mono typography.
+   DOCURAMA NOTION DESIGN SYSTEM
+   The all-in-one workspace for documents and digital signatures.
+   Deep navy hero band (#0a1530), signature purple CTA (#5645d4),
+   sober 8px rectangular buttons, 12px cards, and pastel database property tints.
    ========================================================================== */
 
 :root,
 [data-theme="docurama"],
 html,
 body {
-  --canvas: #0a0a0a;
-  --canvas-soft: #1a1c20;
-  --canvas-card: #191919;
-  --canvas-mid: #363a3f;
-  --hairline: #212327;
-  --ink: #ffffff;
-  --ink-hover: #fafaf7;
-  --body: #dadbdf;
-  --body-mid: #7d8187;
-  --mute: #7d8187;
-  --accent-sunset: #ff7a17;
-  --accent-sunset-soft: #ffc285;
-  --accent-dusk: #7c3aed;
-  --accent-twilight: #c4b5fd;
-  --accent-breeze: #a0c3ec;
-  --accent-midnight: #0d1726;
+  --primary: #5645d4;
+  --primary-pressed: #4534b3;
+  --primary-deep: #3a2a99;
+  --on-primary: #ffffff;
+  --brand-navy: #0a1530;
+  --brand-navy-deep: #070f24;
+  --brand-navy-mid: #1a2a52;
+  --link-blue: #0075de;
+  --canvas: #ffffff;
+  --surface: #f6f5f4;
+  --surface-soft: #fafaf9;
+  --hairline: #e5e3df;
+  --hairline-soft: #ede9e4;
+  --hairline-strong: #c8c4be;
+  --ink-deep: #000000;
+  --ink: #1a1a1a;
+  --charcoal: #37352f;
+  --slate: #5d5b54;
+  --steel: #787671;
+  --stone: #a4a097;
+  --muted: #bbb8b1;
+  --card-tint-peach: #ffe8d4;
+  --card-tint-rose: #fde0ec;
+  --card-tint-mint: #d9f3e1;
+  --card-tint-lavender: #e6e0f5;
+  --card-tint-sky: #dcecfa;
+  --card-tint-yellow: #fef7d6;
+  --card-tint-yellow-bold: #f9e79f;
+  --card-tint-cream: #f8f5e8;
+  --card-tint-gray: #f0eeec;
 
-  background-color: #0a0a0a !important;
-  color: #ffffff !important;
+  background-color: #ffffff;
+  color: #37352f;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Headings: weight 400 for everything, negative tracking at scale */
+/* Headings in Notion Sans / Inter */
 h1, h2, h3, h4, .font-heading {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
-  font-weight: 400 !important;
-  letter-spacing: -0.035em !important;
-  color: #ffffff !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
 }
 
-/* Typography Scale */
-.display-xl {
-  font-size: clamp(48px, 6vw, 96px);
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -2.4px;
+/* Typography Hierarchy */
+.hero-display {
+  font-size: clamp(40px, 5vw, 80px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -2px;
 }
 
 .display-lg {
-  font-size: clamp(36px, 4.5vw, 72px);
-  font-weight: 400;
-  line-height: 1.05;
-  letter-spacing: -1.8px;
+  font-size: clamp(32px, 4vw, 56px);
+  font-weight: 600;
+  line-height: 1.10;
+  letter-spacing: -1px;
 }
 
-.display-md {
+.heading-1 {
   font-size: clamp(28px, 3vw, 48px);
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.15;
-  letter-spacing: -1.2px;
+  letter-spacing: -0.5px;
 }
 
-.display-sm {
-  font-size: clamp(20px, 2vw, 32px);
-  font-weight: 400;
+.heading-2 {
+  font-size: clamp(24px, 2.5vw, 36px);
+  font-weight: 600;
+  line-height: 1.20;
+  letter-spacing: -0.5px;
+}
+
+.heading-3 {
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.6px;
 }
 
-.caption-mono {
-  font-family: 'Geist Mono', ui-monospace, monospace !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  line-height: 20px !important;
-  letter-spacing: 1.4px !important;
-  text-transform: uppercase !important;
-  color: #7d8187 !important;
+.micro-uppercase {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.40;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
-.caption-mono-sm {
-  font-family: 'Geist Mono', ui-monospace, monospace !important;
-  font-size: 11px !important;
-  font-weight: 400 !important;
-  line-height: 16px !important;
-  letter-spacing: 1.2px !important;
-  text-transform: uppercase !important;
-  color: #7d8187 !important;
-}
-
-/* Buttons: Strictly rounded.pill (9999px) with weight 400 */
+/* Buttons: Sober 8px Rectangles (NOT pills!) */
 .btn {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
-  font-weight: 400 !important;
-  font-size: 0.875rem !important;
-  border-radius: 9999px !important;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  box-shadow: none !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.30;
+  border-radius: 8px !important;
+  padding: 10px 18px;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn:active {
   transform: scale(0.98);
 }
 
-/* Rare Primary Standout Pill */
+/* Notion Signature Primary CTA (Purple Rectangle) */
 .btn-primary {
-  background: #ffffff !important;
-  border: 1px solid #ffffff !important;
-  color: #0a0a0a !important;
+  background: #5645d4 !important;
+  border: 1px solid #5645d4 !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(86, 69, 212, 0.15) !important;
 }
 
 .btn-primary:hover {
-  background: #fafaf7 !important;
-  border-color: #fafaf7 !important;
-  color: #0a0a0a !important;
+  background: #4534b3 !important;
+  border-color: #4534b3 !important;
+  color: #ffffff !important;
 }
 
-/* Canonical Outline Pill Button */
+/* Outlined Secondary Button */
+.btn-secondary,
 .btn-outline,
 .btn-white {
-  background: transparent !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: #ffffff !important;
+  border: 1px solid #c8c4be !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04) !important;
+}
+
+.btn-secondary:hover,
+.btn-outline:hover,
+.btn-white:hover {
+  background: #f6f5f4 !important;
+  border-color: #a4a097 !important;
+  color: #1a1a1a !important;
+}
+
+/* Dark Button */
+.btn-dark {
+  background: #000000 !important;
+  border: 1px solid #000000 !important;
   color: #ffffff !important;
 }
 
-.btn-outline:hover,
-.btn-white:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-color: rgba(255, 255, 255, 0.5) !important;
+.btn-dark:hover {
+  background: #1a1a1a !important;
+}
+
+/* On-Dark Hero Primary Button */
+.btn-on-dark {
+  background: #ffffff !important;
+  border: 1px solid #ffffff !important;
+  color: #1a1a1a !important;
+}
+
+.btn-on-dark:hover {
+  background: #f6f5f4 !important;
+}
+
+/* On-Dark Hero Secondary Outlined Button */
+.btn-secondary-on-dark {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
   color: #ffffff !important;
+}
+
+.btn-secondary-on-dark:hover {
+  border-color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Ghost Button */
 .btn-ghost {
-  border-radius: 9999px !important;
-  color: #dadbdf !important;
+  border-radius: 6px !important;
+  color: #37352f !important;
   background: transparent !important;
   border: 1px solid transparent !important;
+  padding: 8px 12px;
 }
 
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
-  color: #ffffff !important;
+  background: #f6f5f4 !important;
+  color: #1a1a1a !important;
 }
 
-/* Floating Navigation Bar */
-.navbar-glass {
-  background: rgba(10, 10, 10, 0.9) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  border: 1px solid #212327 !important;
-  border-radius: 9999px !important;
-  box-shadow: none !important;
+/* Top Sticky Navbar */
+.notion-navbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e3df;
 }
 
 /* Navigation Link Pills */
 .nav-link-pill {
-  padding: 0.4rem 0.9rem !important;
-  border-radius: 9999px !important;
-  font-weight: 400 !important;
-  font-size: 0.8125rem !important;
-  color: #dadbdf !important;
-  transition: all 0.15s ease !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 0.375rem !important;
-  border: 1px solid transparent !important;
-  background: transparent !important;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  color: #5d5b54;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
 }
 
 .nav-link-pill:hover {
-  color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.06) !important;
+  color: #1a1a1a;
+  background: #f6f5f4;
 }
 
 .nav-link-pill.active {
-  color: #ffffff !important;
-  background: #1a1c20 !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  font-weight: 400 !important;
+  color: #1a1a1a;
+  background: #f6f5f4;
+  font-weight: 600;
 }
 
-/* Dropzone Styling */
-.docurama-dropzone {
-  background: #191919 !important;
-  border: 1px dashed #212327 !important;
-  border-radius: 8px !important;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-.docurama-dropzone:hover {
-  border-color: rgba(255, 255, 255, 0.4) !important;
-  background: #1a1c20 !important;
-}
-
-/* Cards & Content Surfaces: strictly 8px with hairline borders, NO drop shadows */
+/* Notion Cards & Containers: strictly 12px radius with hairline borders */
+.card-base,
 .card-content,
-.card-feature-product,
-.bento-card,
+.card-feature,
 .settings-card,
-.bg-white {
-  background-color: #191919 !important;
-  border-color: #212327 !important;
-  box-shadow: none !important;
+.bento-card {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e3df !important;
+  border-radius: 12px !important;
+  box-shadow: 0px 1px 2px 0px rgba(15, 15, 15, 0.04) !important;
 }
 
-/* Re-shape card radii strictly to 8px */
-.rounded-2xl,
-.rounded-3xl {
-  border-radius: 8px !important;
+/* Pastel Card Tints (Database Property Inspired) */
+.card-tint-peach {
+  background-color: #ffe8d4 !important;
+  border: 1px solid rgba(221, 91, 0, 0.15) !important;
+  color: #37352f !important;
 }
 
-/* Input Fields */
+.card-tint-mint {
+  background-color: #d9f3e1 !important;
+  border: 1px solid rgba(26, 174, 57, 0.15) !important;
+  color: #37352f !important;
+}
+
+.card-tint-lavender {
+  background-color: #e6e0f5 !important;
+  border: 1px solid rgba(123, 63, 242, 0.15) !important;
+  color: #37352f !important;
+}
+
+.card-tint-sky {
+  background-color: #dcecfa !important;
+  border: 1px solid rgba(0, 117, 222, 0.15) !important;
+  color: #37352f !important;
+}
+
+.card-tint-yellow-bold {
+  background-color: #f9e79f !important;
+  border: 1px solid rgba(245, 215, 94, 0.4) !important;
+  color: #37352f !important;
+}
+
+/* Hero Embedded Workspace Mockup Card with Deep Diffuse Drop Shadow */
+.workspace-mockup-card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e3df;
+  box-shadow: 0px 24px 48px -8px rgba(15, 15, 15, 0.20);
+}
+
+/* Inputs & Form Elements (44px height, 8px radius) */
 input[type='text'],
 input[type='email'],
 input[type='password'],
 input[type='number'],
+input[type='url'],
 select,
 textarea,
 .base-input {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
-  font-size: 0.875rem !important;
-  font-weight: 400 !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
   border-radius: 8px !important;
-  background-color: #1a1c20 !important;
-  border: 1px solid #212327 !important;
-  color: #ffffff !important;
-  box-shadow: none !important;
-  transition: border-color 0.15s ease !important;
+  background-color: #ffffff !important;
+  border: 1px solid #c8c4be !important;
+  color: #1a1a1a !important;
+  height: 44px;
+  padding: 0 14px;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+textarea {
+  height: auto !important;
+  padding: 10px 14px;
 }
 
 input[type='text']:focus,
 input[type='email']:focus,
 input[type='password']:focus,
 input[type='number']:focus,
+input[type='url']:focus,
 select:focus,
 textarea:focus,
 .base-input:focus {
   outline: none !important;
-  border-color: rgba(255, 255, 255, 0.4) !important;
-  box-shadow: none !important;
+  border-color: #5645d4 !important;
+  box-shadow: 0 0 0 1px #5645d4, 0 1px 3px rgba(86, 69, 212, 0.15) !important;
+}
+
+/* Pill Tabs for Category Switching */
+.pill-tab {
+  background: transparent;
+  color: #787671;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  border: 1px solid #e5e3df;
+  transition: all 0.15s ease;
+}
+
+.pill-tab:hover {
+  color: #1a1a1a;
+  border-color: #c8c4be;
+  background: #f6f5f4;
+}
+
+.pill-tab.active {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: #000000 !important;
+}
+
+/* Badges & Tag Chips */
+.badge-tag-purple {
+  background-color: #e6e0f5 !important;
+  color: #391c57 !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.badge-tag-orange {
+  background-color: #ffe8d4 !important;
+  color: #793400 !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.badge-tag-green {
+  background-color: #d9f3e1 !important;
+  color: #1aae39 !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.badge-tag-sky {
+  background-color: #dcecfa !important;
+  color: #0075de !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.badge-popular {
+  background-color: #5645d4 !important;
+  color: #ffffff !important;
+  border-radius: 9999px !important;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 3px 10px;
 }
 
 /* Switches & Toggles */
@@ -257,14 +400,14 @@ textarea:focus,
   width: 2.75rem !important;
   height: 1.5rem !important;
   border-radius: 9999px !important;
-  background-color: #363a3f !important;
+  background-color: #e5e3df !important;
   position: relative !important;
   cursor: pointer !important;
   outline: none !important;
   transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   display: inline-block !important;
   flex-shrink: 0 !important;
-  border: 1px solid #212327 !important;
+  border: 1px solid #c8c4be !important;
 }
 
 .toggle::after {
@@ -276,121 +419,44 @@ textarea:focus,
   height: 1.15rem !important;
   border-radius: 50% !important;
   background-color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(15, 15, 15, 0.15) !important;
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .toggle:checked {
-  background-color: #ffffff !important;
-  border-color: #ffffff !important;
+  background-color: #5645d4 !important;
+  border-color: #5645d4 !important;
 }
 
 .toggle:checked::after {
   transform: translateX(1.25rem) !important;
-  background-color: #0a0a0a !important;
 }
 
-/* Badges: Restrained telemetry outline pills */
-.badge-success {
-  background-color: rgba(160, 195, 236, 0.08) !important;
-  color: #a0c3ec !important;
-  border: 1px solid rgba(160, 195, 236, 0.3) !important;
-  border-radius: 9999px !important;
+/* Dropzone Styling */
+.docurama-dropzone {
+  background: #fafaf9;
+  border: 1px dashed #c8c4be;
+  border-radius: 12px;
+  transition: all 0.2s ease;
 }
 
-.badge-warning {
-  background-color: rgba(255, 122, 23, 0.08) !important;
-  color: #ffc285 !important;
-  border: 1px solid rgba(255, 122, 23, 0.3) !important;
-  border-radius: 9999px !important;
+.docurama-dropzone:hover {
+  border-color: #5645d4;
+  background: #f6f5f4;
 }
 
-.badge-info {
-  background-color: rgba(124, 58, 237, 0.08) !important;
-  color: #c4b5fd !important;
-  border: 1px solid rgba(124, 58, 237, 0.3) !important;
-  border-radius: 9999px !important;
-}
-
-.badge-error {
-  background-color: rgba(255, 122, 23, 0.12) !important;
-  color: #ff7a17 !important;
-  border: 1px solid rgba(255, 122, 23, 0.4) !important;
-  border-radius: 9999px !important;
-}
-
-/* Systemic Dark Theme Variable Mappings for Deep Children */
-[data-theme="docurama"] .bg-slate-50,
-[data-theme="docurama"] .bg-slate-100,
-[data-theme="docurama"] .bg-\[\#F8FAFC\],
-[data-theme="docurama"] .bg-\[\#F1F5F9\],
-[data-theme="docurama"] .bg-gray-50,
-[data-theme="docurama"] .bg-gray-100 {
-  background-color: #1a1c20 !important;
-}
-
-[data-theme="docurama"] .border-slate-100,
-[data-theme="docurama"] .border-slate-200,
-[data-theme="docurama"] .border-slate-200\/80,
-[data-theme="docurama"] .border-slate-200\/60,
-[data-theme="docurama"] .border-slate-300,
-[data-theme="docurama"] .border-gray-200,
-[data-theme="docurama"] .border-\[\#E2E8F0\] {
-  border-color: #212327 !important;
-}
-
-[data-theme="docurama"] .text-slate-900,
-[data-theme="docurama"] .text-\[\#0F172A\],
-[data-theme="docurama"] .text-gray-900 {
-  color: #ffffff !important;
-}
-
-[data-theme="docurama"] .text-slate-700,
-[data-theme="docurama"] .text-slate-800,
-[data-theme="docurama"] .text-gray-700,
-[data-theme="docurama"] .text-\[\#334155\],
-[data-theme="docurama"] .text-\[\#475569\] {
-  color: #dadbdf !important;
-}
-
-[data-theme="docurama"] .text-slate-500,
-[data-theme="docurama"] .text-slate-600,
-[data-theme="docurama"] .text-\[\#64748B\],
-[data-theme="docurama"] .text-gray-500 {
-  color: #7d8187 !important;
-}
-
-[data-theme="docurama"] .text-slate-400,
-[data-theme="docurama"] .text-\[\#94A3B8\],
-[data-theme="docurama"] .text-gray-400 {
-  color: #7d8187 !important;
-}
-
-[data-theme="docurama"] .hover\:bg-slate-100:hover,
-[data-theme="docurama"] .hover\:bg-slate-50:hover,
-[data-theme="docurama"] .hover\:bg-gray-100:hover {
-  background-color: #1a1c20 !important;
-}
-
-/* Modals & Dialogs */
-.modal-backdrop,
-.fixed.inset-0.bg-slate-900\/40,
-.fixed.inset-0.bg-black\/50 {
-  background-color: rgba(10, 10, 10, 0.85) !important;
-  backdrop-filter: blur(8px) !important;
-}
-
-/* Clean Dark Scrollbar */
+/* Clean Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: #f6f5f4;
 }
 ::-webkit-scrollbar-thumb {
-  background: #212327;
+  background: #c8c4be;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #363a3f;
+  background: #a4a097;
 }

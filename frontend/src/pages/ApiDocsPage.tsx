@@ -465,36 +465,36 @@ app.post('/webhook', (req, res) => {
       {/* Header Banner if standalone */}
       {!embedded && (
         <div className="mb-8">
-          <div className="caption-mono mb-2 text-[#7d8187] tracking-[1.4px]">
-            REST API &bull; CRYPTOGRAPHIC PROTOCOLS
+          <div className="text-xs font-semibold text-[#5645d4] tracking-wider uppercase mb-2">
+            REST API &bull; Cryptographic Protocols
           </div>
-          <h1 className="text-2xl sm:text-3xl font-normal text-white tracking-[-0.03em] font-display">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-[#1a1a1a] tracking-tight">
             API Reference &amp; Integration Guide
           </h1>
-          <p className="text-xs text-[#7d8187] mt-1.5 max-w-3xl leading-relaxed font-normal">
+          <p className="text-xs text-[#5d5b54] mt-1.5 max-w-3xl leading-relaxed">
             Complete documentation for programmatic document signing, template management, automated dispatch sequences, and real-time webhook listeners.
           </p>
         </div>
       )}
 
       {/* Quick Info & Authentication Card */}
-      <div className="bg-[#191919] rounded-lg p-5 border border-[#212327] mb-6">
+      <div className="bg-white rounded-lg p-5 border border-[#e5e3df] mb-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
-            <span className="caption-mono-sm text-[10px] text-[#7d8187]">BASE URL</span>
-            <div className="font-mono text-xs bg-[#1a1c20] p-2.5 rounded-lg border border-[#212327] text-white select-all">
+            <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">BASE URL</span>
+            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] select-all">
               {`${origin}/api`}
             </div>
           </div>
           <div className="space-y-1">
-            <span className="caption-mono-sm text-[10px] text-[#7d8187]">AUTHENTICATION HEADER</span>
-            <div className="font-mono text-xs bg-[#1a1c20] p-2.5 rounded-lg border border-[#212327] text-white select-all">
+            <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">AUTHENTICATION HEADER</span>
+            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] select-all">
               X-Auth-Token: YOUR_API_KEY
             </div>
           </div>
           <div className="space-y-1">
-            <span className="caption-mono-sm text-[10px] text-[#7d8187]">PAYLOAD ENCODING</span>
-            <div className="font-mono text-xs bg-[#1a1c20] p-2.5 rounded-lg border border-[#212327] text-white">
+            <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">PAYLOAD ENCODING</span>
+            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a]">
               application/json; charset=utf-8
             </div>
           </div>
@@ -518,10 +518,10 @@ app.post('/webhook', (req, res) => {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-normal whitespace-nowrap transition-all ${
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                   active
-                    ? 'bg-white text-[#0a0a0a]'
-                    : 'bg-[#191919] text-[#dadbdf] hover:text-white border border-[#212327] hover:border-white/20'
+                    ? 'bg-[#000000] text-white shadow-sm'
+                    : 'bg-white text-[#5d5b54] hover:text-[#1a1a1a] border border-[#e5e3df] hover:bg-[#f6f5f4]'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -533,13 +533,13 @@ app.post('/webhook', (req, res) => {
 
         {/* Search Input */}
         <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="w-3.5 h-3.5 text-[#7d8187] absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-[#787671] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filter endpoints..."
-            className="base-input pl-9 pr-3 h-9 text-xs w-full bg-[#1a1c20] border border-[#212327] rounded-lg"
+            className="base-input pl-10 pr-3 h-9 text-xs w-full bg-white border border-[#c8c4be] rounded-md text-[#1a1a1a] focus:border-[#5645d4]"
           />
         </div>
       </div>
@@ -548,46 +548,46 @@ app.post('/webhook', (req, res) => {
       <div className="space-y-4">
         {filteredEndpoints.map((ep) => {
           const isExpanded = !!expandedEndpoints[ep.id];
-          const badgeColor =
+          const badgeClass =
             ep.method === 'GET'
-              ? 'bg-[#1a1c20] text-[#a0c3ec] border-[#a0c3ec]/30'
+              ? 'bg-[#dcecfa] text-[#0075de]'
               : ep.method === 'POST'
-              ? 'bg-[#1a1c20] text-emerald-400 border-emerald-500/30'
+              ? 'bg-[#d9f3e1] text-[#1aae39]'
               : ep.method === 'PUT'
-              ? 'bg-[#1a1c20] text-[#ffc285] border-[#ff7a17]/30'
+              ? 'bg-[#ffe8d4] text-[#dd5b00]'
               : ep.method === 'DELETE'
-              ? 'bg-[#1a1c20] text-[#ff7a17] border-[#ff7a17]/40'
-              : 'bg-[#1a1c20] text-[#c4b5fd] border-[#7c3aed]/30';
+              ? 'bg-[#fde0ec] text-[#e03131]'
+              : 'bg-[#e6e0f5] text-[#5645d4]';
 
           return (
             <div
               key={ep.id}
-              className="bg-[#191919] rounded-lg border border-[#212327] overflow-hidden transition-all"
+              className="bg-white rounded-lg border border-[#e5e3df] shadow-sm overflow-hidden transition-all"
             >
               {/* Endpoint Header Bar */}
               <div
                 onClick={() => toggleEndpoint(ep.id)}
-                className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#1a1c20] select-none transition-colors"
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#fafaf9] select-none transition-colors"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                   <div className="flex items-center gap-2.5">
                     <span
-                      className={`font-mono text-[10px] px-2.5 py-0.5 rounded-full border ${badgeColor}`}
+                      className={`font-mono text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${badgeClass}`}
                     >
                       {ep.method}
                     </span>
-                    <span className="font-mono text-xs sm:text-sm font-normal text-white">
+                    <span className="font-mono text-xs sm:text-sm font-semibold text-[#1a1a1a]">
                       {ep.path}
                     </span>
                   </div>
-                  <span className="text-xs text-[#7d8187] font-normal sm:border-l sm:border-[#212327] sm:pl-4">
+                  <span className="text-xs text-[#5d5b54] font-normal sm:border-l sm:border-[#e5e3df] sm:pl-4">
                     {ep.title}
                   </span>
                 </div>
-                <div className="flex items-center space-x-2 text-[#7d8187]">
+                <div className="flex items-center space-x-2 text-[#787671]">
                   <ChevronDown
                     className={`w-4 h-4 transition-transform duration-200 ${
-                      isExpanded ? 'rotate-180 text-white' : ''
+                      isExpanded ? 'rotate-180 text-[#1a1a1a]' : ''
                     }`}
                   />
                 </div>
@@ -595,42 +595,42 @@ app.post('/webhook', (req, res) => {
 
               {/* Endpoint Body */}
               {isExpanded && (
-                <div className="p-4 sm:p-6 border-t border-[#212327] bg-[#1a1c20] space-y-6">
-                  <p className="text-xs text-[#dadbdf] leading-relaxed font-normal">{ep.description}</p>
+                <div className="p-4 sm:p-6 border-t border-[#e5e3df] bg-[#fafaf9] space-y-6">
+                  <p className="text-xs text-[#37352f] leading-relaxed font-normal">{ep.description}</p>
 
                   {/* Parameters Table */}
                   {ep.params && ep.params.length > 0 && (
                     <div>
-                      <h4 className="caption-mono-sm text-[10px] text-[#7d8187] mb-2.5">
+                      <h4 className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider mb-2.5">
                         PARAMETERS
                       </h4>
-                      <div className="rounded-lg border border-[#212327] bg-[#191919] overflow-hidden">
+                      <div className="rounded-lg border border-[#e5e3df] bg-white overflow-hidden shadow-xs">
                         <table className="w-full text-left text-xs">
-                          <thead className="bg-[#191919] caption-mono-sm text-[10px] text-[#7d8187] border-b border-[#212327]">
+                          <thead className="bg-[#f6f5f4] text-[11px] font-semibold text-[#787671] border-b border-[#e5e3df]">
                             <tr>
-                              <th className="py-2.5 px-3 font-normal">Field</th>
-                              <th className="py-2.5 px-3 font-normal">Type</th>
-                              <th className="py-2.5 px-3 font-normal">Required</th>
-                              <th className="py-2.5 px-3 font-normal">Description</th>
+                              <th className="py-2.5 px-3 font-medium">Field</th>
+                              <th className="py-2.5 px-3 font-medium">Type</th>
+                              <th className="py-2.5 px-3 font-medium">Required</th>
+                              <th className="py-2.5 px-3 font-medium">Description</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-[#212327]">
+                          <tbody className="divide-y divide-[#e5e3df]">
                             {ep.params.map((p, idx) => (
-                              <tr key={idx} className="hover:bg-[#1a1c20]/60">
-                                <td className="py-2 px-3 font-mono text-white">
+                              <tr key={idx} className="hover:bg-[#fafaf9]">
+                                <td className="py-2.5 px-3 font-mono text-[#1a1a1a] font-medium">
                                   {p.name}
                                 </td>
-                                <td className="py-2 px-3 text-[#a0c3ec] font-mono text-[11px]">
+                                <td className="py-2.5 px-3 text-[#0075de] font-mono text-[11px]">
                                   {p.type}
                                 </td>
-                                <td className="py-2 px-3">
+                                <td className="py-2.5 px-3">
                                   {p.required ? (
-                                    <span className="text-[#ff7a17] font-mono text-[10px]">REQUIRED</span>
+                                    <span className="text-[#dd5b00] font-mono text-[10px] font-semibold">REQUIRED</span>
                                   ) : (
-                                    <span className="text-[#7d8187] font-mono text-[10px]">OPTIONAL</span>
+                                    <span className="text-[#787671] font-mono text-[10px]">OPTIONAL</span>
                                   )}
                                 </td>
-                                <td className="py-2 px-3 text-[#dadbdf]">{p.desc}</td>
+                                <td className="py-2.5 px-3 text-[#37352f]">{p.desc}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -645,16 +645,16 @@ app.post('/webhook', (req, res) => {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="caption-mono-sm text-[10px] text-[#7d8187]">REQUEST</span>
-                          <div className="flex rounded-full bg-[#191919] p-0.5 border border-[#212327] text-[10px]">
+                          <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">REQUEST</span>
+                          <div className="flex rounded-full bg-[#0a1530] p-0.5 border border-[#1a2a52] text-[10px]">
                             {(['curl', 'python', 'javascript'] as const).map((l) => (
                               <button
                                 key={l}
                                 onClick={() => setActiveLang(l)}
                                 className={`px-2.5 py-0.5 rounded-full font-mono uppercase transition-all ${
                                   activeLang === l
-                                    ? 'bg-white text-[#0a0a0a]'
-                                    : 'text-[#7d8187] hover:text-white'
+                                    ? 'bg-[#5645d4] text-white shadow-xs'
+                                    : 'text-[#a4a097] hover:text-white'
                                 }`}
                               >
                                 {l}
@@ -664,12 +664,12 @@ app.post('/webhook', (req, res) => {
                         </div>
                         <button
                           onClick={() => copyToClipboard(ep[activeLang], `${ep.id}-${activeLang}`)}
-                          className="btn btn-ghost px-2.5 py-0.5 text-xs flex items-center gap-1 text-[#7d8187] hover:text-white"
+                          className="btn btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 text-[#5d5b54] hover:text-[#1a1a1a] rounded-md"
                         >
                           {copiedSnippet === `${ep.id}-${activeLang}` ? (
                             <>
-                              <Check className="w-3.5 h-3.5 text-[#a0c3ec]" />
-                              <span className="text-[#a0c3ec]">Copied</span>
+                              <Check className="w-3.5 h-3.5 text-[#1aae39]" />
+                              <span className="text-[#1aae39]">Copied</span>
                             </>
                           ) : (
                             <>
@@ -680,7 +680,7 @@ app.post('/webhook', (req, res) => {
                         </button>
                       </div>
 
-                      <div className="bg-[#0a0a0a] rounded-lg p-3.5 overflow-x-auto text-xs font-mono text-[#dadbdf] border border-[#212327] leading-relaxed max-h-72">
+                      <div className="bg-[#0a1530] rounded-lg p-3.5 overflow-x-auto text-xs font-mono text-white border border-[#1a2a52] leading-relaxed max-h-72">
                         <pre>{ep[activeLang]}</pre>
                       </div>
                     </div>
@@ -688,19 +688,19 @@ app.post('/webhook', (req, res) => {
                     {/* Right: Response Payload */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="caption-mono-sm text-[10px] text-[#7d8187]">
+                        <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">
                           RESPONSE (200 OK)
                         </span>
                         <button
                           onClick={() =>
                             copyToClipboard(JSON.stringify(ep.response, null, 2), `${ep.id}-res`)
                           }
-                          className="btn btn-ghost px-2.5 py-0.5 text-xs flex items-center gap-1 text-[#7d8187] hover:text-white"
+                          className="btn btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 text-[#5d5b54] hover:text-[#1a1a1a] rounded-md"
                         >
                           {copiedSnippet === `${ep.id}-res` ? (
                             <>
-                              <Check className="w-3.5 h-3.5 text-[#a0c3ec]" />
-                              <span className="text-[#a0c3ec]">Copied</span>
+                              <Check className="w-3.5 h-3.5 text-[#1aae39]" />
+                              <span className="text-[#1aae39]">Copied</span>
                             </>
                           ) : (
                             <>
@@ -711,7 +711,7 @@ app.post('/webhook', (req, res) => {
                         </button>
                       </div>
 
-                      <div className="bg-[#0a0a0a] rounded-lg p-3.5 overflow-x-auto text-xs font-mono text-[#dadbdf] border border-[#212327] leading-relaxed max-h-72">
+                      <div className="bg-[#0a1530] rounded-lg p-3.5 overflow-x-auto text-xs font-mono text-white border border-[#1a2a52] leading-relaxed max-h-72">
                         <pre>{JSON.stringify(ep.response, null, 2)}</pre>
                       </div>
                     </div>
