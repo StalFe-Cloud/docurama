@@ -11,7 +11,8 @@ from app.schemas.schemas import (
     TemplateCreate, TemplateOut,
     DetectedField, AutoDetectResponse,
     DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
-    WebhookCreate, WebhookOut, WebhookDeliveryOut, WebhookTestRequest
+    WebhookCreate, WebhookOut, WebhookDeliveryOut, WebhookTestRequest,
+    CorrectionRequestCreate, CorrectionRequestOut
 )
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "TemplateCreate", "TemplateOut",
     "DetectedField", "AutoDetectResponse",
     "DomainCreate", "DomainOut", "DomainVerifyResponse", "DomainPublicStatus",
-    "WebhookCreate", "WebhookOut", "WebhookDeliveryOut", "WebhookTestRequest"
+    "WebhookCreate", "WebhookOut", "WebhookDeliveryOut", "WebhookTestRequest",
+    "CorrectionRequestCreate", "CorrectionRequestOut"
 ]
