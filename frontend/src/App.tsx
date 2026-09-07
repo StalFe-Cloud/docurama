@@ -9,6 +9,7 @@ import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SignInPage } from './pages/SignInPage';
 import { PublicFormPage } from './pages/PublicFormPage';
+import { ApiDocsPage } from './pages/ApiDocsPage';
 import { api } from './lib/api';
 
 export const App: React.FC = () => {
@@ -119,7 +120,29 @@ export const App: React.FC = () => {
     );
   }
 
-  // 5. Direct Settings Route: /settings, /settings/account, /settings/profile, etc.
+  // 5. Direct API Documentation Route: /docs/api or /api/docs
+  if (path.startsWith('/docs/api') || path.startsWith('/api/docs')) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
+        <Header
+          currentTab="settings"
+          onSelectTab={(tab) => {
+            if (tab === 'landing') window.location.href = '/';
+            else setCurrentTab(tab);
+          }}
+          onNewEnvelope={() => setCurrentTab('builder')}
+          user={user}
+          onLogout={handleLogout}
+          onSignIn={() => setCurrentTab('signin')}
+        />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
+          <ApiDocsPage />
+        </main>
+      </div>
+    );
+  }
+
+  // 6. Direct Settings Route: /settings, /settings/account, /settings/profile, etc.
   if (path.startsWith('/settings')) {
     const subtab = path.replace('/settings', '').replace('/', '') || 'account';
     return (
