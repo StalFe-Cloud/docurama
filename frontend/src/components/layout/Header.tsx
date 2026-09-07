@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="h-8 md:h-9 object-contain" 
             />
             <span className="hidden sm:inline-block text-[10px] font-semibold text-[#0075de] bg-[#dcecfa] border border-[#0075de]/20 rounded-full px-2 py-0.5 tracking-wide uppercase">
-              DocuSign Alternative
+              Digital Signatures &amp; Seals
             </span>
           </div>
 

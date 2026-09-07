@@ -18,7 +18,8 @@ import {
   Users,
   CheckCircle2,
   XCircle,
-  HelpCircle
+  HelpCircle,
+  FileCheck
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -60,51 +61,67 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   return (
     <div className="w-full bg-white text-[#37352f]">
       
-      {/* 1. Signature Deep Navy Hero Band */}
-      <div className="w-full bg-[#0a1530] text-white pt-14 pb-24 px-4 relative overflow-hidden">
-        {/* Subtle decorative mesh and sticky-note dots */}
-        <div className="absolute top-12 left-10 w-3 h-3 rounded-full bg-[#ff64c8] opacity-75 hidden md:block" />
-        <div className="absolute top-24 right-16 w-3.5 h-3.5 rounded-full bg-[#f5d75e] opacity-80 hidden md:block" />
-        <div className="absolute bottom-20 left-24 w-2.5 h-2.5 rounded-full bg-[#2a9d99] opacity-75 hidden md:block" />
-        <div className="absolute top-40 left-1/4 w-2 h-2 rounded-full bg-[#ff7a17] opacity-60 hidden lg:block" />
+      {/* 1. Modern Luminous Light Hero Section (No Dark, Inspired by designprompts.dev Minimal Swiss & Linear Light) */}
+      <div className="w-full bg-gradient-to-b from-[#fafaf9] via-[#ffffff] to-[#f6f5f4] text-[#1a1a1a] pt-14 pb-20 px-4 relative overflow-hidden border-b border-[#e5e3df]">
+        
+        {/* Subtle luminous ambient radial glow */}
+        <div 
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] pointer-events-none opacity-60"
+          style={{
+            background: 'radial-gradient(ellipse at 50% 0%, rgba(86, 69, 212, 0.12), transparent 70%)'
+          }}
+        />
+
+        {/* Decorative pastel accents */}
+        <div className="absolute top-16 left-12 w-2.5 h-2.5 rounded-full bg-[#5645d4]/40 hidden md:block" />
+        <div className="absolute top-28 right-20 w-3 h-3 rounded-full bg-[#1aae39]/30 hidden md:block" />
+        <div className="absolute bottom-28 left-20 w-2.5 h-2.5 rounded-full bg-[#dd5b00]/30 hidden md:block" />
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           
-          {/* DocuSign Alternative Badges */}
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 mb-6">
-            <span className="badge-tag-purple font-semibold text-[11px]">DocuSign Alternative</span>
-            <span className="badge-tag-green font-semibold text-[11px]">X.509 Cryptographic Seals</span>
-            <span className="badge-tag-orange font-semibold text-[11px]">RFC 3161 Qualified TSA</span>
-            <span className="badge-tag-sky font-semibold text-[11px]">eIDAS &amp; ESIGN Compliant</span>
+          {/* Top Announcement Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#e5e3df] shadow-xs text-xs font-medium text-[#37352f] mb-6 hover:border-[#5645d4]/40 transition-colors">
+            <span className="flex h-2 w-2 rounded-full bg-[#1aae39]" />
+            <span className="font-semibold text-[#5645d4]">X.509 PKI &bull; RFC 3161 Qualified</span>
+            <span className="text-[#787671]">&bull;</span>
+            <span>eIDAS &amp; ESIGN Compliant</span>
           </div>
 
-          {/* Hero Display Headline: Directly Positioning Against DocuSign */}
-          <h1 className="hero-display text-white mb-6 font-display">
-            The open, cryptographic alternative to DocuSign.
+          {/* High-Impact Display Headline in Notion 600 weight */}
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-[#1a1a1a] max-w-4xl mx-auto leading-[1.12] mb-6 font-display">
+            Sign, seal, and verify contracts with <span className="text-[#5645d4]">cryptographic certainty.</span>
           </h1>
 
-          <p className="text-base sm:text-lg text-[#a4a097] max-w-2xl mx-auto font-normal leading-relaxed mb-8">
-            Send, sign, and verify legally binding contracts with true X.509 digital seals, RFC 3161 timestamps, and complete audit trails. Self-host on your private cloud with zero envelope overages.
+          <p className="text-base sm:text-lg text-[#5d5b54] max-w-2xl mx-auto font-normal leading-relaxed mb-8">
+            The enterprise platform for legally binding electronic signatures, RFC 3161 timestamps, and multi-party envelope automation. Self-host with complete data sovereignty or deploy in seconds.
           </p>
 
-          {/* Dual CTAs: Signature Purple Primary + Outlined Secondary on Dark */}
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-14">
+          {/* Dual CTAs: Signature Purple Primary (8px rectangle) + Light Secondary */}
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
             <button
               onClick={onGetStarted}
-              className="btn btn-primary px-6 h-11 text-sm font-medium rounded-md shadow-md flex items-center space-x-2"
+              className="btn btn-primary px-6 h-11 text-sm font-medium rounded-md shadow-md flex items-center space-x-2 bg-[#5645d4] hover:bg-[#4534b3] text-white transition-colors"
             >
               <span>Start Signing Free</span>
               <ArrowRight className="w-4 h-4 ml-1 stroke-[2]" />
             </button>
             <button
               onClick={scrollToComparison}
-              className="btn btn-secondary-on-dark px-6 h-11 text-sm font-medium rounded-md"
+              className="btn btn-secondary px-6 h-11 text-sm font-medium rounded-md bg-white hover:bg-[#f6f5f4] text-[#1a1a1a] border border-[#c8c4be] transition-colors"
             >
-              Compare with DocuSign
+              Compare Architecture
             </button>
           </div>
 
-          {/* Embedded Real Electronic Signature Envelope Mockup Card */}
+          {/* Micro Trust Indicators */}
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-[#787671] mb-12">
+            <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#1aae39]" /> Unlimited Envelopes</span>
+            <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#1aae39]" /> Offline Adobe Acrobat Proof</span>
+            <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#1aae39]" /> 21 CFR Part 11 Audit Trail</span>
+            <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#1aae39]" /> Zero Envelope Overages</span>
+          </div>
+
+          {/* Embedded Real Electronic Signature Envelope Mockup Card (Light Mode) */}
           <div className="relative max-w-3xl mx-auto text-left">
             <div
               ref={cardRef}
@@ -114,7 +131,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg)`,
                 transition: 'transform 0.15s ease-out'
               }}
-              className="workspace-mockup-card p-6 sm:p-8 select-none text-[#37352f]"
+              className="bg-white rounded-xl p-6 sm:p-8 border border-[#e5e3df] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.08),0_0_1px_1px_rgba(0,0,0,0.04)] select-none text-[#37352f]"
             >
               {/* Envelope Header Bar */}
               <div className="flex items-center justify-between border-b border-[#e5e3df] pb-4 mb-6">
@@ -138,7 +155,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
               {/* Envelope Signers Progression Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-                <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df]">
+                <div className="p-3 bg-[#fafaf9] rounded-lg border border-[#ede9e4]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">First Signer</div>
                   <div className="text-xs font-semibold text-[#1a1a1a]">Sarah Connor</div>
                   <div className="text-[11px] text-[#1aae39] mt-1 flex items-center gap-1 font-medium">
@@ -147,7 +164,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   <div className="text-[10px] text-[#787671] mt-0.5 font-mono">2026-09-07 10:14 UTC</div>
                 </div>
 
-                <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df]">
+                <div className="p-3 bg-[#fafaf9] rounded-lg border border-[#ede9e4]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">Second Signer</div>
                   <div className="text-xs font-semibold text-[#1a1a1a]">Legal Counsel</div>
                   <div className="text-[11px] text-[#dd5b00] mt-1 flex items-center gap-1 font-medium">
@@ -156,7 +173,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   <div className="text-[10px] text-[#787671] mt-0.5 font-mono">Dispatched via Email</div>
                 </div>
 
-                <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df]">
+                <div className="p-3 bg-[#fafaf9] rounded-lg border border-[#ede9e4]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">Compliance TSA</div>
                   <div className="text-xs font-semibold text-[#1a1a1a]">DigiCert Authority</div>
                   <div className="text-[11px] text-[#5645d4] mt-1 flex items-center gap-1 font-medium">
@@ -167,7 +184,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </div>
 
               {/* Cryptographic Signature Pad Preview */}
-              <div className="bg-[#fafaf9] rounded-lg p-4 border border-[#e5e3df] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="bg-[#f6f5f4] rounded-lg p-4 border border-[#e5e3df] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider mb-1">
                     Authorized Digital Seal (X.509 Certificate)
@@ -193,14 +210,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </div>
 
-      {/* 2. Feature Cards Section: The DocuSign Competitive Advantage */}
+      {/* 2. Feature Cards Section: The Architectural Advantage */}
       <div id="features" className="max-w-6xl mx-auto px-4 py-20">
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="text-[12px] font-semibold text-[#5645d4] uppercase tracking-wider mb-2">
-            DOCUSIGN COMPETITIVE ADVANTAGE
+            ENTERPRISE ARCHITECTURE
           </div>
           <h2 className="heading-1 text-[#1a1a1a] mb-3 font-display">
-            Everything DocuSign charges extra for, built-in by default.
+            Cryptographic certainty at every layer of document execution.
           </h2>
           <p className="text-[#5d5b54] text-base leading-relaxed">
             No artificial envelope caps, no seat penalties, and true cryptographic proof that stands up in any court of law worldwide.
@@ -221,7 +238,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 The only e-signature platform built for AI agents.
               </h3>
               <p className="text-[#37352f] text-sm leading-relaxed max-w-xl">
-                While DocuSign locks developers behind enterprise pricing gates, Docurama exposes native MCP server endpoints and REST APIs. Claude, Cursor, and internal autonomous agents can prepare, inspect, and dispatch signature envelopes with human-in-the-loop validation.
+                Docurama exposes native MCP server endpoints and REST APIs. Claude, Cursor, and internal autonomous agents can prepare, inspect, and dispatch signature envelopes with human-in-the-loop validation.
               </p>
             </div>
             <div className="mt-8 pt-4 border-t border-[#793400]/15 flex items-center justify-between text-xs text-[#793400] font-medium">
@@ -276,7 +293,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 Your contracts never leave your private infrastructure.
               </h3>
               <p className="text-[#37352f] text-xs leading-relaxed max-w-lg">
-                DocuSign stores your sensitive customer agreements, NDAs, and financials on US multi-tenant clouds. Docurama runs self-hosted on Docker, Kubernetes, or private VPS with PostgreSQL storage, zero external telemetry, and complete regulatory audit trails.
+                Run self-hosted on Docker, Kubernetes, or private VPS with PostgreSQL storage, zero external telemetry leaks, and complete regulatory audit trails.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-[#793400]/15 flex items-center justify-between text-xs text-[#793400] font-medium">
@@ -291,18 +308,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </div>
 
-      {/* 3. Direct Head-to-Head Comparison Table: Docurama vs DocuSign */}
+      {/* 3. Direct Architecture Comparison Table */}
       <div id="comparison" className="w-full bg-[#fafaf9] py-20 border-t border-[#e5e3df]">
         <div className="max-w-5xl mx-auto px-4">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <div className="text-[12px] font-semibold text-[#5645d4] uppercase tracking-wider mb-2">
-              HEAD-TO-HEAD COMPARISON
+              ARCHITECTURE COMPARISON
             </div>
             <h2 className="heading-1 text-[#1a1a1a] mb-2 font-display">
-              How Docurama compares to DocuSign.
+              How Docurama compares to traditional e-signature vendors.
             </h2>
             <p className="text-[#5d5b54] text-sm">
-              See why high-security teams, law firms, and engineering organizations choose Docurama.
+              Built from the ground up on modern cryptography, open APIs, and transparent pricing.
             </p>
           </div>
 
@@ -311,8 +328,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               <thead className="bg-[#f6f5f4] text-[#1a1a1a] border-b border-[#e5e3df]">
                 <tr>
                   <th className="py-3.5 px-4 font-semibold">Capability</th>
-                  <th className="py-3.5 px-4 font-semibold text-[#5645d4] bg-[#e6e0f5]/30">Docurama</th>
-                  <th className="py-3.5 px-4 font-semibold text-[#787671]">DocuSign</th>
+                  <th className="py-3.5 px-4 font-semibold text-[#5645d4] bg-[#e6e0f5]/30">Docurama Platform</th>
+                  <th className="py-3.5 px-4 font-semibold text-[#787671]">Traditional E-Sign Vendors</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ede9e4]">
@@ -321,7 +338,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
                     <Check className="w-4 h-4 text-[#1aae39]" /> Unlimited (No Overages)
                   </td>
-                  <td className="py-3 px-4 text-[#787671]">Capped (Expensive Overages)</td>
+                  <td className="py-3 px-4 text-[#787671]">Capped (Metered Overages)</td>
                 </tr>
                 <tr className="hover:bg-[#fafaf9]">
                   <td className="py-3 px-4 font-medium text-[#1a1a1a]">Cryptographic Long-Term Validation</td>
@@ -335,28 +352,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
                     <Check className="w-4 h-4 text-[#1aae39]" /> 100% Private Cloud / On-Prem
                   </td>
-                  <td className="py-3 px-4 text-[#787671]">Multi-Tenant US Cloud Only</td>
+                  <td className="py-3 px-4 text-[#787671]">Multi-Tenant Public Cloud Only</td>
                 </tr>
                 <tr className="hover:bg-[#fafaf9]">
                   <td className="py-3 px-4 font-medium text-[#1a1a1a]">AI Agent MCP Server</td>
                   <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
                     <Check className="w-4 h-4 text-[#1aae39]" /> Native Model Context Protocol
                   </td>
-                  <td className="py-3 px-4 text-[#787671]">Not Available</td>
+                  <td className="py-3 px-4 text-[#787671]">Not Supported</td>
                 </tr>
                 <tr className="hover:bg-[#fafaf9]">
                   <td className="py-3 px-4 font-medium text-[#1a1a1a]">21 CFR Part 11 &amp; eIDAS Compliance</td>
                   <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
                     <Check className="w-4 h-4 text-[#1aae39]" /> Included in Standard Business
                   </td>
-                  <td className="py-3 px-4 text-[#787671]">Expensive Enterprise Contract Only</td>
+                  <td className="py-3 px-4 text-[#787671]">Expensive Enterprise Add-on</td>
                 </tr>
                 <tr className="hover:bg-[#fafaf9]">
                   <td className="py-3 px-4 font-medium text-[#1a1a1a]">REST API &amp; Webhooks Access</td>
                   <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
                     <Check className="w-4 h-4 text-[#1aae39]" /> Included in All Tiers
                   </td>
-                  <td className="py-3 px-4 text-[#787671]">Separate Developer Plans</td>
+                  <td className="py-3 px-4 text-[#787671]">Gated by Developer Plans</td>
                 </tr>
               </tbody>
             </table>
@@ -399,7 +416,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <div className="bg-white rounded-lg p-6 border border-[#e5e3df] flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-[#1a1a1a]">Plus</h3>
-                <p className="text-xs text-[#787671] mt-1 mb-4">For small businesses replacing DocuSign Starter</p>
+                <p className="text-xs text-[#787671] mt-1 mb-4">For small businesses and professional practices</p>
                 <div className="text-3xl font-bold text-[#1a1a1a] mb-4">$10<span className="text-xs font-normal text-[#787671]"> / user</span></div>
                 <ul className="space-y-2.5 text-xs text-[#37352f]">
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Automated reminder sequences</li>
@@ -465,7 +482,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               className="h-8 object-contain" 
             />
             <span className="text-xs text-[#787671] border-l border-[#e5e3df] pl-3">
-              The modern alternative to DocuSign
+              Cryptographic Electronic Signatures &amp; Document Intelligence
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs text-[#787671]">
