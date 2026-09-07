@@ -120,8 +120,8 @@ export const App: React.FC = () => {
     );
   }
 
-  // 5. Direct API Documentation Route: /docs/api or /api/docs
-  if (path.startsWith('/docs/api') || path.startsWith('/api/docs')) {
+  // 5. Direct API Documentation Route: /api-docs, /docs/api, or /api/docs
+  if (path.startsWith('/api-docs') || path.startsWith('/docs/api') || path.startsWith('/api/docs')) {
     return (
       <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <Header
