@@ -104,6 +104,21 @@ export interface AutoDetectResult {
   fields: DetectedField[];
 }
 
+export interface DocumentPage {
+  page_number: number;
+  width: number;
+  height: number;
+  aspect_ratio: number;
+  url: string;
+}
+
+export interface DocumentPreview {
+  doc_id: string;
+  filename: string;
+  page_count: number;
+  pages: DocumentPage[];
+}
+
 export interface DomainItem {
   id: string;
   domain: string;
@@ -299,10 +314,27 @@ export const api = {
     return res.json();
   },
 
+  // Documents & Previews
+  uploadDocumentPreview: async (file: File): Promise<DocumentPreview> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/documents/preview`, {
+      method: 'POST',
+      body: fd,
+    });
+    if (!res.ok) throw new Error('Failed to generate document page previews');
+    return res.json();
+  },
+
   // Signing
   getSigningSession: async (token: string) => {
     const res = await fetch(`${API_BASE}/signing/${token}`);
     if (!res.ok) throw new Error('Signing session expired or invalid');
+    return res.json();
+  },
+  getSigningPages: async (token: string): Promise<{ page_count: number; pages: DocumentPage[] }> => {
+    const res = await fetch(`${API_BASE}/signing/${token}/pages`);
+    if (!res.ok) throw new Error('Failed to fetch signing document pages');
     return res.json();
   },
   getMobileHandshake: async (token: string) => {

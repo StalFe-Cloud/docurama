@@ -305,3 +305,37 @@ def append_certificate_page(
         import shutil
         shutil.copy2(main_pdf_path, output_pdf_path)
         return output_pdf_path
+
+def get_pdf_pages_info(pdf_path: str) -> List[Dict[str, Any]]:
+    """Returns page count and dimensions for each page (1-indexed)."""
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        pages = []
+        for i, page in enumerate(doc):
+            rect = page.rect
+            pages.append({
+                "page_number": i + 1,
+                "width": round(rect.width, 2),
+                "height": round(rect.height, 2),
+                "aspect_ratio": round(rect.width / rect.height, 4) if rect.height else 0.7727
+            })
+        doc.close()
+        return pages
+    except Exception as e:
+        return [{"page_number": 1, "width": 612.0, "height": 792.0, "aspect_ratio": 0.7727}]
+
+def render_pdf_page_png(pdf_path: str, page_number: int, dpi: int = 150) -> bytes:
+    """Renders a specific page of a PDF as PNG bytes (page_number is 1-indexed)."""
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        page_idx = max(0, min(page_number - 1, len(doc) - 1))
+        page = doc[page_idx]
+        pix = page.get_pixmap(dpi=dpi)
+        data = pix.tobytes("png")
+        doc.close()
+        return data
+    except Exception as e:
+        # Fallback 1x1 transparent PNG
+        return b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82"

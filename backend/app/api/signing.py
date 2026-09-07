@@ -2,7 +2,7 @@ import os
 import io
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -16,7 +16,13 @@ from app.schemas import (
     DeclineRequest, DelegateRequest
 )
 from app.services.qr_generator import generate_qr_base64
-from app.services.pdf_service import overlay_fields_on_pdf, generate_certificate_of_completion_pdf, append_certificate_page
+from app.services.pdf_service import (
+    overlay_fields_on_pdf, 
+    generate_certificate_of_completion_pdf, 
+    append_certificate_page,
+    get_pdf_pages_info,
+    render_pdf_page_png
+)
 from app.services.crypto_engine import sign_pdf_with_pades, calculate_file_sha256
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.api.ws import manager
@@ -96,6 +102,61 @@ async def get_signing_pdf(
         raise HTTPException(status_code=404, detail="PDF file not found.")
         
     return FileResponse(pdf_path, media_type="application/pdf")
+
+@router.get("/{token}/pages")
+async def get_signing_pages(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns page list and aspect ratios for the document being signed."""
+    query = select(Recipient).where(Recipient.signing_token == token).options(selectinload(Recipient.envelope))
+    recipient = (await db.execute(query)).scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing token.")
+    envelope = recipient.envelope
+    pdf_path = envelope.original_pdf_path
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF document not found.")
+
+    pages_info = get_pdf_pages_info(pdf_path)
+    pages = []
+    for p in pages_info:
+        p_num = p["page_number"]
+        pages.append({
+            "page_number": p_num,
+            "width": p["width"],
+            "height": p["height"],
+            "aspect_ratio": p["aspect_ratio"],
+            "url": f"/api/signing/{token}/pages/{p_num}"
+        })
+    return {"page_count": len(pages), "pages": pages}
+
+@router.get("/{token}/pages/{page_number}")
+async def get_signing_page_image(
+    token: str,
+    page_number: int,
+    dpi: int = 150,
+    db: AsyncSession = Depends(get_db)
+):
+    """Renders a specific page of the signing envelope as a PNG image."""
+    query = select(Recipient).where(Recipient.signing_token == token).options(selectinload(Recipient.envelope))
+    recipient = (await db.execute(query)).scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing token.")
+    envelope = recipient.envelope
+    pdf_path = envelope.original_pdf_path
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF document not found.")
+
+    png_bytes = render_pdf_page_png(pdf_path, page_number, dpi=dpi)
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": f"inline; filename=page_{page_number}.png"
+        }
+    )
 
 @router.get("/{token}/mobile_handshake")
 async def mobile_handshake(
