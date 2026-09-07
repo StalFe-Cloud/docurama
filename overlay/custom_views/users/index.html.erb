@@ -1,0 +1,118 @@
+<div class="w-full max-w-5xl mx-auto px-4 py-6">
+  <%= render 'shared/settings_nav' %>
+
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-1">
+        <% if params[:status] == 'archived' %>
+          <%= t('archived_users') %>
+        <% elsif params[:status] == 'integration' %>
+          <%= t('embedding_users') %>
+        <% else %>
+          <%= t('users') %>
+        <% end %>
+      </h1>
+      <p class="text-sm text-slate-500">
+        Manage team members, permissions, and organization account roles.
+      </p>
+    </div>
+    <div class="flex items-center space-x-3">
+      <% if params[:status].blank? %>
+        <% if can?(:create, User.new(account: current_account)) %>
+          <%= render 'users/extra_buttons' %>
+          <% if content_for(:add_user_button) %>
+            <%= content_for(:add_user_button) %>
+          <% else %>
+            <%= link_to new_user_path, class: 'base-button text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center space-x-1.5 shadow-sm', data: { turbo_frame: 'modal' } do %>
+              <%= svg_icon('plus', class: 'w-4 h-4') %>
+              <span><%= t('new_user') %></span>
+            <% end %>
+          <% end %>
+        <% else %>
+          <div class="tooltip" data-tip="<%= t('contact_your_administrator_to_add_new_users') %>">
+            <%= link_to '#', class: 'base-button text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center space-x-1.5 opacity-50 cursor-not-allowed' do %>
+              <%= svg_icon('plus', class: 'w-4 h-4') %>
+              <span><%= t('new_user') %></span>
+            <% end %>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="table w-full">
+        <thead class="bg-slate-50/80 text-xs font-bold uppercase text-slate-500 border-b border-slate-200/70">
+          <tr>
+            <th class="py-3.5 px-4"><%= t('name') %></th>
+            <th class="py-3.5 px-4"><%= t('email') %></th>
+            <th class="py-3.5 px-4"><%= t('role') %></th>
+            <th class="py-3.5 px-4"><%= t('last_session') %></th>
+            <th class="py-3.5 px-4 text-right"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-sm">
+          <% @users.each do |user| %>
+            <tr class="hover:bg-slate-50/40 transition-colors">
+              <td class="py-3.5 px-4 font-semibold text-slate-800">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-blue-50 text-[#1D72FE] font-bold text-xs flex items-center justify-center">
+                    <%= user.first_name.presence&.first&.upcase || user.email.first.upcase %>
+                  </div>
+                  <span><%= user.full_name %></span>
+                </div>
+              </td>
+              <td class="py-3.5 px-4 text-slate-600 text-xs font-mono">
+                <% if user.try(:pending_reconfirmation?) %>
+                  <%= user.unconfirmed_email %>
+                  <br>
+                  <span class="label-text-alt text-amber-600 font-sans">(<%= t('unconfirmed') %>)</span>
+                <% else %>
+                  <%= user.email %>
+                <% end %>
+              </td>
+              <td class="py-3.5 px-4">
+                <span class="badge badge-sm font-semibold rounded-md <%= user.role == 'admin' ? 'badge-primary text-white' : 'badge-ghost text-slate-700' %>">
+                  <%= t(user.role) %>
+                </span>
+              </td>
+              <td class="py-3.5 px-4 text-xs text-slate-500">
+                <%= user.current_sign_in_at ? l(user.current_sign_in_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) : 'Never' %>
+              </td>
+              <td class="py-3.5 px-4 text-right">
+                <div class="flex items-center space-x-1.5 justify-end">
+                  <% if params[:status].blank? && can?(:update, user) && user.archived_at.blank? %>
+                    <%= link_to edit_user_path(user), class: 'btn btn-outline btn-xs rounded-lg font-semibold', title: t('edit'), data: { turbo_frame: 'modal' } do %>
+                      <%= t('edit') %>
+                    <% end %>
+                  <% end %>
+                  <% if params[:status] != 'archived' && can?(:destroy, user) && user != current_user %>
+                    <%= button_to user_path(user), method: :delete, class: 'btn btn-outline btn-error btn-xs rounded-lg', title: t('remove'), data: { turbo_confirm: t('are_you_sure_') } do %>
+                      <%= t('remove') %>
+                    <% end %>
+                  <% end %>
+                  <% if params[:status] == 'archived' && can?(:create, user) && user != current_user && user.archived_at? %>
+                    <%= button_to user_path(user), method: :put, params: { user: { archived_at: nil } }, class: 'btn btn-outline btn-xs rounded-lg font-semibold', title: t('unarchive'), data: { turbo_confirm: t('are_you_sure_') } do %>
+                      <%= t('unarchive') %>
+                    <% end %>
+                  <% end %>
+                </div>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    <% if @pagy.pages > 1 %>
+      <div class="p-4 border-t border-slate-100">
+        <%= render 'shared/pagination', pagy: @pagy, items_name: 'users', left_additional_html: render('bottom_links') %>
+      </div>
+    <% else %>
+      <div class="p-4 border-t border-slate-100">
+        <%= render 'bottom_links' %>
+      </div>
+    <% end %>
+  </div>
+</div>

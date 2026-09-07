@@ -1,0 +1,142 @@
+<div class="w-full max-w-5xl mx-auto px-4 py-6">
+  <%= render 'shared/settings_nav' %>
+
+  <!-- Page Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-1">
+        API & Developer Access
+      </h1>
+      <p class="text-sm text-slate-500">
+        Authenticate requests and build workflows using the Docurama REST API.
+      </p>
+    </div>
+    <div>
+      <%= render 'shared/test_mode_toggle' %>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <!-- Card 1: Token Secret -->
+    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+      <div class="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100">
+        <div class="w-10 h-10 rounded-xl bg-blue-50 text-[#1D72FE] flex items-center justify-center">
+          <%= svg_icon('code', class: 'w-5 h-5') %>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">API Authentication Token</h2>
+          <p class="text-xs text-slate-500">Use this secret token in the <code>X-Auth-Token</code> header of your HTTP requests</p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <label for="api_key" class="text-xs font-bold uppercase tracking-wider text-slate-500">X-Auth-Token</label>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="flex-grow flex items-center space-x-2">
+            <% token = current_user.access_token.token %>
+            <% obscured_token = current_user.access_token.token.sub(token[5..], '*' * token[5..].size) %>
+            <% if current_account.testing? %>
+              <masked-input class="block w-full" data-token="<%= token %>">
+                <input id="api_key" type="text" value="<%= obscured_token %>" class="input font-mono text-xs input-bordered w-full bg-slate-50 rounded-xl" autocomplete="off" readonly>
+              </masked-input>
+              <%= render 'shared/clipboard_copy', icon: 'copy', text: token, class: 'base-button px-4 py-2.5 rounded-xl', icon_class: 'w-5 h-5 text-white', copy_title: t('copy'), copied_title: t('copied') %>
+            <% else %>
+              <a id="access_token_container" href="<%= settings_reveal_access_token_path %>" data-turbo-frame="modal" class="flex w-full space-x-2">
+                <input id="api_key" type="text" value="<%= obscured_token %>" class="input font-mono text-xs input-bordered w-full bg-slate-50 rounded-xl cursor-pointer" autocomplete="off" readonly>
+                <div class="base-button px-4 py-2.5 rounded-xl flex items-center space-x-1.5 flex-none">
+                  <%= svg_icon('copy', class: 'w-4 h-4 text-white') %>
+                  <span class="hidden sm:inline text-xs font-semibold"><%= t('copy') %></span>
+                </div>
+              </a>
+            <% end %>
+          </div>
+          <%= button_to button_title(title: t('rotate'), disabled_with: t('rotate'), icon: svg_icon('reload', class: 'w-4 h-4 mr-1.5')), settings_api_index_path, class: 'white-button rounded-xl text-xs font-semibold px-4 py-2.5 flex items-center justify-center', data: { turbo_confirm: t('remove_existing_api_token_and_generated_a_new_one_are_you_sure_') } %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Code Examples -->
+    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm">
+      <div class="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100">
+        <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+          <%= svg_icon('terminal', class: 'w-5 h-5') %>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">API Endpoints & Integration Quickstart</h2>
+          <p class="text-xs text-slate-500">cURL examples for submitting document requests and inspecting templates</p>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Endpoint 1 -->
+        <div class="collapse collapse-plus bg-slate-50/80 border border-slate-200/80 rounded-2xl">
+          <input type="checkbox">
+          <div class="collapse-title font-semibold text-sm text-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-warning badge-sm font-mono font-bold text-xs">POST</span>
+              <span><%= t('request_signature_multiple_submitters_with_default_values') %></span>
+            </div>
+            <code class="text-xs text-slate-500 font-mono hidden sm:inline"><%= api_submissions_path %></code>
+          </div>
+          <div class="collapse-content" style="display: inherit">
+            <div class="mockup-code bg-slate-900 rounded-xl overflow-hidden mt-2 relative">
+              <% text = capture do %>curl --location '<%= api_submissions_url %>' \
+  --header 'X-Auth-Token: YOUR_API_TOKEN' \
+  --data-raw '{
+    "template_id": <%= current_account.templates.last&.id || 1 %>,
+    "submitters": [
+      {
+        "name": "John Doe",
+        "role": "<%= current_account.templates.last ? current_account.templates.last.submitters.first['name'] : 'First Party' %>",
+        "email": "<%= current_user.email.sub('@', '+test@') %>",
+        "values": {
+          "Form Field": "Default Value"
+        }
+      }
+    ]
+  }'<% end.to_str %>
+              <span class="top-2 right-2 absolute">
+                <%= render 'shared/clipboard_copy', icon: 'copy', text:, class: 'btn btn-ghost btn-sm text-white/80 hover:text-white', icon_class: 'w-4 h-4 text-white', copy_title: t('copy'), copied_title: t('copied') %>
+              </span>
+              <pre data-prefix="$"><code class="overflow-hidden w-full text-xs font-mono"><%== HighlightCode.call(text, 'Shell', theme: 'base16.dark') %></code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Endpoint 2 -->
+        <div class="collapse collapse-plus bg-slate-50/80 border border-slate-200/80 rounded-2xl">
+          <input type="checkbox">
+          <div class="collapse-title font-semibold text-sm text-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-warning badge-sm font-mono font-bold text-xs">POST</span>
+              <span><%= t('request_signature_single_submitter') %></span>
+            </div>
+            <code class="text-xs text-slate-500 font-mono hidden sm:inline"><%= api_submissions_emails_path %></code>
+          </div>
+          <div class="collapse-content" style="display: inherit">
+            <div class="mockup-code bg-slate-900 rounded-xl overflow-hidden mt-2 relative">
+              <% text = capture do %>curl --location '<%= api_submissions_emails_url %>' \
+  --header 'X-Auth-Token: YOUR_API_TOKEN' \
+  --data-raw '{
+      "template_id": <%= current_account.templates.last&.id || 1 %>,
+      "emails": "<%= current_user.email.sub('@', '+test@') %>"
+  }'<% end.to_str %>
+              <span class="top-2 right-2 absolute">
+                <%= render 'shared/clipboard_copy', icon: 'copy', text:, class: 'btn btn-ghost btn-sm text-white/80 hover:text-white', icon_class: 'w-4 h-4 text-white', copy_title: t('copy'), copied_title: t('copied') %>
+              </span>
+              <pre data-prefix="$"><code class="overflow-hidden w-full text-xs font-mono"><%== HighlightCode.call(text, 'Shell', theme: 'base16.dark') %></code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
+        <span class="text-xs text-slate-500">Need full endpoint references and webhooks?</span>
+        <a href="/docs/api" class="text-xs font-semibold text-[#1D72FE] hover:underline flex items-center space-x-1">
+          <span><%= t('open_full_api_reference') %></span>
+          <%= svg_icon('arrow_up_right', class: 'w-3.5 h-3.5') %>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

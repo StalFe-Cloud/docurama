@@ -1,0 +1,7 @@
+<div class="form-control mt-2 mb-2">
+  <label class="label cursor-pointer justify-start gap-3">
+    <input type="hidden" name="send_sms" value="0">
+    <input type="checkbox" name="send_sms" value="1" class="toggle toggle-primary" <%= 'checked' if local_assigns[:checked] %>>
+    <span class="label-text font-medium"><%= t('send_sms') %></span>
+  </label>
+</div>

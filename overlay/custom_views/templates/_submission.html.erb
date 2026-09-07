@@ -1,0 +1,127 @@
+<% status_classes = {
+  'awaiting' => 'bg-amber-50 text-amber-700 border-amber-200/60',
+  'sent' => 'bg-indigo-50 text-indigo-700 border-indigo-200/60',
+  'completed' => 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
+  'opened' => 'bg-sky-50 text-sky-700 border-sky-200/60',
+  'declined' => 'bg-rose-50 text-rose-700 border-rose-200/60'
+} %>
+<div class="bg-white/95 backdrop-blur border border-slate-200/90 rounded-2xl flex flex-col sm:flex-row shadow-sm hover:shadow-md hover:border-indigo-400/50 transition-all duration-200 overflow-hidden group">
+  <% if local_assigns[:with_template] %>
+    <% template = submission.template %>
+    <a href="<%= template ? template_path(template) : submission_path(submission) %>" class="px-5 sm:pr-4 py-4 group/tmpl sm:rounded-l-2xl sm:rounded-tr-none rounded-t-2xl flex sm:flex-col justify-between sm:w-60 w-full flex-shrink-0 bg-slate-50/80 border-b sm:border-b-0 sm:border-r border-slate-200/70 space-x-2 sm:space-x-0 transition-colors group-hover:bg-indigo-50/20">
+      <div>
+        <div class="font-bold items-start w-full group-hover/tmpl:text-indigo-600 text-sm flex space-x-2 transition-colors text-slate-900">
+          <%= svg_icon('file_text', class: 'w-4 h-4 mt-0.5 flex-shrink-0 text-indigo-600') %>
+          <span style="overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;">
+            <% (submission.name || template&.name).to_s.split(/(_)/).each do |item| %><%= item %><wbr><% end %>
+          </span>
+        </div>
+      </div>
+      <div class="flex-shrink-0 sm:mt-3 max-w-[50%] md:max-w-full">
+        <div class="flex text-xs flex-col text-slate-500 space-y-1">
+          <span class="flex items-center space-x-1.5 font-medium truncate">
+            <%= svg_icon('user', class: 'w-3.5 h-3.5 flex-shrink-0 text-slate-400') %>
+            <span class="truncate"><%= (submission.created_by_user || template&.author)&.full_name.presence || (submission.created_by_user || template&.author)&.email.to_s.sub(/\+\w+@/, '@') %></span>
+          </span>
+          <span class="flex items-center space-x-1.5 font-medium text-slate-400">
+            <%= svg_icon('calendar', class: 'w-3.5 h-3.5 flex-shrink-0 text-slate-400') %>
+            <span><%= l(submission.created_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) %></span>
+          </span>
+        </div>
+      </div>
+    </a>
+  <% end %>
+
+  <div class="w-full flex flex-col md:flex-row space-y-4 md:space-y-0 md:justify-between px-5 md:px-6 pb-5 md:items-center pt-5 relative cursor-pointer">
+    <% submitters = (submission.template_submitters || submission.template.submitters).filter_map { |item| submission.submitters.find { |e| e.uuid == item['uuid'] } } %>
+    <% is_submission_completed = submission.completed_at? %>
+
+    <% if submitters.size == 1 %>
+      <div>
+        <% submitter = submitters.first %>
+        <div class="flex items-center space-x-4">
+          <% if is_submission_completed %>
+            <div class="tooltip flex" data-tip="<%= l(submitter.completed_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) %>">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase tracking-wider">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <%= t('completed') %>
+              </span>
+            </div>
+          <% elsif submitter.declined_at? %>
+            <div class="tooltip flex" data-tip="<%= l(submitter.declined_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) %>">
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/60 uppercase tracking-wider">
+                <%= t('declined') %>
+              </span>
+            </div>
+          <% elsif !submission.expired? %>
+            <div class="tooltip flex" data-tip="<%= l(submitter.status_event_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) %>">
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <%= status_classes[submitter.status] || 'bg-slate-50 text-slate-700 border-slate-200' %> uppercase tracking-wider">
+                <%= t(submitter.status) %>
+              </span>
+            </div>
+          <% else %>
+            <div class="tooltip flex" data-tip="<%= l(submission.expire_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) %>">
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/60 uppercase tracking-wider">
+                <%= t('expired') %>
+              </span>
+            </div>
+          <% end %>
+
+          <div class="flex items-center space-x-2">
+            <a href="<%= submission_path(submission) %>" class="text-base font-semibold text-slate-900 hover:text-indigo-600 transition-colors break-all">
+              <%= submitter.name || submitter.email || submitter.phone %>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex space-x-2 items-center z-[1]">
+        <% if is_submission_completed %>
+          <download-button data-src="<%= submission_download_index_path(submission) %>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-all">
+            <span class="flex items-center justify-center space-x-1.5" data-target="download-button.defaultButton">
+              <%= svg_icon('download', class: 'w-4 h-4 stroke-2') %>
+              <span><%= t('download') %></span>
+            </span>
+          </download-button>
+        <% elsif current_user.email == submitter.email %>
+          <a href="<%= submit_form_path(slug: submitter.slug) %>" data-turbo="false" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-all">
+            <span class="flex items-center justify-center space-x-1.5">
+              <%= svg_icon('writing_sign', class: 'w-4 h-4 stroke-2') %>
+              <span><%= t('sign_now') %></span>
+            </span>
+          </a>
+        <% else %>
+          <%= render 'shared/clipboard_copy', text: submit_form_url(slug: submitter.slug, host: form_link_host), class: 'px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm transition-all', icon_class: 'w-4 h-4 text-slate-500', copy_title: t('copy_link'), copy_title_md: t('copy_link'), copied_title_md: t('copied') %>
+        <% end %>
+        <a href="<%= submission_path(submission) %>" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-sm transition-all">
+          <%= t('view') %>
+        </a>
+      </div>
+    <% else %>
+      <!-- Multi-submitter summary -->
+      <div class="flex items-center space-x-3">
+        <% if is_submission_completed %>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 uppercase tracking-wider">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <%= t('completed') %>
+          </span>
+        <% else %>
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60 uppercase tracking-wider">
+            <%= submitters.count(&:completed_at?) %>/<%= submitters.size %> <%= t('completed') %>
+          </span>
+        <% end %>
+        <span class="text-sm font-semibold text-slate-900">
+          <%= submitters.map { |s| s.name || s.email }.compact.join(', ') %>
+        </span>
+      </div>
+
+      <div class="flex space-x-2 items-center z-[1]">
+        <a href="<%= submission_path(submission) %>" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-all">
+          <%= t('view') %>
+        </a>
+      </div>
+    <% end %>
+
+    <a href="<%= submission_path(submission) %>" class="top-0 bottom-0 left-0 right-0 absolute"></a>
+  </div>
+</div>

@@ -1,0 +1,58 @@
+<div class="w-full mb-8 settings-horizontal-nav-wrapper">
+  <!-- Top Command Tab Bar -->
+  <div class="bg-white/95 backdrop-blur-md rounded-2xl p-2 border border-slate-200/80 shadow-sm flex items-center justify-between overflow-x-auto gap-2 scrollbar-none">
+    <div class="flex items-center space-x-1 sm:space-x-1.5 flex-nowrap">
+      <!-- Workspace Group -->
+      <a href="<%= settings_account_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path == settings_account_path ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+        <%= svg_icon('building', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+        <span><%= t('account') %></span>
+      </a>
+      <a href="<%= settings_profile_index_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path == settings_profile_index_path ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+        <%= svg_icon('user', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+        <span><%= t('profile') %></span>
+      </a>
+      <% if (can?(:manage, User) rescue true) %>
+        <a href="<%= settings_users_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path.starts_with?(settings_users_path) ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+          <%= svg_icon('users', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+          <span><%= t('users') %></span>
+        </a>
+      <% end %>
+
+      <span class="h-5 w-px bg-slate-200 mx-1 hidden sm:inline-block"></span>
+
+      <!-- Signatures & Security Group -->
+      <% if (can?(:read, EncryptedConfig.new(key: EncryptedConfig::ESIGN_CERTS_KEY, account: current_account)) rescue true) %>
+        <a href="<%= settings_esign_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path == settings_esign_path ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+          <%= svg_icon('discount_check_filled', class: 'w-4 h-4 mr-1.5 text-[#1D72FE]') %>
+          <span><%= t('digital_signatures') %></span>
+        </a>
+      <% end %>
+      <a href="<%= settings_notifications_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path == settings_notifications_path ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+        <%= svg_icon('mail', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+        <span><%= t('notifications') %></span>
+      </a>
+      <a href="<%= settings_sms_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path == settings_sms_path ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+        <%= svg_icon('message', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+        <span><%= t('sms') %></span>
+      </a>
+
+      <span class="h-5 w-px bg-slate-200 mx-1 hidden sm:inline-block"></span>
+
+      <!-- Developer Group -->
+      <% if (can?(:manage, :api) || can?(:read, AccessToken) rescue true) %>
+        <a href="<%= settings_api_index_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path.starts_with?(settings_api_index_path) ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+          <%= svg_icon('code', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+          <span><%= t('api_keys') %></span>
+        </a>
+        <a href="<%= settings_mcp_index_path %>" class="flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all <%= request.path.starts_with?(settings_mcp_index_path) ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60' %>">
+          <%= svg_icon('code_circle', class: 'w-4 h-4 mr-1.5 opacity-80') %>
+          <span>MCP Server</span>
+        </a>
+      <% end %>
+    </div>
+
+    <div class="hidden lg:flex items-center px-3 py-1 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-semibold text-slate-500">
+      <span>Docurama Control Center</span>
+    </div>
+  </div>
+</div>

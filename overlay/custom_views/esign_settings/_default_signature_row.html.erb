@@ -1,0 +1,32 @@
+<% is_default = @encrypted_config.value&.dig('custom')&.any? { |e| e['name'] == Docuseal::AATL_CERT_NAME && e['status'] == 'default' } %>
+<tr class="group">
+  <td class="flex items-center space-x-1">
+    <%= svg_icon('discount_check_filled', class: 'w-6 h-6 shrink-0 text-green-500') %>
+    <span class="flex items-center">
+      <span class="whitespace-nowrap font-medium text-slate-800">Docurama Trusted Signature</span>
+      <div class="tooltip tooltip-top ml-1 shrink-0" data-tip="Sign documents with trusted certificate provided by Docurama. Your documents and data are never shared with third parties.">
+        <%= svg_icon('circle_question', class: 'w-4 h-4 stroke-1 shrink-0') %>
+      </div>
+    </span>
+  </td>
+  <td>
+    <% if is_default %>
+      <span class="badge badge-success text-white">Active</span>
+    <% else %>
+      <span class="badge badge-neutral badge-outline">Available</span>
+    <% end %>
+  </td>
+  <td>
+    <% if is_default %>
+      <span class="badge badge-lg badge-info badge-outline">
+        <%= t('default') %>
+      </span>
+    <% else %>
+      <%= button_to settings_esign_path, method: :put, params: { name: Docuseal::AATL_CERT_NAME }, class: 'btn btn-outline btn-neutral btn-xs whitespace-nowrap', title: t('make_default'), disabled: false do %>
+        <%= t('make_default') %>
+      <% end %>
+    <% end %>
+  </td>
+  <td>
+  </td>
+</tr>

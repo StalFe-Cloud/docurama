@@ -1,0 +1,14 @@
+<form action="<%= root_path %>" method="get" id="templates_submissions_toggle" class="bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0] flex items-center space-x-1">
+  <toggle-cookies data-value="templates" data-key="dashboard_view" class="tooltip tooltip-top tooltip-no-touch" data-tip="<%= t('templates') %>">
+    <button class="<%= local_assigns[:selected] == 'submissions' ? 'px-3 py-1.5 text-xs font-medium text-[#64748B] hover:text-[#0F172A] rounded-lg transition-all flex items-center space-x-1.5' : 'px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white rounded-lg shadow-sm border border-[#E2E8F0] transition-all flex items-center space-x-1.5' %>">
+      <%= svg_icon('layout_grid', class: 'w-4 h-4 stroke-2') %>
+      <span class="hidden sm:inline"><%= t('templates') %></span>
+    </button>
+  </toggle-cookies>
+  <toggle-cookies data-value="submissions" data-key="dashboard_view" class="tooltip tooltip-top tooltip-no-touch" data-tip="<%= t('submissions') %>">
+    <button class="<%= local_assigns[:selected] == 'submissions' ? 'px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white rounded-lg shadow-sm border border-[#E2E8F0] transition-all flex items-center space-x-1.5' : 'px-3 py-1.5 text-xs font-medium text-[#64748B] hover:text-[#0F172A] rounded-lg transition-all flex items-center space-x-1.5' %>">
+      <%= svg_icon('layout_list', class: 'w-4 h-4 stroke-2') %>
+      <span class="hidden sm:inline"><%= t('submissions') %></span>
+    </button>
+  </toggle-cookies>
+</form>

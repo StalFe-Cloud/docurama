@@ -1,0 +1,185 @@
+<div class="hero-spotlight-wrapper py-6">
+  <div class="hero-spotlight"></div>
+  <div class="bg-dot-grid absolute inset-0 opacity-40 pointer-events-none"></div>
+
+  <!-- Hero Header -->
+  <div class="relative z-10 max-w-4xl mx-auto text-center px-4 pt-4 pb-10">
+    <!-- Announcement Pill -->
+    <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/70 text-blue-700 text-xs font-semibold mb-6 shadow-sm">
+      <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+      <span>Enterprise Cryptographic E-Signatures</span>
+      <span class="text-blue-400">|</span>
+      <span class="font-normal text-blue-600">RFC 3161 Verified</span>
+    </div>
+
+    <!-- Main Headline -->
+    <h1 class="text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.15] mb-5">
+      Sign documents with <span class="bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 bg-clip-text text-transparent">confidence, speed & precision</span>.
+    </h1>
+
+    <p class="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto font-normal leading-relaxed mb-8">
+      The modern document signing platform with cryptographic digital seals, automated multi-signer sequences, and tamper-evident audit trails.
+    </p>
+
+    <!-- CTAs -->
+    <div class="flex flex-wrap items-center justify-center gap-4">
+      <a href="<%= new_user_session_path %>" class="btn btn-shimmer border-0 font-semibold px-8 h-12 rounded-xl text-base shadow-lg shadow-blue-500/25 flex items-center space-x-2">
+        <span>Get Started / Sign In</span>
+        <svg class="w-5 h-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </a>
+      <a href="#features" class="btn btn-ghost border border-slate-300/80 bg-white/80 hover:bg-white font-medium px-6 h-12 rounded-xl text-base text-slate-700">
+        Explore Capabilities
+      </a>
+    </div>
+  </div>
+
+  <!-- Interactive 3D Document Canvas (img2threejs + Aceternity Card) -->
+  <div class="relative z-10 max-w-2xl mx-auto px-4 my-8 doc-3d-scene">
+    <div id="interactiveCard" class="doc-3d-card bg-white rounded-2xl p-8 border border-slate-200/80 cursor-pointer">
+      <!-- Document Header -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-5 mb-6">
+        <div class="flex items-center space-x-3">
+          <%= render 'shared/logo', width: '42px', height: '42px' %>
+          <div>
+            <div class="font-bold text-slate-900 text-base leading-tight">Partnership_Agreement_2026.pdf</div>
+            <div class="text-xs text-slate-400 font-mono mt-0.5">SHA-256: 8f4b...19c2 • 3 Signers</div>
+          </div>
+        </div>
+        <div class="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-xs font-semibold">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          <span>RFC 3161 Certified</span>
+        </div>
+      </div>
+
+      <!-- Document Mock Body -->
+      <div class="space-y-3 mb-8">
+        <div class="h-2.5 bg-slate-100 rounded-full w-full"></div>
+        <div class="h-2.5 bg-slate-100 rounded-full w-5/6"></div>
+        <div class="h-2.5 bg-slate-100 rounded-full w-4/6"></div>
+      </div>
+
+      <!-- Interactive Signature Block -->
+      <div class="bg-slate-50/80 rounded-xl p-5 border border-slate-200/60 flex items-center justify-between">
+        <div>
+          <div class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Authorized Digital Signature</div>
+          <svg class="w-48 h-12" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path class="signature-draw-path" d="M10 40C30 15 50 48 70 30C90 12 110 50 135 25C150 10 160 45 190 28" stroke="#1D72FE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-slate-400">Timestamped</div>
+          <div class="text-xs font-semibold text-slate-700 font-mono">DigiCert TSA</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bento Grid (Core Capabilities) -->
+  <div id="features" class="relative z-10 max-w-6xl mx-auto px-4 mt-16 mb-12">
+    <div class="text-center max-w-xl mx-auto mb-12">
+      <h2 class="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight mb-3">
+        Built for Modern Document Workflows
+      </h2>
+      <p class="text-slate-500 text-base">
+        A unified platform engineered for legal compliance, high velocity, and complete data ownership.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Bento Item 1 (Wide: 2 cols) -->
+      <div class="bento-card md:col-span-2 p-8 flex flex-col justify-between">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-6">
+            <%= svg_icon('writing_sign', class: 'w-6 h-6') %>
+          </div>
+          <h3 class="text-2xl font-bold text-slate-900 mb-2">Automated Multi-Party Sequences</h3>
+          <p class="text-slate-500 text-base leading-relaxed max-w-lg">
+            Configure complex multi-signatory execution orders with real-time tracking, automatic reminder cadence, and instant SMS & email notifications.
+          </p>
+        </div>
+        <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
+          <span>Multi-party routing</span>
+          <span>•</span>
+          <span>Automatic Reminders</span>
+          <span>•</span>
+          <span>SMS & Email Dispatch</span>
+        </div>
+      </div>
+
+      <!-- Bento Item 2 -->
+      <div class="bento-card p-8 flex flex-col justify-between">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-6">
+            <%= svg_icon('shield_check', class: 'w-6 h-6') %>
+          </div>
+          <h3 class="text-2xl font-bold text-slate-900 mb-2">RFC 3161 Cryptographic Seals</h3>
+          <p class="text-slate-500 text-base leading-relaxed">
+            Every signed PDF includes digital timestamping and tamper-evident cryptographic hash verification.
+          </p>
+        </div>
+        <div class="mt-8 pt-6 border-t border-slate-100 text-xs text-emerald-600 font-semibold">
+          eIDAS & ESIGN Compliant
+        </div>
+      </div>
+
+      <!-- Bento Item 3 -->
+      <div class="bento-card p-8 flex flex-col justify-between">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-6">
+            <%= svg_icon('devices', class: 'w-6 h-6') %>
+          </div>
+          <h3 class="text-2xl font-bold text-slate-900 mb-2">Universal Mobile Signing</h3>
+          <p class="text-slate-500 text-base leading-relaxed">
+            Smooth, touch-optimized signing experience across iOS, Android, tablets, and desktop browsers without installing apps.
+          </p>
+        </div>
+        <div class="mt-8 pt-6 border-t border-slate-100 text-xs text-indigo-600 font-semibold">
+          Zero friction for signers
+        </div>
+      </div>
+
+      <!-- Bento Item 4 (Wide: 2 cols) -->
+      <div class="bento-card md:col-span-2 p-8 flex flex-col justify-between">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center mb-6">
+            <%= svg_icon('brand_docker', class: 'w-6 h-6') %>
+          </div>
+          <h3 class="text-2xl font-bold text-slate-900 mb-2">Self-Hosted Data Sovereignty</h3>
+          <p class="text-slate-500 text-base leading-relaxed max-w-lg">
+            Deploy on your own infrastructure with total data isolation, complete privacy, direct REST API webhooks, and zero third-party telemetry.
+          </p>
+        </div>
+        <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
+          <span>Private Cloud</span>
+          <span>•</span>
+          <span>REST API & Webhooks</span>
+          <span>•</span>
+          <span>100% Data Isolation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3D Card Interactive Tilt Script -->
+<script>
+(function() {
+  const card = document.getElementById('interactiveCard');
+  if (!card) return;
+  
+  card.addEventListener('mousemove', (e) => {
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    const rotateX = -(y / (rect.height / 2)) * 8;
+    const rotateY = (x / (rect.width / 2)) * 8;
+    card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+  });
+
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = 'rotateX(0deg) rotateY(0deg)';
+  });
+})();
+</script>
+
+<%= render 'shared/attribution', with_counter: true %>

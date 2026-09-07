@@ -1,0 +1,25 @@
+<% if Docuseal.demo? || (request.path != '/' && !devise_controller?) %>
+  <meta name="robots" content="noindex">
+<% end %>
+<% title = content_for(:html_title) || (signed_in? ? 'Docurama' : 'Docurama | Document Signing Platform') %>
+<% description = content_for(:html_description) || 'Docurama - Streamlined document filling and digital signing platform.' %>
+<meta name="description" content="<%= description %>">
+<meta property="og:title" content="<%= title %>">
+<meta property="og:description" content="<%= description %>">
+<meta property="og:type" content="website">
+<meta property="og:url" content="<%= root_url %>">
+<meta property="og:site_name" content="Docurama">
+<% if content_for(:disable_image_preview) %>
+  <meta property="og:image" content="">
+  <meta name="twitter:image" content="">
+<% else %>
+  <meta property="og:image" content="<%= content_for(:preview_image_url).presence || "#{root_url}preview.png" %>">
+  <meta property="og:image:width" content="800">
+  <meta property="og:image:height" content="800">
+  <meta name="twitter:image" content="<%= content_for(:preview_image_url).presence || "#{root_url}preview.png" %>">
+<% end %>
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="<%= title %>">
+<meta name="twitter:description" content="<%= description %>">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="theme-color" content="#4f46e5">

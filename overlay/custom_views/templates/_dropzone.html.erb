@@ -1,0 +1,30 @@
+<%= form_for '', url: templates_upload_path, id: form_id = SecureRandom.uuid, method: :post, class: 'mt-6 block', html: { enctype: 'multipart/form-data' } do %>
+  <input type="hidden" name="form_id" value="<%= form_id %>">
+  <button type="submit" class="hidden"></button>
+  <file-dropzone data-submit-on-upload="true" class="w-full block">
+    <label for="file_dropzone_input" class="w-full block h-56 relative rounded-2xl border-2 border-dashed border-slate-300 hover:border-indigo-500 bg-white/60 hover:bg-indigo-50/20 backdrop-blur-sm transition-all duration-300 cursor-pointer group shadow-sm hover:shadow-md" data-target="file-dropzone.area">
+      <div class="absolute top-0 right-0 left-0 bottom-0 flex items-center justify-center p-6 pointer-events-none">
+        <div class="flex flex-col items-center text-center">
+          <span data-target="file-dropzone.icon" class="flex flex-col items-center">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500/10 to-violet-500/20 text-indigo-600 flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+              <%= svg_icon('cloud_upload', class: 'w-7 h-7 stroke-2') %>
+            </div>
+            <div class="font-bold text-slate-900 text-lg mb-1 tracking-tight">
+              <%= t('upload_a_new_document') %>
+            </div>
+            <div class="text-xs text-slate-500 max-w-sm">
+              <%= t('click_to_upload_or_drag_and_drop_html') %>
+            </div>
+          </span>
+          <span data-target="file-dropzone.loading" class="flex flex-col items-center hidden">
+            <%= svg_icon('loader', class: 'w-10 h-10 animate-spin text-indigo-600 mb-2') %>
+            <div class="font-semibold text-sm text-slate-900">
+              <%= t('uploading') %>...
+            </div>
+          </span>
+        </div>
+        <input id="file_dropzone_input" name="files[]" class="hidden" data-action="change:file-dropzone#onSelectFiles" data-target="file-dropzone.input" type="file" accept="image/*, application/pdf, application/zip, application/json<%= ", #{Templates::CreateAttachments::DOCUMENT_EXTENSIONS.join(', ')}" if Docurama.advanced_formats? %>" multiple>
+      </div>
+    </label>
+  </file-dropzone>
+<% end %>

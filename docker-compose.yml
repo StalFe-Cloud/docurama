@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  docurama-db:
+    image: postgres:16-alpine
+    container_name: docurama-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: docurama
+      POSTGRES_USER: docurama
+      POSTGRES_PASSWORD: docurama_secure_db_pass_2026
+    volumes:
+      - docurama_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docurama -d docurama"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docurama_net
+
+  docurama-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: docurama-api
+    restart: always
+    environment:
+      DOCURAMA_APP_URL: "https://docurama.stalfe.com"
+      DOCURAMA_DATABASE_URL: "postgresql+asyncpg://docurama:docurama_secure_db_pass_2026@docurama-db:5432/docurama"
+      DOCURAMA_STORAGE_DIR: "/app/storage"
+      DOCURAMA_P12_PATH: "/app/certs/stalfe_document_signing_cert.p12"
+      DOCURAMA_P12_PASSWORD: "stalfe28e82772b8bd"
+      DOCURAMA_TSA_URL: "http://timestamp.digicert.com"
+      DOCURAMA_SECRET_KEY: "stalfe-docurama-super-secret-production-key-2026-crypto"
+    volumes:
+      - docurama_storage:/app/storage
+    depends_on:
+      docurama-db:
+        condition: service_healthy
+    networks:
+      - docurama_net
+
+  docurama:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: docurama
+    restart: always
+    ports:
+      - "0.0.0.0:3002:3000"
+    depends_on:
+      - docurama-api
+    networks:
+      - docurama_net
+
+volumes:
+  docurama_db_data:
+  docurama_storage:
+
+networks:
+  docurama_net:
+    driver: bridge

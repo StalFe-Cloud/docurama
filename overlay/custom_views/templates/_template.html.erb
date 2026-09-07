@@ -1,0 +1,49 @@
+<div class="h-44 relative group">
+  <a href="<%= template_path(template) %>" class="flex h-full flex-col justify-between rounded-2xl p-5 w-full bg-white/90 backdrop-blur-sm border border-slate-200/90 hover:border-indigo-500/50 shadow-sm hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 group relative overflow-hidden" data-targets="dashboard-dropzone.templateCards">
+    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-indigo-500 via-indigo-600 to-violet-600 opacity-90 group-hover:w-2 transition-all"></div>
+    
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/50">
+          Template
+        </span>
+        <% if template.template_accesses.present? %>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200/50">
+            <%= svg_icon('lock', class: 'w-3 h-3 text-amber-600') %>
+            Restricted
+          </span>
+        <% end %>
+      </div>
+
+      <div class="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug" style="overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;">
+        <% template.name.split(/(_)/).each do |item| %><%= item %><wbr><% end %>
+      </div>
+    </div>
+    
+    <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500" data-targets="dashboard-dropzone.hiddenOnDrag">
+      <div class="flex items-center space-x-1.5 truncate">
+        <span class="w-5 h-5 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 text-white font-bold flex items-center justify-center text-[10px] shadow-sm">
+          <%= (template.author.full_name.presence || template.author.email).first.upcase %>
+        </span>
+        <span class="truncate font-medium text-slate-700"><%= template.author.full_name.presence || template.author.email.to_s.sub(/\+\w+@/, '@') %></span>
+      </div>
+      
+      <div class="flex items-center space-x-1 font-medium text-slate-400 whitespace-nowrap">
+        <%= svg_icon('calendar', class: 'w-3.5 h-3.5 text-slate-400') %>
+        <span><%= l(template.created_at.in_time_zone(current_account.timezone), format: :short, locale: current_account.locale) %></span>
+      </div>
+    </div>
+  </a>
+  
+  <div class="absolute top-3 right-3 items-center hidden md:group-hover:flex z-10" data-targets="dashboard-dropzone.hiddenOnDrag">
+    <div class="flex space-x-1 bg-white/95 backdrop-blur p-1 rounded-xl border border-slate-200 shadow-sm">
+      <% if can?(:update, template) && !template.archived_at? && template.account_id == current_account.id %>
+        <span class="tooltip tooltip-left tooltip-no-touch" data-tip="<%= t('move') %>">
+          <a href="<%= edit_template_folder_path(template.id) %>" data-turbo-frame="modal" class="p-1 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 transition-all">
+            <%= svg_icon('folder_share', class: 'w-4 h-4') %>
+          </a>
+        </span>
+      <% end %>
+    </div>
+  </div>
+</div>
