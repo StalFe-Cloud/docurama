@@ -119,6 +119,29 @@ export const App: React.FC = () => {
     );
   }
 
+  // 5. Direct Settings Route: /settings, /settings/account, /settings/profile, etc.
+  if (path.startsWith('/settings')) {
+    const subtab = path.replace('/settings', '').replace('/', '') || 'account';
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
+        <Header
+          currentTab="settings"
+          onSelectTab={(tab) => {
+            if (tab === 'landing') window.location.href = '/';
+            else setCurrentTab(tab);
+          }}
+          onNewEnvelope={() => setCurrentTab('builder')}
+          user={user || { email: 'admin@docurama.com', first_name: 'Admin', role: 'admin' }}
+          onLogout={handleLogout}
+          onSignIn={() => setCurrentTab('signin')}
+        />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
+          <SettingsPage user={user || { email: 'admin@docurama.com', first_name: 'Admin', role: 'admin' }} initialSubtab={subtab} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
       <Header

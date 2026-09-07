@@ -172,6 +172,60 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(29, 114, 254, 0.15), 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+/* --- TOGGLES & SWITCHES (Apple / Linear Pill) --- */
+.toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background-color: #CBD5E1;
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toggle:checked {
+  background-color: #1D72FE !important;
+}
+
+.toggle:checked::after {
+  transform: translateX(1.25rem);
+}
+
+.property-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+  gap: 1.5rem;
+}
+
+.property-row:first-child {
+  padding-top: 0.25rem;
+}
+
+.property-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0.25rem;
+}
+
 /* Status Badges */
 .badge-success {
   background-color: #ECFDF5;
