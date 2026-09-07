@@ -3,7 +3,9 @@ import {
   Plus, 
   Settings as SettingsIcon, 
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  FileCheck,
+  Code
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -29,26 +31,23 @@ export const Header: React.FC<HeaderProps> = ({
     <div className="sticky top-0 z-40 w-full bg-white border-b border-[#e5e3df]">
       <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between">
         
-        {/* Left: Brand Identity matching Notion workspace aesthetic */}
-        <div className="flex items-center space-x-6">
+        {/* Left: Official Docurama Logo (from preview.png) */}
+        <div className="flex items-center space-x-4 sm:space-x-6">
           <div 
             onClick={() => onSelectTab(user ? 'templates' : 'landing')}
             className="flex items-center space-x-2.5 group cursor-pointer select-none"
           >
-            <div className="w-7 h-7 inline-flex items-center justify-center">
-              <img src="/logo.svg" alt="Docurama" className="w-7 h-7 object-contain" />
-            </div>
-            <div className="flex items-center space-x-1.5">
-              <span className="text-base md:text-lg font-semibold tracking-tight text-[#1a1a1a]">
-                Docurama
-              </span>
-              <span className="hidden sm:inline-block text-[11px] font-medium text-[#787671] bg-[#f6f5f4] border border-[#e5e3df] rounded px-1.5 py-0.5">
-                Docs &amp; Sign
-              </span>
-            </div>
+            <img 
+              src="/logo_horizontal.png" 
+              alt="Docurama: Documents Signed Simplified" 
+              className="h-8 md:h-9 object-contain" 
+            />
+            <span className="hidden sm:inline-block text-[10px] font-semibold text-[#0075de] bg-[#dcecfa] border border-[#0075de]/20 rounded-full px-2 py-0.5 tracking-wide uppercase">
+              DocuSign Alternative
+            </span>
           </div>
 
-          {/* Center Navigation Links */}
+          {/* Center Navigation Links for Authenticated Users */}
           {user && (
             <nav className="hidden md:flex items-center space-x-1">
               <button 
@@ -68,6 +67,12 @@ export const Header: React.FC<HeaderProps> = ({
                 className={`nav-link-pill ${currentTab === 'settings' ? 'active' : ''}`}
               >
                 Settings
+              </button>
+              <button 
+                onClick={() => onSelectTab('verify')}
+                className={`nav-link-pill ${currentTab === 'verify' ? 'active' : ''}`}
+              >
+                Verify Portal
               </button>
             </nav>
           )}
@@ -101,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <div className="px-3 py-2 border-b border-[#e5e3df] mb-1">
                     <span className="text-[11px] font-semibold text-[#787671] block uppercase tracking-wider">
-                      {user?.account_name || "Docurama Workspace"}
+                      {user?.account_name || "Docurama Organization"}
                     </span>
                     <span className="text-xs text-[#1a1a1a] truncate block font-medium mt-0.5">
                       {user?.email || "admin@docurama.com"}
@@ -113,14 +118,14 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-full rounded-md py-1.5 px-3 text-xs text-[#37352f] hover:bg-[#f6f5f4] hover:text-[#1a1a1a] flex items-center gap-2 text-left transition-colors"
                     >
                       <SettingsIcon className="w-3.5 h-3.5 text-[#787671]" />
-                      <span>Settings</span>
+                      <span>Settings &amp; Keys</span>
                     </button>
                     <button
                       onClick={() => { onSelectTab('verify'); setDropdownOpen(false); }}
                       className="w-full rounded-md py-1.5 px-3 text-xs text-[#37352f] hover:bg-[#f6f5f4] hover:text-[#1a1a1a] flex items-center gap-2 text-left transition-colors"
                     >
                       <ShieldCheck className="w-3.5 h-3.5 text-[#1aae39]" />
-                      <span>Verify Portal</span>
+                      <span>Verify Signature</span>
                     </button>
                   </div>
                   <div className="border-t border-[#e5e3df] mt-1 pt-1">
@@ -140,6 +145,12 @@ export const Header: React.FC<HeaderProps> = ({
           /* Unauthenticated Right Menu */
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => onSelectTab('verify')}
+              className="hidden md:inline-flex btn btn-ghost px-2.5 py-1.5 text-xs text-[#5d5b54] hover:text-[#1a1a1a]"
+            >
+              Verify PDF
+            </button>
+            <button
               onClick={onSignIn}
               className="btn btn-ghost px-3 py-1.5 text-xs text-[#37352f] hover:text-[#1a1a1a]"
             >
@@ -149,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onSignIn}
               className="btn btn-primary px-3.5 py-1.5 text-xs font-medium text-white rounded-md"
             >
-              Get Docurama free
+              Start Signing Free
             </button>
           </div>
         )}

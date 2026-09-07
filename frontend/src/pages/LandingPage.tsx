@@ -16,7 +16,9 @@ import {
   FileText,
   Sparkles,
   Users,
-  CheckCircle2
+  CheckCircle2,
+  XCircle,
+  HelpCircle
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -48,11 +50,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
     }
   };
 
+  const scrollToComparison = () => {
+    const el = document.getElementById('comparison');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="w-full bg-white text-[#37352f]">
       
-      {/* 1. Signature Notion Deep Navy Hero Band */}
-      <div className="w-full bg-[#0a1530] text-white pt-16 pb-24 px-4 relative overflow-hidden">
+      {/* 1. Signature Deep Navy Hero Band */}
+      <div className="w-full bg-[#0a1530] text-white pt-14 pb-24 px-4 relative overflow-hidden">
         {/* Subtle decorative mesh and sticky-note dots */}
         <div className="absolute top-12 left-10 w-3 h-3 rounded-full bg-[#ff64c8] opacity-75 hidden md:block" />
         <div className="absolute top-24 right-16 w-3.5 h-3.5 rounded-full bg-[#f5d75e] opacity-80 hidden md:block" />
@@ -61,40 +70,41 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
         <div className="max-w-4xl mx-auto text-center relative z-10">
           
-          {/* Decorative sticky-note tags */}
-          <div className="inline-flex items-center gap-2 mb-6">
-            <span className="badge-tag-purple">X.509 Cryptographic Seals</span>
-            <span className="badge-tag-green">RFC 3161 Verified</span>
-            <span className="badge-tag-orange">MCP AI Agents</span>
+          {/* DocuSign Alternative Badges */}
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 mb-6">
+            <span className="badge-tag-purple font-semibold text-[11px]">DocuSign Alternative</span>
+            <span className="badge-tag-green font-semibold text-[11px]">X.509 Cryptographic Seals</span>
+            <span className="badge-tag-orange font-semibold text-[11px]">RFC 3161 Qualified TSA</span>
+            <span className="badge-tag-sky font-semibold text-[11px]">eIDAS &amp; ESIGN Compliant</span>
           </div>
 
-          {/* Hero Display Headline in Notion 600 weight */}
+          {/* Hero Display Headline: Directly Positioning Against DocuSign */}
           <h1 className="hero-display text-white mb-6 font-display">
-            The all-in-one workspace for documents and signatures.
+            The open, cryptographic alternative to DocuSign.
           </h1>
 
           <p className="text-base sm:text-lg text-[#a4a097] max-w-2xl mx-auto font-normal leading-relaxed mb-8">
-            Write, fill, digitally seal, and automate multi-signer sequences with legal cryptographic certainty. Programmatically accessible via Model Context Protocol.
+            Send, sign, and verify legally binding contracts with true X.509 digital seals, RFC 3161 timestamps, and complete audit trails. Self-host on your private cloud with zero envelope overages.
           </p>
 
-          {/* Dual CTAs: Signature Purple Primary (8px rectangle) + Outlined Secondary on Dark */}
+          {/* Dual CTAs: Signature Purple Primary + Outlined Secondary on Dark */}
           <div className="flex flex-wrap items-center justify-center gap-3 mb-14">
             <button
               onClick={onGetStarted}
               className="btn btn-primary px-6 h-11 text-sm font-medium rounded-md shadow-md flex items-center space-x-2"
             >
-              <span>Get Docurama free</span>
+              <span>Start Signing Free</span>
               <ArrowRight className="w-4 h-4 ml-1 stroke-[2]" />
             </button>
             <button
-              onClick={scrollToFeatures}
+              onClick={scrollToComparison}
               className="btn btn-secondary-on-dark px-6 h-11 text-sm font-medium rounded-md"
             >
-              Explore capabilities
+              Compare with DocuSign
             </button>
           </div>
 
-          {/* Embedded Real Workspace Mockup Card with Deep Diffuse Drop Shadow */}
+          {/* Embedded Real Electronic Signature Envelope Mockup Card */}
           <div className="relative max-w-3xl mx-auto text-left">
             <div
               ref={cardRef}
@@ -106,18 +116,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               }}
               className="workspace-mockup-card p-6 sm:p-8 select-none text-[#37352f]"
             >
-              {/* Document Workspace Title Bar */}
+              {/* Envelope Header Bar */}
               <div className="flex items-center justify-between border-b border-[#e5e3df] pb-4 mb-6">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-md bg-[#f6f5f4] border border-[#e5e3df] flex items-center justify-center text-[#5645d4]">
-                    <FileText className="w-4 h-4" />
+                  <div className="w-9 h-9 rounded-md bg-[#e6e0f5] border border-[#d6b6f6] flex items-center justify-center text-[#5645d4]">
+                    <FileText className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="font-semibold text-sm text-[#1a1a1a]">Master_Service_Agreement_2026.pdf</div>
+                    <div className="font-semibold text-sm text-[#1a1a1a]">Master_Services_Agreement_and_Mutual_NDA.pdf</div>
                     <div className="text-xs text-[#787671] flex items-center gap-2 mt-0.5">
-                      <span>3 Signatories</span>
+                      <span>Envelope: 3 Signatories</span>
                       <span>&bull;</span>
-                      <span className="font-mono text-[11px]">SHA-256: 8f4b...19c2</span>
+                      <span className="text-[#0075de] font-medium">Status: In Progress (2 of 3 Completed)</span>
                     </div>
                   </div>
                 </div>
@@ -126,38 +136,41 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 </span>
               </div>
 
-              {/* Document Workspace Kanban Mockup Rows */}
+              {/* Envelope Signers Progression Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                 <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">First Signer</div>
-                  <div className="text-xs font-medium text-[#1a1a1a]">Sarah Connor</div>
-                  <div className="text-[11px] text-[#1aae39] mt-0.5 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Signed &amp; Sealed
+                  <div className="text-xs font-semibold text-[#1a1a1a]">Sarah Connor</div>
+                  <div className="text-[11px] text-[#1aae39] mt-1 flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Signed &amp; Sealed
                   </div>
+                  <div className="text-[10px] text-[#787671] mt-0.5 font-mono">2026-09-07 10:14 UTC</div>
                 </div>
 
                 <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">Second Signer</div>
-                  <div className="text-xs font-medium text-[#1a1a1a]">Legal Counsel</div>
-                  <div className="text-[11px] text-[#dd5b00] mt-0.5 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> In Review
+                  <div className="text-xs font-semibold text-[#1a1a1a]">Legal Counsel</div>
+                  <div className="text-[11px] text-[#dd5b00] mt-1 flex items-center gap-1 font-medium">
+                    <Clock className="w-3.5 h-3.5" /> Pending Signature
                   </div>
+                  <div className="text-[10px] text-[#787671] mt-0.5 font-mono">Dispatched via Email</div>
                 </div>
 
                 <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">Compliance TSA</div>
-                  <div className="text-xs font-medium text-[#1a1a1a]">DigiCert Authority</div>
-                  <div className="text-[11px] text-[#5645d4] mt-0.5 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" /> PAdES-LTV Ready
+                  <div className="text-xs font-semibold text-[#1a1a1a]">DigiCert Authority</div>
+                  <div className="text-[11px] text-[#5645d4] mt-1 flex items-center gap-1 font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5" /> PAdES-LTV Attached
                   </div>
+                  <div className="text-[10px] text-[#787671] mt-0.5 font-mono">RFC 3161 Qualified</div>
                 </div>
               </div>
 
-              {/* Signature Interactive Pad Preview */}
-              <div className="bg-[#fafaf9] rounded-lg p-4 border border-[#e5e3df] flex items-center justify-between">
+              {/* Cryptographic Signature Pad Preview */}
+              <div className="bg-[#fafaf9] rounded-lg p-4 border border-[#e5e3df] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider mb-1">
-                    Authorized Digital Seal
+                    Authorized Digital Seal (X.509 Certificate)
                   </div>
                   <svg className="w-36 sm:w-44 h-9" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path
@@ -169,9 +182,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                     />
                   </svg>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-[#787671]">Verification Fingerprint</div>
-                  <div className="text-xs font-medium text-[#1a1a1a] font-mono">Docurama Root CA G2</div>
+                <div className="text-left sm:text-right">
+                  <div className="text-xs text-[#787671]">Offline Verification in Adobe Reader</div>
+                  <div className="text-xs font-semibold text-[#1a1a1a] font-mono">Docurama Root CA G2 &bull; SHA-256</div>
                 </div>
               </div>
             </div>
@@ -180,21 +193,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </div>
 
-      {/* 2. Pastel Feature Cards Palette Section (Echoing Notion Database Properties) */}
+      {/* 2. Feature Cards Section: The DocuSign Competitive Advantage */}
       <div id="features" className="max-w-6xl mx-auto px-4 py-20">
-        <div className="text-center max-w-2xl mx-auto mb-14">
+        <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="text-[12px] font-semibold text-[#5645d4] uppercase tracking-wider mb-2">
-            ALL-IN-ONE WORKSPACE
+            DOCUSIGN COMPETITIVE ADVANTAGE
           </div>
           <h2 className="heading-1 text-[#1a1a1a] mb-3 font-display">
-            Keep work moving 24/7.
+            Everything DocuSign charges extra for, built-in by default.
           </h2>
           <p className="text-[#5d5b54] text-base leading-relaxed">
-            One connected system for cryptographic verification, multi-signer workflows, and autonomous AI agents.
+            No artificial envelope caps, no seat penalties, and true cryptographic proof that stands up in any court of law worldwide.
           </p>
         </div>
 
-        {/* Feature Grid with Notion Pastel Tints */}
+        {/* Feature Grid with Pastel Tints */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
           {/* Card 1: Bold Yellow High-Emphasis Banner (2 cols) */}
@@ -205,10 +218,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 <span className="text-xs font-semibold text-[#793400]">Autonomous AI Agents</span>
               </div>
               <h3 className="heading-2 text-[#1a1a1a] mb-3">
-                Ask your on-demand assistants.
+                The only e-signature platform built for AI agents.
               </h3>
               <p className="text-[#37352f] text-sm leading-relaxed max-w-xl">
-                Docurama exposes native MCP server endpoints so Claude, Cursor, and custom frontier coding agents can inspect PDF signatures, verify certificate chains, and dispatch envelopes automatically.
+                While DocuSign locks developers behind enterprise pricing gates, Docurama exposes native MCP server endpoints and REST APIs. Claude, Cursor, and internal autonomous agents can prepare, inspect, and dispatch signature envelopes with human-in-the-loop validation.
               </p>
             </div>
             <div className="mt-8 pt-4 border-t border-[#793400]/15 flex items-center justify-between text-xs text-[#793400] font-medium">
@@ -216,7 +229,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               <span>&bull;</span>
               <span>5 Native Agent Tools</span>
               <span>&bull;</span>
-              <span>Bearer Authentication</span>
+              <span>Python &amp; Node SDKs</span>
             </div>
           </div>
 
@@ -226,9 +239,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               <div className="w-10 h-10 rounded-lg bg-white/70 border border-[#1aae39]/20 flex items-center justify-center mb-4 text-[#1aae39]">
                 <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="text-xl font-semibold text-[#1a1a1a] mb-2">RFC 3161 Timestamping</h3>
+              <h3 className="text-xl font-semibold text-[#1a1a1a] mb-2">Offline Adobe Acrobat Proof</h3>
               <p className="text-[#37352f] text-xs leading-relaxed">
-                Embedded cryptographic timestamps with CRL and OCSP responses ensure legal validity under eIDAS and ESIGN standards.
+                Unlike simple drawn signatures, Docurama signs with true X.509 certificates and RFC 3161 qualified timestamps. Your signed PDFs remain verifiable in Adobe Acrobat Reader offline for decades without contacting third-party servers.
               </p>
             </div>
             <div className="mt-6 pt-3 border-t border-[#1aae39]/15 text-xs text-[#1aae39] font-semibold">
@@ -242,13 +255,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               <div className="w-10 h-10 rounded-lg bg-white/70 border border-[#7b3ff2]/20 flex items-center justify-center mb-4 text-[#7b3ff2]">
                 <PenTool className="w-5 h-5" />
               </div>
-              <h3 className="text-xl font-semibold text-[#1a1a1a] mb-2">Sequential Routing</h3>
+              <h3 className="text-xl font-semibold text-[#1a1a1a] mb-2">Sequential Signer Workflows</h3>
               <p className="text-[#37352f] text-xs leading-relaxed">
-                Configure deterministic signing orders, automatic reminder intervals, and real-time delivery alerts across SMS and email.
+                Configure deterministic signing orders, conditional routing, automatic reminder intervals, and real-time delivery alerts across SMS and email without purchasing expensive add-on tiers.
               </p>
             </div>
             <div className="mt-6 pt-3 border-t border-[#7b3ff2]/15 text-xs text-[#391c57] font-semibold">
-              Multi-Party Automation
+              Deterministic Signer Chains
             </div>
           </div>
 
@@ -256,14 +269,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
           <div className="card-feature card-tint-peach md:col-span-2 p-8 flex flex-col justify-between">
             <div>
               <div className="inline-flex items-center gap-2 mb-4">
-                <span className="badge-tag-green">Self-Hosted Deployment</span>
-                <span className="text-xs font-semibold text-[#793400]">Data Sovereignty</span>
+                <span className="badge-tag-green">Data Sovereignty</span>
+                <span className="text-xs font-semibold text-[#793400]">Private Cloud &amp; On-Prem</span>
               </div>
               <h3 className="heading-3 text-[#1a1a1a] mb-2">
-                Your documents. Your infrastructure. Total isolation.
+                Your contracts never leave your private infrastructure.
               </h3>
               <p className="text-[#37352f] text-xs leading-relaxed max-w-lg">
-                Run on Docker, Kubernetes, or private VPS with PostgreSQL storage, zero external telemetry leaks, and complete regulatory audit trails.
+                DocuSign stores your sensitive customer agreements, NDAs, and financials on US multi-tenant clouds. Docurama runs self-hosted on Docker, Kubernetes, or private VPS with PostgreSQL storage, zero external telemetry, and complete regulatory audit trails.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-[#793400]/15 flex items-center justify-between text-xs text-[#793400] font-medium">
@@ -271,22 +284,95 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               <span>&bull;</span>
               <span>PostgreSQL &amp; Redis</span>
               <span>&bull;</span>
-              <span>Zero Vendor Lock-in</span>
+              <span>21 CFR Part 11 Ready</span>
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* 3. Notion 4-Tier Pricing Comparison Surface */}
+      {/* 3. Direct Head-to-Head Comparison Table: Docurama vs DocuSign */}
+      <div id="comparison" className="w-full bg-[#fafaf9] py-20 border-t border-[#e5e3df]">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <div className="text-[12px] font-semibold text-[#5645d4] uppercase tracking-wider mb-2">
+              HEAD-TO-HEAD COMPARISON
+            </div>
+            <h2 className="heading-1 text-[#1a1a1a] mb-2 font-display">
+              How Docurama compares to DocuSign.
+            </h2>
+            <p className="text-[#5d5b54] text-sm">
+              See why high-security teams, law firms, and engineering organizations choose Docurama.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-[#e5e3df] shadow-sm overflow-hidden">
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead className="bg-[#f6f5f4] text-[#1a1a1a] border-b border-[#e5e3df]">
+                <tr>
+                  <th className="py-3.5 px-4 font-semibold">Capability</th>
+                  <th className="py-3.5 px-4 font-semibold text-[#5645d4] bg-[#e6e0f5]/30">Docurama</th>
+                  <th className="py-3.5 px-4 font-semibold text-[#787671]">DocuSign</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#ede9e4]">
+                <tr className="hover:bg-[#fafaf9]">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">Envelopes &amp; Templates</td>
+                  <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#1aae39]" /> Unlimited (No Overages)
+                  </td>
+                  <td className="py-3 px-4 text-[#787671]">Capped (Expensive Overages)</td>
+                </tr>
+                <tr className="hover:bg-[#fafaf9]">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">Cryptographic Long-Term Validation</td>
+                  <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#1aae39]" /> True X.509 PAdES-LTV Included
+                  </td>
+                  <td className="py-3 px-4 text-[#787671]">Basic Stamp (LTV requires add-on)</td>
+                </tr>
+                <tr className="hover:bg-[#fafaf9]">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">Data Sovereignty &amp; Self-Hosting</td>
+                  <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#1aae39]" /> 100% Private Cloud / On-Prem
+                  </td>
+                  <td className="py-3 px-4 text-[#787671]">Multi-Tenant US Cloud Only</td>
+                </tr>
+                <tr className="hover:bg-[#fafaf9]">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">AI Agent MCP Server</td>
+                  <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#1aae39]" /> Native Model Context Protocol
+                  </td>
+                  <td className="py-3 px-4 text-[#787671]">Not Available</td>
+                </tr>
+                <tr className="hover:bg-[#fafaf9]">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">21 CFR Part 11 &amp; eIDAS Compliance</td>
+                  <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#1aae39]" /> Included in Standard Business
+                  </td>
+                  <td className="py-3 px-4 text-[#787671]">Expensive Enterprise Contract Only</td>
+                </tr>
+                <tr className="hover:bg-[#fafaf9]">
+                  <td className="py-3 px-4 font-medium text-[#1a1a1a]">REST API &amp; Webhooks Access</td>
+                  <td className="py-3 px-4 font-semibold text-[#1aae39] bg-[#e6e0f5]/15 flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-[#1aae39]" /> Included in All Tiers
+                  </td>
+                  <td className="py-3 px-4 text-[#787671]">Separate Developer Plans</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. 4-Tier Pricing Grid */}
       <div className="w-full bg-[#f6f5f4] py-20 border-t border-b border-[#e5e3df]">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <h2 className="heading-1 text-[#1a1a1a] mb-2 font-display">
-              One tool for your whole organization.
+              Predictable pricing for electronic signatures.
             </h2>
             <p className="text-[#5d5b54] text-base">
-              Free for individuals. Powerful cryptographic tiers for growing teams and enterprises.
+              No envelope overages. No surprise annual true-ups. Simple, honest pricing for teams of any size.
             </p>
           </div>
 
@@ -295,16 +381,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <div className="bg-white rounded-lg p-6 border border-[#e5e3df] flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-[#1a1a1a]">Free</h3>
-                <p className="text-xs text-[#787671] mt-1 mb-4">For organizing personal document workflows</p>
+                <p className="text-xs text-[#787671] mt-1 mb-4">For individuals needing legally binding signatures</p>
                 <div className="text-3xl font-bold text-[#1a1a1a] mb-4">$0</div>
                 <ul className="space-y-2.5 text-xs text-[#37352f]">
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Unlimited templates</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Unlimited document templates</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Self-service intake forms</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Basic audit trail</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Full cryptographic audit trail</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Standard X.509 signatures</li>
                 </ul>
               </div>
               <button onClick={onGetStarted} className="btn btn-secondary w-full text-xs mt-6 rounded-md">
-                Get started
+                Start Signing Free
               </button>
             </div>
 
@@ -312,12 +399,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <div className="bg-white rounded-lg p-6 border border-[#e5e3df] flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-[#1a1a1a]">Plus</h3>
-                <p className="text-xs text-[#787671] mt-1 mb-4">A collaborative space for small teams</p>
+                <p className="text-xs text-[#787671] mt-1 mb-4">For small businesses replacing DocuSign Starter</p>
                 <div className="text-3xl font-bold text-[#1a1a1a] mb-4">$10<span className="text-xs font-normal text-[#787671]"> / user</span></div>
                 <ul className="space-y-2.5 text-xs text-[#37352f]">
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Automated reminders</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Custom branding &amp; logos</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> SMS notifications</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Automated reminder sequences</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Custom branding and logos</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> SMS OTP mobile signing</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Real-time webhook notifications</li>
                 </ul>
               </div>
               <button onClick={onGetStarted} className="btn btn-secondary w-full text-xs mt-6 rounded-md">
@@ -332,13 +420,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </span>
               <div>
                 <h3 className="text-lg font-semibold text-[#1a1a1a]">Business</h3>
-                <p className="text-xs text-[#787671] mt-1 mb-4">Connect several teams and tools</p>
+                <p className="text-xs text-[#787671] mt-1 mb-4">For growing teams needing strict compliance</p>
                 <div className="text-3xl font-bold text-[#1a1a1a] mb-4">$18<span className="text-xs font-normal text-[#787671]"> / user</span></div>
                 <ul className="space-y-2.5 text-xs text-[#37352f]">
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> RFC 3161 TSA timestamps</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> 21 CFR Part 11 compliance</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> RFC 3161 qualified TSA timestamps</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> 21 CFR Part 11 strict compliance</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> MCP Agent Server token access</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> REST API webhooks</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Deterministic multi-signer routing</li>
                 </ul>
               </div>
               <button onClick={onGetStarted} className="btn btn-primary w-full text-xs mt-6 rounded-md">
@@ -350,13 +438,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             <div className="bg-white rounded-lg p-6 border border-[#e5e3df] flex flex-col justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-[#1a1a1a]">Enterprise</h3>
-                <p className="text-xs text-[#787671] mt-1 mb-4">Advanced security and dedicated controls</p>
+                <p className="text-xs text-[#787671] mt-1 mb-4">Dedicated security controls and private cloud</p>
                 <div className="text-3xl font-bold text-[#1a1a1a] mb-4">Custom</div>
                 <ul className="space-y-2.5 text-xs text-[#37352f]">
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Custom PKCS#12 root certs</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Custom PKCS#12 root certificates</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Hardware Security Module (HSM)</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> SAML SSO &amp; SCIM user provisioning</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Dedicated SLA</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#1aae39]" /> Air-gapped private deployment</li>
                 </ul>
               </div>
               <button onClick={onGetStarted} className="btn btn-secondary w-full text-xs mt-6 rounded-md">
@@ -367,19 +455,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </div>
 
-      {/* 4. Notion Multi-Column Footer */}
-      <footer className="w-full bg-white border-t border-[#e5e3df] py-16 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#787671]">
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-[#1aae39]" />
-            <span className="font-medium text-[#1a1a1a]">Docurama Workspace</span>
-            <span>&bull;</span>
-            <span>All systems operational</span>
+      {/* 5. Footer with Official Logo */}
+      <footer className="w-full bg-white border-t border-[#e5e3df] py-14 px-4">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="flex items-center space-x-3">
+            <img 
+              src="/logo_horizontal.png" 
+              alt="Docurama: Documents Signed Simplified" 
+              className="h-8 object-contain" 
+            />
+            <span className="text-xs text-[#787671] border-l border-[#e5e3df] pl-3">
+              The modern alternative to DocuSign
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs text-[#787671]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#1aae39]" />
+              <span className="font-medium text-[#1a1a1a]">Systems Operational</span>
+            </span>
             <span>&bull;</span>
             <span className="text-[#5645d4] font-medium">PAdES-LTV Compliant</span>
-          </div>
-          <div className="font-mono text-[11px] text-[#787671]">
-            RFC 3161 TSA &bull; X.509 PKI &bull; Notion Design System
+            <span>&bull;</span>
+            <span>RFC 3161 TSA</span>
+            <span>&bull;</span>
+            <span>21 CFR Part 11</span>
           </div>
         </div>
       </footer>

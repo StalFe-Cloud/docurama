@@ -42,18 +42,15 @@ export const SignInPage: React.FC<SignInPageProps> = ({ onSuccess, onCancel }) =
           </button>
         )}
 
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center mb-3">
-            <img src="/logo.svg" alt="Docurama" className="w-10 h-10 object-contain" />
+        {/* Brand Header with Official Logo */}
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center justify-center mb-2">
+            <img src="/logo_horizontal.png" alt="Docurama: Documents Signed Simplified" className="h-11 object-contain" />
           </div>
-          <h1 className="text-2xl font-semibold text-[#1a1a1a] tracking-tight">
-            Docurama
-          </h1>
-          <p className="text-xs text-[#787671] mt-1 font-medium">
-            Document Intelligence and Cryptographic Workflows
+          <p className="text-xs text-[#5d5b54] mt-1 font-medium">
+            Electronic Signatures &amp; Document Intelligence
           </p>
-          <h2 className="text-sm font-semibold text-[#37352f] mt-4">Sign in to your account</h2>
+          <h2 className="text-sm font-semibold text-[#1a1a1a] mt-4">Sign in to your organization</h2>
         </div>
 
         {error && (
