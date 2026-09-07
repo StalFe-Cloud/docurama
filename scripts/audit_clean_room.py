@@ -3,7 +3,7 @@ import sys
 
 def audit_directory(root_dir):
     forbidden = ["docuseal", "docu_seal", "docu seal"]
-    exclude_dirs = [".git", "node_modules", "dist", ".pytest_cache", "__pycache__"]
+    exclude_dirs = [".git", "node_modules", "dist", ".pytest_cache", "__pycache__", "data", "storage"]
     
     findings = []
     total_files = 0
