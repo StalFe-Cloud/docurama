@@ -1,11 +1,50 @@
 import os
 import sys
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8')
 import tarfile
 import tempfile
 import time
-import paramiko
+import subprocess
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+NEXA_HOST = "212.47.79.52"
+NEXA_USER = "root"
+NEXA_KEY = os.path.expanduser(r"~/.ssh/nexa_vps")
+
+def run_ssh(cmd, check=True):
+    ssh_cmd = [
+        "ssh",
+        "-i", NEXA_KEY,
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=15",
+        f"{NEXA_USER}@{NEXA_HOST}",
+        cmd
+    ]
+    print(f"  [ssh] {cmd}")
+    res = subprocess.run(ssh_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.stdout:
+        print(res.stdout.strip())
+    if res.stderr and res.returncode != 0:
+        print("  [stderr]", res.stderr.strip())
+    if check and res.returncode != 0:
+        raise RuntimeError(f"Remote command failed with code {res.returncode}: {cmd}")
+    return res
+
+def run_scp(local_path, remote_path):
+    scp_cmd = [
+        "scp",
+        "-i", NEXA_KEY,
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "ConnectTimeout=15",
+        local_path,
+        f"{NEXA_USER}@{NEXA_HOST}:{remote_path}"
+    ]
+    print(f"  [scp] {local_path} -> {remote_path}")
+    res = subprocess.run(scp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        raise RuntimeError(f"SCP failed with code {res.returncode}: {res.stderr}")
+    return res
 
 def create_deploy_archive():
     print("[1/5] Packaging clean-room Docurama source code...")
@@ -14,7 +53,7 @@ def create_deploy_archive():
         os.remove(temp_tar)
         
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    exclude = {"node_modules", ".git", ".pytest_cache", "__pycache__"}
+    exclude = {"node_modules", ".git", ".pytest_cache", "__pycache__", "dist"}
     
     with tarfile.open(temp_tar, "w:gz") as tar:
         for root, dirs, files in os.walk(base_dir):
@@ -31,72 +70,43 @@ def create_deploy_archive():
 def deploy():
     archive_path = create_deploy_archive()
     
-    print("[2/5] Connecting directly to Nexa-VPS (212.47.79.52:22)...")
-    key_path = os.path.expanduser(r"~/.ssh/nexa_vps")
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect("212.47.79.52", port=22, username="root", key_filename=key_path, timeout=30)
-    print("      SSH Connected to Nexa-VPS successfully.")
-
-    print("[3/5] Uploading and extracting clean-room Docurama stack to /opt/docurama...")
-    sftp = ssh.open_sftp()
-    remote_tar = "/tmp/docurama_clean.tar.gz"
-    sftp.put(archive_path, remote_tar)
-    sftp.close()
+    print(f"[2/5] Verifying direct SSH to Nexa-VPS ({NEXA_HOST}:22)...")
+    run_ssh("echo 'SSH to Nexa-VPS verified.' && uname -a")
     
-    commands = [
-        "cd /opt/docurama && docker compose down 2>/dev/null || true",
-        "tar -xzf /tmp/docurama_clean.tar.gz -C /opt/docurama && rm -f /tmp/docurama_clean.tar.gz",
-        "mkdir -p /opt/docurama/backend/certs"
-    ]
-    for cmd in commands:
-        stdin, stdout, stderr = ssh.exec_command(cmd)
-        stdout.channel.recv_exit_status()
+    print("[3/5] Uploading and extracting clean-room Docurama stack to /opt/docurama...")
+    remote_tar = "/tmp/docurama_clean.tar.gz"
+    run_scp(archive_path, remote_tar)
+    
+    run_ssh("cd /opt/docurama && docker compose down 2>/dev/null || true", check=False)
+    run_ssh(f"tar -xzf {remote_tar} -C /opt/docurama && rm -f {remote_tar}")
+    run_ssh("mkdir -p /opt/docurama/backend/certs")
 
     print("[4/5] Building and launching completely isolated Docurama stack (Port 3002, network docurama_net)...")
-    build_and_up_cmd = "cd /opt/docurama && docker compose build && docker compose up -d"
-    stdin, stdout, stderr = ssh.exec_command(build_and_up_cmd)
-    
-    for line in iter(stdout.readline, ""):
-        safe_line = line.strip().encode("ascii", errors="replace").decode("ascii")
-        print("  [docker]", safe_line)
-    exit_status = stdout.channel.recv_exit_status()
-    if exit_status != 0:
-        print("ERROR during docker compose build/up:", stderr.read().decode("utf-8", errors="replace"))
-        sys.exit(1)
+    run_ssh("cd /opt/docurama && docker compose build && docker compose up -d")
 
     print("\n[5/5] Updating Nexa Nginx reverse proxy to point to isolated 172.17.0.1:3002...")
-    nginx_update_cmd = """
-    sed -i 's/server docurama:3000;/server 172.17.0.1:3002;/' /opt/nexa/infra/nginx/conf.d/docurama.conf
-    docker exec nexa-nginx nginx -s reload
-    """
-    stdin, stdout, stderr = ssh.exec_command(nginx_update_cmd)
-    stdout.channel.recv_exit_status()
+    nginx_update_cmd = (
+        "sed -i 's/server docurama:3000;/server 172.17.0.1:3002;/' /opt/nexa/infra/nginx/conf.d/docurama.conf && "
+        "docker exec nexa-nginx nginx -s reload"
+    )
+    run_ssh(nginx_update_cmd, check=False)
 
     print("Waiting 10s for services to stabilize...")
     time.sleep(10)
 
     # Verification
     print("\n=== RUNNING CONTAINERS ===")
-    stdin, stdout, stderr = ssh.exec_command("docker ps --filter 'name=docurama' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'")
-    print(stdout.read().decode('utf-8'))
+    run_ssh("docker ps --filter 'name=docurama' --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'")
 
     print("=== LOCAL PORT 3002 HEALTH ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -s http://127.0.0.1:3002/api/health")
-    print(stdout.read().decode('utf-8'))
+    run_ssh("curl -s http://127.0.0.1:3002/api/health || curl -sI http://127.0.0.1:3002/ | head -n 5")
 
-    print("\n=== PUBLIC HTTPS ENDPOINT (https://docurama.stalfe.com/api/health) ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -s https://docurama.stalfe.com/api/health")
-    print(stdout.read().decode('utf-8'))
+    print("\n=== PUBLIC HTTPS ENDPOINT (https://docurama.stalfe.com/) ===")
+    run_ssh("curl -sI https://docurama.stalfe.com/ | head -n 8")
 
-    print("\n=== PUBLIC HTTPS ROOT (https://docurama.stalfe.com/) ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -sI https://docurama.stalfe.com/ | head -n 6")
-    print(stdout.read().decode('utf-8'))
-
-    ssh.close()
     if os.path.exists(archive_path):
         os.remove(archive_path)
-    print("\nDocurama Isolated Clean-Room Deployment Complete!")
+    print("\nDocurama Isolated Clean-Room Deployment to Nexa-VPS Complete!")
 
 if __name__ == "__main__":
     deploy()
