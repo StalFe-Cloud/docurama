@@ -31,17 +31,11 @@ def create_deploy_archive():
 def deploy():
     archive_path = create_deploy_archive()
     
-    print("[2/5] Establishing SSH Jump Tunnel (Switch-VPS -> Nexa-VPS)...")
-    jump_client = paramiko.SSHClient()
-    jump_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    jump_client.connect("109.199.110.49", username="root", key_filename=os.path.expanduser(r"~/.ssh/id_vps"))
-    
-    jump_transport = jump_client.get_transport()
-    jump_channel = jump_transport.open_channel("direct-tcpip", ("212.47.79.52", 22), ("127.0.0.1", 0))
-    
+    print("[2/5] Connecting directly to Nexa-VPS (212.47.79.52:22)...")
+    key_path = os.path.expanduser(r"~/.ssh/nexa_vps")
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect("212.47.79.52", username="root", key_filename=os.path.expanduser(r"~/.ssh/nexa_vps"), sock=jump_channel)
+    ssh.connect("212.47.79.52", port=22, username="root", key_filename=key_path, timeout=30)
     print("      SSH Connected to Nexa-VPS successfully.")
 
     print("[3/5] Uploading and extracting clean-room Docurama stack to /opt/docurama...")
@@ -91,16 +85,15 @@ def deploy():
     stdin, stdout, stderr = ssh.exec_command("curl -s http://127.0.0.1:3002/api/health")
     print(stdout.read().decode('utf-8'))
 
-    print("\n=== PUBLIC HTTPS ENDPOINT (https://docurama.example.com/api/health) ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -s https://docurama.example.com/api/health")
+    print("\n=== PUBLIC HTTPS ENDPOINT (https://docurama.stalfe.com/api/health) ===")
+    stdin, stdout, stderr = ssh.exec_command("curl -s https://docurama.stalfe.com/api/health")
     print(stdout.read().decode('utf-8'))
 
-    print("\n=== PUBLIC HTTPS ROOT (https://docurama.example.com/) ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -sI https://docurama.example.com/ | head -n 6")
+    print("\n=== PUBLIC HTTPS ROOT (https://docurama.stalfe.com/) ===")
+    stdin, stdout, stderr = ssh.exec_command("curl -sI https://docurama.stalfe.com/ | head -n 6")
     print(stdout.read().decode('utf-8'))
 
     ssh.close()
-    jump_client.close()
     if os.path.exists(archive_path):
         os.remove(archive_path)
     print("\nDocurama Isolated Clean-Room Deployment Complete!")
