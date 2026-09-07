@@ -16,9 +16,15 @@ import {
   Plus,
   ExternalLink,
   Trash2,
-  Shield
+  Shield,
+  Activity,
+  Play,
+  Eye,
+  Code,
+  X,
+  Radio
 } from 'lucide-react';
-import { api, DomainItem } from '../lib/api';
+import { api, DomainItem, WebhookItem, WebhookDeliveryItem } from '../lib/api';
 
 interface SettingsPageProps {
   user: any;
@@ -37,6 +43,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [domainFeedback, setDomainFeedback] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
+  // Webhooks State
+  const [webhooks, setWebhooks] = useState<WebhookItem[]>([]);
+  const [loadingWebhooks, setLoadingWebhooks] = useState(false);
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [newWebhookEvents, setNewWebhookEvents] = useState<string[]>(['*']);
+  const [creatingWebhook, setCreatingWebhook] = useState(false);
+  const [testResults, setTestResults] = useState<{ [id: string]: string }>({});
+
+  // Deliveries Modal
+  const [selectedWebhook, setSelectedWebhook] = useState<WebhookItem | null>(null);
+  const [deliveries, setDeliveries] = useState<WebhookDeliveryItem[]>([]);
+  const [loadingDeliveries, setLoadingDeliveries] = useState(false);
+
   const tabs = [
     { id: 'crypto', label: 'Cryptographic Trust', icon: ShieldCheck },
     { id: 'domains', label: 'Domain Verification', icon: Globe },
@@ -49,8 +69,79 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   useEffect(() => {
     if (activeTab === 'domains') {
       loadDomains();
+    } else if (activeTab === 'api') {
+      loadWebhooks();
     }
   }, [activeTab]);
+
+  const loadWebhooks = async () => {
+    try {
+      setLoadingWebhooks(true);
+      const list = await api.getWebhooks();
+      setWebhooks(list);
+    } catch (e: any) {
+      console.error('Failed to load webhooks:', e);
+    } finally {
+      setLoadingWebhooks(false);
+    }
+  };
+
+  const handleCreateWebhook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWebhookUrl.trim()) return;
+    try {
+      setCreatingWebhook(true);
+      await api.createWebhook(newWebhookUrl.trim(), newWebhookEvents);
+      setNewWebhookUrl('');
+      setNewWebhookEvents(['*']);
+      setShowWebhookModal(false);
+      await loadWebhooks();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create webhook');
+    } finally {
+      setCreatingWebhook(false);
+    }
+  };
+
+  const handleDeleteWebhook = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this webhook endpoint?')) return;
+    try {
+      await api.deleteWebhook(id);
+      await loadWebhooks();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete webhook');
+    }
+  };
+
+  const handleTestWebhook = async (id: string) => {
+    try {
+      setTestResults(prev => ({ ...prev, [id]: 'Testing...' }));
+      const res = await api.testWebhook(id);
+      setTestResults(prev => ({ ...prev, [id]: res.success ? `Delivered HTTP ${res.status_code || 200}` : 'Delivery Failed' }));
+      setTimeout(() => {
+        setTestResults(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }, 4000);
+    } catch (e: any) {
+      setTestResults(prev => ({ ...prev, [id]: 'Test error' }));
+    }
+  };
+
+  const handleOpenDeliveries = async (webhook: WebhookItem) => {
+    setSelectedWebhook(webhook);
+    try {
+      setLoadingDeliveries(true);
+      const d = await api.getWebhookDeliveries(webhook.id);
+      setDeliveries(d);
+    } catch (e) {
+      alert('Failed to load delivery attempts');
+    } finally {
+      setLoadingDeliveries(false);
+    }
+  };
 
   const loadDomains = async () => {
     try {
@@ -486,12 +577,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             </div>
           )}
 
-          {/* API Keys Tab */}
+          {/* API Keys & Webhooks Tab */}
           {activeTab === 'api' && (
-            <div className="space-y-4 text-xs">
-              <h2 className="text-base font-bold text-white">API Keys & Webhooks</h2>
-              <div>
-                <label className="block text-slate-400 mb-1">Production API Key</label>
+            <div className="space-y-6 text-xs">
+              <div className="border-b border-white/10 pb-4">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Key className="w-5 h-5 text-indigo-400" />
+                  API Keys & Cryptographic Webhooks
+                </h2>
+                <p className="text-slate-400 mt-1">
+                  Integrate Docurama into your external applications and receive cryptographically signed HMAC-SHA256 event notifications.
+                </p>
+              </div>
+
+              {/* API Key */}
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 space-y-2">
+                <label className="block text-slate-300 font-semibold">Production REST API Key</label>
                 <div className="flex gap-2">
                   <input
                     type="password"
@@ -499,10 +600,108 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     readOnly
                     className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-white/10 font-mono text-slate-400"
                   />
-                  <button className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold">
-                    Copy
+                  <button 
+                    onClick={() => copyToClipboard('dcr_live_92837498237498237498', 'api_key')}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-1.5"
+                  >
+                    {copiedKey === 'api_key' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedKey === 'api_key' ? 'Copied' : 'Copy'}
                   </button>
                 </div>
+              </div>
+
+              {/* Webhooks Section */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-emerald-400" />
+                      Registered Webhook Endpoints
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Dispatched with header <code>X-Docurama-Signature: sha256=...</code>
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setShowWebhookModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors shadow-lg"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Webhook
+                  </button>
+                </div>
+
+                {loadingWebhooks ? (
+                  <div className="py-8 text-center text-slate-500">Loading webhooks...</div>
+                ) : webhooks.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-slate-900/40 border border-white/5 text-center space-y-2">
+                    <Activity className="w-8 h-8 mx-auto text-slate-600" />
+                    <p className="text-slate-400 font-medium">No webhook endpoints configured yet.</p>
+                    <p className="text-[11px] text-slate-500">
+                      Add a webhook to receive real-time updates when documents are signed, completed, declined, or delegated.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {webhooks.map((wh) => (
+                      <div key={wh.id} className="p-4 rounded-xl bg-slate-900/80 border border-white/5 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="font-mono text-white text-xs break-all font-semibold">
+                            {wh.url}
+                          </div>
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <button
+                              onClick={() => handleTestWebhook(wh.id)}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-semibold flex items-center gap-1 transition-colors"
+                            >
+                              <Play className="w-3 h-3" />
+                              {testResults[wh.id] || 'Test Ping'}
+                            </button>
+
+                            <button
+                              onClick={() => handleOpenDeliveries(wh)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold flex items-center gap-1 transition-colors"
+                            >
+                              <Eye className="w-3 h-3" />
+                              Deliveries
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteWebhook(wh.id)}
+                              className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                              title="Delete Webhook"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Secret Token & Events */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-2 border-t border-white/5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">HMAC Secret:</span>
+                            <span className="font-mono text-indigo-300">{wh.secret_token?.slice(0, 16)}...</span>
+                            <button
+                              onClick={() => copyToClipboard(wh.secret_token, `wh_${wh.id}`)}
+                              className="text-slate-400 hover:text-white"
+                            >
+                              {copiedKey === `wh_${wh.id}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 sm:justify-end flex-wrap">
+                            {(wh.events || []).map((ev) => (
+                              <span key={ev} className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/5 font-mono text-[10px]">
+                                {ev}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -549,6 +748,178 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         </div>
 
       </div>
+
+      {/* Add Webhook Modal */}
+      {showWebhookModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                Add Webhook Endpoint
+              </h3>
+              <button onClick={() => setShowWebhookModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Docurama will dispatch signed JSON POST requests with HMAC-SHA256 headers for all selected lifecycle events.
+            </p>
+
+            <form onSubmit={handleCreateWebhook} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Payload URL *</label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://api.yourdomain.com/webhooks/docurama"
+                  value={newWebhookUrl}
+                  onChange={(e) => setNewWebhookUrl(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2">Subscribe to Events</label>
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-950 border border-white/5">
+                  {[
+                    { id: '*', label: 'All Lifecycle Events (*)' },
+                    { id: 'envelope.completed', label: 'Envelope Completed (All Signed)' },
+                    { id: 'envelope.sent', label: 'Envelope Dispatched' },
+                    { id: 'recipient.signed', label: 'Individual Signer Signed' },
+                    { id: 'recipient.declined', label: 'Signer Declined' },
+                    { id: 'recipient.delegated', label: 'Signer Delegated' }
+                  ].map((ev) => {
+                    const isChecked = newWebhookEvents.includes(ev.id);
+                    return (
+                      <label key={ev.id} className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (ev.id === '*') {
+                              setNewWebhookEvents(e.target.checked ? ['*'] : ['envelope.completed']);
+                            } else {
+                              const withoutStar = newWebhookEvents.filter(x => x !== '*');
+                              if (e.target.checked) {
+                                setNewWebhookEvents([...withoutStar, ev.id]);
+                              } else {
+                                setNewWebhookEvents(withoutStar.filter(x => x !== ev.id));
+                              }
+                            }
+                          }}
+                          className="rounded text-indigo-600 bg-slate-900 border-white/20"
+                        />
+                        <span>{ev.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowWebhookModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingWebhook}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white btn-primary-glow disabled:opacity-50"
+                >
+                  {creatingWebhook ? 'Registering...' : 'Register Endpoint'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Deliveries History Modal */}
+      {selectedWebhook && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  Webhook Deliveries
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5 break-all">
+                  {selectedWebhook.url}
+                </p>
+              </div>
+              <button onClick={() => setSelectedWebhook(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-white/5 bg-slate-950">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-900 text-slate-400 border-b border-white/5 text-[10px] uppercase font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-4">Event Type</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">HTTP Code</th>
+                    <th className="py-2.5 px-3">Attempts</th>
+                    <th className="py-2.5 px-4 text-right">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+                  {loadingDeliveries ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-500 font-sans">Loading audit history...</td>
+                    </tr>
+                  ) : deliveries.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-500 font-sans">
+                        No delivery attempts recorded yet. Click "Test Ping" to dispatch an initial handshake event.
+                      </td>
+                    </tr>
+                  ) : (
+                    deliveries.map((del) => (
+                      <tr key={del.id} className="hover:bg-slate-900/40">
+                        <td className="py-2.5 px-4 font-semibold text-white">{del.event_type}</td>
+                        <td className="py-2.5 px-3">
+                          {del.is_success ? (
+                            <span className="text-emerald-400 font-sans font-bold flex items-center gap-1 text-[10px]">
+                              <CheckCircle2 className="w-3 h-3" /> SUCCESS
+                            </span>
+                          ) : (
+                            <span className="text-rose-400 font-sans font-bold flex items-center gap-1 text-[10px]">
+                              <AlertCircle className="w-3 h-3" /> FAILED
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-300">
+                          {del.response_status || '---'}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-400">{del.attempts}</td>
+                        <td className="py-2.5 px-4 text-right text-slate-400 text-[10px]">
+                          {new Date(del.created_at).toLocaleTimeString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSelectedWebhook(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

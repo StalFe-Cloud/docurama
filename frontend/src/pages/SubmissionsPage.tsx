@@ -11,9 +11,16 @@ import {
   X, 
   ExternalLink,
   Ban,
-  FileText
+  FileText,
+  Bell,
+  FileSpreadsheet,
+  Users,
+  UserX,
+  UserCheck,
+  Send,
+  Upload
 } from 'lucide-react';
-import { api, Envelope } from '../lib/api';
+import { api, Envelope, TemplateItem } from '../lib/api';
 
 export const SubmissionsPage: React.FC = () => {
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
@@ -22,9 +29,22 @@ export const SubmissionsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedEnvelope, setSelectedEnvelope] = useState<Envelope | null>(null);
 
+  // Bulk Send Modal
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [bulkCsvFile, setBulkCsvFile] = useState<File | null>(null);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   useEffect(() => {
     loadEnvelopes();
   }, []);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const loadEnvelopes = async () => {
     try {
@@ -55,8 +75,55 @@ export const SubmissionsPage: React.FC = () => {
       if (selectedEnvelope?.id === id) {
         setSelectedEnvelope(null);
       }
+      showToast('Envelope voided successfully.');
     } catch (err) {
       alert('Error voiding envelope');
+    }
+  };
+
+  const handleSendReminder = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      const res = await api.sendReminder(id);
+      showToast(res.message || 'Automated reminder dispatched to pending signers.');
+      await loadEnvelopes();
+      if (selectedEnvelope?.id === id) {
+        const full = await api.getEnvelope(id);
+        setSelectedEnvelope(full);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to send reminder');
+    }
+  };
+
+  const openBulkModal = async () => {
+    try {
+      const tList = await api.listTemplates();
+      setTemplates(tList);
+      if (tList.length > 0) setSelectedTemplateId(tList[0].id);
+      setShowBulkModal(true);
+    } catch (e) {
+      alert('Failed to load templates for bulk send');
+    }
+  };
+
+  const handleBulkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTemplateId || !bulkCsvFile) {
+      alert('Please select a template and upload a CSV file.');
+      return;
+    }
+    try {
+      setBulkSubmitting(true);
+      const res = await api.bulkSendEnvelopes(selectedTemplateId, bulkCsvFile);
+      showToast(`Bulk send successful: dispatched ${res.dispatched_count || 0} envelopes!`);
+      setShowBulkModal(false);
+      setBulkCsvFile(null);
+      await loadEnvelopes();
+    } catch (err: any) {
+      alert(err.message || 'Bulk dispatch failed.');
+    } finally {
+      setBulkSubmitting(false);
     }
   };
 
@@ -91,6 +158,13 @@ export const SubmissionsPage: React.FC = () => {
             Partially Signed
           </span>
         );
+      case 'declined':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+            <UserX className="w-3.5 h-3.5" />
+            Declined
+          </span>
+        );
       case 'voided':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
@@ -110,6 +184,14 @@ export const SubmissionsPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-16">
       
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-indigo-950 border border-indigo-500/40 text-white shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <span className="text-xs font-semibold">{toastMessage}</span>
+        </div>
+      )}
+
       {/* Title & Stats */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -118,11 +200,19 @@ export const SubmissionsPage: React.FC = () => {
             Submissions Ledger
           </h1>
           <p className="mt-1 text-xs text-slate-400">
-            Real-time audit log of all active and completed cryptographic envelopes.
+            Real-time audit ledger of all active and completed cryptographic envelopes.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={openBulkModal}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors shadow-lg"
+          >
+            <Users className="w-3.5 h-3.5" />
+            Bulk Send (CSV)
+          </button>
+
           <button
             onClick={loadEnvelopes}
             className="px-3.5 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
@@ -145,12 +235,12 @@ export const SubmissionsPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 self-start sm:self-auto">
-          {['all', 'completed', 'sent', 'voided'].map((status) => (
+        <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 self-start sm:self-auto overflow-x-auto">
+          {['all', 'completed', 'sent', 'declined', 'voided'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all shrink-0 ${
                 statusFilter === status
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -163,7 +253,7 @@ export const SubmissionsPage: React.FC = () => {
       </div>
 
       {/* Ledger Table */}
-      <div className="rounded-2xl glass-card border border-white/10 overflow-hidden">
+      <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-900/80 text-slate-400 border-b border-white/10 uppercase tracking-wider text-[10px]">
@@ -171,7 +261,7 @@ export const SubmissionsPage: React.FC = () => {
                 <th className="py-3.5 px-6 font-semibold">Document Subject</th>
                 <th className="py-3.5 px-4 font-semibold">Status</th>
                 <th className="py-3.5 px-4 font-semibold">Signers Progress</th>
-                <th className="py-3.5 px-4 font-semibold">Created (UTC)</th>
+                <th className="py-3.5 px-4 font-semibold">Created</th>
                 <th className="py-3.5 px-6 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -227,11 +317,32 @@ export const SubmissionsPage: React.FC = () => {
                     </td>
 
                     <td className="py-4 px-4 text-slate-400 text-[11px]">
-                      {new Date(env.created_at).toLocaleDateString()} {new Date(env.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(env.created_at).toLocaleDateString()}
                     </td>
 
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
+                        {/* Remind Button */}
+                        {(env.status === 'sent' || env.status === 'delivered') && (
+                          <button
+                            onClick={(e) => handleSendReminder(env.id, e)}
+                            title="Send Automated Reminder"
+                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors"
+                          >
+                            <Bell className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Export CSV */}
+                        <a
+                          href={api.getExportCsvUrl(env.id)}
+                          download
+                          title="Export CSV Responses"
+                          className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors"
+                        >
+                          <FileSpreadsheet className="w-4 h-4" />
+                        </a>
+
                         {env.status === 'completed' && (
                           <a
                             href={`/api/envelopes/${env.id}/download`}
@@ -242,6 +353,7 @@ export const SubmissionsPage: React.FC = () => {
                             <Download className="w-4 h-4" />
                           </a>
                         )}
+
                         <button
                           onClick={() => openDetails(env.id)}
                           title="View Audit Trail"
@@ -249,6 +361,7 @@ export const SubmissionsPage: React.FC = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+
                         {env.status === 'sent' && (
                           <button
                             onClick={() => handleVoid(env.id)}
@@ -311,57 +424,86 @@ export const SubmissionsPage: React.FC = () => {
               )}
             </div>
 
-            {/* Actions */}
-            {selectedEnvelope.status === 'completed' && (
-              <div className="grid grid-cols-2 gap-3">
-                <a
-                  href={`/api/envelopes/${selectedEnvelope.id}/download`}
-                  download
-                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  Download Sealed PDF
-                </a>
-                <a
-                  href={`/api/envelopes/${selectedEnvelope.id}/certificate`}
-                  download
-                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors"
-                >
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  Audit Certificate
-                </a>
-              </div>
-            )}
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href={api.getExportCsvUrl(selectedEnvelope.id)}
+                download
+                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                Export CSV Data
+              </a>
 
-            {/* Recipients List with Signing Links */}
+              {(selectedEnvelope.status === 'sent' || selectedEnvelope.status === 'delivered') && (
+                <button
+                  onClick={() => handleSendReminder(selectedEnvelope.id)}
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-colors"
+                >
+                  <Bell className="w-4 h-4" />
+                  Dispatch Reminders
+                </button>
+              )}
+            </div>
+
+            {/* Recipients List with Live States */}
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                Recipients & Signing Links
+                Recipients & Execution Flow
               </h3>
               <div className="space-y-2.5">
                 {(selectedEnvelope.recipients || []).map((r) => (
-                  <div key={r.id} className="p-3 rounded-xl bg-slate-950/40 border border-white/5 text-xs flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-white">{r.name}</div>
-                      <div className="text-slate-400 text-[11px]">{r.email} ({r.role})</div>
+                  <div key={r.id} className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-white">{r.name}</div>
+                        <div className="text-slate-400 text-[11px]">{r.email} ({r.role})</div>
+                      </div>
+                      <div>
+                        {r.status === 'signed' ? (
+                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Signed
+                          </span>
+                        ) : r.status === 'declined' ? (
+                          <span className="text-rose-400 font-semibold flex items-center gap-1">
+                            <UserX className="w-3.5 h-3.5" /> Declined
+                          </span>
+                        ) : r.status === 'delegated' ? (
+                          <span className="text-purple-400 font-semibold flex items-center gap-1">
+                            <UserCheck className="w-3.5 h-3.5" /> Delegated
+                          </span>
+                        ) : (
+                          <a
+                            href={`/s/${r.signing_token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium"
+                          >
+                            Sign Now
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {r.status === 'signed' ? (
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Signed
-                        </span>
-                      ) : (
-                        <a
-                          href={`/s/${r.signing_token}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium"
-                        >
-                          Sign Now
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
+
+                    {r.declined_reason && (
+                      <div className="p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px]">
+                        <strong>Decline Reason:</strong> {r.declined_reason}
+                      </div>
+                    )}
+
+                    {r.delegated_to_email && (
+                      <div className="p-2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px]">
+                        <strong>Delegated to:</strong> {r.delegated_to_name} ({r.delegated_to_email})
+                      </div>
+                    )}
+
+                    {(r.reminders_sent_count || 0) > 0 && (
+                      <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                        <Bell className="w-3 h-3 text-amber-400" />
+                        Reminders sent: {r.reminders_sent_count} (Last: {new Date(r.last_reminded_at || '').toLocaleDateString()})
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -385,6 +527,73 @@ export const SubmissionsPage: React.FC = () => {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Send Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-400" />
+                Bulk Dispatch from CSV
+              </h3>
+              <button onClick={() => setShowBulkModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Generate dozens or hundreds of individual signing envelopes simultaneously using a template blueprint and a recipient CSV list.
+            </p>
+
+            <form onSubmit={handleBulkSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Target Blueprint Template *</label>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white"
+                >
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">Upload Recipient CSV *</label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => e.target.files && setBulkCsvFile(e.target.files[0])}
+                  className="w-full text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                />
+                <p className="text-[10px] text-slate-500 mt-1.5">
+                  CSV format: columns <code>email</code> and <code>name</code> (required), plus optional custom field values.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={bulkSubmitting}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white btn-primary-glow disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {bulkSubmitting ? 'Dispatching Envelopes...' : 'Start Bulk Dispatch'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { SigningStudioPage } from './pages/SigningStudioPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SignInPage } from './pages/SignInPage';
+import { PublicFormPage } from './pages/PublicFormPage';
 import { api } from './lib/api';
 
 export const App: React.FC = () => {
@@ -44,9 +45,19 @@ export const App: React.FC = () => {
     setUser(null);
   };
 
-  // 1. Direct Signing Link Route: /s/:token
-  if (path.startsWith('/s/')) {
-    const token = path.replace('/s/', '').split('?')[0];
+  // 1. Public Self-Service Template Intake Form: /d/:slug
+  if (path.startsWith('/d/')) {
+    const slug = path.replace('/d/', '').split('?')[0];
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 bg-grid-pattern">
+        <PublicFormPage slug={slug} />
+      </div>
+    );
+  }
+
+  // 2. Direct Signing Link Route: /s/:token or /sign/:token
+  if (path.startsWith('/s/') || path.startsWith('/sign/')) {
+    const token = (path.startsWith('/s/') ? path.replace('/s/', '') : path.replace('/sign/', '')).split('?')[0];
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 bg-grid-pattern">
         <SigningStudioPage token={token} onDone={() => { window.location.href = '/verify'; }} />
@@ -54,7 +65,7 @@ export const App: React.FC = () => {
     );
   }
 
-  // 2. Direct Public Verification Route: /verify
+  // 3. Direct Public Verification Route: /verify
   if (path === '/verify') {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 bg-grid-pattern">

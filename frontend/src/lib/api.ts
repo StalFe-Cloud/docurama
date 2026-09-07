@@ -26,6 +26,12 @@ export interface Recipient {
   status: string;
   signing_token: string;
   signed_at?: string;
+  declined_reason?: string;
+  delegated_to_email?: string;
+  delegated_to_name?: string;
+  delegated_at?: string;
+  reminders_sent_count?: number;
+  last_reminded_at?: string;
   created_at: string;
 }
 
@@ -33,7 +39,7 @@ export interface FieldItem {
   id: string;
   envelope_id: string;
   recipient_id?: string;
-  field_type: string;
+  field_type: string; // signature, initials, date, text, number, checkbox, radio, dropdown, file
   page_number: number;
   x: number;
   y: number;
@@ -41,6 +47,9 @@ export interface FieldItem {
   height: number;
   required: boolean;
   label?: string;
+  placeholder?: string;
+  validation_regex?: string;
+  options?: string[];
   value?: string;
 }
 
@@ -54,15 +63,45 @@ export interface AuditEvent {
   created_at: string;
 }
 
+export interface TemplateFolder {
+  id: string;
+  name: string;
+  color: string;
+  parent_id?: string;
+  created_at: string;
+}
+
 export interface TemplateItem {
   id: string;
   title: string;
   description?: string;
+  folder_id?: string;
+  tags?: string[];
+  is_public_shared?: boolean;
+  public_slug?: string;
+  reminder_interval_days?: number;
+  max_reminders?: number;
   pdf_path?: string;
   fields_data: any[];
   roles_data: any[];
   created_at: string;
   updated_at: string;
+}
+
+export interface DetectedField {
+  field_type: string;
+  page_number: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  name?: string;
+  confidence: number;
+}
+
+export interface AutoDetectResult {
+  total_detected: number;
+  fields: DetectedField[];
 }
 
 export interface DomainItem {
@@ -110,6 +149,25 @@ export interface VerificationResult {
   message: string;
 }
 
+export interface WebhookItem {
+  id: string;
+  url: string;
+  secret_token: string;
+  events: string[];
+  is_active: boolean;
+  deliveries_count?: number;
+  created_at: string;
+}
+
+export interface WebhookDeliveryItem {
+  id: string;
+  event_type: string;
+  response_status?: number;
+  attempts: number;
+  is_success: boolean;
+  created_at: string;
+}
+
 export const api = {
   // Auth
   getMe: async () => {
@@ -155,6 +213,23 @@ export const api = {
     }
     return res.json();
   },
+  sendReminder: async (id: string) => {
+    const res = await fetch(`${API_BASE}/envelopes/${id}/remind`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to dispatch reminders');
+    return res.json();
+  },
+  getExportCsvUrl: (id: string) => `${API_BASE}/envelopes/${id}/export-csv`,
+  bulkSendEnvelopes: async (templateId: string, csvFile: File) => {
+    const fd = new FormData();
+    fd.append('template_id', templateId);
+    fd.append('csv_file', csvFile);
+    const res = await fetch(`${API_BASE}/envelopes/bulk`, {
+      method: 'POST',
+      body: fd,
+    });
+    if (!res.ok) throw new Error('Bulk dispatch failed');
+    return res.json();
+  },
   voidEnvelope: async (id: string, reason: string) => {
     const fd = new FormData();
     fd.append('reason', reason);
@@ -165,9 +240,30 @@ export const api = {
     return res.json();
   },
 
+  // Folders
+  listFolders: async (): Promise<TemplateFolder[]> => {
+    const res = await fetch(`${API_BASE}/folders`);
+    if (!res.ok) throw new Error('Failed to fetch folders');
+    return res.json();
+  },
+  createFolder: async (name: string, color: string = '#4f46e5', parentId?: string): Promise<TemplateFolder> => {
+    const res = await fetch(`${API_BASE}/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, color, parent_id: parentId }),
+    });
+    if (!res.ok) throw new Error('Failed to create folder');
+    return res.json();
+  },
+  deleteFolder: async (folderId: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/folders/${folderId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete folder');
+  },
+
   // Templates
-  listTemplates: async (): Promise<TemplateItem[]> => {
-    const res = await fetch(`${API_BASE}/templates`);
+  listTemplates: async (folderId?: string): Promise<TemplateItem[]> => {
+    const url = folderId ? `${API_BASE}/templates?folder_id=${folderId}` : `${API_BASE}/templates`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch templates');
     return res.json();
   },
@@ -176,6 +272,30 @@ export const api = {
       method: 'POST',
       body: formData,
     });
+    return res.json();
+  },
+  autoDetectFields: async (file: File): Promise<AutoDetectResult> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_BASE}/templates/auto-detect`, {
+      method: 'POST',
+      body: fd,
+    });
+    if (!res.ok) throw new Error('Auto field detection failed');
+    return res.json();
+  },
+  getPublicTemplate: async (slug: string) => {
+    const res = await fetch(`${API_BASE}/templates/public/${slug}`);
+    if (!res.ok) throw new Error('Public form not found');
+    return res.json();
+  },
+  startPublicTemplate: async (slug: string, name: string, email: string) => {
+    const res = await fetch(`${API_BASE}/templates/public/${slug}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email }),
+    });
+    if (!res.ok) throw new Error('Failed to initiate public form');
     return res.json();
   },
 
@@ -199,6 +319,24 @@ export const api = {
       const err = await res.json();
       throw new Error(err.detail || 'Signature submission failed');
     }
+    return res.json();
+  },
+  declineSigning: async (token: string, reason: string) => {
+    const res = await fetch(`${API_BASE}/signing/${token}/decline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) throw new Error('Failed to decline signing');
+    return res.json();
+  },
+  delegateSigning: async (token: string, name: string, email: string) => {
+    const res = await fetch(`${API_BASE}/signing/${token}/delegate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email }),
+    });
+    if (!res.ok) throw new Error('Failed to delegate signing');
     return res.json();
   },
 
@@ -250,5 +388,38 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete domain');
+  },
+
+  // Webhooks
+  getWebhooks: async (): Promise<WebhookItem[]> => {
+    const res = await fetch(`${API_BASE}/webhooks`);
+    if (!res.ok) throw new Error('Failed to fetch webhooks');
+    return res.json();
+  },
+  createWebhook: async (url: string, events: string[] = ['*']): Promise<WebhookItem> => {
+    const res = await fetch(`${API_BASE}/webhooks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, events }),
+    });
+    if (!res.ok) throw new Error('Failed to create webhook');
+    return res.json();
+  },
+  deleteWebhook: async (webhookId: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/webhooks/${webhookId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete webhook');
+  },
+  testWebhook: async (webhookId: string, eventType: string = 'ping') => {
+    const res = await fetch(`${API_BASE}/webhooks/${webhookId}/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_type: eventType }),
+    });
+    return res.json();
+  },
+  getWebhookDeliveries: async (webhookId: string): Promise<WebhookDeliveryItem[]> => {
+    const res = await fetch(`${API_BASE}/webhooks/${webhookId}/deliveries`);
+    if (!res.ok) throw new Error('Failed to fetch deliveries');
+    return res.json();
   }
 };

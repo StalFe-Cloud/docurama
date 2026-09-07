@@ -31,7 +31,7 @@ class TokenResponse(BaseModel):
 
 # Field Schemas
 class FieldBase(BaseModel):
-    field_type: str  # signature, initials, date, text, name, email, checkbox
+    field_type: str  # signature, initials, date, text, number, checkbox, radio, dropdown, file
     page_number: int = 1
     x: float
     y: float
@@ -39,6 +39,9 @@ class FieldBase(BaseModel):
     height: float = 50.0
     required: bool = True
     label: Optional[str] = None
+    placeholder: Optional[str] = None
+    validation_regex: Optional[str] = None
+    options: Optional[List[str]] = []
     value: Optional[str] = None
 
 class FieldCreate(FieldBase):
@@ -68,6 +71,12 @@ class RecipientOut(RecipientBase):
     status: str
     signing_token: str
     signed_at: Optional[datetime] = None
+    declined_reason: Optional[str] = None
+    delegated_to_email: Optional[str] = None
+    delegated_to_name: Optional[str] = None
+    delegated_at: Optional[datetime] = None
+    reminders_sent_count: Optional[int] = 0
+    last_reminded_at: Optional[datetime] = None
     created_at: datetime
     
     class Config:
@@ -134,12 +143,19 @@ class SigningSessionOut(BaseModel):
 
 class SignatureSubmission(BaseModel):
     field_id: str
-    value: str  # text or signature base64
+    value: str
 
 class SubmitSignaturesRequest(BaseModel):
     signatures: List[SignatureSubmission]
-    signature_data_url: Optional[str] = None  # primary signature image
+    signature_data_url: Optional[str] = None
     signature_type: Optional[str] = "draw"
+
+class DeclineRequest(BaseModel):
+    reason: str
+
+class DelegateRequest(BaseModel):
+    name: str
+    email: EmailStr
 
 # Public Verification Schemas
 class VerificationResponse(BaseModel):
@@ -159,10 +175,32 @@ class VerificationResponse(BaseModel):
     verified_domain: Optional[str] = None
     message: str = ""
 
+# Folder Schemas
+class FolderCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#4f46e5"
+    parent_id: Optional[str] = None
+
+class FolderOut(BaseModel):
+    id: str
+    name: str
+    color: str
+    parent_id: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 # Template Schemas
 class TemplateCreate(BaseModel):
     title: str
     description: Optional[str] = ""
+    folder_id: Optional[str] = None
+    tags: Optional[List[str]] = []
+    is_public_shared: Optional[bool] = False
+    public_slug: Optional[str] = None
+    reminder_interval_days: Optional[int] = 3
+    max_reminders: Optional[int] = 3
     fields_data: Optional[List[Any]] = []
     roles_data: Optional[List[Any]] = []
 
@@ -170,6 +208,12 @@ class TemplateOut(BaseModel):
     id: str
     title: str
     description: Optional[str] = ""
+    folder_id: Optional[str] = None
+    tags: List[str] = []
+    is_public_shared: bool = False
+    public_slug: Optional[str] = None
+    reminder_interval_days: int = 3
+    max_reminders: int = 3
     pdf_path: Optional[str] = None
     fields_data: List[Any] = []
     roles_data: List[Any] = []
@@ -178,6 +222,21 @@ class TemplateOut(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Auto Detect Schemas
+class DetectedField(BaseModel):
+    field_type: str
+    page_number: int
+    x: float
+    y: float
+    width: float
+    height: float
+    name: Optional[str] = None
+    confidence: float = 1.0
+
+class AutoDetectResponse(BaseModel):
+    total_detected: int
+    fields: List[DetectedField]
 
 # Domain Verification Schemas
 class DomainCreate(BaseModel):
@@ -216,3 +275,38 @@ class DomainPublicStatus(BaseModel):
     is_verified: bool
     verified_at: Optional[datetime] = None
     organization_name: Optional[str] = None
+
+# Webhook Schemas
+class WebhookCreate(BaseModel):
+    url: str
+    events: Optional[List[str]] = [
+        "envelope.created", "envelope.sent", "envelope.completed", 
+        "envelope.declined", "recipient.opened", "recipient.signed"
+    ]
+    is_active: Optional[bool] = True
+
+class WebhookDeliveryOut(BaseModel):
+    id: str
+    event_type: str
+    response_status: Optional[int] = None
+    attempts: int
+    is_success: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class WebhookOut(BaseModel):
+    id: str
+    url: str
+    secret_token: str
+    events: List[str]
+    is_active: bool
+    created_at: datetime
+    deliveries_count: Optional[int] = 0
+    
+    class Config:
+        from_attributes = True
+
+class WebhookTestRequest(BaseModel):
+    event_type: Optional[str] = "ping"

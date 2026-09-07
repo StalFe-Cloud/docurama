@@ -1,10 +1,13 @@
 import os
 import shutil
 import uuid
-from typing import List, Optional
+import csv
+import io
+import json
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -13,10 +16,10 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.api.auth import get_current_user
-from app.models import User, Envelope, Recipient, Field, AuditEvent
+from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
-import json
+from app.services.webhook_dispatcher import WebhookDispatcher
 
 router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 
@@ -71,7 +74,6 @@ async def create_envelope(
     file_ext = os.path.splitext(file.filename)[1] or ".pdf"
     original_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original{file_ext}")
     
-    # Save uploaded PDF
     with open(original_pdf_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
@@ -90,7 +92,6 @@ async def create_envelope(
     db.add(envelope)
     await db.flush()
     
-    # Parse Recipients
     try:
         recipients_data = json.loads(recipients_json)
     except Exception:
@@ -113,7 +114,6 @@ async def create_envelope(
         await db.flush()
         created_recipients[client_ref_id] = rec.id
 
-    # Parse Fields
     try:
         fields_data = json.loads(fields_json)
     except Exception:
@@ -132,11 +132,13 @@ async def create_envelope(
             height=f.get("height", 50.0),
             required=f.get("required", True),
             label=f.get("label"),
+            placeholder=f.get("placeholder"),
+            validation_regex=f.get("validation_regex"),
+            options=f.get("options", []),
             value=f.get("value"),
         )
         db.add(field)
 
-    # Initial Audit Trail Events
     ip = request.client.host if request.client else "127.0.0.1"
     ua = request.headers.get("User-Agent", "Browser")
     
@@ -162,7 +164,14 @@ async def create_envelope(
     db.add_all([event_created, event_sent])
     await db.commit()
 
-    # Reload with relationships
+    await WebhookDispatcher.dispatch_event(
+        db, envelope.account_id, "envelope.created", {
+            "envelope_id": envelope.id,
+            "title": envelope.title,
+            "recipients_count": len(recipients_data)
+        }
+    )
+
     query = (
         select(Envelope)
         .where(Envelope.id == envelope.id)
@@ -195,6 +204,196 @@ async def get_envelope(
     if not envelope:
         raise HTTPException(status_code=404, detail="Envelope not found.")
     return envelope
+
+@router.post("/{id}/remind")
+async def remind_envelope(
+    id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually triggers an automated reminder to all signers who have not yet signed.
+    """
+    query = (
+        select(Envelope)
+        .where(Envelope.id == id, Envelope.account_id == current_user.account_id)
+        .options(selectinload(Envelope.recipients))
+    )
+    result = await db.execute(query)
+    envelope = result.scalar_one_or_none()
+    if not envelope:
+        raise HTTPException(status_code=404, detail="Envelope not found.")
+    
+    pending_signers = [r for r in envelope.recipients if r.status in ["sent", "opened", "waiting"]]
+    if not pending_signers:
+        return {"success": True, "message": "All recipients have already signed.", "reminded_count": 0}
+
+    now = datetime.now(timezone.utc)
+    for r in pending_signers:
+        r.reminders_sent_count = (r.reminders_sent_count or 0) + 1
+        r.last_reminded_at = now
+
+    audit = AuditEvent(
+        envelope_id=envelope.id,
+        event_type="reminder_sent",
+        actor_name=f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email,
+        actor_email=current_user.email,
+        description=f"Sent automated reminder to {len(pending_signers)} pending recipient(s).",
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Reminders dispatched to {len(pending_signers)} recipient(s).",
+        "reminded_count": len(pending_signers)
+    }
+
+@router.get("/{id}/export-csv")
+async def export_envelope_csv(
+    id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Exports all submission fields and signer responses as CSV.
+    """
+    query = (
+        select(Envelope)
+        .where(Envelope.id == id, Envelope.account_id == current_user.account_id)
+        .options(
+            selectinload(Envelope.recipients),
+            selectinload(Envelope.fields)
+        )
+    )
+    result = await db.execute(query)
+    envelope = result.scalar_one_or_none()
+    if not envelope:
+        raise HTTPException(status_code=404, detail="Envelope not found.")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Headers
+    writer.writerow([
+        "Envelope ID", "Title", "Status", "Verification Code",
+        "Recipient Name", "Recipient Email", "Role", "Signer Status", "Signed At",
+        "Field Label", "Field Type", "Field Value"
+    ])
+
+    for r in envelope.recipients:
+        rec_fields = [f for f in envelope.fields if f.recipient_id == r.id]
+        if not rec_fields:
+            writer.writerow([
+                envelope.id, envelope.title, envelope.status, envelope.verification_code,
+                r.name, r.email, r.role, r.status, r.signed_at or "N/A",
+                "N/A", "N/A", "N/A"
+            ])
+        else:
+            for f in rec_fields:
+                writer.writerow([
+                    envelope.id, envelope.title, envelope.status, envelope.verification_code,
+                    r.name, r.email, r.role, r.status, r.signed_at or "N/A",
+                    f.label or f.field_type, f.field_type, f.value or ""
+                ])
+
+    output.seek(0)
+    filename = f"Docurama_Export_{envelope.id[:8]}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.post("/bulk")
+async def bulk_send_envelopes(
+    template_id: str = Form(...),
+    csv_file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Uploads a CSV file of recipients (name, email) and dispatches individual envelopes using a template.
+    """
+    t_query = select(Template).where(Template.id == template_id, Template.account_id == current_user.account_id)
+    template = (await db.execute(t_query)).scalar_one_or_none()
+    if not template or not template.pdf_path or not os.path.exists(template.pdf_path):
+        raise HTTPException(status_code=404, detail="Template or PDF document not found.")
+
+    content = await csv_file.read()
+    reader = csv.DictReader(io.StringIO(content.decode("utf-8", errors="ignore")))
+    
+    dispatched_envelopes = []
+    storage_dir = settings.STORAGE_DIR
+
+    for row in reader:
+        name = row.get("name") or row.get("Name") or "Signer"
+        email = row.get("email") or row.get("Email")
+        if not email:
+            continue
+
+        envelope_id = str(uuid.uuid4())
+        new_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original.pdf")
+        shutil.copyfile(template.pdf_path, new_pdf_path)
+        sha256_orig = calculate_file_sha256(new_pdf_path)
+        ver_code = f"DCR-{uuid.uuid4().hex[:12].upper()}"
+
+        envelope = Envelope(
+            id=envelope_id,
+            account_id=current_user.account_id,
+            created_by_user_id=current_user.id,
+            title=f"{template.title} - {name}",
+            status="sent",
+            original_pdf_path=new_pdf_path,
+            sha256_original=sha256_orig,
+            verification_code=ver_code,
+        )
+        db.add(envelope)
+
+        signing_token = f"dcr_sig_{uuid.uuid4().hex}"
+        rec = Recipient(
+            envelope_id=envelope_id,
+            name=name,
+            email=email,
+            role="signer",
+            routing_order=1,
+            status="sent",
+            signing_token=signing_token
+        )
+        db.add(rec)
+        await db.flush()
+
+        for f_data in (template.fields_data or []):
+            field_val = row.get(f_data.get("label", "")) or None
+            f = Field(
+                envelope_id=envelope_id,
+                recipient_id=rec.id,
+                field_type=f_data.get("field_type", "signature"),
+                page_number=f_data.get("page_number", 1),
+                x=f_data.get("x", 0.0),
+                y=f_data.get("y", 0.0),
+                width=f_data.get("width", 150.0),
+                height=f_data.get("height", 50.0),
+                required=f_data.get("required", True),
+                label=f_data.get("label"),
+                value=field_val
+            )
+            db.add(f)
+
+        dispatched_envelopes.append({
+            "envelope_id": envelope_id,
+            "recipient": email,
+            "verification_code": ver_code
+        })
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "dispatched_count": len(dispatched_envelopes),
+        "envelopes": dispatched_envelopes
+    }
 
 @router.post("/{id}/void")
 async def void_envelope(
