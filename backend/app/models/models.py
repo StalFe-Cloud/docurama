@@ -247,3 +247,23 @@ class WebhookDelivery(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
     
     webhook = relationship("Webhook", back_populates="deliveries")
+
+class CorrectionRequest(Base):
+    __tablename__ = "correction_requests"
+    
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    envelope_id = Column(String(36), ForeignKey("envelopes.id"), nullable=False)
+    submitter_id = Column(String(36), ForeignKey("submitters.id"), nullable=False)
+    field_id = Column(String(36), ForeignKey("fields.id"), nullable=True)
+    
+    clause_title = Column(String(255), nullable=True)
+    suggested_correction = Column(Text, nullable=False)
+    status = Column(String(50), default="open")  # open, resolved, rejected
+    resolution_notes = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    
+    envelope = relationship("Envelope", backref="correction_requests")
+    submitter = relationship("Submitter", backref="correction_requests")
+    field = relationship("Field", backref="correction_requests")

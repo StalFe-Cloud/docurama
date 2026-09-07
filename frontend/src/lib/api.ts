@@ -174,6 +174,42 @@ export interface WebhookItem {
   created_at: string;
 }
 
+export interface ContractRiskFlag {
+  category: string;
+  severity: 'low' | 'medium' | 'high';
+  title: string;
+  summary: string;
+}
+
+export interface ContractAnalysisReport {
+  is_analyzed: boolean;
+  document_type: string;
+  page_count: number;
+  word_count: number;
+  estimated_read_minutes: number;
+  overall_risk_assessment: string;
+  risk_badge: 'emerald' | 'blue' | 'amber';
+  key_commercial_terms: {
+    governing_law: string;
+    termination_notice: string;
+    payment_terms: string;
+    dispute_resolution: string;
+  };
+  risk_flags: ContractRiskFlag[];
+  error?: string;
+}
+
+export interface CorrectionRequestItem {
+  id: string;
+  envelope_id: string;
+  submitter_id: string;
+  field_id?: string;
+  clause_title?: string;
+  suggested_correction: string;
+  status: string;
+  created_at: string;
+}
+
 export interface WebhookDeliveryItem {
   id: string;
   event_type: string;
@@ -369,6 +405,28 @@ export const api = {
       body: JSON.stringify({ name, email }),
     });
     if (!res.ok) throw new Error('Failed to delegate signing');
+    return res.json();
+  },
+  getContractAnalysis: async (token: string): Promise<ContractAnalysisReport> => {
+    const res = await fetch(`${API_BASE}/signing/${token}/contract-analysis`);
+    if (!res.ok) throw new Error('Failed to fetch contract analysis');
+    return res.json();
+  },
+  requestCorrection: async (token: string, data: { suggested_correction: string; clause_title?: string; field_id?: string }): Promise<CorrectionRequestItem> => {
+    const res = await fetch(`${API_BASE}/signing/${token}/request-correction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to submit correction request');
+    }
+    return res.json();
+  },
+  getCorrections: async (token: string): Promise<CorrectionRequestItem[]> => {
+    const res = await fetch(`${API_BASE}/signing/${token}/corrections`);
+    if (!res.ok) throw new Error('Failed to fetch corrections');
     return res.json();
   },
 

@@ -10,11 +10,12 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.models import Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification
+from app.models import Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification, CorrectionRequest
 from app.schemas import (
     SigningSessionOut, SubmitSignaturesRequest, FieldOut, RecipientOut,
-    DeclineRequest, DelegateRequest
+    DeclineRequest, DelegateRequest, CorrectionRequestCreate, CorrectionRequestOut
 )
+from app.services.contract_analyzer import ContractAnalyzer
 from app.services.qr_generator import generate_qr_base64
 from app.services.pdf_service import (
     overlay_fields_on_pdf, 
@@ -499,3 +500,116 @@ async def delegate_signing(
         "new_signing_token": new_token,
         "new_signing_url": f"/sign/{new_token}"
     }
+
+@router.get("/{token}/contract-analysis")
+async def get_contract_analysis(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns an instant executive summary and risk assessment of the contract.
+    """
+    query = (
+        select(Recipient)
+        .where(Recipient.signing_token == token)
+        .options(selectinload(Recipient.envelope))
+    )
+    res = await db.execute(query)
+    recipient = res.scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing link.")
+
+    envelope = recipient.envelope
+    if not envelope.original_pdf_path or not os.path.exists(envelope.original_pdf_path):
+        raise HTTPException(status_code=404, detail="Contract document file unavailable for analysis.")
+
+    return ContractAnalyzer.analyze_pdf(envelope.original_pdf_path)
+
+@router.post("/{token}/request-correction")
+async def request_correction(
+    token: str,
+    req: CorrectionRequestCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Submits an in-line correction or clarification request without voiding or declining the envelope.
+    """
+    query = (
+        select(Recipient)
+        .where(Recipient.signing_token == token)
+        .options(selectinload(Recipient.envelope))
+    )
+    res = await db.execute(query)
+    recipient = res.scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing link.")
+
+    envelope = recipient.envelope
+    correction = CorrectionRequest(
+        envelope_id=envelope.id,
+        submitter_id=recipient.id,
+        field_id=req.field_id,
+        clause_title=req.clause_title,
+        suggested_correction=req.suggested_correction,
+        status="open"
+    )
+    db.add(correction)
+
+    ip = request.client.host if request.client else "127.0.0.1"
+    ua = request.headers.get("User-Agent", "Browser")
+    audit = AuditEvent(
+        envelope_id=envelope.id,
+        event_type="correction_requested",
+        actor_name=recipient.name,
+        actor_email=recipient.email,
+        ip_address=ip,
+        user_agent=ua,
+        description=f"Recipient {recipient.name} requested in-line correction: '{req.suggested_correction[:100]}...'",
+    )
+    db.add(audit)
+    await db.commit()
+    await db.refresh(correction)
+
+    # Dispatch webhook event
+    await WebhookDispatcher.dispatch_event(
+        db, envelope.account_id, "envelope.correction_requested", {
+            "envelope_id": envelope.id,
+            "recipient_email": recipient.email,
+            "clause_title": req.clause_title,
+            "suggested_correction": req.suggested_correction
+        }
+    )
+
+    return {
+        "success": True,
+        "id": correction.id,
+        "message": "Correction request recorded and transmitted to the document creator.",
+        "status": correction.status
+    }
+
+@router.get("/{token}/corrections", response_model=List[CorrectionRequestOut])
+async def list_corrections(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retrieves all active in-line correction requests for this envelope.
+    """
+    query = (
+        select(Recipient)
+        .where(Recipient.signing_token == token)
+        .options(selectinload(Recipient.envelope))
+    )
+    res = await db.execute(query)
+    recipient = res.scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing link.")
+
+    corrections_query = (
+        select(CorrectionRequest)
+        .where(CorrectionRequest.envelope_id == recipient.envelope_id)
+        .order_by(CorrectionRequest.created_at.desc())
+    )
+    c_res = await db.execute(corrections_query)
+    return c_res.scalars().all()

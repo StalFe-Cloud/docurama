@@ -310,3 +310,22 @@ class WebhookOut(BaseModel):
 
 class WebhookTestRequest(BaseModel):
     event_type: Optional[str] = "ping"
+
+# In-line Correction Request Schemas
+class CorrectionRequestCreate(BaseModel):
+    suggested_correction: str
+    clause_title: Optional[str] = None
+    field_id: Optional[str] = None
+
+class CorrectionRequestOut(BaseModel):
+    id: str
+    envelope_id: str
+    submitter_id: str
+    field_id: Optional[str] = None
+    clause_title: Optional[str] = None
+    suggested_correction: str
+    status: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

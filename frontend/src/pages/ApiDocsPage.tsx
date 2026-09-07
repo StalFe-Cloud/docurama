@@ -28,11 +28,12 @@ interface ApiDocsPageProps {
 export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ embedded = false }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('templates');
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
-  const [activeLang, setActiveLang] = useState<'curl' | 'python' | 'javascript'>('curl');
+  const [activeLang, setActiveLang] = useState<'curl' | 'python' | 'typescript' | 'go' | 'mcp'>('curl');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedEndpoints, setExpandedEndpoints] = useState<{ [key: string]: boolean }>({
     'list-templates': true,
-    'create-submission': true
+    'create-submission': true,
+    'contract-analysis': true
   });
 
   const origin = window.location.origin;
@@ -45,6 +46,66 @@ export const ApiDocsPage: React.FC<ApiDocsPageProps> = ({ embedded = false }) =>
 
   const toggleEndpoint = (id: string) => {
     setExpandedEndpoints((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const getSnippet = (ep: any, lang: 'curl' | 'python' | 'typescript' | 'go' | 'mcp'): string => {
+    if (lang === 'curl') return ep.curl || `curl --location '${origin}${ep.path}' \\\n  --header 'X-Auth-Token: YOUR_API_KEY'`;
+    if (lang === 'python') return ep.python || `import requests\n\nres = requests.${ep.method.toLowerCase()}("${origin}${ep.path}", headers={"X-Auth-Token": "YOUR_API_KEY"})\nprint(res.json())`;
+    if (lang === 'typescript') {
+      const cleanPath = ep.path.replace('{id}', '101').replace('{token}', 'sig_sec_token');
+      return `// TypeScript SDK Integration
+import { DocuramaClient } from '@docurama/sdk';
+
+const client = new DocuramaClient({ apiKey: process.env.DOCURAMA_API_KEY });
+
+const response = await fetch('${origin}${cleanPath}', {
+  method: '${ep.method}',
+  headers: {
+    'X-Auth-Token': 'YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  }${ep.method === 'POST' || ep.method === 'PUT' ? `,\n  body: JSON.stringify({\n    // Required parameters\n  })` : ''}
+});
+const result = await response.json();
+console.log(result);`;
+    }
+    if (lang === 'go') {
+      const cleanPath = ep.path.replace('{id}', '101').replace('{token}', 'sig_sec_token');
+      return `package main
+
+import (
+\t"fmt"
+\t"net/http"
+\t"io/ioutil"
+)
+
+func main() {
+\tclient := &http.Client{}
+\treq, _ := http.NewRequest("${ep.method}", "${origin}${cleanPath}", nil)
+\treq.Header.Set("X-Auth-Token", "YOUR_API_KEY")
+\treq.Header.Set("Content-Type", "application/json")
+
+\tresp, err := client.Do(req)
+\tif err != nil {
+\t\tpanic(err)
+\t}
+\tdefer resp.Body.Close()
+\tbody, _ := ioutil.ReadAll(resp.Body)
+\tfmt.Println(string(body))
+}`;
+    }
+    if (lang === 'mcp') {
+      return JSON.stringify({
+        server: "docurama-mcp",
+        tool: ep.id.replace(/-/g, '_'),
+        description: ep.description,
+        arguments: {
+          path: ep.path,
+          method: ep.method,
+          parameters: ep.params ? ep.params.reduce((acc: any, p: any) => ({ ...acc, [p.name]: `<${p.type}>` }), {}) : {}
+        }
+      }, null, 2);
+    }
+    return ep.curl;
   };
 
   const endpoints = [
@@ -447,6 +508,104 @@ app.post('/webhook', (req, res) => {
           download_url: `${origin}/api/submissions/4012/documents`
         }
       }
+    },
+    // ----------------------------------------------------
+    // CONTRACT INTELLIGENCE & IN-LINE REVIEW
+    // ----------------------------------------------------
+    {
+      id: 'contract-analysis',
+      category: 'intelligence',
+      method: 'GET',
+      path: '/api/signing/{token}/contract-analysis',
+      title: 'Extract Contract Intelligence & Risk Score',
+      description: 'Run deep semantic clause analysis on the envelope document. Classifies agreement type, parses governing law, termination notice periods, payment terms, and flags critical covenant risks (evergreen auto-renewal, uncapped liability, non-compete) with zero third-party data leakage.',
+      params: [
+        { name: 'token', type: 'string', required: true, desc: 'Secure signer session token or envelope identifier.' }
+      ],
+      curl: `curl --location '${origin}/api/signing/sig_session_token_xyz/contract-analysis' \\
+  --header 'X-Auth-Token: YOUR_API_KEY'`,
+      python: `import requests
+
+response = requests.get(
+    "${origin}/api/signing/sig_session_token_xyz/contract-analysis",
+    headers={"X-Auth-Token": "YOUR_API_KEY"}
+)
+print(response.json())`,
+      javascript: `const response = await fetch('${origin}/api/signing/sig_session_token_xyz/contract-analysis', {
+  headers: { 'X-Auth-Token': 'YOUR_API_KEY' }
+});
+const report = await response.json();
+console.log(report);`,
+      response: {
+        is_analyzed: true,
+        document_type: "Non-Disclosure Agreement (NDA)",
+        page_count: 3,
+        word_count: 850,
+        estimated_read_minutes: 4,
+        overall_risk_assessment: "Low Risk (Standard Agreement)",
+        risk_badge: "emerald",
+        key_commercial_terms: {
+          governing_law: "State of Delaware",
+          termination_notice: "30 days written notice",
+          payment_terms: "Standard commercial schedule",
+          dispute_resolution: "Courts of competent jurisdiction"
+        },
+        risk_flags: [
+          {
+            category: "Covenants",
+            severity: "medium",
+            title: "Non-Solicitation or Restrictive Covenants",
+            summary: "Contains restrictions regarding solicitation of employees or customers."
+          }
+        ]
+      }
+    },
+    {
+      id: 'request-correction',
+      category: 'intelligence',
+      method: 'POST',
+      path: '/api/signing/{token}/request-correction',
+      title: 'Submit In-Line Clause Correction Request',
+      description: 'Submit an in-line correction or amendment request prior to signature. Instantly records the requested change and dispatches the envelope.correction_requested webhook to notify the originator.',
+      params: [
+        { name: 'token', type: 'string', required: true, desc: 'Secure signer session token.' },
+        { name: 'suggested_correction', type: 'string', required: true, desc: 'Detailed amendment or revision proposal.' },
+        { name: 'clause_title', type: 'string', required: false, desc: 'Target clause or section heading (e.g. Section 4.2).' }
+      ],
+      curl: `curl --location '${origin}/api/signing/sig_session_token_xyz/request-correction' \\
+  --header 'Content-Type: application/json' \\
+  --data-raw '{
+    "clause_title": "Section 4 - Payment Schedule",
+    "suggested_correction": "Payment shall be due within Net 60 days of invoice receipt, rather than Net 30."
+  }'`,
+      python: `import requests
+
+payload = {
+    "clause_title": "Section 4 - Payment Schedule",
+    "suggested_correction": "Payment shall be due within Net 60 days of invoice receipt, rather than Net 30."
+}
+response = requests.post(
+    "${origin}/api/signing/sig_session_token_xyz/request-correction",
+    json=payload
+)
+print(response.json())`,
+      javascript: `const response = await fetch('${origin}/api/signing/sig_session_token_xyz/request-correction', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    clause_title: 'Section 4 - Payment Schedule',
+    suggested_correction: 'Payment shall be due within Net 60 days of invoice receipt, rather than Net 30.'
+  })
+});
+console.log(await response.json());`,
+      response: {
+        id: "corr_88f921ab01",
+        envelope_id: "env_4012",
+        clause_title: "Section 4 - Payment Schedule",
+        suggested_correction: "Payment shall be due within Net 60 days of invoice receipt, rather than Net 30.",
+        status: "pending",
+        created_at: "2026-09-07T20:20:00Z"
+      }
     }
   ];
 
@@ -479,23 +638,32 @@ app.post('/webhook', (req, res) => {
 
       {/* Quick Info & Authentication Card */}
       <div className="bg-white rounded-lg p-5 border border-[#e5e3df] mb-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-1">
             <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">BASE URL</span>
-            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] select-all">
+            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] select-all truncate">
               {`${origin}/api`}
             </div>
           </div>
           <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">AUTHENTICATION HEADER</span>
-            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] select-all">
+            <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">AUTHENTICATION</span>
+            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] select-all truncate">
               X-Auth-Token: YOUR_API_KEY
             </div>
           </div>
           <div className="space-y-1">
             <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">PAYLOAD ENCODING</span>
-            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a]">
-              application/json; charset=utf-8
+            <div className="font-mono text-xs bg-[#f6f5f4] p-2.5 rounded-md border border-[#e5e3df] text-[#1a1a1a] truncate">
+              application/json
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-semibold text-[#5645d4] uppercase tracking-wider flex items-center gap-1">
+              <Cpu className="w-3 h-3 text-[#5645d4]" />
+              MCP SERVER
+            </span>
+            <div className="font-mono text-xs bg-indigo-50/60 p-2.5 rounded-md border border-indigo-200 text-[#5645d4] select-all truncate">
+              docurama-mcp (Native Agent Hub)
             </div>
           </div>
         </div>
@@ -508,6 +676,7 @@ app.post('/webhook', (req, res) => {
           {[
             { id: 'templates', label: 'Templates', icon: FileText },
             { id: 'submissions', label: 'Submissions', icon: Send },
+            { id: 'intelligence', label: 'Contract Intelligence', icon: Sparkles },
             { id: 'submitters', label: 'Submitters', icon: Users },
             { id: 'webhooks', label: 'Webhooks', icon: Webhook },
             { id: 'all', label: 'All Endpoints', icon: Layers }
@@ -647,11 +816,11 @@ app.post('/webhook', (req, res) => {
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider">REQUEST</span>
                           <div className="flex rounded-full bg-[#0a1530] p-0.5 border border-[#1a2a52] text-[10px]">
-                            {(['curl', 'python', 'javascript'] as const).map((l) => (
+                            {(['curl', 'python', 'typescript', 'go', 'mcp'] as const).map((l) => (
                               <button
                                 key={l}
                                 onClick={() => setActiveLang(l)}
-                                className={`px-2.5 py-0.5 rounded-full font-mono uppercase transition-all ${
+                                className={`px-2 py-0.5 rounded-full font-mono uppercase transition-all ${
                                   activeLang === l
                                     ? 'bg-[#5645d4] text-white shadow-xs'
                                     : 'text-[#a4a097] hover:text-white'
@@ -663,7 +832,7 @@ app.post('/webhook', (req, res) => {
                           </div>
                         </div>
                         <button
-                          onClick={() => copyToClipboard(ep[activeLang], `${ep.id}-${activeLang}`)}
+                          onClick={() => copyToClipboard(getSnippet(ep, activeLang), `${ep.id}-${activeLang}`)}
                           className="btn btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 text-[#5d5b54] hover:text-[#1a1a1a] rounded-md"
                         >
                           {copiedSnippet === `${ep.id}-${activeLang}` ? (
@@ -681,7 +850,7 @@ app.post('/webhook', (req, res) => {
                       </div>
 
                       <div className="bg-[#0a1530] rounded-lg p-3.5 overflow-x-auto text-xs font-mono text-white border border-[#1a2a52] leading-relaxed max-h-72">
-                        <pre>{ep[activeLang]}</pre>
+                        <pre>{getSnippet(ep, activeLang)}</pre>
                       </div>
                     </div>
 
