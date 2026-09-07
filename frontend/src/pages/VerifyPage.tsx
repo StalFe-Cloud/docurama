@@ -69,13 +69,13 @@ export const VerifyPage: React.FC = () => {
       <div className="text-center space-y-3 pt-6">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-300">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          StalFe Document Trust & Attestation Authority
+          Docurama Document Trust & Attestation Authority
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
           Public Verification Portal
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
-          Verify PAdES-LTV electronic signatures, DigiCert RFC 3161 cryptographic timestamps, and SHA-256 document tamper integrity against the StalFe Root CA registry.
+          Verify PAdES-LTV electronic signatures, DigiCert RFC 3161 cryptographic timestamps, and SHA-256 document tamper integrity against the Docurama Root CA registry.
         </p>
       </div>
 
@@ -211,7 +211,7 @@ export const VerifyPage: React.FC = () => {
               )}
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Root Authority</span>
-                <span className="font-semibold text-emerald-400">StalFe Root Certification Authority (FR)</span>
+                <span className="font-semibold text-emerald-400">Docurama Root Certification Authority (FR)</span>
               </div>
             </div>
 

@@ -1,15 +1,15 @@
 # syntax=docker/dockerfile:1
 # Docurama Enterprise Container Image
-# Copyright (c) 2026 StalFe Technologies. All Rights Reserved.
-# https://github.com/StalFe-Cloud/docurama
+# Copyright (c) 2026 Docurama Technologies. All Rights Reserved.
+# https://github.com/Docurama-Cloud/docurama
 
 FROM docuseal/docuseal:latest
 
 LABEL org.opencontainers.image.title="Docurama" \
       org.opencontainers.image.description="Next-Generation Digital Document Signing & Verification Platform" \
-      org.opencontainers.image.vendor="StalFe Technologies" \
-      org.opencontainers.image.version="1.0.0-stalfe" \
-      org.opencontainers.image.source="https://github.com/StalFe-Cloud/docurama"
+      org.opencontainers.image.vendor="Docurama Technologies" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://github.com/Docurama-Cloud/docurama"
 
 # Set Docurama environment defaults
 ENV PRODUCT_NAME=Docurama \

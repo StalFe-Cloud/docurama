@@ -29,8 +29,8 @@ export const App: React.FC = () => {
     } catch (e) {
       // Mock default user if in offline mode or dev mode
       setUser({
-        email: 'admin@stalfe.com',
-        first_name: 'StalFe',
+        email: 'admin@docurama.com',
+        first_name: 'Docurama',
         last_name: 'Admin',
         role: 'admin'
       });
@@ -109,7 +109,7 @@ export const App: React.FC = () => {
       {/* Footer */}
       <footer className="w-full border-t border-white/5 py-6 px-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>&copy; {new Date().getFullYear()} StalFe Technologies. All rights reserved.</span>
+          <span>&copy; {new Date().getFullYear()} Docurama Technologies. All rights reserved.</span>
           <div className="flex items-center gap-4 text-[11px] text-slate-400">
             <span>PAdES-LTV Digital Trust</span>
             <span>•</span>

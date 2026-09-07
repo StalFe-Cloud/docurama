@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
                   Docurama
                 </span>
                 <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                  StalFe Trust
+                  Docurama Trust
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">Digital Seal & E-Signature Studio</p>

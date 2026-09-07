@@ -2,7 +2,7 @@
 
 For PAdES-LTV digital signing and RFC 3161 timestamping, place your PKCS#12 signing certificate here:
 
-- `stalfe_document_signing_cert.p12` (or your custom `.p12` bundle)
+- `docurama_document_signing_cert.p12` (or your custom `.p12` bundle)
 - Configure the passphrase via the `CERT_PASSWORD` environment variable in `.env`.
 
 > [!CAUTION]

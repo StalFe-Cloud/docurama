@@ -173,7 +173,7 @@ class DomainVerification(Base):
     txt_record_host = Column(String(255), nullable=False)
     txt_record_value = Column(String(255), nullable=False)
     cname_record_host = Column(String(255), nullable=False)
-    cname_target = Column(String(255), nullable=False, default="docurama.stalfe.com")
+    cname_target = Column(String(255), nullable=False, default="docurama.example.com")
     web_confirmation_url = Column(String(500), nullable=True)
     
     verified_at = Column(DateTime(timezone=True), nullable=True)

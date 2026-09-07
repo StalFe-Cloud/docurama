@@ -154,7 +154,7 @@ async def create_envelope(
         envelope_id=envelope.id,
         event_type="sent",
         actor_name="Docurama Trust Engine",
-        actor_email="system@stalfe.com",
+        actor_email="system@example.com",
         ip_address=ip,
         user_agent=ua,
         description=f"Sent envelope invitations to {len(recipients_data)} recipient(s).",

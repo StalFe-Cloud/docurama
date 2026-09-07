@@ -1,7 +1,7 @@
 # Docurama
 
 **Next-Generation Digital Document Signing & Cryptographic Verification Platform**  
-*Tailored for StalFe Technologies and Enterprise Counterparties.*
+*Tailored for Docurama Technologies and Enterprise Counterparties.*
 
 ---
 
@@ -64,7 +64,7 @@ docurama/
 * **PAdES-LTV Digital Signatures**: Cryptographically certified with PKCS#12 signing certificates and RFC 3161 trusted timestamps (DigiCert TSA).
 * **Certificate of Completion with Vector QR Code**: Generates a tamper-evident audit trail embedded with a scannable QR code linking to the public verification portal.
 * **Public Verification Portal (`/verify`)**: Standalone verification interface where counterparties can upload a signed document or enter an envelope ID to verify certificate validity and timestamps.
-* **Corporate DNS Domain Attestation**: Authenticates client domains (e.g., `stalfe.com`) via DNS TXT records, subdomain pointers (`docurama.stalfe.com`), or HTTP `/.well-known/` confirmation.
+* **Corporate DNS Domain Attestation**: Authenticates client domains (e.g., `example.com`) via DNS TXT records, subdomain pointers (`docurama.example.com`), or HTTP `/.well-known/` confirmation.
 * **Mobile Signing Hand-Off**: Desktop signers can scan an on-screen QR code to sign on their smartphone touchscreens.
 * **Strict Network Isolation**: Dedicated Docker bridge network (`docurama_net`) with zero attachment to any internal staging/production microservice networks.
 
@@ -103,7 +103,7 @@ docker compose -f overlay/docker-compose.overlay.yml up -d
 To build the self-contained, standalone `docurama:latest` container image locally (with all views, controllers, vector QR generators, and brand assets baked directly into the image layers):
 
 ```bash
-docker build -t docurama:latest -t docurama:1.0.0-stalfe .
+docker build -t docurama:latest -t docurama:1.0.0 .
 ```
 
 To run the standalone image with clean volume persistence (zero runtime code mounts):

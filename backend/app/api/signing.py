@@ -245,7 +245,7 @@ async def submit_signatures(
         combined_pdf_path = os.path.join(storage_dir, f"{envelope.id}_combined.pdf")
         append_certificate_page(flattened_pdf_path, cert_pdf_path, combined_pdf_path)
 
-        # 4. Cryptographically Sign with StalFe PAdES-LTV Digital Certificate
+        # 4. Cryptographically Sign with Docurama PAdES-LTV Digital Certificate
         final_sealed_path = os.path.join(storage_dir, f"{envelope.id}_sealed.pdf")
         crypto_res = sign_pdf_with_pades(combined_pdf_path, final_sealed_path)
 
@@ -259,10 +259,10 @@ async def submit_signatures(
         audit_sealed = AuditEvent(
             envelope_id=envelope.id,
             event_type="completed",
-            actor_name="StalFe Trust Engine",
-            actor_email="system@stalfe.com",
+            actor_name="Docurama Trust Engine",
+            actor_email="system@example.com",
             ip_address="127.0.0.1",
-            description=f"Envelope completed and sealed with StalFe PAdES-LTV (SHA-256: {envelope.sha256_signed[:16]}...).",
+            description=f"Envelope completed and sealed with Docurama PAdES-LTV (SHA-256: {envelope.sha256_signed[:16]}...).",
             hash_state=envelope.sha256_signed,
         )
         db.add(audit_sealed)

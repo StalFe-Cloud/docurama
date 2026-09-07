@@ -7,8 +7,8 @@ interface SignInPageProps {
 }
 
 export const SignInPage: React.FC<SignInPageProps> = ({ onSuccess }) => {
-  const [email, setEmail] = useState('admin@stalfe.com');
-  const [password, setPassword] = useState('StalFe2026!');
+  const [email, setEmail] = useState('admin@docurama.com');
+  const [password, setPassword] = useState('Docurama2026!');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -91,7 +91,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({ onSuccess }) => {
 
         <div className="pt-4 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-slate-400">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Secured by StalFe Root Certification Authority</span>
+          <span>Secured by Docurama Root Certification Authority</span>
         </div>
 
       </div>

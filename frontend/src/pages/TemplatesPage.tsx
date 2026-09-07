@@ -138,7 +138,7 @@ export const TemplatesPage: React.FC<TemplatesPageProps> = ({
         </div>
         <div className="text-xs text-slate-400 flex items-center gap-2 self-end sm:self-center">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>All templates include automated StalFe Root CA audit certificate</span>
+          <span>All templates include automated Docurama Root CA audit certificate</span>
         </div>
       </div>
 

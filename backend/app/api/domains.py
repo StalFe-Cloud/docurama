@@ -37,7 +37,7 @@ async def list_domains(
     result = await db.execute(query)
     domains = result.scalars().all()
     
-    # If no domain exists and user email is from a corporate domain (e.g. stalfe.com), auto-provision domain
+    # If no domain exists and user email is from a corporate domain (e.g. example.com), auto-provision domain
     if not domains and current_user.email and "@" in current_user.email:
         user_domain = sanitize_domain(current_user.email.split("@")[1])
         if user_domain not in ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"]:
@@ -51,7 +51,7 @@ async def list_domains(
                 txt_record_host=f"_docurama-challenge.{user_domain}",
                 txt_record_value=f"docurama-verification={token}",
                 cname_record_host=f"docurama.{user_domain}",
-                cname_target="docurama.stalfe.com",
+                cname_target="docurama.example.com",
                 web_confirmation_url=f"https://{user_domain}/.well-known/docurama-verification"
             )
             # Check if immediately verifiable
@@ -80,7 +80,7 @@ async def create_domain(
     if not clean_domain or "." not in clean_domain:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please provide a valid corporate domain (e.g. stalfe.com)"
+            detail="Please provide a valid corporate domain (e.g. example.com)"
         )
 
     # Check if domain already registered
@@ -106,7 +106,7 @@ async def create_domain(
         txt_record_host=f"_docurama-challenge.{clean_domain}",
         txt_record_value=f"docurama-verification={token}",
         cname_record_host=f"docurama.{clean_domain}",
-        cname_target="docurama.stalfe.com",
+        cname_target="docurama.example.com",
         web_confirmation_url=f"https://{clean_domain}/.well-known/docurama-verification"
     )
 

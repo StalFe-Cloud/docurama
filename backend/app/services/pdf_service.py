@@ -262,7 +262,7 @@ def generate_certificate_of_completion_pdf(
         elements.append(Spacer(1, 15))
         
         # Cryptographic Trust Statement
-        cert_statement = """<font size=7 color="#64748b">This Certificate of Completion is an immutable electronic record generated automatically by StalFe Docurama. Every event is cryptographically anchored with SHA-256 message digests and RFC 3161 compliant timestamps. Scan the QR code or verify online at docurama.stalfe.com/verify.</font>"""
+        cert_statement = """<font size=7 color="#64748b">This Certificate of Completion is an immutable electronic record generated automatically by Docurama. Every event is cryptographically anchored with SHA-256 message digests and RFC 3161 compliant timestamps. Scan the QR code or verify online at docurama.example.com/verify.</font>"""
         elements.append(Paragraph(cert_statement, subtitle_style))
         
         doc.build(elements)

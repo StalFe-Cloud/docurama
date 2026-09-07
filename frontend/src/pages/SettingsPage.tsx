@@ -167,7 +167,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               <div className="border-b border-white/10 pb-4">
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  StalFe Document Trust Engine
+                  Docurama Document Trust Engine
                 </h2>
                 <p className="text-slate-400 mt-1">
                   Active X.509 PKCS#12 digital certificates used for PAdES-LTV document sealing and RFC 3161 timestamps.
@@ -177,19 +177,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               <div className="space-y-3">
                 <div className="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/20 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">StalFe Document Signing Certificate</span>
+                    <span className="font-bold text-white">Docurama Document Signing Certificate</span>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
                       ACTIVE
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-400">
-                    Subject: <span className="text-slate-300 font-mono">CN=StalFe Trusted Document Signer, O=StalFe Technologies, C=FR</span>
+                    Subject: <span className="text-slate-300 font-mono">CN=Docurama Trusted Document Signer, O=Docurama Technologies, C=FR</span>
                   </div>
                   <div className="text-[11px] text-slate-400">
-                    Issuer: <span className="text-slate-300 font-mono">CN=StalFe Document Signing Intermediate CA</span>
+                    Issuer: <span className="text-slate-300 font-mono">CN=Docurama Document Signing Intermediate CA</span>
                   </div>
                   <div className="text-[11px] text-slate-400">
-                    Root CA: <span className="text-slate-300 font-mono">CN=StalFe Root Certification Authority</span>
+                    Root CA: <span className="text-slate-300 font-mono">CN=Docurama Root Certification Authority</span>
                   </div>
                 </div>
 
@@ -221,7 +221,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     Client & Corporate Domain Verification
                   </h2>
                   <p className="text-slate-400 mt-1">
-                    Authenticate your corporate domain (<code className="text-indigo-300">stalfe.com</code>) via DNS records or website confirmation pointing to Docurama to enable verified sender identity and anti-spoofing seals.
+                    Authenticate your corporate domain (<code className="text-indigo-300">example.com</code>) via DNS records or website confirmation pointing to Docurama to enable verified sender identity and anti-spoofing seals.
                   </p>
                 </div>
                 <button
@@ -256,7 +256,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="e.g. stalfe.com"
+                    placeholder="e.g. example.com"
                     value={newDomainInput}
                     onChange={(e) => setNewDomainInput(e.target.value)}
                     className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
@@ -447,7 +447,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <label className="block text-slate-400 mb-1">Email Address</label>
                 <input
                   type="email"
-                  defaultValue={user?.email || 'admin@stalfe.com'}
+                  defaultValue={user?.email || 'admin@docurama.com'}
                   className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
                 />
               </div>
@@ -455,7 +455,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <label className="block text-slate-400 mb-1">Organization Subdomain</label>
                 <input
                   type="text"
-                  defaultValue="stalfe"
+                  defaultValue="Docurama"
                   disabled
                   className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/5 text-slate-500 font-mono"
                 />
@@ -471,7 +471,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <label className="block text-slate-400 mb-1">Sender Email</label>
                 <input
                   type="text"
-                  defaultValue="documents@stalfe.com"
+                  defaultValue="documents@docurama.com"
                   className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
                 />
               </div>
@@ -479,7 +479,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <label className="block text-slate-400 mb-1">Sender Display Name</label>
                 <input
                   type="text"
-                  defaultValue="StalFe Docurama Electronic Signatures"
+                  defaultValue="Docurama Electronic Signatures"
                   className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
                 />
               </div>

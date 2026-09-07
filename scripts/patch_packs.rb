@@ -7,14 +7,14 @@ packs_dir = '/app/public/packs'
 puts "=== Docurama Build: Scrubbing Legacy Strings in Asset Packs ==="
 
 replacements = [
-  ['https://www.docuseal.com/blog/accept-payments-and-request-signatures-with-ease', 'https://docurama.stalfe.com/docs'],
-  ['https://www.docuseal.com/pricing', 'https://docurama.stalfe.com/settings'],
-  ['https://www.docuseal.com/qualified-electronic-signature', 'https://docurama.stalfe.com/settings/esign'],
-  ['https://www.docuseal.com/esign-disclosure', 'https://docurama.stalfe.com/terms'],
-  ['https://github.com/docusealco/docuseal', 'https://docurama.stalfe.com'],
-  ['https://docuseal.com/sign_up', 'https://docurama.stalfe.com/users/sign_up'],
-  ['https://www.docuseal.com/start', 'https://docurama.stalfe.com'],
-  ['demo.docuseal.tech', 'demo.docurama.stalfe.com'],
+  ['https://www.docuseal.com/blog/accept-payments-and-request-signatures-with-ease', 'https://docurama.example.com/docs'],
+  ['https://www.docuseal.com/pricing', 'https://docurama.example.com/settings'],
+  ['https://www.docuseal.com/qualified-electronic-signature', 'https://docurama.example.com/settings/esign'],
+  ['https://www.docuseal.com/esign-disclosure', 'https://docurama.example.com/terms'],
+  ['https://github.com/docusealco/docuseal', 'https://docurama.example.com'],
+  ['https://docuseal.com/sign_up', 'https://docurama.example.com/users/sign_up'],
+  ['https://www.docuseal.com/start', 'https://docurama.example.com'],
+  ['demo.docuseal.tech', 'demo.docurama.example.com'],
   ['docuseal_modal_container', 'docurama_modal_container'],
   ['docuseal_builder_tab', 'docurama_builder_tab'],
   ['docuseal_clipboard', 'docurama_clipboard'],

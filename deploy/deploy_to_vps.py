@@ -91,12 +91,12 @@ def deploy():
     stdin, stdout, stderr = ssh.exec_command("curl -s http://127.0.0.1:3002/api/health")
     print(stdout.read().decode('utf-8'))
 
-    print("\n=== PUBLIC HTTPS ENDPOINT (https://docurama.stalfe.com/api/health) ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -s https://docurama.stalfe.com/api/health")
+    print("\n=== PUBLIC HTTPS ENDPOINT (https://docurama.example.com/api/health) ===")
+    stdin, stdout, stderr = ssh.exec_command("curl -s https://docurama.example.com/api/health")
     print(stdout.read().decode('utf-8'))
 
-    print("\n=== PUBLIC HTTPS ROOT (https://docurama.stalfe.com/) ===")
-    stdin, stdout, stderr = ssh.exec_command("curl -sI https://docurama.stalfe.com/ | head -n 6")
+    print("\n=== PUBLIC HTTPS ROOT (https://docurama.example.com/) ===")
+    stdin, stdout, stderr = ssh.exec_command("curl -sI https://docurama.example.com/ | head -n 6")
     print(stdout.read().decode('utf-8'))
 
     ssh.close()

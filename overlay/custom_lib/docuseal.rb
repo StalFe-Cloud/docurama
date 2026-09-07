@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
 module Docurama
-  PRODUCT_URL = 'https://docurama.stalfe.com'
+  PRODUCT_URL = 'https://docurama.example.com'
   PRODUCT_EMAIL_URL = ENV.fetch('DOCURAMA_PRODUCT_EMAIL_URL', ENV.fetch('PRODUCT_EMAIL_URL', PRODUCT_URL))
   NEWSLETTER_URL = "#{PRODUCT_URL}/newsletters".freeze
   ENQUIRIES_URL = "#{PRODUCT_URL}/enquiries".freeze
   PRODUCT_NAME = 'Docurama'
-  DEFAULT_APP_URL = ENV.fetch('DOCURAMA_APP_URL', ENV.fetch('APP_URL', 'https://docurama.stalfe.com'))
-  GITHUB_URL = 'https://docurama.stalfe.com'
-  DISCORD_URL = 'https://docurama.stalfe.com'
-  TWITTER_URL = 'https://docurama.stalfe.com'
+  DEFAULT_APP_URL = ENV.fetch('DOCURAMA_APP_URL', ENV.fetch('APP_URL', 'https://docurama.example.com'))
+  GITHUB_URL = 'https://docurama.example.com'
+  DISCORD_URL = 'https://docurama.example.com'
+  TWITTER_URL = 'https://docurama.example.com'
   TWITTER_HANDLE = '@docurama'
   CHATGPT_URL = "#{PRODUCT_URL}".freeze
-  SUPPORT_EMAIL = 'support@stalfe.com'
-  HOST = ENV.fetch('DOCURAMA_HOST', ENV.fetch('HOST', 'docurama.stalfe.com'))
-  AATL_CERT_NAME = 'stalfe_aatl'
+  SUPPORT_EMAIL = 'support@docurama.com'
+  HOST = ENV.fetch('DOCURAMA_HOST', ENV.fetch('HOST', 'docurama.example.com'))
+  AATL_CERT_NAME = 'docurama_aatl'
   CONSOLE_URL = '/settings'
   CLOUD_URL = '/settings'
   CDN_URL = "https://#{HOST}"

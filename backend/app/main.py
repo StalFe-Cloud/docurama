@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Docurama API",
-    description="High-Assurance Digital Signature and Document Intelligence Platform for StalFe",
+    description="High-Assurance Digital Signature and Document Intelligence Platform for Docurama",
     version=settings.VERSION,
     lifespan=lifespan,
     docs_url="/api/docs",
@@ -47,7 +47,7 @@ async def health_check():
         "status": "healthy",
         "service": "docurama-backend",
         "version": settings.VERSION,
-        "digital_trust": "StalFe Root CA Certified"
+        "digital_trust": "Docurama Root CA Certified"
     }
 
 if __name__ == "__main__":

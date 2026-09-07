@@ -193,7 +193,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
         <div>
           <h2 className="text-xl font-bold text-white">Document Successfully Sealed</h2>
           <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            Your cryptographic digital signature has been verified and permanently affixed to the document under the StalFe Root CA Trust Network.
+            Your cryptographic digital signature has been verified and permanently affixed to the document under the Docurama Root CA Trust Network.
           </p>
         </div>
         {completedCode && (
@@ -258,7 +258,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
         <div className="border-b border-slate-200 pb-6 flex items-start justify-between">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">{session?.envelope_title}</h1>
-            <p className="text-xs text-slate-500 mt-1">StalFe Docurama Certified Electronic Document</p>
+            <p className="text-xs text-slate-500 mt-1">Docurama Certified Electronic Document</p>
           </div>
           <div className="text-right text-[10px] text-slate-400 font-mono">
             SECURE-ID: {session?.envelope_id?.slice(0, 8)}
@@ -267,7 +267,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
         <div className="space-y-4 text-xs text-slate-600 leading-relaxed">
           <p>
-            By executing this document through StalFe Docurama, all parties agree that electronic signatures, initials, and cryptographic timestamps affixed hereto carry the full legal validity, enforceability, and admissibility equivalent to handwritten wet signatures under eIDAS (EU 910/2014) and the US ESIGN Act.
+            By executing this document through Docurama, all parties agree that electronic signatures, initials, and cryptographic timestamps affixed hereto carry the full legal validity, enforceability, and admissibility equivalent to handwritten wet signatures under eIDAS (EU 910/2014) and the US ESIGN Act.
           </p>
           <p>
             Every signature captured records hardware telemetry, high-entropy timestamps via DigiCert RFC 3161 TSA, and an immutable SHA-256 state digest permanently sealed into the PAdES-LTV layer.

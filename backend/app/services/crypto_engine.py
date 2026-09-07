@@ -20,9 +20,9 @@ def calculate_bytes_sha256(data: bytes) -> str:
     """Calculate SHA-256 hexadecimal digest of bytes in memory."""
     return hashlib.sha256(data).hexdigest()
 
-def load_stalfe_p12():
+def load_Docurama_p12():
     """
-    Load StalFe PKCS#12 Document Signing Certificate and Private Key.
+    Load Docurama PKCS#12 Document Signing Certificate and Private Key.
     """
     p12_path = settings.P12_PATH
     p12_password = settings.P12_PASSWORD.encode("utf-8") if settings.P12_PASSWORD else None
@@ -40,18 +40,18 @@ def load_stalfe_p12():
 def sign_pdf_with_pades(
     input_pdf_path: str,
     output_pdf_path: str,
-    reason: str = "Document Sealed and Certified by StalFe Docurama",
-    location: str = "StalFe Trust Engine (FR)",
-    contact_info: str = "legal@stalfe.com"
+    reason: str = "Document Sealed and Certified by Docurama",
+    location: str = "Docurama Trust Engine (FR)",
+    contact_info: str = "legal@example.com"
 ) -> Dict[str, Any]:
     """
     Sign a PDF document with PAdES digital signature using pyhanko.
-    Embeds StalFe document signing certificate chain, cryptographic SHA-256 digest,
+    Embeds Docurama Document Signing Certificate chain, cryptographic SHA-256 digest,
     and optional RFC 3161 TSA timestamp.
     """
-    key, cert, add_certs = load_stalfe_p12()
-    subject_str = cert.subject.rfc4514_string() if cert else "CN=StalFe Trusted Document Signer, O=StalFe Technologies, C=FR"
-    issuer_str = cert.issuer.rfc4514_string() if cert else "CN=StalFe Document Signing Intermediate CA, C=FR"
+    key, cert, add_certs = load_Docurama_p12()
+    subject_str = cert.subject.rfc4514_string() if cert else "CN=Docurama Trusted Document Signer, O=Docurama Technologies, C=FR"
+    issuer_str = cert.issuer.rfc4514_string() if cert else "CN=Docurama Document Signing Intermediate CA, C=FR"
     
     try:
         from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
@@ -76,7 +76,7 @@ def sign_pdf_with_pades(
             w = IncrementalPdfFileWriter(inf)
             
             sig_meta = signers.PdfSignatureMetadata(
-                field_name=f"StalFe_Docurama_Seal_{int(datetime.now().timestamp())}",
+                field_name=f"Docurama_Docurama_Seal_{int(datetime.now().timestamp())}",
                 reason=reason,
                 location=location,
                 contact_info=contact_info,
@@ -114,7 +114,7 @@ def sign_pdf_with_pades(
             "sha256": signed_sha,
             "subject": subject_str,
             "issuer": issuer_str,
-            "pades_standard": "PAdES-LTV (StalFe Sealed)",
+            "pades_standard": "PAdES-LTV (Docurama Sealed)",
             "warning": str(e)
         }
 
@@ -143,8 +143,8 @@ def verify_document_integrity(pdf_path: str) -> Dict[str, Any]:
                     "sha256": sha256,
                     "has_digital_signature": True,
                     "signature_intact": status.intact,
-                    "signer_subject": str(status.signing_cert.subject) if status.signing_cert else "CN=StalFe Trusted Document Signer",
-                    "signer_issuer": str(status.signing_cert.issuer) if status.signing_cert else "CN=StalFe Root Certification Authority",
+                    "signer_subject": str(status.signing_cert.subject) if status.signing_cert else "CN=Docurama Trusted Document Signer",
+                    "signer_issuer": str(status.signing_cert.issuer) if status.signing_cert else "CN=Docurama Root Certification Authority",
                     "timestamp_rfc3161": "RFC 3161 Verified",
                     "pades_ltv_verified": status.intact,
                     "message": "Cryptographic signature is valid and document has not been altered."
@@ -157,8 +157,8 @@ def verify_document_integrity(pdf_path: str) -> Dict[str, Any]:
         "sha256": sha256,
         "has_digital_signature": True,
         "signature_intact": True,
-        "signer_subject": "CN=StalFe Trusted Document Signer, O=StalFe Technologies, C=FR",
-        "signer_issuer": "CN=StalFe Root Certification Authority, C=FR",
+        "signer_subject": "CN=Docurama Trusted Document Signer, O=Docurama Technologies, C=FR",
+        "signer_issuer": "CN=Docurama Root Certification Authority, C=FR",
         "timestamp_rfc3161": "RFC 3161 Timestamped",
         "pades_ltv_verified": True,
         "message": "Verified document cryptographic integrity and digital seal."
