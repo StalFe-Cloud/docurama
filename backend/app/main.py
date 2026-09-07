@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -49,6 +50,28 @@ async def health_check():
         "version": settings.VERSION,
         "digital_trust": "Docurama Root CA Certified"
     }
+
+# Mount built React frontend SPA if dist directory is present
+frontend_dist = os.getenv(
+    "DOCURAMA_FRONTEND_DIST", 
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../frontend/dist"))
+)
+if os.path.exists(frontend_dist) and os.path.isdir(frontend_dist):
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api") or full_path.startswith("ws") or full_path in ("healthz", "docs", "openapi.json"):
+            return {"detail": "Not Found"}
+        candidate = os.path.join(frontend_dist, full_path)
+        if full_path and os.path.exists(candidate) and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        index_file = os.path.join(frontend_dist, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        return {"detail": "Not Found"}
 
 if __name__ == "__main__":
     import uvicorn

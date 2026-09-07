@@ -1,5 +1,0 @@
-<div class="mt-2 mb-1">
-  <div class="tooltip tooltip-no-touch w-full" data-tip="<%= t('send_sms') %>">
-    <%= link_to submitter.sent_at? ? t('re_send_sms') : t('send_sms'), submitter_path(submitter, send_sms: 1), method: :patch, class: 'btn btn-sm btn-primary w-full' %>
-  </div>
-</div>

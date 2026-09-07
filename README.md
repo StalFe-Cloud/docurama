@@ -9,9 +9,9 @@
 
 Docurama is a high-security document signing, template management, and audit verification platform. It combines visual document preparation, multi-party signing workflows, vector QR verification, PAdES-LTV (Long-Term Validation) digital signatures, and authoritative corporate DNS domain attestation.
 
-This repository houses both implementation pathways for the Docurama platform:
-1. **Clean-Room Proprietary Architecture (`backend/` & `frontend/`)**: Built from scratch with zero legacy dependencies using Python (FastAPI, pyHanko) and React (Vite, TypeScript, Tailwind CSS).
-2. **Full-Featured Engine Overlay (`overlay/`)**: A complete cosmetic, controller, routing, and cryptographic patch layer running on top of a mature engine under the hood, delivering 45+ enterprise features immediately with 100% Docurama branding.
+The platform is **100% proprietary (Option 3 Clean-Room Architecture)** with zero legacy engine dependencies:
+- **Backend**: Python (FastAPI, pyHanko, PyMuPDF, SQLAlchemy 2.0 async, asyncpg)
+- **Frontend**: React 18, Vite 5, TypeScript 5.5, Tailwind CSS, Lucide icons
 
 ---
 
@@ -21,11 +21,11 @@ This repository houses both implementation pathways for the Docurama platform:
 docurama/
 ├── backend/                  # Clean-Room Python / FastAPI Microservice
 │   ├── app/
-│   │   ├── api/              # REST & WebSocket Endpoints (auth, envelopes, templates, domains, verify)
+│   │   ├── api/              # REST & WebSocket Endpoints (auth, envelopes, templates, domains, verify, webhooks)
 │   │   ├── core/             # Database session, security, JWT, config
 │   │   ├── models/           # SQLAlchemy database models
 │   │   ├── schemas/          # Pydantic validation schemas
-│   │   └── services/         # PAdES-LTV signing, QR generator, DNS domain verifier
+│   │   └── services/         # PAdES-LTV signing, QR generator, DNS domain verifier, field detector
 │   ├── certs/                # PKCS#12 signing cert location (ignored by git)
 │   ├── tests/                # Pytest integration & unit test suite
 │   ├── Dockerfile            # Container build for FastAPI backend
@@ -36,23 +36,16 @@ docurama/
 │   ├── src/
 │   │   ├── components/       # Reusable layout, navigation, and modal components
 │   │   ├── lib/              # API client and WebSocket handlers
-│   │   ├── pages/            # Builder, Templates, Submissions, Verify, Settings
+│   │   ├── pages/            # Builder, Templates, Submissions, Verify, Settings, ApiDocs
 │   │   └── styles/           # Tailwind CSS & Plus Jakarta Sans typography
 │   ├── Dockerfile            # Multi-stage build with Nginx reverse proxy
 │   └── package.json          # Node dependencies
 │
-├── overlay/                  # Full-Featured Engine Overlay (Production Stack)
-│   ├── custom_views/         # 40+ customized ERB views (Plus Jakarta Sans, dark glass UI)
-│   ├── custom_controllers/   # Custom controllers (verify_pdf_signature, errors, esign)
-│   ├── custom_lib/           # Submissions::GenerateAuditTrail with vector QR code
-│   ├── custom_public/        # Favicons, high-res logos, docurama-theme.css
-│   ├── custom_pdf_icons/     # High-res logos for PDF digital sealing stamp
-│   ├── custom_config/        # routes.rb (/verify), i18n, session_store (_docurama_session)
-│   └── docker-compose.overlay.yml # Live deployment manifest for VPS
-│
-├── deploy/                   # VPS Deployment & SSH orchestration scripts
+├── deploy/                   # VPS Deployment & SSH orchestration scripts (direct Nexa-VPS)
 ├── scripts/                  # Clean-room audit & code analysis utilities
-├── docker-compose.yml        # Docker compose configuration for Clean-Room stack
+├── Dockerfile                # Unified Multi-Stage Production Build (FastAPI + React SPA)
+├── docker-compose.yml        # Multi-Container Microservice Stack (Production)
+├── docker-compose.engine.yml # Standalone Unified Image Stack
 ├── .env.example              # Environment variables template
 └── .gitignore                # Strict security exclusions (keys, certs, credentials)
 ```
@@ -80,33 +73,25 @@ Copy `.env.example` to `.env` and fill in required values:
 cp .env.example .env
 ```
 
-### 2. Option A: Running the Clean-Room Stack (FastAPI + React)
+### 2. Multi-Container Microservices (Recommended for Production)
 
 ```bash
 docker compose up -d --build
 ```
 
-- Frontend: `http://localhost:3000`
+- Frontend: `http://localhost:3002` (or `http://localhost:3000`)
 - Backend API: `http://localhost:8000`
 - API Docs (Swagger): `http://localhost:8000/docs`
 
-### 3. Option B: Running the Full-Featured Overlay Stack (Development Mounts)
+### 3. Unified Standalone Production Image
+
+To build the self-contained, standalone `docurama:latest` container image locally (compiling the React frontend and bundling it directly with the FastAPI backend):
 
 ```bash
-docker compose -f overlay/docker-compose.overlay.yml up -d
+docker build -t docurama:latest .
 ```
 
-- Accessible at: `http://localhost:3002` (or configured host reverse proxy port)
-
-### 4. Option C: Standalone Proprietary Image (Stage 1 Production Build)
-
-To build the self-contained, standalone `docurama:latest` container image locally (with all views, controllers, vector QR generators, and brand assets baked directly into the image layers):
-
-```bash
-docker build -t docurama:latest -t docurama:1.0.0 .
-```
-
-To run the standalone image with clean volume persistence (zero runtime code mounts):
+To run the standalone container with persistent storage:
 
 ```bash
 docker compose -f docker-compose.engine.yml up -d
