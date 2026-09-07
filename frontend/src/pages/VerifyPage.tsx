@@ -38,7 +38,7 @@ export const VerifyPage: React.FC = () => {
       const res = await api.verifyByCode(searchCode.trim());
       setResult(res);
     } catch (err: any) {
-      setError(err.message || 'Verification lookup failed.');
+      setError(err.message || 'Verification lookup failed. Code not found.');
       setResult(null);
     } finally {
       setLoading(false);
@@ -67,96 +67,98 @@ export const VerifyPage: React.FC = () => {
       
       {/* Top Banner */}
       <div className="text-center space-y-3 pt-6">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-300">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          Docurama Document Trust & Attestation Authority
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-xs font-semibold text-emerald-700">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          Docurama Document Trust &amp; Attestation Authority
         </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#0F172A] font-heading">
           Public Verification Portal
         </h1>
-        <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+        <p className="text-xs sm:text-sm text-[#64748B] max-w-xl mx-auto leading-relaxed">
           Verify PAdES-LTV electronic signatures, DigiCert RFC 3161 cryptographic timestamps, and SHA-256 document tamper integrity against the Docurama Root CA registry.
         </p>
       </div>
 
-      {/* Verification Inputs */}
-      <div className="p-6 rounded-3xl glass-card border border-white/10 space-y-4">
+      {/* Verification Inputs Card */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-5">
         
         {/* Code Search */}
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
             <input
               type="text"
               placeholder="Enter Verification Code or Envelope ID (e.g. 7A8B9C...)"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && verifyCode(code)}
-              className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 uppercase font-mono"
+              className="base-input w-full pl-10 pr-4 h-11 text-xs uppercase font-mono"
             />
           </div>
           <button
             onClick={() => verifyCode(code)}
             disabled={loading}
-            className="px-6 py-3 rounded-xl text-xs font-bold text-white btn-primary-glow disabled:opacity-50"
+            className="btn btn-primary px-6 h-11 text-xs font-bold disabled:opacity-50"
           >
             {loading ? 'Verifying...' : 'Verify'}
           </button>
         </div>
 
         <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-white/5"></div>
-          <span className="flex-shrink mx-4 text-[10px] uppercase font-bold text-slate-500 tracking-wider">or upload document</span>
-          <div className="flex-grow border-t border-white/5"></div>
+          <div className="flex-grow border-t border-slate-200" />
+          <span className="flex-shrink mx-4 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+            or upload document
+          </span>
+          <div className="flex-grow border-t border-slate-200" />
         </div>
 
         {/* Upload Box */}
-        <label className="border border-dashed border-white/10 hover:border-indigo-500/40 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-950/40">
+        <label className="border-2 border-dashed border-[#CBD5E1] hover:border-[#1D72FE] rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#F8FAFC]">
           <input
             type="file"
             accept="application/pdf"
             onChange={handleFileUpload}
             className="hidden"
           />
-          <Upload className="w-8 h-8 text-indigo-400 mb-2" />
-          <span className="text-xs font-semibold text-white">Click to drop signed PDF document for instant cryptographic analysis</span>
+          <Upload className="w-8 h-8 text-[#1D72FE] mb-2" />
+          <span className="text-xs font-semibold text-[#0F172A]">Click to drop signed PDF document for instant cryptographic analysis</span>
           <span className="text-[10px] text-slate-500 mt-1">Calculates SHA-256 and validates embedded signature certificates</span>
         </label>
 
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 text-rose-500" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Verification Result Card */}
       {result && (
-        <div className="rounded-3xl glass-card border border-white/10 overflow-hidden space-y-6 animate-in fade-in-50 duration-300">
+        <div className="rounded-3xl bg-white border border-[#E2E8F0] shadow-md overflow-hidden space-y-6 animate-in fade-in-50 duration-300">
           
           {/* Header Badge */}
           <div className={`p-6 border-b flex items-start justify-between ${
             result.is_valid 
-              ? 'bg-emerald-950/30 border-emerald-500/20' 
-              : 'bg-rose-950/30 border-rose-500/20'
+              ? 'bg-emerald-50/50 border-emerald-100' 
+              : 'bg-rose-50/50 border-rose-100'
           }`}>
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                result.is_valid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                result.is_valid ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
               }`}>
                 {result.is_valid ? <CheckCircle2 className="w-7 h-7" /> : <AlertTriangle className="w-7 h-7" />}
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">
+                <h2 className="text-lg font-bold text-[#0F172A]">
                   {result.is_valid ? 'Cryptographically Sealed & Verified' : 'Verification Issue Detected'}
                 </h2>
-                <p className="text-xs text-slate-300 mt-0.5">{result.message}</p>
+                <p className="text-xs text-slate-600 mt-0.5">{result.message}</p>
               </div>
             </div>
 
-            <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-slate-900 border border-white/10 text-slate-300">
+            <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
               PAdES-LTV
             </span>
           </div>
@@ -164,71 +166,71 @@ export const VerifyPage: React.FC = () => {
           <div className="p-6 space-y-6 pt-0 text-xs">
             
             {/* Metadata Table */}
-            <div className="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-white/5">
+            <div className="space-y-3 bg-[#F8FAFC] p-5 rounded-2xl border border-slate-200/80">
               {result.envelope_title && (
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-slate-400">Document Subject</span>
-                  <span className="font-semibold text-white">{result.envelope_title}</span>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500">Document Subject</span>
+                  <span className="font-semibold text-[#0F172A]">{result.envelope_title}</span>
                 </div>
               )}
               {result.verification_code && (
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-slate-400">Verification Code</span>
-                  <span className="font-mono font-bold text-indigo-300">{result.verification_code}</span>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500">Verification Code</span>
+                  <span className="font-mono font-bold text-[#1D72FE]">{result.verification_code}</span>
                 </div>
               )}
               {result.issuer_domain_verified && result.verified_domain && (
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-[#1D72FE]" />
                     Corporate Domain Identity
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold font-mono">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold font-mono">
                     <CheckCircle2 className="w-3 h-3" />
                     DNS Verified ({result.verified_domain})
                   </span>
                 </div>
               )}
               {result.completed_at && (
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-slate-400">Sealed Timestamp</span>
-                  <span className="font-mono text-slate-300">{new Date(result.completed_at).toUTCString()}</span>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500">Sealed Timestamp</span>
+                  <span className="font-mono text-slate-700">{new Date(result.completed_at).toUTCString()}</span>
                 </div>
               )}
               {result.sha256 && (
-                <div className="flex flex-col gap-1 pb-2 border-b border-white/5">
-                  <span className="text-slate-400 text-[10px]">Document Checksum (SHA-256):</span>
-                  <span className="font-mono text-[10px] text-emerald-400 bg-slate-900 p-1.5 rounded break-all">
+                <div className="flex flex-col gap-1 pb-2 border-b border-slate-200">
+                  <span className="text-slate-500 text-[10px]">Document Checksum (SHA-256):</span>
+                  <span className="font-mono text-[10px] text-emerald-800 bg-white p-2 rounded border border-slate-200 break-all">
                     {result.sha256}
                   </span>
                 </div>
               )}
               {result.certificate_subject && (
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-slate-400">Signer Certificate</span>
-                  <span className="font-medium text-slate-200 text-right">{result.certificate_subject}</span>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                  <span className="text-slate-500">Signer Certificate</span>
+                  <span className="font-medium text-slate-800 text-right">{result.certificate_subject}</span>
                 </div>
               )}
               <div className="flex justify-between items-center">
-                <span className="text-slate-400">Root Authority</span>
-                <span className="font-semibold text-emerald-400">Docurama Root Certification Authority (FR)</span>
+                <span className="text-slate-500">Root Authority</span>
+                <span className="font-semibold text-emerald-700">Docurama Root Certification Authority (FR)</span>
               </div>
             </div>
 
             {/* Audit Trail Events */}
             {result.audit_trail && result.audit_trail.length > 0 && (
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Provenance & Audit Events
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                  Provenance &amp; Audit Events
                 </h3>
                 <div className="space-y-2">
                   {result.audit_trail.map((a, idx) => (
-                    <div key={idx} className="p-3 rounded-xl bg-slate-900/50 border border-white/5 flex items-center justify-between text-xs">
+                    <div key={idx} className="p-3.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs">
                       <div>
-                        <div className="font-semibold text-white">{a.description}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{a.actor_name}</div>
+                        <div className="font-semibold text-[#0F172A]">{a.description}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{a.actor_name}</div>
                       </div>
-                      <div className="text-[10px] font-mono text-slate-400 text-right">
+                      <div className="text-[10px] font-mono text-slate-500 text-right">
                         {new Date(a.created_at).toLocaleString()}
                       </div>
                     </div>

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Settings as SettingsIcon, 
+  Building,
   User, 
+  Users,
   ShieldCheck, 
   Mail, 
+  MessageSquare,
   Key, 
+  Code,
   Lock, 
   CheckCircle2, 
   Save,
@@ -20,9 +23,9 @@ import {
   Activity,
   Play,
   Eye,
-  Code,
   X,
-  Radio
+  Radio,
+  FileCheck
 } from 'lucide-react';
 import { api, DomainItem, WebhookItem, WebhookDeliveryItem } from '../lib/api';
 
@@ -31,8 +34,16 @@ interface SettingsPageProps {
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
-  const [activeTab, setActiveTab] = useState<'crypto' | 'domains' | 'profile' | 'smtp' | 'api' | 'security'>('crypto');
+  const [activeTab, setActiveTab] = useState<
+    'account' | 'profile' | 'users' | 'signatures' | 'notifications' | 'sms' | 'api' | 'mcp'
+  >('account');
   const [saved, setSaved] = useState(false);
+
+  // Profile Form State
+  const [firstName, setFirstName] = useState(user?.first_name || 'Admin');
+  const [lastName, setLastName] = useState(user?.last_name || 'User');
+  const [email, setEmail] = useState(user?.email || 'admin@docurama.com');
+  const [accountName, setAccountName] = useState(user?.account_name || 'Docurama Technologies Inc.');
 
   // Domains State
   const [domains, setDomains] = useState<DomainItem[]>([]);
@@ -57,17 +68,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [deliveries, setDeliveries] = useState<WebhookDeliveryItem[]>([]);
   const [loadingDeliveries, setLoadingDeliveries] = useState(false);
 
-  const tabs = [
-    { id: 'crypto', label: 'Cryptographic Trust', icon: ShieldCheck },
-    { id: 'domains', label: 'Domain Verification', icon: Globe },
-    { id: 'profile', label: 'Profile & Account', icon: User },
-    { id: 'smtp', label: 'Email & SMTP', icon: Mail },
-    { id: 'api', label: 'API Keys & Webhooks', icon: Key },
-    { id: 'security', label: 'Security & Auth', icon: Lock },
+  // Users Management State
+  const [usersList, setUsersList] = useState([
+    { id: '1', name: 'Primary Admin', email: user?.email || 'admin@docurama.com', role: 'admin', status: 'active' },
+    { id: '2', name: 'Compliance Officer', email: 'compliance@docurama.com', role: 'member', status: 'active' },
+  ]);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+
+  // Top Nav Items Matching overlay/custom_views/shared/_settings_nav.html.erb
+  const navItems = [
+    { id: 'account', label: 'Account', icon: Building, group: 'workspace' },
+    { id: 'profile', label: 'Profile', icon: User, group: 'workspace' },
+    { id: 'users', label: 'Users', icon: Users, group: 'workspace' },
+    { id: 'signatures', label: 'Digital Signatures', icon: ShieldCheck, group: 'security' },
+    { id: 'notifications', label: 'Notifications', icon: Mail, group: 'security' },
+    { id: 'sms', label: 'SMS', icon: MessageSquare, group: 'security' },
+    { id: 'api', label: 'API Keys', icon: Key, group: 'developer' },
+    { id: 'mcp', label: 'MCP Server', icon: Code, group: 'developer' },
   ];
 
   useEffect(() => {
-    if (activeTab === 'domains') {
+    if (activeTab === 'account') {
       loadDomains();
     } else if (activeTab === 'api') {
       loadWebhooks();
@@ -104,18 +125,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   };
 
   const handleDeleteWebhook = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this webhook endpoint?')) return;
+    if (!confirm('Are you sure you want to delete this webhook endpoint?')) return;
     try {
       await api.deleteWebhook(id);
       await loadWebhooks();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete webhook');
+    } catch (e) {
+      alert('Failed to delete webhook');
     }
   };
 
   const handleTestWebhook = async (id: string) => {
     try {
-      setTestResults(prev => ({ ...prev, [id]: 'Testing...' }));
+      setTestResults(prev => ({ ...prev, [id]: 'Dispatching test...' }));
       const res = await api.testWebhook(id);
       setTestResults(prev => ({ ...prev, [id]: res.success ? `Delivered HTTP ${res.status_code || 200}` : 'Delivery Failed' }));
       setTimeout(() => {
@@ -164,7 +185,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       await api.createDomain(newDomainInput.trim());
       setNewDomainInput('');
       await loadDomains();
-      setDomainFeedback({ msg: 'Domain added! Configure the DNS records below and click "Verify DNS Now".', type: 'success' });
+      setDomainFeedback({ msg: 'Domain added! Configure DNS records below.', type: 'success' });
     } catch (err: any) {
       setDomainFeedback({ msg: err.message || 'Failed to add domain.', type: 'error' });
     } finally {
@@ -213,710 +234,606 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+    <div className="max-w-6xl mx-auto space-y-6 pb-20">
       
-      <div>
-        <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-3">
-          <SettingsIcon className="w-7 h-7 text-indigo-400" />
-          Settings & Control Center
-        </h1>
-        <p className="mt-1 text-xs text-slate-400">
-          Configure cryptographic trust authorities, corporate domain DNS verifications, and enterprise security policies.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
-        {/* Left Tabs */}
-        <div className="md:col-span-1 space-y-1">
-          {tabs.map(t => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id as any)}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-left transition-all ${
-                  isActive 
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Right Content */}
-        <div className="md:col-span-3 p-6 rounded-3xl glass-card border border-white/10 space-y-6">
-          
-          {/* Cryptographic Trust Tab */}
-          {activeTab === 'crypto' && (
-            <div className="space-y-6 text-xs">
-              <div className="border-b border-white/10 pb-4">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  Docurama Document Trust Engine
-                </h2>
-                <p className="text-slate-400 mt-1">
-                  Active X.509 PKCS#12 digital certificates used for PAdES-LTV document sealing and RFC 3161 timestamps.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/20 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">Docurama Document Signing Certificate</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
-                      ACTIVE
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Subject: <span className="text-slate-300 font-mono">CN=Docurama Trusted Document Signer, O=Docurama Technologies, C=FR</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Issuer: <span className="text-slate-300 font-mono">CN=Docurama Document Signing Intermediate CA</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Root CA: <span className="text-slate-300 font-mono">CN=Docurama Root Certification Authority</span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-white/5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">RFC 3161 Timestamping Authority (TSA)</span>
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-[10px] font-bold border border-indigo-500/20">
-                      CONNECTED
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Server: <span className="text-slate-300 font-mono">http://timestamp.digicert.com</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Standard: <span className="text-slate-300">RFC 3161 Authenticode & PAdES-B-LTV Compliant</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Domain Verification Tab */}
-          {activeTab === 'domains' && (
-            <div className="space-y-6 text-xs">
-              <div className="border-b border-white/10 pb-4 flex items-start justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <Globe className="w-5 h-5 text-indigo-400" />
-                    Client & Corporate Domain Verification
-                  </h2>
-                  <p className="text-slate-400 mt-1">
-                    Authenticate your corporate domain (<code className="text-indigo-300">example.com</code>) via DNS records or website confirmation pointing to Docurama to enable verified sender identity and anti-spoofing seals.
-                  </p>
-                </div>
-                <button
-                  onClick={loadDomains}
-                  disabled={loadingDomains}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                  title="Refresh Domain List"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingDomains ? 'animate-spin text-indigo-400' : ''}`} />
-                </button>
-              </div>
-
-              {/* Feedback Alert */}
-              {domainFeedback && (
-                <div className={`p-4 rounded-xl border flex items-center gap-3 ${
-                  domainFeedback.type === 'success' 
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
-                    : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                }`}>
-                  {domainFeedback.type === 'success' ? (
-                    <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
-                  ) : (
-                    <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
-                  )}
-                  <span className="text-xs">{domainFeedback.msg}</span>
-                </div>
-              )}
-
-              {/* Add Domain Form */}
-              <form onSubmit={handleAddDomain} className="p-4 rounded-2xl bg-slate-900/60 border border-white/5 space-y-3">
-                <span className="font-bold text-white text-xs block">Add Corporate Domain to Verify</span>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. example.com"
-                    value={newDomainInput}
-                    onChange={(e) => setNewDomainInput(e.target.value)}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
-                  />
-                  <button
-                    type="submit"
-                    disabled={addingDomain || !newDomainInput.trim()}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {addingDomain ? 'Adding...' : 'Add Domain'}
-                  </button>
-                </div>
-              </form>
-
-              {/* Domains List */}
-              <div className="space-y-4">
-                {domains.length === 0 && !loadingDomains && (
-                  <div className="p-8 text-center text-slate-500 bg-slate-950/40 rounded-2xl border border-dashed border-white/10">
-                    No custom domains configured yet. Add your corporate domain above to begin verification.
-                  </div>
-                )}
-
-                {domains.map((d) => {
-                  const isVerified = d.status === 'verified';
-                  const isVerifying = verifyingId === d.id;
-
-                  return (
-                    <div key={d.id} className="p-5 rounded-2xl bg-slate-900 border border-white/10 space-y-4">
-                      
-                      {/* Domain Header */}
-                      <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                        <div className="flex items-center gap-3">
-                          <Globe className="w-5 h-5 text-indigo-400" />
-                          <div>
-                            <span className="text-sm font-extrabold text-white font-mono">{d.domain}</span>
-                            <div className="text-[11px] text-slate-400 mt-0.5">
-                              {isVerified ? (
-                                <span className="text-emerald-400 flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Corporate Identity Confirmed ({d.verification_method.replace(/_/g, ' ')})
-                                </span>
-                              ) : (
-                                <span className="text-amber-400 flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5" />
-                                  Awaiting DNS Records or Website Confirmation
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                            isVerified 
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          }`}>
-                            {isVerified ? 'VERIFIED' : 'PENDING'}
-                          </span>
-
-                          <button
-                            onClick={() => handleVerifyDomain(d.id)}
-                            disabled={isVerifying}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50 transition-colors"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isVerifying ? 'animate-spin' : ''}`} />
-                            {isVerifying ? 'Checking...' : 'Verify DNS Now'}
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteDomain(d.id)}
-                            className="p-1.5 rounded-xl bg-slate-800 hover:bg-rose-900/50 hover:text-rose-300 text-slate-400 transition-colors"
-                            title="Remove Domain"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* DNS Configuration Instructions */}
-                      <div className="space-y-3">
-                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                          Required DNS Records (Choose Method A or B)
-                        </span>
-
-                        {/* Record 1: TXT Record */}
-                        <div className="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-2">
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="text-slate-300 font-bold">Method A: DNS TXT Challenge Record</span>
-                            <span className="text-[10px] text-slate-500">Standard Anti-Spoofing</span>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Record Type & Host</span>
-                              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 font-mono text-slate-300 mt-1">
-                                <span>TXT <span className="text-indigo-400">{d.txt_record_host}</span></span>
-                                <button 
-                                  onClick={() => copyToClipboard(d.txt_record_host, `host-${d.id}`)}
-                                  className="text-slate-400 hover:text-white"
-                                >
-                                  {copiedKey === `host-${d.id}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Record Value</span>
-                              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 font-mono text-slate-300 mt-1">
-                                <span className="truncate pr-2">{d.txt_record_value}</span>
-                                <button 
-                                  onClick={() => copyToClipboard(d.txt_record_value, `val-${d.id}`)}
-                                  className="text-slate-400 hover:text-white shrink-0"
-                                >
-                                  {copiedKey === `val-${d.id}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Record 2: Subdomain Pointer */}
-                        <div className="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-2">
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="text-slate-300 font-bold">Method B: Subdomain Pointer to Docurama</span>
-                            <span className="text-[10px] text-emerald-400 font-semibold">Active & Live</span>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Host Name</span>
-                              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 font-mono text-slate-300 mt-1">
-                                <span>{d.cname_record_host}</span>
-                                <button 
-                                  onClick={() => copyToClipboard(d.cname_record_host, `cname-${d.id}`)}
-                                  className="text-slate-400 hover:text-white"
-                                >
-                                  {copiedKey === `cname-${d.id}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-slate-500 block">Points To Target</span>
-                              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 font-mono text-slate-300 mt-1">
-                                <span>{d.cname_target}</span>
-                                <button 
-                                  onClick={() => copyToClipboard(d.cname_target, `target-${d.id}`)}
-                                  className="text-slate-400 hover:text-white"
-                                >
-                                  {copiedKey === `target-${d.id}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                      </div>
-
-                      {/* Attestation Preview Banner */}
-                      <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-[11px] text-indigo-300 flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span>
-                          {isVerified 
-                            ? `Authenticity Sealed: All envelopes issued by @${d.domain} display the official "DNS Verified Organization" trust badge on Audit Certificates.`
-                            : `Once confirmed pointing to Docurama, documents issued from @${d.domain} will be cryptographically anchored to your corporate identity.`}
-                        </span>
-                      </div>
-
-                    </div>
-                  );
-                })}
-              </div>
-
-            </div>
-          )}
-
-          {/* Profile & Account Tab */}
-          {activeTab === 'profile' && (
-            <div className="space-y-4 text-xs">
-              <h2 className="text-base font-bold text-white">User Profile & Account</h2>
-              <div>
-                <label className="block text-slate-400 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  defaultValue={`${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Administrator'}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  defaultValue={user?.email || 'admin@docurama.com'}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Organization Subdomain</label>
-                <input
-                  type="text"
-                  defaultValue="Docurama"
-                  disabled
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/5 text-slate-500 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* SMTP Notifications Tab */}
-          {activeTab === 'smtp' && (
-            <div className="space-y-4 text-xs">
-              <h2 className="text-base font-bold text-white">Email & Dispatch Settings</h2>
-              <div>
-                <label className="block text-slate-400 mb-1">Sender Email</label>
-                <input
-                  type="text"
-                  defaultValue="documents@docurama.com"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Sender Display Name</label>
-                <input
-                  type="text"
-                  defaultValue="Docurama Electronic Signatures"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* API Keys & Webhooks Tab */}
-          {activeTab === 'api' && (
-            <div className="space-y-6 text-xs">
-              <div className="border-b border-white/10 pb-4">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Key className="w-5 h-5 text-indigo-400" />
-                  API Keys & Cryptographic Webhooks
-                </h2>
-                <p className="text-slate-400 mt-1">
-                  Integrate Docurama into your external applications and receive cryptographically signed HMAC-SHA256 event notifications.
-                </p>
-              </div>
-
-              {/* API Key */}
-              <div className="p-4 rounded-xl bg-slate-900/60 border border-white/5 space-y-2">
-                <label className="block text-slate-300 font-semibold">Production REST API Key</label>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    defaultValue="dcr_live_92837498237498237498"
-                    readOnly
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-white/10 font-mono text-slate-400"
-                  />
-                  <button 
-                    onClick={() => copyToClipboard('dcr_live_92837498237498237498', 'api_key')}
-                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-1.5"
-                  >
-                    {copiedKey === 'api_key' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedKey === 'api_key' ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Webhooks Section */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-emerald-400" />
-                      Registered Webhook Endpoints
-                    </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Dispatched with header <code>X-Docurama-Signature: sha256=...</code>
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => setShowWebhookModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors shadow-lg"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add Webhook
-                  </button>
-                </div>
-
-                {loadingWebhooks ? (
-                  <div className="py-8 text-center text-slate-500">Loading webhooks...</div>
-                ) : webhooks.length === 0 ? (
-                  <div className="p-8 rounded-2xl bg-slate-900/40 border border-white/5 text-center space-y-2">
-                    <Activity className="w-8 h-8 mx-auto text-slate-600" />
-                    <p className="text-slate-400 font-medium">No webhook endpoints configured yet.</p>
-                    <p className="text-[11px] text-slate-500">
-                      Add a webhook to receive real-time updates when documents are signed, completed, declined, or delegated.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {webhooks.map((wh) => (
-                      <div key={wh.id} className="p-4 rounded-xl bg-slate-900/80 border border-white/5 space-y-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="font-mono text-white text-xs break-all font-semibold">
-                            {wh.url}
-                          </div>
-                          <div className="flex items-center gap-2 self-end sm:self-auto">
-                            <button
-                              onClick={() => handleTestWebhook(wh.id)}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-semibold flex items-center gap-1 transition-colors"
-                            >
-                              <Play className="w-3 h-3" />
-                              {testResults[wh.id] || 'Test Ping'}
-                            </button>
-
-                            <button
-                              onClick={() => handleOpenDeliveries(wh)}
-                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold flex items-center gap-1 transition-colors"
-                            >
-                              <Eye className="w-3 h-3" />
-                              Deliveries
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteWebhook(wh.id)}
-                              className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                              title="Delete Webhook"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Secret Token & Events */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-2 border-t border-white/5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-500">HMAC Secret:</span>
-                            <span className="font-mono text-indigo-300">{wh.secret_token?.slice(0, 16)}...</span>
-                            <button
-                              onClick={() => copyToClipboard(wh.secret_token, `wh_${wh.id}`)}
-                              className="text-slate-400 hover:text-white"
-                            >
-                              {copiedKey === `wh_${wh.id}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                            </button>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 sm:justify-end flex-wrap">
-                            {(wh.events || []).map((ev) => (
-                              <span key={ev} className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/5 font-mono text-[10px]">
-                                {ev}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Security Tab */}
-          {activeTab === 'security' && (
-            <div className="space-y-4 text-xs">
-              <h2 className="text-base font-bold text-white">Security & Access Controls</h2>
-              <div className="space-y-2">
-                <div className="p-3 bg-slate-900 rounded-xl border border-white/5 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-white">Argon2id Password Storage</div>
-                    <div className="text-slate-400 text-[11px]">Hardware-cost enforced memory-hard password protection</div>
-                  </div>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div className="p-3 bg-slate-900 rounded-xl border border-white/5 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-white">HTTP-Only SameSite Secure Cookies</div>
-                    <div className="text-slate-400 text-[11px]">Enforces strict CSRF and XSS cookie boundary (_docurama_session)</div>
-                  </div>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-4 border-t border-white/10">
-            {saved ? (
-              <span className="text-xs text-emerald-400 flex items-center gap-1.5 font-semibold">
-                <CheckCircle2 className="w-4 h-4" /> Preferences saved successfully
-              </span>
-            ) : <span />}
-
+      {/* Top Command Tab Bar Matching Production Exactly */}
+      <div className="w-full settings-horizontal-nav-wrapper">
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl p-2 border border-slate-200/80 shadow-sm flex items-center justify-between overflow-x-auto gap-2 scrollbar-none">
+          <div className="flex items-center space-x-1 sm:space-x-1.5 flex-nowrap">
+            
+            {/* Workspace Group */}
             <button
-              onClick={handleSave}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white btn-primary-glow"
+              onClick={() => setActiveTab('account')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'account'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
             >
-              <Save className="w-4 h-4" />
-              Save Preferences
+              <Building className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>Account</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'profile'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <User className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>Profile</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'users'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <Users className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>Users</span>
+            </button>
+
+            <span className="h-5 w-px bg-slate-200 mx-1 hidden sm:inline-block" />
+
+            {/* Signatures & Security Group */}
+            <button
+              onClick={() => setActiveTab('signatures')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'signatures'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 mr-1.5 text-[#1D72FE]" />
+              <span>Digital Signatures</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'notifications'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <Mail className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>Notifications</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('sms')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'sms'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>SMS</span>
+            </button>
+
+            <span className="h-5 w-px bg-slate-200 mx-1 hidden sm:inline-block" />
+
+            {/* Developer Group */}
+            <button
+              onClick={() => setActiveTab('api')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'api'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <Key className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>API Keys</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('mcp')}
+              className={`flex items-center px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                activeTab === 'mcp'
+                  ? 'bg-[#EFF6FF] text-[#1D72FE] shadow-sm border border-[#BFDBFE]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+              }`}
+            >
+              <Code className="w-4 h-4 mr-1.5 opacity-80" />
+              <span>MCP Server</span>
             </button>
           </div>
 
+          <div className="hidden lg:flex items-center px-3 py-1 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-semibold text-slate-500">
+            <span>Docurama Control Center</span>
+          </div>
         </div>
-
       </div>
 
-      {/* Add Webhook Modal */}
-      {showWebhookModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-400" />
-                Add Webhook Endpoint
-              </h3>
-              <button onClick={() => setShowWebhookModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
+      {saved && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <span>Configuration preferences updated and synchronized across all nodes.</span>
+        </div>
+      )}
+
+      {/* 1. Account Tab */}
+      {activeTab === 'account' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#0F172A]">Organization Settings</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Manage your workspace brand identity and document quotas.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Organization Name
+                </label>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  className="base-input w-full h-10 px-3.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Default Legal Seal Format
+                </label>
+                <select className="base-input w-full h-10 px-3.5 text-sm bg-white">
+                  <option>PAdES-B-LTV (PDF Advanced Electronic Signatures)</option>
+                  <option>CAdES-BES (Cryptographic Message Syntax)</option>
+                  <option>XAdES (XML Advanced Electronic Signatures)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <button onClick={handleSave} className="btn btn-primary px-6 h-10 font-semibold text-sm">
+                Save Account Changes
+              </button>
+            </div>
+          </div>
+
+          {/* Custom Sending Domains */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
+                <Globe className="w-5 h-5 text-[#1D72FE]" />
+                <span>Custom Email Domains</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">Send signing invites from your brand's verified domain using SPF &amp; DKIM.</p>
+            </div>
+
+            {domainFeedback && (
+              <div className={`p-4 rounded-xl text-xs flex items-center gap-2 ${
+                domainFeedback.type === 'success' 
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' 
+                  : 'bg-rose-50 border border-rose-200 text-rose-700'
+              }`}>
+                {domainFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span>{domainFeedback.msg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddDomain} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. sign.yourcompany.com"
+                value={newDomainInput}
+                onChange={(e) => setNewDomainInput(e.target.value)}
+                className="base-input flex-1 h-10 px-3.5 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={addingDomain}
+                className="btn btn-primary px-5 h-10 font-semibold text-sm flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Domain</span>
+              </button>
+            </form>
+
+            <div className="space-y-3">
+              {domains.length === 0 && !loadingDomains ? (
+                <div className="text-center py-6 text-xs text-slate-400">
+                  No custom sending domains registered. Add your root or subdomain above.
+                </div>
+              ) : (
+                domains.map((dom) => (
+                  <div key={dom.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-800 text-sm">{dom.domain}</span>
+                      <span className={`ml-3 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        dom.status === 'verified' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {dom.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleVerifyDomain(dom.id)}
+                        disabled={verifyingId === dom.id}
+                        className="btn btn-white text-xs px-3 py-1.5 border border-slate-300"
+                      >
+                        {verifyingId === dom.id ? 'Checking DNS...' : 'Verify DNS'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDomain(dom.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Profile Tab */}
+      {activeTab === 'profile' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-[#0F172A]">Personal Profile</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Manage your credentials and authenticated email.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">First Name</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="base-input w-full h-10 px-3.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Last Name</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="base-input w-full h-10 px-3.5 text-sm"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Email Address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="base-input w-full h-10 px-3.5 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 flex justify-end">
+            <button onClick={handleSave} className="btn btn-primary px-6 h-10 font-semibold text-sm">
+              Update Profile
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Users Tab */}
+      {activeTab === 'users' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4 flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-bold text-[#0F172A]">Team Members</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Invite teammates to prepare and send document envelopes.</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <input
+              type="email"
+              placeholder="colleague@yourcompany.com"
+              value={newMemberEmail}
+              onChange={(e) => setNewMemberEmail(e.target.value)}
+              className="base-input flex-1 h-10 px-3.5 text-sm"
+            />
+            <button
+              onClick={() => {
+                if (!newMemberEmail) return;
+                setUsersList([...usersList, { id: String(Date.now()), name: newMemberEmail.split('@')[0], email: newMemberEmail, role: 'member', status: 'invited' }]);
+                setNewMemberEmail('');
+              }}
+              className="btn btn-primary px-5 h-10 font-semibold text-sm flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Invite User</span>
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {usersList.map((u) => (
+              <div key={u.id} className="py-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-700">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-[#0F172A]">{u.name}</div>
+                    <div className="text-xs text-slate-400">{u.email}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#1D72FE] text-xs font-semibold uppercase">
+                    {u.role}
+                  </span>
+                  <span className="text-xs text-slate-400 capitalize">{u.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Digital Signatures Tab */}
+      {activeTab === 'signatures' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              <span>Cryptographic Root Authority &amp; Seals</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">X.509 Digital Certificates, Hardware Security, and DigiCert RFC 3161 TSA.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">Root Certification Authority</div>
+              <div className="text-sm font-semibold text-[#0F172A]">Docurama Enterprise Root CA v2</div>
+              <div className="text-xs text-slate-500 font-mono">Fingerprint: E7:4A:9C:12:F4:7B:33...</div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Valid through 2036 • Active</span>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+              <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">Time Stamping Authority (TSA)</div>
+              <div className="text-sm font-semibold text-[#0F172A]">DigiCert RFC 3161 Certified Time Stamp</div>
+              <div className="text-xs text-slate-500 font-mono">Endpoint: http://timestamp.digicert.com</div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-[#1D72FE] text-xs font-semibold">
+                <span>PAdES-LTV Compliant</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Notifications Tab */}
+      {activeTab === 'notifications' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-[#0F172A]">Email Notification Templates</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Customize automatic email dispatching for signing invitations and completion audits.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+              <div>
+                <div className="font-semibold text-slate-800 text-sm">Signer Invitation Notification</div>
+                <div className="text-xs text-slate-400">Triggered immediately when a recipient is required to review and sign.</div>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 accent-[#1D72FE] rounded" />
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+              <div>
+                <div className="font-semibold text-slate-800 text-sm">Automatic Cadence Reminders</div>
+                <div className="text-xs text-slate-400">Send reminder nudges every 48 hours to signers who haven't completed fields.</div>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 accent-[#1D72FE] rounded" />
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
+              <div>
+                <div className="font-semibold text-slate-800 text-sm">Completed Certificate of Completion PDF</div>
+                <div className="text-xs text-slate-400">Attaches the tamper-evident cryptographic audit report upon envelope sealing.</div>
+              </div>
+              <input type="checkbox" defaultChecked className="w-5 h-5 accent-[#1D72FE] rounded" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. SMS Tab */}
+      {activeTab === 'sms' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-[#0F172A]">SMS Delivery Gateway</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Configure Twilio or custom SMS provider for mobile signing links.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Account SID</label>
+              <input type="text" placeholder="AC••••••••••••••••••••••••••••••••" className="base-input w-full h-10 px-3.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Auth Token</label>
+              <input type="password" placeholder="••••••••••••••••••••••••" className="base-input w-full h-10 px-3.5 text-sm" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Sender Phone Number / Messaging SID</label>
+              <input type="text" placeholder="+1 (555) 000-0000" className="base-input w-full h-10 px-3.5 text-sm" />
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 flex justify-end">
+            <button onClick={handleSave} className="btn btn-primary px-6 h-10 font-semibold text-sm">
+              Save SMS Credentials
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 7. API Keys Tab */}
+      {activeTab === 'api' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#0F172A]">REST API Access Tokens</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Bearer authentication keys for programmatic contract dispatching.</p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Production Secret Key</span>
+                <button 
+                  onClick={() => copyToClipboard('docu_live_99f2e718b52c4a9190da', 'apikey')}
+                  className="btn btn-white text-xs px-3 py-1 flex items-center gap-1.5 border border-slate-300"
+                >
+                  {copiedKey === 'apikey' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedKey === 'apikey' ? 'Copied' : 'Copy Key'}</span>
+                </button>
+              </div>
+              <div className="font-mono text-sm text-slate-800 bg-white p-2.5 rounded-lg border border-slate-200">
+                docu_live_99f2e718b52c4a9190da••••••••••••••••
+              </div>
+            </div>
+          </div>
+
+          {/* Webhooks Section */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+            <div className="border-b border-slate-100 pb-4 flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-[#0F172A]">Webhook Subscriptions</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Real-time HTTP callbacks for signed events and tamper audits.</p>
+              </div>
+              <button
+                onClick={() => setShowWebhookModal(true)}
+                className="btn btn-primary px-4 py-2 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Webhook</span>
               </button>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Docurama will dispatch signed JSON POST requests with HMAC-SHA256 headers for all selected lifecycle events.
-            </p>
+            <div className="space-y-3">
+              {webhooks.length === 0 && !loadingWebhooks ? (
+                <div className="text-center py-6 text-xs text-slate-400">
+                  No active webhooks configured. Click "New Webhook" to register an endpoint.
+                </div>
+              ) : (
+                webhooks.map((w) => (
+                  <div key={w.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <div>
+                      <div className="font-mono text-xs font-bold text-slate-800">{w.url}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        Events: {w.events.join(', ')} • Active
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleTestWebhook(w.id)}
+                        className="btn btn-white text-xs px-3 py-1.5 border border-slate-300"
+                      >
+                        {testResults[w.id] || 'Test Ping'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteWebhook(w.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleCreateWebhook} className="space-y-4 text-xs">
+      {/* 8. MCP Server Tab */}
+      {activeTab === 'mcp' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
+              <Code className="w-5 h-5 text-[#1D72FE]" />
+              <span>Model Context Protocol (MCP) Server</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Connect AI coding assistants and autonomous agents directly to Docurama tools.</p>
+          </div>
+
+          <div className="p-5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">SSE Server Endpoint</div>
+            <div className="font-mono text-xs text-slate-800 bg-white p-3 rounded-lg border border-slate-200 select-all">
+              {window.location.origin}/.webmcp/sse
+            </div>
+            <div className="text-xs text-slate-500">
+              Compatible with Claude Desktop, Cursor, and Antigravity IDE agentic workflows.
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">Exposed Agent Tools</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
+                <div className="font-mono text-xs font-bold text-[#1D72FE]">create_envelope</div>
+                <div className="text-[11px] text-slate-500 mt-1">Uploads and dispatches multi-party PDF workflows.</div>
+              </div>
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
+                <div className="font-mono text-xs font-bold text-[#1D72FE]">verify_pdf_signature</div>
+                <div className="text-[11px] text-slate-500 mt-1">Extracts X.509 PAdES-LTV cryptographic seals.</div>
+              </div>
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-white">
+                <div className="font-mono text-xs font-bold text-[#1D72FE]">get_submission_audit</div>
+                <div className="text-[11px] text-slate-500 mt-1">Returns immutable timestamped audit trails.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Webhook Modal */}
+      {showWebhookModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-[#0F172A]">Register Webhook Endpoint</h3>
+              <button onClick={() => setShowWebhookModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateWebhook} className="space-y-4">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Payload URL *</label>
+                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
+                  Payload URL
+                </label>
                 <input
                   type="url"
                   required
                   placeholder="https://api.yourdomain.com/webhooks/docurama"
                   value={newWebhookUrl}
                   onChange={(e) => setNewWebhookUrl(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white font-mono text-xs placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  className="base-input w-full h-10 px-3.5 text-sm"
                 />
               </div>
-
-              <div>
-                <label className="block text-slate-300 font-semibold mb-2">Subscribe to Events</label>
-                <div className="space-y-1.5 p-3 rounded-xl bg-slate-950 border border-white/5">
-                  {[
-                    { id: '*', label: 'All Lifecycle Events (*)' },
-                    { id: 'envelope.completed', label: 'Envelope Completed (All Signed)' },
-                    { id: 'envelope.sent', label: 'Envelope Dispatched' },
-                    { id: 'recipient.signed', label: 'Individual Signer Signed' },
-                    { id: 'recipient.declined', label: 'Signer Declined' },
-                    { id: 'recipient.delegated', label: 'Signer Delegated' }
-                  ].map((ev) => {
-                    const isChecked = newWebhookEvents.includes(ev.id);
-                    return (
-                      <label key={ev.id} className="flex items-center gap-2 text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (ev.id === '*') {
-                              setNewWebhookEvents(e.target.checked ? ['*'] : ['envelope.completed']);
-                            } else {
-                              const withoutStar = newWebhookEvents.filter(x => x !== '*');
-                              if (e.target.checked) {
-                                setNewWebhookEvents([...withoutStar, ev.id]);
-                              } else {
-                                setNewWebhookEvents(withoutStar.filter(x => x !== ev.id));
-                              }
-                            }
-                          }}
-                          className="rounded text-indigo-600 bg-slate-900 border-white/20"
-                        />
-                        <span>{ev.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+              <div className="flex justify-end gap-3 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowWebhookModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                  className="btn btn-white px-4 h-10 text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creatingWebhook}
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white btn-primary-glow disabled:opacity-50"
+                  className="btn btn-primary px-5 h-10 text-sm font-semibold"
                 >
-                  {creatingWebhook ? 'Registering...' : 'Register Endpoint'}
+                  {creatingWebhook ? 'Registering...' : 'Save Endpoint'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Deliveries History Modal */}
-      {selectedWebhook && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-emerald-400" />
-                  Webhook Deliveries
-                </h3>
-                <p className="text-[11px] text-slate-400 font-mono mt-0.5 break-all">
-                  {selectedWebhook.url}
-                </p>
-              </div>
-              <button onClick={() => setSelectedWebhook(null)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-white/5 bg-slate-950">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900 text-slate-400 border-b border-white/5 text-[10px] uppercase font-semibold">
-                  <tr>
-                    <th className="py-2.5 px-4">Event Type</th>
-                    <th className="py-2.5 px-3">Status</th>
-                    <th className="py-2.5 px-3">HTTP Code</th>
-                    <th className="py-2.5 px-3">Attempts</th>
-                    <th className="py-2.5 px-4 text-right">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 font-mono text-[11px]">
-                  {loadingDeliveries ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500 font-sans">Loading audit history...</td>
-                    </tr>
-                  ) : deliveries.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500 font-sans">
-                        No delivery attempts recorded yet. Click "Test Ping" to dispatch an initial handshake event.
-                      </td>
-                    </tr>
-                  ) : (
-                    deliveries.map((del) => (
-                      <tr key={del.id} className="hover:bg-slate-900/40">
-                        <td className="py-2.5 px-4 font-semibold text-white">{del.event_type}</td>
-                        <td className="py-2.5 px-3">
-                          {del.is_success ? (
-                            <span className="text-emerald-400 font-sans font-bold flex items-center gap-1 text-[10px]">
-                              <CheckCircle2 className="w-3 h-3" /> SUCCESS
-                            </span>
-                          ) : (
-                            <span className="text-rose-400 font-sans font-bold flex items-center gap-1 text-[10px]">
-                              <AlertCircle className="w-3 h-3" /> FAILED
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-300">
-                          {del.response_status || '---'}
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-400">{del.attempts}</td>
-                        <td className="py-2.5 px-4 text-right text-slate-400 text-[10px]">
-                          {new Date(del.created_at).toLocaleTimeString()}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setSelectedWebhook(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}

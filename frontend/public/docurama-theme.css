@@ -1,0 +1,373 @@
+/* ==========================================================================
+   DOCURAMA ENTERPRISE DESIGN SYSTEM
+   Bespoke UI/UX overhaul - Inspired by Aceternity UI, Linear, & shadcn/ui
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+/* --- Reset DaisyUI / Docuseal theme variables --- */
+:root,
+[data-theme],
+[data-theme="docurama"],
+[data-theme="docuseal"],
+html,
+body {
+  /* Slate & Crisp Modern Whites */
+  --b1: 210 40% 98% !important;   /* #F8FAFC Slate-50 */
+  --b2: 214 32% 94% !important;   /* #F1F5F9 Slate-100 */
+  --b3: 215 25% 89% !important;   /* #E2E8F0 Slate-200 */
+  --bc: 222 47% 11% !important;   /* #0F172A Slate-900 */
+
+  /* Electric Royal Blue Primary */
+  --p: 217 98% 55% !important;    /* #1D72FE */
+  --pf: 224 76% 48% !important;   /* #1E40AF */
+  --pc: 0 0% 100% !important;     /* White */
+
+  /* Deep Violet / Indigo Secondary */
+  --s: 250 84% 60% !important;
+  --sf: 250 84% 50% !important;
+  --sc: 0 0% 100% !important;
+
+  /* Accent & Status */
+  --a: 190 95% 45% !important;
+  --af: 190 95% 38% !important;
+  --n: 222 47% 11% !important;
+  --nf: 222 47% 7% !important;
+  --nc: 210 40% 98% !important;
+  --su: 158 64% 42% !important;
+  --wa: 38 92% 50% !important;
+  --er: 0 84% 60% !important;
+
+  /* Radii & Micro-interactions */
+  --rounded-box: 1rem !important;
+  --rounded-btn: 0.625rem !important;
+  --rounded-badge: 9999px !important;
+  --animation-btn: 0.15s !important;
+  --animation-input: 0.15s !important;
+  --btn-text-case: none !important;
+  --border-btn: 1px !important;
+  --tab-radius: 0.5rem !important;
+
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings */
+h1, h2, h3, h4, .font-heading {
+  font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif !important;
+  letter-spacing: -0.025em !important;
+  color: #0F172A !important;
+}
+
+/* --- BUTTONS (Linear / Aceternity Style) --- */
+.btn,
+.base-button,
+.white-button {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  font-weight: 500 !important;
+  border-radius: 0.625rem !important;
+  text-transform: none !important;
+  letter-spacing: -0.01em !important;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Primary Button */
+.btn-primary,
+.base-button,
+.btn-neutral:not(.btn-square):not(.btn-ghost):not(.btn-circle) {
+  background: linear-gradient(180deg, #1D72FE 0%, #1557CC 100%) !important;
+  border: 1px solid #144FBA !important;
+  color: #FFFFFF !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(29, 114, 254, 0.25) !important;
+}
+
+.btn-primary:hover,
+.base-button:hover,
+.btn-neutral:not(.btn-square):not(.btn-ghost):not(.btn-circle):hover {
+  transform: translateY(-1px) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 16px rgba(29, 114, 254, 0.35), 0 12px 24px rgba(29, 114, 254, 0.2) !important;
+  filter: brightness(1.03) !important;
+}
+
+.btn-primary:active,
+.base-button:active {
+  transform: scale(0.98) !important;
+}
+
+/* White / Outline Button */
+.white-button,
+.btn-outline {
+  background: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.white-button:hover,
+.btn-outline:hover {
+  background: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Ghost Button */
+.btn-ghost {
+  border-radius: 0.625rem !important;
+  color: #475569 !important;
+  text-transform: none !important;
+}
+
+.btn-ghost:hover {
+  background: rgba(15, 23, 42, 0.05) !important;
+  color: #0F172A !important;
+}
+
+/* --- INPUTS & SELECTS (Shadcn/ui Glow Focus) --- */
+.base-input,
+.input,
+.base-select,
+.select,
+.base-textarea,
+.textarea,
+input[type='text'],
+input[type='email'],
+input[type='password'] {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border-radius: 0.625rem !important;
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.base-input:focus,
+.input:focus,
+.base-select:focus,
+.select:focus,
+.base-textarea:focus,
+.textarea:focus,
+input[type='text']:focus,
+input[type='email']:focus,
+input[type='password']:focus {
+  outline: none !important;
+  border-color: #1D72FE !important;
+  box-shadow: 0 0 0 3px rgba(29, 114, 254, 0.15), 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* --- TOGGLES & SWITCHES (Apple / Linear Pill) --- */
+.toggle {
+  border-radius: 9999px !important;
+  background-color: #E2E8F0 !important;
+  border: 2px solid transparent !important;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.toggle:checked {
+  background-color: #1D72FE !important;
+  border-color: transparent !important;
+}
+
+/* --- CHECKBOXES & RADIOS --- */
+.checkbox,
+.base-checkbox {
+  border-radius: 6px !important;
+  border: 1.5px solid #CBD5E1 !important;
+  background: #FFFFFF !important;
+  transition: all 0.15s ease !important;
+}
+
+.checkbox:checked,
+.base-checkbox:checked {
+  background-color: #1D72FE !important;
+  border-color: #1D72FE !important;
+}
+
+/* --- STATUS BADGES --- */
+.badge {
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.65rem !important;
+  letter-spacing: 0.02em !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.375rem !important;
+}
+
+.badge-success {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+  border: 1px solid #A7F3D0 !important;
+}
+
+.badge-warning {
+  background-color: #FFFBEB !important;
+  color: #92400E !important;
+  border: 1px solid #FDE68A !important;
+}
+
+.badge-info {
+  background-color: #EFF6FF !important;
+  color: #1E40AF !important;
+  border: 1px solid #BFDBFE !important;
+}
+
+.badge-error {
+  background-color: #FEF2F2 !important;
+  color: #991B1B !important;
+  border: 1px solid #FECACA !important;
+}
+
+/* --- CARDS & SURFACES --- */
+.card,
+.bg-base-200 {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.02) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.bg-base-300 {
+  background-color: #F1F5F9 !important;
+  border: 1px solid #E2E8F0 !important;
+}
+
+/* --- MODALS & DIALOGS --- */
+.modal {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.modal-box {
+  background: #FFFFFF !important;
+  border-radius: 1.25rem !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.2) !important;
+}
+
+/* --- TABLES --- */
+.table {
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+}
+
+.table th {
+  background-color: #F8FAFC !important;
+  text-transform: uppercase !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  color: #64748B !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.table tr:hover td {
+  background-color: #F8FAFC !important;
+}
+
+/* --- FLOATING ISLAND NAVBAR --- */
+.navbar-glass {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
+  border-radius: 1rem !important;
+}
+
+/* Navigation link pills */
+.nav-link-pill {
+  padding: 0.5rem 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  color: #475569 !important;
+  transition: all 0.15s ease !important;
+}
+
+.nav-link-pill:hover {
+  color: #0F172A !important;
+  background: #F1F5F9 !important;
+}
+
+.nav-link-pill.active {
+  color: #0F172A !important;
+  background: #FFFFFF !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* --- TEMPLATE BUILDER & SIGNATURE PAD OVERRIDES --- */
+template-builder {
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+template-builder .btn {
+  border-radius: 0.5rem !important;
+}
+
+/* Signature Pad modal smoothing */
+signature-pad canvas,
+.signature-canvas {
+  background-color: #FAFBFD !important;
+  border: 1.5px dashed #CBD5E1 !important;
+  border-radius: 0.75rem !important;
+}
+
+/* Custom dropzone hover */
+.docurama-dropzone {
+  background: radial-gradient(circle at 50% 50%, rgba(29, 114, 254, 0.03) 0%, rgba(255, 255, 255, 1) 100%) !important;
+  border: 2px dashed #CBD5E1 !important;
+  border-radius: 1.25rem !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.docurama-dropzone:hover {
+  border-color: #1D72FE !important;
+  background: radial-gradient(circle at 50% 50%, rgba(29, 114, 254, 0.08) 0%, rgba(255, 255, 255, 1) 100%) !important;
+  box-shadow: 0 10px 30px -10px rgba(29, 114, 254, 0.15) !important;
+}
+
+/* --- PROPERTY ROW & HORIZONTAL SETTINGS LAYOUT --- */
+.settings-horizontal-nav-wrapper {
+  width: 100% !important;
+}
+
+/* Force settings wrappers with top nav to stack vertically and take 100% width */
+.flex-wrap.md\:flex-nowrap,
+.flex.flex-wrap.md\:flex-nowrap {
+  flex-direction: column !important;
+  gap: 1.5rem !important;
+  width: 100% !important;
+}
+
+.property-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 1rem 0 !important;
+  gap: 1.5rem !important;
+}
+
+.property-row:first-child {
+  padding-top: 0.25rem !important;
+}
+
+.property-row:last-child {
+  border-bottom: none !important;
+  padding-bottom: 0.25rem !important;
+}
+
+/* Remove dummy spacers in settings */
+.w-0.md\:w-52 {
+  display: none !important;
+}

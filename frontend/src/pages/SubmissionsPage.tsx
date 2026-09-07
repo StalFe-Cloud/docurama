@@ -18,7 +18,9 @@ import {
   UserX,
   UserCheck,
   Send,
-  Upload
+  Upload,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { api, Envelope, TemplateItem } from '../lib/api';
 
@@ -100,37 +102,36 @@ export const SubmissionsPage: React.FC = () => {
     try {
       const tList = await api.listTemplates();
       setTemplates(tList);
-      if (tList.length > 0) setSelectedTemplateId(tList[0].id);
+      if (tList.length > 0) {
+        setSelectedTemplateId(tList[0].id);
+      }
       setShowBulkModal(true);
     } catch (e) {
-      alert('Failed to load templates for bulk send');
+      alert('Could not load templates for bulk send');
     }
   };
 
   const handleBulkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTemplateId || !bulkCsvFile) {
-      alert('Please select a template and upload a CSV file.');
-      return;
-    }
+    if (!selectedTemplateId || !bulkCsvFile) return;
     try {
       setBulkSubmitting(true);
       const res = await api.bulkSendEnvelopes(selectedTemplateId, bulkCsvFile);
-      showToast(`Bulk send successful: dispatched ${res.dispatched_count || 0} envelopes!`);
+      showToast(`Successfully queued ${res.queued_count} envelopes for dispatch.`);
       setShowBulkModal(false);
       setBulkCsvFile(null);
       await loadEnvelopes();
     } catch (err: any) {
-      alert(err.message || 'Bulk dispatch failed.');
+      alert(err.message || 'Bulk dispatch failed');
     } finally {
       setBulkSubmitting(false);
     }
   };
 
-  const filtered = envelopes.filter(e => {
-    const matchesSearch = e.title.toLowerCase().includes(search.toLowerCase()) ||
-                          e.verification_code.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || e.status === statusFilter;
+  const filtered = envelopes.filter((env) => {
+    const matchesSearch = env.title.toLowerCase().includes(search.toLowerCase()) ||
+                          env.verification_code.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || env.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -138,158 +139,158 @@ export const SubmissionsPage: React.FC = () => {
     switch (status) {
       case 'completed':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Sealed & Valid
+          <span className="badge badge-success">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
+            <span>Completed</span>
           </span>
         );
       case 'sent':
       case 'delivered':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-            <Clock className="w-3.5 h-3.5 animate-pulse" />
-            Waiting Signatures
-          </span>
-        );
-      case 'signed':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-            <Clock className="w-3.5 h-3.5" />
-            Partially Signed
-          </span>
-        );
-      case 'declined':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-            <UserX className="w-3.5 h-3.5" />
-            Declined
+          <span className="badge badge-warning">
+            <Clock className="w-3 h-3 text-amber-600 stroke-[2.5]" />
+            <span>Pending Signers</span>
           </span>
         );
       case 'voided':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-            <Ban className="w-3.5 h-3.5" />
-            Voided
+          <span className="badge badge-error">
+            <Ban className="w-3 h-3 text-rose-600 stroke-[2.5]" />
+            <span>Voided</span>
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300">
-            {status}
+          <span className="badge badge-info">
+            <span>{status}</span>
           </span>
         );
     }
   };
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-6">
       
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-indigo-950 border border-indigo-500/40 text-white shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+        <div className="fixed bottom-8 right-8 z-50 p-4 rounded-2xl bg-white border border-[#E2E8F0] text-[#0F172A] shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
           <span className="text-xs font-semibold">{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="text-[#94A3B8] hover:text-[#0F172A] ml-2">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
-      {/* Title & Stats */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-3">
-            <FileCheck2 className="w-7 h-7 text-indigo-400" />
-            Submissions Ledger
+      {/* Top Header Matching Production submissions_dashboard/index */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center">
+          {/* Toggle View Pill (Templates / Submissions) */}
+          <div className="bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0] flex items-center space-x-1 mr-4 shrink-0">
+            <a 
+              href="/templates" 
+              onClick={(e) => { e.preventDefault(); window.location.pathname = '/templates'; }}
+              className="px-3 py-1.5 text-xs font-medium text-[#64748B] hover:text-[#0F172A] rounded-lg transition-all flex items-center space-x-1.5"
+            >
+              <LayoutGrid className="w-4 h-4 stroke-2" />
+              <span>Templates</span>
+            </a>
+            <button className="px-3 py-1.5 text-xs font-semibold text-[#0F172A] bg-white rounded-lg shadow-sm border border-[#E2E8F0] transition-all flex items-center space-x-1.5">
+              <List className="w-4 h-4 text-[#1D72FE] stroke-[2.5]" />
+              <span>Submissions</span>
+            </button>
+          </div>
+
+          <h1 className="text-2xl md:text-3xl font-bold truncate tracking-tight text-[#0F172A] font-heading">
+            Submissions
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
-            Real-time audit ledger of all active and completed cryptographic envelopes.
-          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={openBulkModal}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors shadow-lg"
-          >
-            <Users className="w-3.5 h-3.5" />
-            Bulk Send (CSV)
-          </button>
+        <div className="flex items-center space-x-2">
+          {/* Search Input */}
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search submissions..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-3 py-2 text-xs w-full bg-white border border-[#E2E8F0] rounded-xl text-[#0F172A] placeholder-[#94A3B8] focus:border-[#1D72FE] shadow-sm"
+            />
+          </div>
 
           <button
-            onClick={loadEnvelopes}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            onClick={openBulkModal}
+            className="btn btn-white px-3.5 py-2 text-xs font-semibold gap-1.5 shadow-sm shrink-0"
           >
-            Refresh Ledger
+            <Users className="w-4 h-4 text-[#1D72FE]" />
+            <span className="hidden sm:inline">Bulk Send</span>
           </button>
         </div>
       </div>
 
-      {/* Filter Controls */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by title or verification code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 self-start sm:self-auto overflow-x-auto">
-          {['all', 'completed', 'sent', 'declined', 'voided'].map((status) => (
+      {/* Filter Tabs Matching Production */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center space-x-1 bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0]">
+          {['all', 'sent', 'completed'].map((st) => (
             <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all shrink-0 ${
-                statusFilter === status
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize ${
+                statusFilter === st
+                  ? 'bg-white text-[#0F172A] shadow-sm border border-[#E2E8F0]'
+                  : 'text-[#64748B] hover:text-[#0F172A]'
               }`}
             >
-              {status === 'all' ? 'All Envelopes' : status}
+              {st === 'sent' ? 'Pending' : st}
             </button>
           ))}
         </div>
+
+        <span className="text-xs text-[#64748B] font-medium">
+          Showing {filtered.length} document{filtered.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
-      {/* Ledger Table */}
-      <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
+      {/* Submissions Table / Ledger */}
+      <div className="rounded-2xl bg-white border border-[#E2E8F0] overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900/80 text-slate-400 border-b border-white/10 uppercase tracking-wider text-[10px]">
+            <thead className="bg-[#F8FAFC] text-[#64748B] border-b border-[#E2E8F0] uppercase tracking-wider text-[11px] font-semibold">
               <tr>
-                <th className="py-3.5 px-6 font-semibold">Document Subject</th>
-                <th className="py-3.5 px-4 font-semibold">Status</th>
-                <th className="py-3.5 px-4 font-semibold">Signers Progress</th>
-                <th className="py-3.5 px-4 font-semibold">Created</th>
-                <th className="py-3.5 px-6 font-semibold text-right">Actions</th>
+                <th className="py-3.5 px-6">Document Subject</th>
+                <th className="py-3.5 px-4">Status</th>
+                <th className="py-3.5 px-4">Signers Progress</th>
+                <th className="py-3.5 px-4">Created</th>
+                <th className="py-3.5 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[#F1F5F9]">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-500">
-                    <FileText className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-                    No envelopes found matching your search.
+                  <td colSpan={5} className="py-16 text-center text-[#64748B]">
+                    <FileText className="w-10 h-10 mx-auto text-[#CBD5E1] mb-2" />
+                    <p className="font-semibold text-sm text-[#0F172A]">No submissions found</p>
+                    <p className="text-xs text-[#94A3B8] mt-0.5">Documents sent for signature will appear here.</p>
                   </td>
                 </tr>
               ) : (
                 filtered.map((env) => (
                   <tr 
                     key={env.id}
-                    className="hover:bg-slate-900/40 transition-colors group cursor-pointer"
+                    className="hover:bg-[#F8FAFC] transition-colors group cursor-pointer"
                     onClick={() => openDetails(env.id)}
                   >
-                    <td className="py-4 px-6 font-medium text-white">
+                    <td className="py-4 px-6 font-medium text-[#0F172A]">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                          <FileText className="w-4 h-4" />
+                        <div className="w-9 h-9 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#1D72FE] shrink-0">
+                          <FileText className="w-4 h-4 stroke-2" />
                         </div>
                         <div>
-                          <div className="font-semibold text-white group-hover:text-indigo-300 transition-colors">
+                          <div className="font-bold text-[#0F172A] group-hover:text-[#1D72FE] transition-colors font-heading text-sm">
                             {env.title}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono">
+                          <div className="text-[10px] text-[#94A3B8] font-mono">
                             ID: {env.verification_code}
                           </div>
                         </div>
@@ -300,34 +301,34 @@ export const SubmissionsPage: React.FC = () => {
                       {getStatusBadge(env.status)}
                     </td>
 
-                    <td className="py-4 px-4 text-slate-300 font-medium">
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 bg-slate-800 rounded-full h-2 overflow-hidden border border-white/5">
+                    <td className="py-4 px-4 text-[#334155] font-medium">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-24 bg-[#E2E8F0] rounded-full h-2 overflow-hidden">
                           <div 
-                            className="bg-indigo-500 h-full rounded-full transition-all"
+                            className="bg-[#1D72FE] h-full rounded-full transition-all"
                             style={{ 
                               width: `${((env.signed_count || 0) / (env.recipients_count || 1)) * 100}%` 
                             }}
                           />
                         </div>
-                        <span className="text-[11px] text-slate-400">
+                        <span className="text-[11px] text-[#64748B] font-mono">
                           {env.signed_count || 0}/{env.recipients_count || 0}
                         </span>
                       </div>
                     </td>
 
-                    <td className="py-4 px-4 text-slate-400 text-[11px]">
+                    <td className="py-4 px-4 text-[#64748B] text-[11px]">
                       {new Date(env.created_at).toLocaleDateString()}
                     </td>
 
                     <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         {/* Remind Button */}
                         {(env.status === 'sent' || env.status === 'delivered') && (
                           <button
                             onClick={(e) => handleSendReminder(env.id, e)}
                             title="Send Automated Reminder"
-                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 transition-colors"
+                            className="p-1.5 rounded-lg bg-[#FFFBEB] hover:bg-[#FDE68A] text-amber-700 border border-[#FDE68A] transition-colors"
                           >
                             <Bell className="w-4 h-4" />
                           </button>
@@ -338,7 +339,7 @@ export const SubmissionsPage: React.FC = () => {
                           href={api.getExportCsvUrl(env.id)}
                           download
                           title="Export CSV Responses"
-                          className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition-colors"
+                          className="p-1.5 rounded-lg bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#1D72FE] border border-[#BFDBFE] transition-colors"
                         >
                           <FileSpreadsheet className="w-4 h-4" />
                         </a>
@@ -348,7 +349,7 @@ export const SubmissionsPage: React.FC = () => {
                             href={`/api/envelopes/${env.id}/download`}
                             download
                             title="Download Sealed PDF"
-                            className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 transition-colors"
+                            className="p-1.5 rounded-lg bg-[#ECFDF5] hover:bg-[#D1FAE5] text-emerald-700 border border-[#A7F3D0] transition-colors"
                           >
                             <Download className="w-4 h-4" />
                           </a>
@@ -357,7 +358,7 @@ export const SubmissionsPage: React.FC = () => {
                         <button
                           onClick={() => openDetails(env.id)}
                           title="View Audit Trail"
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                          className="p-1.5 rounded-lg bg-white hover:bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0] transition-colors"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -366,7 +367,7 @@ export const SubmissionsPage: React.FC = () => {
                           <button
                             onClick={() => handleVoid(env.id)}
                             title="Void Envelope"
-                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                            className="p-1.5 rounded-lg bg-[#FEF2F2] hover:bg-[#FEE2E2] text-rose-600 border border-[#FECACA] transition-colors"
                           >
                             <Ban className="w-4 h-4" />
                           </button>
@@ -381,181 +382,105 @@ export const SubmissionsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Slide-over Audit Drawer */}
+      {/* Details / Audit Trail Modal */}
       {selectedEnvelope && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-xl bg-slate-900 border-l border-white/10 h-full p-6 overflow-y-auto space-y-6 shadow-2xl animate-in slide-in-from-right duration-300">
-            
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white">Envelope Intelligence & Audit Trail</h2>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-3xl bg-white border border-[#E2E8F0] p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-[#0F172A] font-heading">{selectedEnvelope.title}</h3>
+                <p className="text-xs text-[#64748B] font-mono mt-0.5">Verification Code: {selectedEnvelope.verification_code}</p>
               </div>
-              <button 
-                onClick={() => setSelectedEnvelope(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
-              >
+              <button onClick={() => setSelectedEnvelope(null)} className="text-[#64748B] hover:text-[#0F172A]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Summary Block */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-white/5 space-y-3 text-xs">
-              <div className="flex justify-between items-start">
-                <span className="text-slate-400">Subject:</span>
-                <span className="font-semibold text-white text-right">{selectedEnvelope.title}</span>
+            {/* Recipient Timeline */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#475569]">Signer Timeline & Status</h4>
+              <div className="space-y-2.5">
+                {(selectedEnvelope.recipients || []).map((r: any) => (
+                  <div key={r.id} className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-xs text-[#0F172A]">{r.name}</div>
+                      <div className="text-[11px] text-[#64748B]">{r.email} ({r.role})</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`badge ${r.status === 'signed' ? 'badge-success' : 'badge-warning'}`}>
+                        {r.status === 'signed' ? 'Signed' : r.status}
+                      </span>
+                      {r.status !== 'signed' && (
+                        <a 
+                          href={`/s/${r.signing_token}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-white text-[11px] px-2.5 py-1 gap-1"
+                        >
+                          <span>Sign Link</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Verification Code:</span>
-                <span className="font-mono text-indigo-300 font-bold">{selectedEnvelope.verification_code}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Status:</span>
-                <div>{getStatusBadge(selectedEnvelope.status)}</div>
-              </div>
-              {selectedEnvelope.sha256_signed && (
-                <div className="flex flex-col gap-1 pt-2 border-t border-white/5">
-                  <span className="text-slate-400 text-[10px]">PAdES Cryptographic Checksum (SHA-256):</span>
-                  <span className="font-mono text-[9px] text-emerald-400 break-all bg-slate-900 p-1.5 rounded">
-                    {selectedEnvelope.sha256_signed}
+            </div>
+
+            {/* Cryptographic Digest & Audit Log */}
+            <div className="space-y-3 pt-3 border-t border-[#E2E8F0]">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#475569]">Audit Certificate Digest</h4>
+              <div className="p-4 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748B]">Digital Trust Engine</span>
+                  <span className="font-semibold text-emerald-600 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Docurama Root CA Certified
                   </span>
                 </div>
-              )}
+                <div className="flex items-center justify-between font-mono text-[10px]">
+                  <span className="text-[#64748B]">SHA-256 Digest</span>
+                  <span className="text-[#0F172A] truncate max-w-xs">{selectedEnvelope.sha256_original || "Pending final sealing"}</span>
+                </div>
+              </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              <a
-                href={api.getExportCsvUrl(selectedEnvelope.id)}
-                download
-                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors"
+            <div className="flex justify-end gap-2 pt-2 border-t border-[#F1F5F9]">
+              <button 
+                onClick={() => setSelectedEnvelope(null)}
+                className="btn btn-white px-5 py-2 text-xs font-semibold"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                Export CSV Data
-              </a>
-
-              {(selectedEnvelope.status === 'sent' || selectedEnvelope.status === 'delivered') && (
-                <button
-                  onClick={() => handleSendReminder(selectedEnvelope.id)}
-                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition-colors"
-                >
-                  <Bell className="w-4 h-4" />
-                  Dispatch Reminders
-                </button>
-              )}
+                Close
+              </button>
             </div>
-
-            {/* Recipients List with Live States */}
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                Recipients & Execution Flow
-              </h3>
-              <div className="space-y-2.5">
-                {(selectedEnvelope.recipients || []).map((r) => (
-                  <div key={r.id} className="p-3.5 rounded-xl bg-slate-950/40 border border-white/5 text-xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold text-white">{r.name}</div>
-                        <div className="text-slate-400 text-[11px]">{r.email} ({r.role})</div>
-                      </div>
-                      <div>
-                        {r.status === 'signed' ? (
-                          <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Signed
-                          </span>
-                        ) : r.status === 'declined' ? (
-                          <span className="text-rose-400 font-semibold flex items-center gap-1">
-                            <UserX className="w-3.5 h-3.5" /> Declined
-                          </span>
-                        ) : r.status === 'delegated' ? (
-                          <span className="text-purple-400 font-semibold flex items-center gap-1">
-                            <UserCheck className="w-3.5 h-3.5" /> Delegated
-                          </span>
-                        ) : (
-                          <a
-                            href={`/s/${r.signing_token}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium"
-                          >
-                            Sign Now
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    {r.declined_reason && (
-                      <div className="p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px]">
-                        <strong>Decline Reason:</strong> {r.declined_reason}
-                      </div>
-                    )}
-
-                    {r.delegated_to_email && (
-                      <div className="p-2 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px]">
-                        <strong>Delegated to:</strong> {r.delegated_to_name} ({r.delegated_to_email})
-                      </div>
-                    )}
-
-                    {(r.reminders_sent_count || 0) > 0 && (
-                      <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <Bell className="w-3 h-3 text-amber-400" />
-                        Reminders sent: {r.reminders_sent_count} (Last: {new Date(r.last_reminded_at || '').toLocaleDateString()})
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chronological Audit Timeline */}
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                Immutable Event Timeline
-              </h3>
-              <div className="relative pl-6 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
-                {(selectedEnvelope.audit_events || []).map((a, idx) => (
-                  <div key={a.id || idx} className="relative text-xs">
-                    <div className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-indigo-500 ring-4 ring-slate-900" />
-                    <div className="font-semibold text-white">{a.description}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {a.actor_name} • {new Date(a.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
           </div>
         </div>
       )}
 
       {/* Bulk Send Modal */}
       {showBulkModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white border border-[#E2E8F0] p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Users className="w-4 h-4 text-indigo-400" />
-                Bulk Dispatch from CSV
+              <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2 font-heading">
+                <Users className="w-4 h-4 text-[#1D72FE]" />
+                Bulk Send Envelopes via CSV
               </h3>
-              <button onClick={() => setShowBulkModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowBulkModal(false)} className="text-[#64748B] hover:text-[#0F172A]">
+                <X className="w-4 h-4" />
               </button>
             </div>
-
-            <p className="text-xs text-slate-400">
-              Generate dozens or hundreds of individual signing envelopes simultaneously using a template blueprint and a recipient CSV list.
+            <p className="text-xs text-[#64748B]">
+              Upload a CSV file containing columns <code className="text-[#1D72FE] font-bold">name</code> and <code className="text-[#1D72FE] font-bold">email</code>. Docurama will automatically dispatch unique signing envelopes.
             </p>
 
-            <form onSubmit={handleBulkSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleBulkSubmit} className="space-y-4">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Target Blueprint Template *</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">Select Base Template *</label>
                 <select
                   value={selectedTemplateId}
                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-[#E2E8F0] text-xs text-[#0F172A]"
                 >
                   {templates.map(t => (
                     <option key={t.id} value={t.id}>{t.title}</option>
@@ -564,33 +489,30 @@ export const SubmissionsPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Upload Recipient CSV *</label>
+                <label className="block text-xs font-medium text-[#475569] mb-1">Recipients CSV File *</label>
                 <input
                   type="file"
+                  required
                   accept=".csv"
-                  onChange={(e) => e.target.files && setBulkCsvFile(e.target.files[0])}
-                  className="w-full text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                  onChange={(e) => setBulkCsvFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-[#64748B] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#EFF6FF] file:text-[#1D72FE] hover:file:bg-[#DBEAFE] cursor-pointer"
                 />
-                <p className="text-[10px] text-slate-500 mt-1.5">
-                  CSV format: columns <code>email</code> and <code>name</code> (required), plus optional custom field values.
-                </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#F1F5F9]">
                 <button
                   type="button"
                   onClick={() => setShowBulkModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                  className="btn btn-white px-4 py-2 text-xs font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={bulkSubmitting}
-                  className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white btn-primary-glow disabled:opacity-50"
+                  className="btn btn-primary px-5 py-2 text-xs font-semibold shadow-sm"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  {bulkSubmitting ? 'Dispatching Envelopes...' : 'Start Bulk Dispatch'}
+                  {bulkSubmitting ? 'Dispatching...' : 'Dispatch Envelopes'}
                 </button>
               </div>
             </form>

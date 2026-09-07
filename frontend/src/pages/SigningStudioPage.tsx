@@ -337,11 +337,11 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4">
-        <div className="w-10 h-10 rounded-full border-3 border-indigo-500 border-t-transparent animate-spin" />
+      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
+        <div className="w-10 h-10 rounded-full border-3 border-[#1D72FE] border-t-transparent animate-spin" />
         <div className="text-center">
-          <p className="text-sm font-semibold text-white">Loading Secure Signing Studio...</p>
-          <p className="text-xs text-slate-400 mt-1">Rendering high-resolution document pages & cryptographic layers</p>
+          <p className="text-sm font-semibold text-[#0F172A]">Loading Secure Signing Studio...</p>
+          <p className="text-xs text-slate-500 mt-1">Rendering high-resolution document pages & cryptographic layers</p>
         </div>
       </div>
     );
@@ -349,18 +349,18 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
   if (isDeclined) {
     return (
-      <div className="max-w-md mx-auto my-16 p-8 rounded-3xl glass-card border border-rose-500/30 text-center space-y-6 animate-in zoom-in-95 duration-300 shadow-2xl">
-        <div className="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 mx-auto flex items-center justify-center">
+      <div className="max-w-md mx-auto my-16 p-8 rounded-3xl bg-white border border-rose-200 text-center space-y-6 animate-in zoom-in-95 duration-300 shadow-xl">
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 border border-rose-100 mx-auto flex items-center justify-center">
           <UserX className="w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">Document Signing Declined</h2>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+          <h2 className="text-xl font-bold text-[#0F172A]">Document Signing Declined</h2>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             You have officially declined to sign this document. The document originator has been notified of your refusal.
           </p>
         </div>
-        <div className="p-3 bg-slate-900/90 rounded-xl border border-white/5 text-xs text-slate-300">
-          <span className="text-slate-500 block mb-1 text-[10px] uppercase font-bold tracking-wider">Reason Specified</span>
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
+          <span className="text-slate-400 block mb-1 text-[10px] uppercase font-bold tracking-wider">Reason Specified</span>
           <span>{declineReason}</span>
         </div>
       </div>
@@ -369,14 +369,14 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
   if (isDelegated) {
     return (
-      <div className="max-w-md mx-auto my-16 p-8 rounded-3xl glass-card border border-indigo-500/30 text-center space-y-6 animate-in zoom-in-95 duration-300 shadow-2xl">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 mx-auto flex items-center justify-center">
+      <div className="max-w-md mx-auto my-16 p-8 rounded-3xl bg-white border border-blue-200 text-center space-y-6 animate-in zoom-in-95 duration-300 shadow-xl">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#1D72FE] border border-blue-100 mx-auto flex items-center justify-center">
           <UserCheck className="w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">Authority Successfully Delegated</h2>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-            Signing authority has been reassigned to <strong className="text-white">{delegatedInfo?.name}</strong> (<span className="text-indigo-300">{delegatedInfo?.email}</span>). A fresh signing link has been generated and dispatched.
+          <h2 className="text-xl font-bold text-[#0F172A]">Authority Successfully Delegated</h2>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+            Signing authority has been reassigned to <strong className="text-[#0F172A]">{delegatedInfo?.name}</strong> (<span className="text-[#1D72FE]">{delegatedInfo?.email}</span>). A fresh signing link has been generated and dispatched.
           </p>
         </div>
       </div>
@@ -385,28 +385,28 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
   if (isCompleted) {
     return (
-      <div className="max-w-lg mx-auto my-16 p-8 sm:p-10 rounded-3xl glass-card border border-emerald-500/30 text-center space-y-6 animate-in zoom-in-95 duration-300 shadow-2xl">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
+      <div className="max-w-lg mx-auto my-16 p-8 sm:p-10 rounded-3xl bg-white border border-emerald-200 text-center space-y-6 animate-in zoom-in-95 duration-300 shadow-xl">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 mx-auto flex items-center justify-center shadow-md">
           <CheckCircle2 className="w-9 h-9" />
         </div>
         <div>
-          <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block mb-3">
+          <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block mb-3">
             Legally Binding • eIDAS & ESIGN Compliant
           </span>
-          <h2 className="text-2xl font-bold text-white">Document Successfully Sealed</h2>
-          <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+          <h2 className="text-2xl font-bold text-[#0F172A]">Document Successfully Sealed</h2>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             Your cryptographic digital signature has been verified and permanently affixed to the document under the Docurama Root CA Trust Network.
           </p>
         </div>
 
         {completedCode && (
-          <div className="p-4 bg-slate-900/90 rounded-2xl border border-white/5 text-xs text-left space-y-2">
+          <div className="p-4 bg-[#F8FAFC] rounded-2xl border border-slate-200 text-xs text-left space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 text-[11px] font-semibold">Verification Code</span>
-              <span className="font-mono text-emerald-400 font-bold text-sm tracking-wider">{completedCode}</span>
+              <span className="text-slate-500 text-[11px] font-semibold">Verification Code</span>
+              <span className="font-mono text-emerald-700 font-bold text-sm tracking-wider">{completedCode}</span>
             </div>
-            <div className="text-[10px] text-slate-500 flex items-center gap-1.5 pt-1 border-t border-white/5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="text-[10px] text-slate-500 flex items-center gap-1.5 pt-1 border-t border-slate-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
               <span>SHA-256 Digest Recorded in PAdES-LTV Certificate</span>
             </div>
           </div>
@@ -415,7 +415,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
           <a
             href={`/verify?code=${completedCode}`}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-xs font-bold text-white btn-primary-glow"
+            className="btn btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 h-11 text-xs font-bold"
           >
             <ShieldCheck className="w-4 h-4" />
             View Public Verification Certificate
@@ -426,64 +426,64 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-120px)] overflow-hidden font-sans">
       
       {/* Top Sticky Header & Controls */}
-      <div className="p-3 sm:p-4 rounded-2xl glass-panel border border-white/10 flex flex-wrap items-center justify-between gap-3 shadow-xl mb-3 shrink-0">
+      <div className="p-3 sm:p-4 rounded-2xl bg-white/95 backdrop-blur-md border border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 shadow-sm mb-3 shrink-0">
         
         {/* Document Info */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1D72FE]">
             <Lock className="w-4 h-4" />
           </div>
           <div>
-            <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+            <div className="font-bold text-[#0F172A] text-xs sm:text-sm flex items-center gap-2">
               <span>{session?.envelope_title}</span>
-              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-[#1D72FE] border border-blue-200">
                 Secure Session
               </span>
             </div>
-            <div className="text-[11px] text-slate-400">
-              Signer: <span className="text-white font-medium">{session?.recipient?.name}</span> ({session?.recipient?.email})
+            <div className="text-[11px] text-[#64748B]">
+              Signer: <span className="text-[#0F172A] font-medium">{session?.recipient?.name}</span> ({session?.recipient?.email})
             </div>
           </div>
         </div>
 
         {/* Center: Zoom Controls & Thumbnail Toggle */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-white/10">
+        <div className="flex items-center gap-1 bg-[#F8FAFC] p-1 rounded-xl border border-[#CBD5E1]">
           <button
             onClick={() => setShowThumbnails(!showThumbnails)}
             title="Toggle Page Rail"
             className={`p-1.5 rounded-lg text-xs transition-colors ${
-              showThumbnails ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              showThumbnails ? 'bg-[#1D72FE] text-white shadow-sm' : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
           </button>
-          <div className="h-3 w-px bg-white/10 mx-1" />
+          <div className="h-3 w-px bg-slate-200 mx-1" />
           <button
             onClick={() => setZoomLevel(Math.max(60, zoomLevel - 15))}
             disabled={zoomLevel <= 60}
             title="Zoom Out"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#0F172A] disabled:opacity-30 transition-colors"
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
-          <span className="px-2 text-[11px] font-mono font-bold text-slate-300 min-w-[44px] text-center">
+          <span className="px-2 text-[11px] font-mono font-bold text-[#0F172A] min-w-[44px] text-center">
             {zoomLevel}%
           </span>
           <button
             onClick={() => setZoomLevel(Math.min(160, zoomLevel + 15))}
             disabled={zoomLevel >= 160}
             title="Zoom In"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#0F172A] disabled:opacity-30 transition-colors"
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setZoomLevel(100)}
             title="Reset Zoom (100%)"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white text-[10px] font-mono transition-colors"
+            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#0F172A] text-[10px] font-mono transition-colors"
           >
             100%
           </button>
@@ -494,22 +494,22 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
           <button
             onClick={() => setShowSecurityModal(true)}
             title="Security Audit & Compliance"
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white bg-slate-900 border border-white/10 transition-colors"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#64748B] hover:text-[#0F172A] bg-slate-50 border border-[#CBD5E1] transition-colors"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span className="text-[11px]">Audit Info</span>
           </button>
 
           <button
             onClick={() => setShowDelegateModal(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 bg-slate-900 border border-white/10 hover:bg-slate-800 transition-colors"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-50 border border-[#CBD5E1] hover:bg-slate-100 transition-colors"
           >
             Delegate
           </button>
 
           <button
             onClick={() => setShowDeclineModal(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors"
           >
             Decline
           </button>
@@ -517,10 +517,10 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
           <button
             onClick={handleFinalSubmit}
             disabled={submitting}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all shadow-lg ${
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all shadow-md ${
               unfilledRequiredFields.length === 0
-                ? 'btn-primary-glow animate-bounce-subtle'
-                : 'bg-indigo-600/80 hover:bg-indigo-600'
+                ? 'btn-primary'
+                : 'bg-[#1D72FE]/80 hover:bg-[#1D72FE]'
             }`}
           >
             <Check className="w-4 h-4" />
@@ -531,11 +531,11 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
       </div>
 
       {/* Main Studio Body: Thumbnails + Document Canvas */}
-      <div className="flex-1 flex overflow-hidden rounded-2xl border border-white/10 relative">
+      <div className="flex-1 flex overflow-hidden rounded-2xl border border-[#E2E8F0] relative bg-[#F1F5F9]">
         
         {/* Left Page Thumbnails Rail */}
         {showThumbnails && pages.length > 0 && (
-          <div className="w-36 bg-slate-900/95 border-r border-white/10 p-3 overflow-y-auto space-y-3 shrink-0 flex flex-col">
+          <div className="w-36 bg-white border-r border-[#E2E8F0] p-3 overflow-y-auto space-y-3 shrink-0 flex flex-col shadow-sm">
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block px-1">
               Pages ({pages.length})
             </span>
@@ -550,8 +550,8 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                     onClick={() => scrollToPage(p.page_number)}
                     className={`cursor-pointer group rounded-xl overflow-hidden border-2 transition-all relative ${
                       isActive 
-                        ? 'border-indigo-500 ring-2 ring-indigo-500/40 shadow-lg' 
-                        : 'border-white/10 hover:border-white/30'
+                        ? 'border-[#1D72FE] ring-2 ring-blue-200 shadow-md' 
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="relative bg-white aspect-[0.77] overflow-hidden">
@@ -564,7 +564,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                         #{p.page_number}
                       </span>
                       {pageFieldsCount > 0 && (
-                        <span className="absolute top-1 left-1 px-1 py-0.2 rounded-full bg-indigo-600 text-[8px] font-bold text-white flex items-center justify-center min-w-[16px]">
+                        <span className="absolute top-1 left-1 px-1 py-0.2 rounded-full bg-[#1D72FE] text-[8px] font-bold text-white flex items-center justify-center min-w-[16px]">
                           {pageFieldsCount}
                         </span>
                       )}
@@ -577,7 +577,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
         )}
 
         {/* Central Scrollable Document Canvas */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-10 bg-slate-950 flex flex-col items-center bg-dot-pattern relative">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-10 bg-[#F1F5F9] flex flex-col items-center relative">
           
           {pages.length > 0 ? (
             pages.map((page: DocumentPage) => {
@@ -801,14 +801,14 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
           <div className="relative w-7 h-7 flex items-center justify-center">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
               <path
-                className="text-slate-800"
+                className="text-slate-200"
                 strokeWidth="3.5"
                 stroke="currentColor"
                 fill="none"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
               <path
-                className="text-indigo-500 transition-all duration-500"
+                className="text-[#1D72FE] transition-all duration-500"
                 strokeDasharray={`${progressPercent}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
@@ -817,26 +817,26 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>
-            <span className="absolute text-[8px] font-bold font-mono text-white">{progressPercent}%</span>
+            <span className="absolute text-[8px] font-bold font-mono text-[#0F172A]">{progressPercent}%</span>
           </div>
           <div className="text-xs">
-            <div className="font-bold text-white leading-none">
+            <div className="font-bold text-[#0F172A] leading-none">
               {unfilledRequiredFields.length > 0 
                 ? `${unfilledRequiredFields.length} field${unfilledRequiredFields.length > 1 ? 's' : ''} left` 
                 : 'All fields completed!'}
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
+            <div className="text-[10px] text-slate-500 mt-0.5">
               {filledCount} of {totalRequired} required filled
             </div>
           </div>
         </div>
 
-        <div className="h-6 w-px bg-white/10" />
+        <div className="h-6 w-px bg-slate-200" />
 
         {unfilledRequiredFields.length > 0 ? (
           <button
             onClick={handleNextField}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-white btn-primary-glow shadow-md"
+            className="btn btn-primary flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold shadow-md"
           >
             <span>Next Field</span>
             <ArrowDown className="w-3.5 h-3.5 animate-bounce" />
@@ -845,7 +845,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
           <button
             onClick={handleFinalSubmit}
             disabled={submitting}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-600/30 transition-all"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Finish & Seal</span>
@@ -855,35 +855,35 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
       {/* Signature / Initials Capture Modal */}
       {activeModalField && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-white/15 p-6 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 p-6 space-y-5 shadow-2xl text-[#0F172A]">
             
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1D72FE]">
                   <PenTool className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">
+                  <h3 className="text-sm font-bold text-[#0F172A]">
                     Affix Digital Signature & Cryptographic Seal
                   </h3>
-                  <p className="text-[10px] text-slate-400">Docurama Root CA Trust Framework</p>
+                  <p className="text-[10px] text-slate-500">Docurama Root CA Trust Framework</p>
                 </div>
               </div>
               <button 
                 onClick={() => setActiveModalField(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Mode Tabs */}
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-white/10">
+            <div className="flex items-center gap-1 bg-[#F1F5F9] p-1 rounded-xl border border-slate-200">
               <button
                 onClick={() => setSigMode('draw')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  sigMode === 'draw' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  sigMode === 'draw' ? 'bg-[#1D72FE] text-white shadow-sm' : 'text-slate-600 hover:text-[#0F172A]'
                 }`}
               >
                 <PenTool className="w-3.5 h-3.5" />
@@ -892,7 +892,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
               <button
                 onClick={() => setSigMode('type')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  sigMode === 'type' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  sigMode === 'type' ? 'bg-[#1D72FE] text-white shadow-sm' : 'text-slate-600 hover:text-[#0F172A]'
                 }`}
               >
                 <Type className="w-3.5 h-3.5" />
@@ -904,7 +904,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                   loadMobileQr();
                 }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  sigMode === 'phone' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  sigMode === 'phone' ? 'bg-[#1D72FE] text-white shadow-sm' : 'text-slate-600 hover:text-[#0F172A]'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
@@ -936,9 +936,9 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                     <RotateCcw className="w-3 h-3" /> Clear
                   </button>
                 </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                <div className="flex items-center justify-between text-[10px] text-slate-500 px-1">
                   <span>Draw using mouse, stylus or touchpad</span>
-                  <span className="text-indigo-400 font-medium">Vector Smoothing Active</span>
+                  <span className="text-[#1D72FE] font-medium">Vector Smoothing Active</span>
                 </div>
               </div>
             )}
@@ -951,7 +951,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                   placeholder="Type your legal full name"
                   value={typedName}
                   onChange={(e) => setTypedName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inner"
+                  className="base-input w-full h-11 px-4 text-sm"
                 />
 
                 <div className="grid grid-cols-2 gap-2">
@@ -963,7 +963,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                         onClick={() => setSelectedFont(f.fontFamily)}
                         style={{ fontFamily: f.fontFamily }}
                         className={`p-3 rounded-xl text-left bg-white text-slate-900 text-xl truncate border-2 transition-all ${
-                          isSelected ? 'border-indigo-600 ring-2 ring-indigo-500/40 shadow-md' : 'border-slate-200 hover:border-slate-300'
+                          isSelected ? 'border-[#1D72FE] ring-2 ring-blue-100 shadow-md' : 'border-slate-200 hover:border-slate-300'
                         }`}
                       >
                         {typedName || session?.recipient?.name || 'Your Signature'}
@@ -977,16 +977,16 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
             {/* Sign on Phone Mode */}
             {sigMode === 'phone' && (
               <div className="text-center p-4 space-y-4">
-                <div className="w-48 h-48 bg-white p-3 rounded-2xl mx-auto shadow-lg flex items-center justify-center">
+                <div className="w-48 h-48 bg-[#F8FAFC] p-3 rounded-2xl mx-auto border border-slate-200 shadow-inner flex items-center justify-center">
                   {mobileQr ? (
                     <img src={mobileQr} alt="Scan QR Code to Sign on Phone" className="w-full h-full object-contain" />
                   ) : (
-                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-[#1D72FE] border-t-transparent rounded-full animate-spin" />
                   )}
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">Scan to Sign on Mobile Touchscreen</div>
-                  <div className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
+                  <div className="text-xs font-bold text-[#0F172A]">Scan to Sign on Mobile Touchscreen</div>
+                  <div className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
                     Point your camera at this QR code. Sign smoothly on your mobile touch screen and watch your desktop update in real-time.
                   </div>
                 </div>
@@ -994,19 +994,19 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
             )}
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 onClick={() => setActiveModalField(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
               >
                 Cancel
               </button>
               {sigMode !== 'phone' && (
                 <button
                   onClick={applySignature}
-                  className="px-6 py-2 rounded-xl text-xs font-bold text-white btn-primary-glow shadow-md"
+                  className="btn btn-primary px-6 py-2 text-xs font-bold shadow-md"
                 >
-                  Adopt & Sign
+                  Adopt &amp; Sign
                 </button>
               )}
             </div>
@@ -1017,36 +1017,36 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
       {/* Legal & Security Compliance Modal */}
       {showSecurityModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/15 p-6 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 space-y-5 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white">Document Legal Validity & Security</h3>
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-bold text-[#0F172A]">Document Legal Validity &amp; Security</h3>
               </div>
-              <button onClick={() => setShowSecurityModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowSecurityModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
-              <div className="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">eIDAS & ESIGN Compliance</span>
-                <p className="text-[11px] text-slate-400">
+            <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-[#1D72FE] tracking-wider">eIDAS &amp; ESIGN Compliance</span>
+                <p className="text-[11px] text-slate-600">
                   Electronic signatures executed via Docurama carry full legal validity, enforceability, and court admissibility under EU Regulation 910/2014 and the US ESIGN Act of 2000.
                 </p>
               </div>
 
-              <div className="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Cryptographic PAdES-LTV Seal</span>
-                <p className="text-[11px] text-slate-400">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider">Cryptographic PAdES-LTV Seal</span>
+                <p className="text-[11px] text-slate-600">
                   Each finalized document is sealed with an immutable SHA-256 state digest and embedded cryptographic certificates providing Long-Term Validation (LTV) independent of Docurama servers.
                 </p>
               </div>
 
-              <div className="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">RFC 3161 Certified Timestamping</span>
-                <p className="text-[11px] text-slate-400">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">RFC 3161 Certified Timestamping</span>
+                <p className="text-[11px] text-slate-600">
                   Every signature record captures hardware telemetry, IP address, and high-entropy timestamping issued by certified Trust Service Providers.
                 </p>
               </div>
@@ -1054,7 +1054,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
             <button
               onClick={() => setShowSecurityModal(false)}
-              className="w-full py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+              className="btn btn-white w-full py-2 text-xs font-bold border border-slate-200"
             >
               Close
             </button>
@@ -1064,18 +1064,18 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
       {/* Decline Modal */}
       {showDeclineModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 space-y-4 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <UserX className="w-4 h-4 text-rose-400" />
+              <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2">
+                <UserX className="w-4 h-4 text-rose-600" />
                 Decline to Sign Document
               </h3>
-              <button onClick={() => setShowDeclineModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowDeclineModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Please specify the reason you are refusing to execute this agreement. The sender will be informed immediately.
             </p>
             <form onSubmit={handleDeclineSubmit} className="space-y-4">
@@ -1085,13 +1085,13 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                 placeholder="Reason for declining..."
                 value={declineReason}
                 onChange={(e) => setDeclineReason(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                className="base-input w-full p-3 text-xs"
               />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowDeclineModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                  className="btn btn-white px-4 py-2 text-xs border border-slate-200"
                 >
                   Cancel
                 </button>
@@ -1110,55 +1110,55 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
 
       {/* Delegate Modal */}
       {showDelegateModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-white/10 p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 space-y-4 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-[#1D72FE]" />
                 Delegate Signing Authority
               </h3>
-              <button onClick={() => setShowDelegateModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowDelegateModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               Reassign your signature duties to another authorized representative in your organization.
             </p>
             <form onSubmit={handleDelegateSubmit} className="space-y-3">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Delegate Full Name *</label>
+                <label className="block text-[11px] text-slate-600 font-semibold mb-1">Delegate Full Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Sarah Connor"
                   value={delegateName}
                   onChange={(e) => setDelegateName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-xs text-white"
+                  className="base-input w-full h-10 px-3 text-xs"
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Delegate Email Address *</label>
+                <label className="block text-[11px] text-slate-600 font-semibold mb-1">Delegate Email Address *</label>
                 <input
                   type="email"
                   required
                   placeholder="e.g. sarah@enterprise.com"
                   value={delegateEmail}
                   onChange={(e) => setDelegateEmail(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-xs text-white"
+                  className="base-input w-full h-10 px-3 text-xs"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowDelegateModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                  className="btn btn-white px-4 py-2 text-xs border border-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white btn-primary-glow"
+                  className="btn btn-primary px-4 py-2 text-xs font-bold"
                 >
                   Confirm Delegation
                 </button>

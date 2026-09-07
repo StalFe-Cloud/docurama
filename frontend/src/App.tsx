@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
+import { LandingPage } from './pages/LandingPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { SubmissionsPage } from './pages/SubmissionsPage';
 import { BuilderPage } from './pages/BuilderPage';
@@ -11,9 +12,9 @@ import { PublicFormPage } from './pages/PublicFormPage';
 import { api } from './lib/api';
 
 export const App: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState<string>('templates');
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currentTab, setCurrentTab] = useState<string>('landing');
 
   // Check URL routes
   const path = window.location.pathname;
@@ -26,30 +27,36 @@ export const App: React.FC = () => {
     try {
       setLoading(true);
       const u = await api.getMe();
-      setUser(u);
+      if (u && u.email) {
+        setUser(u);
+        if (currentTab === 'landing' || currentTab === 'signin') {
+          setCurrentTab('templates');
+        }
+      } else {
+        setUser(null);
+      }
     } catch (e) {
-      // Mock default user if in offline mode or dev mode
-      setUser({
-        email: 'admin@docurama.com',
-        first_name: 'Docurama',
-        last_name: 'Admin',
-        role: 'admin'
-      });
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    await api.logout();
+    try {
+      await api.logout();
+    } catch (e) {
+      // ignore
+    }
     setUser(null);
+    setCurrentTab('landing');
   };
 
   // 1. Public Self-Service Template Intake Form: /d/:slug
   if (path.startsWith('/d/')) {
     const slug = path.replace('/d/', '').split('?')[0];
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 bg-grid-pattern">
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] p-4 sm:p-8">
         <PublicFormPage slug={slug} />
       </div>
     );
@@ -59,7 +66,7 @@ export const App: React.FC = () => {
   if (path.startsWith('/s/') || path.startsWith('/sign/')) {
     const token = (path.startsWith('/s/') ? path.replace('/s/', '') : path.replace('/sign/', '')).split('?')[0];
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 bg-grid-pattern">
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] p-2 sm:p-6">
         <SigningStudioPage token={token} onDone={() => { window.location.href = '/verify'; }} />
       </div>
     );
@@ -68,40 +75,80 @@ export const App: React.FC = () => {
   // 3. Direct Public Verification Route: /verify
   if (path === '/verify') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 bg-grid-pattern">
-        <VerifyPage />
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
+        <Header
+          currentTab="verify"
+          onSelectTab={(tab) => {
+            if (tab === 'landing') window.location.href = '/';
+            else setCurrentTab(tab);
+          }}
+          onNewEnvelope={() => setCurrentTab('builder')}
+          user={user}
+          onLogout={handleLogout}
+          onSignIn={() => setCurrentTab('signin')}
+        />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
+          <VerifyPage />
+        </main>
       </div>
     );
   }
 
-  // 3. Main Authenticated Dashboard
-  if (!user && !loading) {
-    return <SignInPage onSuccess={(u) => setUser(u)} />;
+  // 4. Direct Sign-In Route: /sign_in
+  if (path === '/sign_in' || currentTab === 'signin') {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
+        <Header
+          currentTab="signin"
+          onSelectTab={(tab) => setCurrentTab(tab)}
+          onNewEnvelope={() => setCurrentTab('builder')}
+          user={user}
+          onLogout={handleLogout}
+          onSignIn={() => setCurrentTab('signin')}
+        />
+        <main className="flex-1 flex items-center justify-center">
+          <SignInPage
+            onSuccess={(u) => {
+              setUser(u);
+              setCurrentTab('templates');
+            }}
+            onCancel={() => setCurrentTab('landing')}
+          />
+        </main>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-pattern">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col font-sans">
       <Header
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         onNewEnvelope={() => setCurrentTab('builder')}
         user={user}
         onLogout={handleLogout}
+        onSignIn={() => setCurrentTab('signin')}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 pt-8">
-        {currentTab === 'templates' && (
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
+        {/* Unauthenticated Landing Hero */}
+        {!user && currentTab === 'landing' && (
+          <LandingPage onGetStarted={() => setCurrentTab('signin')} />
+        )}
+
+        {/* Authenticated Pages */}
+        {user && currentTab === 'templates' && (
           <TemplatesPage
             onSelectTemplate={() => setCurrentTab('builder')}
             onNewEnvelope={() => setCurrentTab('builder')}
           />
         )}
 
-        {currentTab === 'submissions' && (
+        {user && currentTab === 'submissions' && (
           <SubmissionsPage />
         )}
 
-        {currentTab === 'builder' && (
+        {user && currentTab === 'builder' && (
           <BuilderPage
             onSuccess={() => setCurrentTab('submissions')}
             onCancel={() => setCurrentTab('templates')}
@@ -112,21 +159,21 @@ export const App: React.FC = () => {
           <VerifyPage />
         )}
 
-        {currentTab === 'settings' && (
+        {user && currentTab === 'settings' && (
           <SettingsPage user={user} />
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="w-full border-t border-white/5 py-6 px-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      {/* Production Footer */}
+      <footer className="w-full border-t border-[#E2E8F0] py-6 px-4 text-center text-xs text-[#64748B] bg-white">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>&copy; {new Date().getFullYear()} Docurama Technologies. All rights reserved.</span>
-          <div className="flex items-center gap-4 text-[11px] text-slate-400">
+          <div className="flex items-center gap-4 text-[11px] text-[#64748B]">
             <span>PAdES-LTV Digital Trust</span>
             <span>•</span>
             <span>RFC 3161 Certified</span>
             <span>•</span>
-            <span>Zero Upstream Dependency</span>
+            <span>Enterprise Clean-Room</span>
           </div>
         </div>
       </footer>
