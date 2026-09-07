@@ -90,13 +90,27 @@ docker compose up -d --build
 - Backend API: `http://localhost:8000`
 - API Docs (Swagger): `http://localhost:8000/docs`
 
-### 3. Option B: Running the Full-Featured Overlay Stack
+### 3. Option B: Running the Full-Featured Overlay Stack (Development Mounts)
 
 ```bash
 docker compose -f overlay/docker-compose.overlay.yml up -d
 ```
 
 - Accessible at: `http://localhost:3002` (or configured host reverse proxy port)
+
+### 4. Option C: Standalone Proprietary Image (Stage 1 Production Build)
+
+To build the self-contained, standalone `docurama:latest` container image locally (with all views, controllers, vector QR generators, and brand assets baked directly into the image layers):
+
+```bash
+docker build -t docurama:latest -t docurama:1.0.0-stalfe .
+```
+
+To run the standalone image with clean volume persistence (zero runtime code mounts):
+
+```bash
+docker compose -f docker-compose.engine.yml up -d
+```
 
 ---
 
