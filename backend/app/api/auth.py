@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -6,9 +7,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
-from app.models import User, Account, AccountMembership, DomainVerification
+from app.core.security import (
+    verify_and_upgrade_password, get_password_hash,
+    create_access_token, decode_access_token,
+)
+from app.models import User, Account, AccountMembership, DomainVerification, ApiKey
 from app.schemas import UserCreate, UserLogin, UserOut, TokenResponse, CompanyOut
+from app.services import api_keys as api_key_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -113,17 +118,67 @@ async def build_user_out(user: User, db: AsyncSession) -> UserOut:
         created_at=user.created_at
     )
 
+async def _user_from_api_key(presented: str, db: AsyncSession) -> Optional[User]:
+    """
+    Resolve an issued API key to the user who created it.
+
+    The key's prefix is stored in clear and indexed, so lookup is a single indexed
+    query; the secret itself is compared against a stored hash in constant time.
+    """
+    prefix = api_key_service.parse_prefix(presented)
+    if not prefix:
+        return None
+
+    candidates = (await db.execute(
+        select(ApiKey).where(ApiKey.key_prefix == prefix)
+    )).scalars().all()
+
+    for key in candidates:
+        if not api_key_service.verify_api_key(presented, key.hashed_key):
+            continue
+        if not api_key_service.is_usable(key.is_active, key.revoked_at, key.expires_at):
+            return None
+
+        owner = (await db.execute(
+            select(User).where(User.id == key.created_by_user_id)
+        )).scalar_one_or_none()
+        if not owner or not owner.is_active:
+            return None
+
+        # The key is bound to the account it was issued for, not to whatever the
+        # owner has since switched to.
+        if owner.account_id != key.account_id:
+            owner.account_id = key.account_id
+
+        key.last_used_at = datetime.now(timezone.utc)
+        await db.commit()
+        return owner
+
+    return None
+
+
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> User:
+    # Issued API keys authenticate machine callers against the documented API.
+    api_key = request.headers.get("X-Api-Key")
+    if api_key:
+        key_user = await _user_from_api_key(api_key.strip(), db)
+        if key_user:
+            return key_user
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid, revoked, or expired API key",
+        )
+
     token = None
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
     if not token:
         token = request.cookies.get(settings.SESSION_COOKIE_NAME)
-        
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -191,7 +246,7 @@ async def register(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -206,16 +261,30 @@ async def login(
 ):
     query = select(User).where(User.email == credentials.email)
     user = (await db.execute(query)).scalar_one_or_none()
-    
-    if not user or not verify_password(credentials.password, user.hashed_password):
+
+    if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password.")
-        
+
+    # Passwords hashed under the superseded bcrypt scheme are migrated to argon2 on
+    # the first successful sign-in, so the old hashes drain away without a reset.
+    password_ok, upgraded_hash = verify_and_upgrade_password(
+        credentials.password, user.hashed_password
+    )
+    if not password_ok:
+        raise HTTPException(status_code=400, detail="Incorrect email or password.")
+
+    if upgraded_hash:
+        user.hashed_password = upgraded_hash
+        await db.commit()
+        await db.refresh(user)
+
+
     token = create_access_token(subject=user.id, claims={"role": user.role, "email": user.email, "account_id": user.account_id})
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )

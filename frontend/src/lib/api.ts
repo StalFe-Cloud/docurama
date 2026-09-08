@@ -12,6 +12,8 @@ export interface Envelope {
   signed_count?: number;
   sha256_original?: string;
   sha256_signed?: string;
+  // pending until completion, then sealed or unsealed.
+  seal_status?: string | null;
   recipients?: Recipient[];
   fields?: FieldItem[];
   audit_events?: AuditEvent[];
@@ -32,6 +34,7 @@ export interface Recipient {
   delegated_at?: string;
   reminders_sent_count?: number;
   last_reminded_at?: string;
+  token_expires_at?: string | null;
   created_at: string;
 }
 
@@ -143,6 +146,53 @@ export interface CompanyMemberItem {
   created_at?: string;
 }
 
+export interface CompanyInviteResult {
+  success: boolean;
+  membership_id: string;
+  user_id: string;
+  email: string;
+  role: string;
+  is_new_user: boolean;
+  temporary_password?: string | null;
+  message: string;
+}
+
+export interface ApiKeyItem {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  is_active: boolean;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  created_at?: string;
+}
+
+export interface ApiKeyCreated extends ApiKeyItem {
+  // Returned once at creation and never retrievable again.
+  plaintext_key: string;
+}
+
+export interface SigningCertificateItem {
+  id: string;
+  label: string;
+  subject?: string | null;
+  issuer?: string | null;
+  serial_number?: string | null;
+  fingerprint_sha256?: string | null;
+  valid_from?: string | null;
+  valid_until?: string | null;
+  is_default: boolean;
+  status: string;
+  created_at?: string;
+}
+
+export interface AccountSettingSection {
+  section: string;
+  data: Record<string, any>;
+  updated_at?: string | null;
+}
+
 export interface DomainItem {
   id: string;
   domain: string;
@@ -186,6 +236,14 @@ export interface VerificationResult {
   certificate_issuer?: string;
   timestamp_rfc3161?: string;
   pades_ltv_verified: boolean;
+  // Observed cryptographic state, reported by the backend from an actual inspection
+  // of the document. Absent or false means "not established", never "assume valid".
+  has_digital_signature?: boolean;
+  signature_intact?: boolean;
+  has_timestamp?: boolean;
+  timestamp_utc?: string | null;
+  pades_level?: string | null;
+  seal_status?: string | null;
   audit_trail: AuditEvent[];
   issuer_domain_verified?: boolean;
   verified_domain?: string;
@@ -518,6 +576,31 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch company members');
     return res.json();
   },
+  inviteCompanyMember: async (
+    companyId: string,
+    data: { email: string; role?: string; first_name?: string; last_name?: string }
+  ): Promise<CompanyInviteResult> => {
+    const res = await fetch(`${API_BASE}/companies/${companyId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to invite member');
+    }
+    return res.json();
+  },
+  removeCompanyMember: async (companyId: string, userId: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/companies/${companyId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to remove member');
+    }
+    return res.json();
+  },
 
   // Domains & Enterprise Authentication
   getDomains: async (): Promise<DomainItem[]> => {
@@ -603,6 +686,91 @@ export const api = {
   getWebhookDeliveries: async (webhookId: string): Promise<WebhookDeliveryItem[]> => {
     const res = await fetch(`${API_BASE}/webhooks/${webhookId}/deliveries`);
     if (!res.ok) throw new Error('Failed to fetch deliveries');
+    return res.json();
+  },
+
+  // Settings sections, API keys and signing certificates
+  getSettingSection: async (section: string): Promise<AccountSettingSection> => {
+    const res = await fetch(`${API_BASE}/settings/${section}`);
+    if (!res.ok) throw new Error(`Failed to load ${section} settings`);
+    return res.json();
+  },
+  updateSettingSection: async (section: string, data: Record<string, any>): Promise<AccountSettingSection> => {
+    const res = await fetch(`${API_BASE}/settings/${section}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || `Failed to save ${section} settings`);
+    }
+    return res.json();
+  },
+  getApiKeys: async (): Promise<ApiKeyItem[]> => {
+    const res = await fetch(`${API_BASE}/api-keys`);
+    if (!res.ok) throw new Error('Failed to fetch API keys');
+    return res.json();
+  },
+  createApiKey: async (data: { name: string; scopes?: string[]; expires_in_days?: number }): Promise<ApiKeyCreated> => {
+    const res = await fetch(`${API_BASE}/api-keys`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to create API key');
+    }
+    return res.json();
+  },
+  revokeApiKey: async (keyId: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/api-keys/${keyId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to revoke API key');
+    }
+    return res.json();
+  },
+  getSigningCertificates: async (): Promise<SigningCertificateItem[]> => {
+    const res = await fetch(`${API_BASE}/signing-certificates`);
+    if (!res.ok) throw new Error('Failed to fetch signing certificates');
+    return res.json();
+  },
+  registerSigningCertificate: async (data: {
+    label: string;
+    subject?: string;
+    issuer?: string;
+    serial_number?: string;
+    valid_from?: string;
+    valid_until?: string;
+    is_default?: boolean;
+  }): Promise<SigningCertificateItem> => {
+    const res = await fetch(`${API_BASE}/signing-certificates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to register certificate');
+    }
+    return res.json();
+  },
+  setDefaultSigningCertificate: async (certId: string): Promise<SigningCertificateItem> => {
+    const res = await fetch(`${API_BASE}/signing-certificates/${certId}/default`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to set default certificate');
+    }
+    return res.json();
+  },
+  deleteSigningCertificate: async (certId: string): Promise<{ success: boolean }> => {
+    const res = await fetch(`${API_BASE}/signing-certificates/${certId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to remove certificate');
+    }
     return res.json();
   }
 };

@@ -1,5 +1,6 @@
 from app.models.models import (
-    Account, User, AccountMembership, Template, Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification, CorrectionRequest
+    Account, User, AccountMembership, Template, Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification, CorrectionRequest,
+    ApiKey, SigningCertificate, AccountSetting
 )
 
 __all__ = [
@@ -14,4 +15,7 @@ __all__ = [
     "AuditEvent",
     "DomainVerification",
     "CorrectionRequest",
+    "ApiKey",
+    "SigningCertificate",
+    "AccountSetting",
 ]
