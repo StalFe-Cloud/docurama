@@ -74,25 +74,103 @@ def preflight_env_check():
         "DOCURAMA_DATABASE_URL, DOCURAMA_SECRET_KEY and DOCURAMA_P12_PASSWORD."
     )
 
+# Directories never shipped: build output, local virtualenvs, caches, and the runtime
+# data the server owns.
+EXCLUDE_DIRS = {
+    "node_modules", ".git", ".pytest_cache", "__pycache__", "dist", "build",
+    ".venv", "venv", "env", "storage", "data", "uploads", ".mypy_cache", ".ruff_cache",
+}
+
+# Files never shipped, matched on the archive-relative path.
+EXCLUDE_SUFFIXES = (".pyc", ".pyo", ".log", ".swp", ".tar.gz")
+
+
+def is_secret_path(rel_path):
+    """
+    True when a path must never leave this machine.
+
+    Deployment secrets belong to the server. A developer's .env carries
+    DOCURAMA_ENV=development, a localhost APP_URL and whatever throwaway signing
+    certificate they happen to be testing with; shipping it would disable the
+    production configuration guard, break every signing link, and re-seal documents
+    under a key that lives in a temp folder. tarfile does not consult .gitignore, so
+    this has to be stated explicitly.
+    """
+    parts = rel_path.replace("\\", "/").split("/")
+    name = parts[-1]
+
+    # .env in any directory, except the committed example.
+    if name == ".env" or (name.startswith(".env.") and name != ".env.example"):
+        return True
+
+    # Anything under a certs/ directory other than its README.
+    if len(parts) >= 2 and parts[-2] == "certs" and name != "README.md":
+        return True
+
+    # Key and certificate material anywhere in the tree.
+    if name.endswith((".p12", ".pfx", ".pem", ".key", ".crt", ".cer", ".jks")):
+        return True
+
+    return False
+
+
+def should_exclude(rel_path):
+    name = rel_path.replace("\\", "/").split("/")[-1]
+    if name.endswith(EXCLUDE_SUFFIXES):
+        return True
+    return is_secret_path(rel_path)
+
+
+def assert_archive_carries_no_secrets(tar_path):
+    """
+    Verify the built artefact rather than trusting the filter that produced it.
+
+    An exclusion rule that silently stops matching is exactly how a secret reaches a
+    server, so the finished tarball is inspected and the deploy aborts on any hit.
+    Returns the member count.
+    """
+    offenders = []
+    with tarfile.open(tar_path, "r:gz") as tar:
+        members = tar.getnames()
+        for member in members:
+            if is_secret_path(member):
+                offenders.append(member)
+
+    if offenders:
+        raise RuntimeError(
+            "Refusing to deploy: the archive contains files that must never leave this "
+            "machine:\n  - " + "\n  - ".join(offenders) +
+            "\n\nSecrets belong on the server. Put certificates in "
+            "/opt/docurama/backend/certs/ with scp, and keep /opt/docurama/.env there."
+        )
+    return len(members)
+
+
 def create_deploy_archive():
     print("[3/6] Packaging clean-room Docurama source code...")
     temp_tar = os.path.join(tempfile.gettempdir(), "docurama_clean_deploy.tar.gz")
     if os.path.exists(temp_tar):
         os.remove(temp_tar)
-        
+
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    exclude = {"node_modules", ".git", ".pytest_cache", "__pycache__", "dist"}
-    
+
+    skipped_secrets = 0
     with tarfile.open(temp_tar, "w:gz") as tar:
         for root, dirs, files in os.walk(base_dir):
-            dirs[:] = [d for d in dirs if d not in exclude]
+            dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
             for f in files:
                 full_path = os.path.join(root, f)
                 rel_path = os.path.relpath(full_path, base_dir)
+                if should_exclude(rel_path):
+                    if is_secret_path(rel_path):
+                        skipped_secrets += 1
+                    continue
                 tar.add(full_path, arcname=rel_path)
-                
+
+    member_count = assert_archive_carries_no_secrets(temp_tar)
     size_mb = os.path.getsize(temp_tar) / 1024 / 1024
-    print(f"      Archive created: {temp_tar} ({size_mb:.2f} MB)")
+    print(f"      Archive created: {temp_tar} ({size_mb:.2f} MB, {member_count} files)")
+    print(f"      Withheld {skipped_secrets} local secret file(s); verified none in archive.")
     return temp_tar
 
 def deploy():
@@ -108,12 +186,22 @@ def deploy():
     run_scp(archive_path, remote_tar)
 
     run_ssh("cd /opt/docurama && docker compose down 2>/dev/null || true", check=False)
-    # Preserve an existing remote .env: the archive may not carry one, and losing it
-    # would leave the stack unable to resolve its secrets.
-    run_ssh("test -f /opt/docurama/.env && cp /opt/docurama/.env /tmp/docurama_env.bak || true", check=False)
+    # Extracting over the deployment now leaves the server's own secrets untouched.
     run_ssh(f"tar -xzf {remote_tar} -C /opt/docurama && rm -f {remote_tar}")
-    run_ssh("test -f /tmp/docurama_env.bak && test ! -f /opt/docurama/.env && mv /tmp/docurama_env.bak /opt/docurama/.env || rm -f /tmp/docurama_env.bak", check=False)
     run_ssh("mkdir -p /opt/docurama/backend/certs")
+
+    # Report what the server actually holds, rather than assuming the deploy provided it.
+    run_ssh(
+        "test -f /opt/docurama/.env && echo '      .env present on server' || "
+        "echo '      WARNING: no .env on server; the stack will not start'",
+        check=False,
+    )
+    run_ssh(
+        "test -f /opt/docurama/backend/certs/docurama_document_signing_cert.p12 && "
+        "echo '      signing certificate present' || "
+        "echo '      WARNING: no signing certificate; documents will complete unsealed'",
+        check=False,
+    )
 
     print("[5/6] Building and launching completely isolated Docurama stack (Port 3002, network docurama_net)...")
     run_ssh("cd /opt/docurama && docker compose build --no-cache && docker compose up -d")
