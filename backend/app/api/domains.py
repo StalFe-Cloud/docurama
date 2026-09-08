@@ -8,9 +8,10 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.api.auth import get_current_user
-from app.models import User, DomainVerification
+from app.models import User, DomainVerification, Account
 from app.schemas import (
-    DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus
+    DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
+    DomainAuthValidateRequest, DomainAuthValidateResponse
 )
 from app.services.domain_verifier import verify_client_domain
 
@@ -181,6 +182,83 @@ async def delete_domain(
     await db.delete(domain_rec)
     await db.commit()
     return {"success": True, "message": f"Domain {domain_rec.domain} removed."}
+
+@router.post("/{domain_id}/toggle-enforcement")
+async def toggle_domain_enforcement(
+    domain_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(DomainVerification).where(
+        DomainVerification.id == domain_id,
+        DomainVerification.account_id == current_user.account_id
+    )
+    domain_rec = (await db.execute(query)).scalar_one_or_none()
+    if not domain_rec:
+        raise HTTPException(status_code=404, detail="Domain record not found.")
+
+    act_query = select(Account).where(Account.id == current_user.account_id)
+    account = (await db.execute(act_query)).scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    account.enforce_domain_auth = not bool(getattr(account, "enforce_domain_auth", False))
+    await db.commit()
+    await db.refresh(account)
+
+    return {
+        "success": True,
+        "domain": domain_rec.domain,
+        "enforce_domain_auth": account.enforce_domain_auth,
+        "message": f"Enterprise domain authentication requirement is now {'enforced' if account.enforce_domain_auth else 'optional'} for {domain_rec.domain}."
+    }
+
+@router.post("/validate-authentication", response_model=DomainAuthValidateResponse)
+async def validate_domain_authentication(
+    req: DomainAuthValidateRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Validate an additional authentication tier using cryptographic DNS domain verification.
+    Verifies that the email domain has an active, verified DNS challenge record.
+    """
+    if not req.email or "@" not in req.email:
+        raise HTTPException(status_code=400, detail="Invalid email format.")
+
+    email_domain = sanitize_domain(req.email.split("@")[1])
+    query = (
+        select(DomainVerification)
+        .where(
+            DomainVerification.domain == email_domain,
+            DomainVerification.status == "verified"
+        )
+        .options(selectinload(DomainVerification.account))
+    )
+    rec = (await db.execute(query)).scalar_one_or_none()
+
+    if rec:
+        org_name = rec.account.name if rec.account else "Verified Enterprise"
+        return DomainAuthValidateResponse(
+            is_authenticated=True,
+            domain=email_domain,
+            assurance_level="enterprise_domain_verified",
+            txt_record_host=rec.txt_record_host,
+            verification_token=rec.verification_token,
+            verified_at=rec.verified_at,
+            organization_name=org_name,
+            message=f"Cryptographic domain authentication confirmed for @{email_domain}. Verified via DNS challenge record ({rec.txt_record_host}) resolving through DNS-over-HTTPS."
+        )
+
+    return DomainAuthValidateResponse(
+        is_authenticated=False,
+        domain=email_domain,
+        assurance_level="standard",
+        txt_record_host=f"_docurama-challenge.{email_domain}",
+        verification_token=None,
+        verified_at=None,
+        organization_name=None,
+        message=f"Domain @{email_domain} does not have an active verified DNS challenge record. Default standard identity assurance applies."
+    )
 
 @router.get("/status/{domain}", response_model=DomainPublicStatus)
 async def get_public_domain_status(

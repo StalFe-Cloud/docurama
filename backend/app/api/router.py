@@ -1,8 +1,9 @@
 from fastapi import APIRouter
-from app.api import auth, envelopes, templates, signing, verify, ws, domains, folders, webhooks, documents
+from app.api import auth, envelopes, templates, signing, verify, ws, domains, folders, webhooks, documents, companies
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
+api_router.include_router(companies.router)
 api_router.include_router(envelopes.router)
 api_router.include_router(templates.router)
 api_router.include_router(documents.router)

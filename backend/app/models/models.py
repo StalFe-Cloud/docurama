@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, JSON
+    Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -18,9 +18,12 @@ class Account(Base):
     id = Column(String(36), primary_key=True, default=gen_uuid)
     name = Column(String(255), nullable=False, default="Default Account")
     subdomain = Column(String(100), unique=True, nullable=True)
+    timezone = Column(String(100), default="(GMT+00:00) UTC")
+    enforce_domain_auth = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     
     users = relationship("User", back_populates="account", cascade="all, delete-orphan")
+    memberships = relationship("AccountMembership", back_populates="account", cascade="all, delete-orphan")
     envelopes = relationship("Envelope", back_populates="account", cascade="all, delete-orphan")
     templates = relationship("Template", back_populates="account", cascade="all, delete-orphan")
     template_folders = relationship("TemplateFolder", back_populates="account", cascade="all, delete-orphan")
@@ -42,7 +45,24 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     
     account = relationship("Account", back_populates="users")
+    memberships = relationship("AccountMembership", back_populates="user", cascade="all, delete-orphan")
     envelopes = relationship("Envelope", back_populates="creator")
+
+class AccountMembership(Base):
+    __tablename__ = "account_memberships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "account_id", name="uq_user_account_membership"),
+    )
+    
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id = Column(String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(50), default="member")  # owner, admin, manager, member
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    
+    user = relationship("User", back_populates="memberships")
+    account = relationship("Account", back_populates="memberships")
 
 class TemplateFolder(Base):
     __tablename__ = "template_folders"

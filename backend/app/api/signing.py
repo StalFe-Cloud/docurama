@@ -245,6 +245,32 @@ async def submit_signatures(
     recipient.signed_at = datetime.now(timezone.utc)
 
     # 4. Add audit event
+    signer_domain = recipient.email.split("@")[1].lower() if "@" in recipient.email else ""
+    is_domain_authenticated = False
+    if signer_domain and envelope.account_id:
+        v_dom_q = select(DomainVerification).where(
+            DomainVerification.account_id == envelope.account_id,
+            DomainVerification.domain == signer_domain,
+            DomainVerification.status == "verified"
+        )
+        v_dom = (await db.execute(v_dom_q)).scalars().first()
+        if v_dom:
+            is_domain_authenticated = True
+            domain_audit = AuditEvent(
+                envelope_id=envelope.id,
+                event_type="domain_auth_asserted",
+                actor_name="Docurama DNS Trust Engine",
+                actor_email=recipient.email,
+                ip_address=ip,
+                user_agent=ua,
+                description=f"Enterprise Authentication Asserted: Corporate domain (@{signer_domain}) validated via active DNS TXT challenge ({v_dom.txt_record_host}).",
+            )
+            db.add(domain_audit)
+
+    audit_desc = f"Recipient {recipient.name} ({recipient.email}) signed the document using {req.signature_type or 'draw'}."
+    if is_domain_authenticated:
+        audit_desc += f" [DNS Domain Authenticated: @{signer_domain}]"
+
     audit = AuditEvent(
         envelope_id=envelope.id,
         event_type="signed",
@@ -252,7 +278,7 @@ async def submit_signatures(
         actor_email=recipient.email,
         ip_address=ip,
         user_agent=ua,
-        description=f"Recipient {recipient.name} ({recipient.email}) signed the document using {req.signature_type or 'draw'}.",
+        description=audit_desc,
     )
     db.add(audit)
 

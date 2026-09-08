@@ -1,5 +1,6 @@
 from app.schemas.schemas import (
     UserCreate, UserLogin, UserOut, TokenResponse,
+    CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse,
     FieldCreate, FieldOut,
     RecipientCreate, RecipientOut,
     AuditEventOut,
@@ -11,12 +12,14 @@ from app.schemas.schemas import (
     TemplateCreate, TemplateOut,
     DetectedField, AutoDetectResponse,
     DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
+    DomainAuthValidateRequest, DomainAuthValidateResponse,
     WebhookCreate, WebhookOut, WebhookDeliveryOut, WebhookTestRequest,
     CorrectionRequestCreate, CorrectionRequestOut
 )
 
 __all__ = [
     "UserCreate", "UserLogin", "UserOut", "TokenResponse",
+    "CompanyCreate", "CompanyOut", "CompanyUpdate", "CompanyMemberOut", "CompanySwitchResponse",
     "FieldCreate", "FieldOut",
     "RecipientCreate", "RecipientOut",
     "AuditEventOut",
@@ -28,6 +31,7 @@ __all__ = [
     "TemplateCreate", "TemplateOut",
     "DetectedField", "AutoDetectResponse",
     "DomainCreate", "DomainOut", "DomainVerifyResponse", "DomainPublicStatus",
+    "DomainAuthValidateRequest", "DomainAuthValidateResponse",
     "WebhookCreate", "WebhookOut", "WebhookDeliveryOut", "WebhookTestRequest",
     "CorrectionRequestCreate", "CorrectionRequestOut"
 ]

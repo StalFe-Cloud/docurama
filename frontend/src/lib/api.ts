@@ -119,6 +119,30 @@ export interface DocumentPreview {
   pages: DocumentPage[];
 }
 
+export interface CompanyItem {
+  id: string;
+  name: string;
+  subdomain?: string;
+  timezone?: string;
+  enforce_domain_auth?: boolean;
+  is_active_company?: boolean;
+  role?: string;
+  members_count?: number;
+  verified_domain?: string | null;
+  domain_verification_status?: string;
+  created_at?: string;
+}
+
+export interface CompanyMemberItem {
+  id: string;
+  user_id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
 export interface DomainItem {
   id: string;
   domain: string;
@@ -133,6 +157,8 @@ export interface DomainItem {
   verified_at?: string;
   last_checked_at?: string;
   dns_check_details?: any;
+  enforce_domain_auth?: boolean;
+  auth_assurance_level?: string;
   created_at: string;
 }
 
@@ -144,6 +170,8 @@ export interface DomainVerifyResult {
   method_matched?: string;
   dns_details?: any;
   verified_at?: string;
+  enforce_domain_auth?: boolean;
+  auth_assurance_level?: string;
 }
 
 export interface VerificationResult {
@@ -445,7 +473,53 @@ export const api = {
     return res.json();
   },
 
-  // Domains
+  // Companies & Organizations
+  getCompanies: async (): Promise<CompanyItem[]> => {
+    const res = await fetch(`${API_BASE}/companies`);
+    if (!res.ok) throw new Error('Failed to fetch companies');
+    return res.json();
+  },
+  createCompany: async (data: { name: string; domain?: string; subdomain?: string; timezone?: string }): Promise<CompanyItem> => {
+    const res = await fetch(`${API_BASE}/companies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to create company');
+    }
+    return res.json();
+  },
+  switchCompany: async (companyId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/companies/${companyId}/switch`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to switch company');
+    }
+    return res.json();
+  },
+  updateCompany: async (companyId: string, data: { name?: string; timezone?: string; enforce_domain_auth?: boolean }): Promise<CompanyItem> => {
+    const res = await fetch(`${API_BASE}/companies/${companyId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to update company');
+    }
+    return res.json();
+  },
+  getCompanyMembers: async (companyId: string): Promise<CompanyMemberItem[]> => {
+    const res = await fetch(`${API_BASE}/companies/${companyId}/members`);
+    if (!res.ok) throw new Error('Failed to fetch company members');
+    return res.json();
+  },
+
+  // Domains & Enterprise Authentication
   getDomains: async (): Promise<DomainItem[]> => {
     const res = await fetch(`${API_BASE}/domains`);
     if (!res.ok) throw new Error('Failed to fetch domains');
@@ -471,6 +545,25 @@ export const api = {
       const err = await res.json();
       throw new Error(err.detail || 'Verification check failed');
     }
+    return res.json();
+  },
+  toggleDomainAuth: async (domainId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/domains/${domainId}/toggle-enforcement`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to toggle domain authentication enforcement');
+    }
+    return res.json();
+  },
+  validateDomainAuth: async (email: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/domains/validate-authentication`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error('Failed to validate domain authentication');
     return res.json();
   },
   deleteDomain: async (domainId: string): Promise<void> => {

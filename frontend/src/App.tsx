@@ -157,6 +157,7 @@ export const App: React.FC = () => {
           user={user || { email: 'admin@docurama.com', first_name: 'Admin', role: 'admin' }}
           onLogout={handleLogout}
           onSignIn={() => setCurrentTab('signin')}
+          onUserUpdate={(u) => setUser(u)}
         />
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
           <SettingsPage user={user || { email: 'admin@docurama.com', first_name: 'Admin', role: 'admin' }} initialSubtab={subtab} />
@@ -174,6 +175,7 @@ export const App: React.FC = () => {
         user={user}
         onLogout={handleLogout}
         onSignIn={() => setCurrentTab('signin')}
+        onUserUpdate={(u) => setUser(u)}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">

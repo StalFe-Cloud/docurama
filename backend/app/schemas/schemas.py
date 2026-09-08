@@ -12,6 +12,49 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class CompanyCreate(BaseModel):
+    name: str
+    subdomain: Optional[str] = None
+    domain: Optional[str] = None
+    timezone: Optional[str] = "(GMT+00:00) UTC"
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    timezone: Optional[str] = None
+    enforce_domain_auth: Optional[bool] = None
+
+class CompanyMemberOut(BaseModel):
+    id: str
+    user_id: str
+    email: str
+    name: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+class CompanyOut(BaseModel):
+    id: str
+    name: str
+    subdomain: Optional[str] = None
+    timezone: Optional[str] = "(GMT+00:00) UTC"
+    enforce_domain_auth: bool = False
+    is_active_company: bool = False
+    role: Optional[str] = "member"
+    members_count: int = 1
+    verified_domain: Optional[str] = None
+    domain_verification_status: str = "unverified"  # unverified, pending, verified
+    created_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class CompanySwitchResponse(BaseModel):
+    success: bool
+    active_company_id: str
+    company: CompanyOut
+    access_token: str
+    user: Any
+
 class UserOut(BaseModel):
     id: str
     email: EmailStr
@@ -19,6 +62,12 @@ class UserOut(BaseModel):
     last_name: Optional[str] = ""
     role: str
     is_active: bool
+    account_id: Optional[str] = None
+    account_name: Optional[str] = None
+    companies: Optional[List[CompanyOut]] = []
+    domain_verified: Optional[bool] = False
+    verified_domain: Optional[str] = None
+    auth_assurance_level: Optional[str] = "standard"
     created_at: Optional[datetime] = None
     
     class Config:
@@ -256,6 +305,8 @@ class DomainOut(BaseModel):
     verified_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     dns_check_details: Optional[Dict[str, Any]] = None
+    enforce_domain_auth: Optional[bool] = False
+    auth_assurance_level: Optional[str] = "enterprise_domain_verified"
     created_at: datetime
     
     class Config:
@@ -269,12 +320,27 @@ class DomainVerifyResponse(BaseModel):
     method_matched: Optional[str] = None
     dns_details: Optional[Dict[str, Any]] = None
     verified_at: Optional[datetime] = None
+    enforce_domain_auth: Optional[bool] = False
+    auth_assurance_level: Optional[str] = "enterprise_domain_verified"
 
 class DomainPublicStatus(BaseModel):
     domain: str
     is_verified: bool
     verified_at: Optional[datetime] = None
     organization_name: Optional[str] = None
+
+class DomainAuthValidateRequest(BaseModel):
+    email: EmailStr
+
+class DomainAuthValidateResponse(BaseModel):
+    is_authenticated: bool
+    domain: str
+    assurance_level: str  # "enterprise_domain_verified" or "standard"
+    txt_record_host: Optional[str] = None
+    verification_token: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    organization_name: Optional[str] = None
+    message: str
 
 # Webhook Schemas
 class WebhookCreate(BaseModel):

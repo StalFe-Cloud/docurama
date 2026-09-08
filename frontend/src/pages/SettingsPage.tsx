@@ -44,7 +44,7 @@ import {
   BookOpen,
   Cpu
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, CompanyItem, DomainItem, DomainVerifyResult } from '../lib/api';
 import { ApiDocsPage } from './ApiDocsPage';
 
 interface SettingsPageProps {
@@ -261,6 +261,138 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const [allowResubmit, setAllowResubmit] = useState(false);
   const [allowDecline, setAllowDecline] = useState(true);
   const [allowDelegate, setAllowDelegate] = useState(false);
+
+  // Multi-Company & Organizations State
+  const [companiesList, setCompaniesList] = useState<CompanyItem[]>(user?.companies || []);
+  const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyDomain, setNewCompanyDomain] = useState('');
+  const [isCreatingCompany, setIsCreatingCompany] = useState(false);
+  const [isSwitchingCompany, setIsSwitchingCompany] = useState(false);
+
+  // DNS Domain Verification & Additional Authentication State
+  const [domainsList, setDomainsList] = useState<DomainItem[]>([]);
+  const [isLoadingDomains, setIsLoadingDomains] = useState(false);
+  const [newDomainInput, setNewDomainInput] = useState('');
+  const [isRegisteringDomain, setIsRegisteringDomain] = useState(false);
+  const [isVerifyingDomain, setIsVerifyingDomain] = useState(false);
+  const [dohVerifyDetails, setDohVerifyDetails] = useState<any>(null);
+  const [enforceDomainAuth, setEnforceDomainAuth] = useState(Boolean(user?.domain_verified));
+  const [showDnsDetailsModal, setShowDnsDetailsModal] = useState(false);
+
+  useEffect(() => {
+    loadCompanies();
+    loadDomains();
+  }, []);
+
+  const loadCompanies = async () => {
+    try {
+      const list = await api.getCompanies();
+      if (list && list.length > 0) {
+        setCompaniesList(list);
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const loadDomains = async () => {
+    try {
+      setIsLoadingDomains(true);
+      const list = await api.getDomains();
+      setDomainsList(list);
+      if (list && list.length > 0) {
+        setEnforceDomainAuth(Boolean(list[0].enforce_domain_auth));
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setIsLoadingDomains(false);
+    }
+  };
+
+  const handleSwitchCompanyInSettings = async (companyId: string) => {
+    if (companyId === user?.account_id) return;
+    try {
+      setIsSwitchingCompany(true);
+      await api.switchCompany(companyId);
+      window.location.reload();
+    } catch (e: any) {
+      alert(e.message || 'Failed to switch company context');
+    } finally {
+      setIsSwitchingCompany(false);
+    }
+  };
+
+  const handleCreateCompanyInSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCompanyName.trim()) return;
+    try {
+      setIsCreatingCompany(true);
+      await api.createCompany({
+        name: newCompanyName.trim(),
+        domain: newCompanyDomain.trim() || undefined
+      });
+      setShowCreateCompanyModal(false);
+      setNewCompanyName('');
+      setNewCompanyDomain('');
+      triggerSave('New enterprise company workspace created.');
+      window.location.reload();
+    } catch (e: any) {
+      alert(e.message || 'Failed to create company');
+    } finally {
+      setIsCreatingCompany(false);
+    }
+  };
+
+  const handleRegisterDomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDomainInput.trim()) return;
+    try {
+      setIsRegisteringDomain(true);
+      const res = await api.createDomain(newDomainInput.trim());
+      setDomainsList(prev => [res, ...prev.filter(d => d.id !== res.id)]);
+      setNewDomainInput('');
+      triggerSave(`Domain ${res.domain} registered. Please add the DNS challenge TXT record.`);
+    } catch (e: any) {
+      alert(e.message || 'Failed to register domain');
+    } finally {
+      setIsRegisteringDomain(false);
+    }
+  };
+
+  const handleVerifyDomainNow = async (domainId: string) => {
+    try {
+      setIsVerifyingDomain(true);
+      const res = await api.verifyDomain(domainId);
+      setDohVerifyDetails(res.dns_details);
+      setDomainsList(prev => prev.map(d => d.id === domainId ? { 
+        ...d, 
+        status: res.status as any, 
+        verified_at: res.verified_at,
+        dns_check_details: res.dns_details
+      } : d));
+      if (res.success) {
+        triggerSave(`DNS Verification Succeeded: ${res.domain} is verified for enterprise authentication!`);
+      } else {
+        triggerSave(`DNS Verification: TXT record not detected yet. Check propagation.`);
+      }
+    } catch (e: any) {
+      alert(e.message || 'Verification check failed');
+    } finally {
+      setIsVerifyingDomain(false);
+    }
+  };
+
+  const handleToggleDomainAuth = async (domainId: string) => {
+    try {
+      const res = await api.toggleDomainAuth(domainId);
+      setEnforceDomainAuth(res.enforce_domain_auth);
+      triggerSave(res.message);
+    } catch (e: any) {
+      alert(e.message || 'Failed to toggle domain authentication');
+    }
+  };
 
   // -------------------------------------------------------------
   // TAB 2: Profile State
@@ -608,6 +740,287 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Card 1B: Organizations & Multiple Companies */}
+          <div className="bg-white rounded-lg p-6 border border-[#e5e3df] shadow-sm">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#ede9e4]">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-md bg-[#eef2ff] text-[#4f46e5] flex items-center justify-center font-bold">
+                  <Building className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#1a1a1a]">Organizations &amp; Multiple Companies</h2>
+                  <p className="text-xs text-[#5d5b54]">Manage multiple corporate workspaces or switch active tenant context</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreateCompanyModal(true)}
+                className="btn btn-primary px-3.5 h-9 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Company</span>
+              </button>
+            </div>
+
+            {/* Companies Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {companiesList.map((comp) => {
+                const isActive = comp.is_active_company || comp.id === user?.account_id;
+                const isVerified = comp.domain_verification_status === 'verified';
+                return (
+                  <div
+                    key={comp.id}
+                    className={`rounded-lg p-4 border transition-all ${
+                      isActive
+                        ? 'border-[#4f46e5] bg-[#fafafe] shadow-sm ring-1 ring-[#4f46e5]/20'
+                        : 'border-[#e5e3df] bg-white hover:border-[#a4a097]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-sm font-semibold text-[#1a1a1a] truncate">{comp.name}</h3>
+                          {isActive && (
+                            <span className="badge-tag-purple text-[10px] py-0.5">
+                              Active Workspace
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#787671] mt-0.5">
+                          Subdomain: <span className="font-mono text-[#37352f]">{comp.subdomain || comp.id.slice(0, 8)}</span>
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#5d5b54] bg-[#f6f5f4] px-2 py-0.5 rounded capitalize">
+                        {comp.role || 'Member'}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-[#ede9e4] flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-2 text-[#787671]">
+                        <span>{comp.members_count || 1} {comp.members_count === 1 ? 'member' : 'members'}</span>
+                        {comp.verified_domain && (
+                          <>
+                            <span>•</span>
+                            <span className={`flex items-center font-medium ${isVerified ? 'text-emerald-600' : 'text-amber-600'}`}>
+                              <ShieldCheck className="w-3 h-3 mr-0.5" />
+                              {comp.verified_domain}
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      {!isActive ? (
+                        <button
+                          onClick={() => handleSwitchCompanyInSettings(comp.id)}
+                          disabled={isSwitchingCompany}
+                          className="btn btn-ghost px-3 py-1 text-xs text-[#0075de] hover:bg-[#eff6ff] font-medium"
+                        >
+                          {isSwitchingCompany ? 'Switching...' : 'Switch Workspace'}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] font-medium text-[#4f46e5] flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Current
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card 1C: Enterprise DNS Domain Verification & Authentication */}
+          <div className="bg-white rounded-lg p-6 border border-[#e5e3df] shadow-sm">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#ede9e4]">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-md bg-[#d9f3e1] text-[#1aae39] flex items-center justify-center font-bold">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#1a1a1a]">Enterprise DNS Domain Verification &amp; Authentication</h2>
+                  <p className="text-xs text-[#5d5b54]">
+                    Validate corporate domain ownership via cryptographic DNS TXT records to authenticate signers and members
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                DNS-over-HTTPS
+              </span>
+            </div>
+
+            {/* If domains registered */}
+            {domainsList.length > 0 ? (
+              <div className="space-y-6">
+                {domainsList.map((dom) => {
+                  const isVerified = dom.status === 'verified';
+                  return (
+                    <div key={dom.id} className="rounded-lg border border-[#e5e3df] p-5 bg-[#fafafa] space-y-4">
+                      {/* Top Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#ede9e4]">
+                        <div className="flex items-center space-x-2.5">
+                          <span className="text-base font-bold text-[#1a1a1a] font-mono">{dom.domain}</span>
+                          {isVerified ? (
+                            <span className="inline-flex items-center text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                              Verified (Enterprise Authentication Active)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                              <Clock className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                              Pending DNS Verification
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleVerifyDomainNow(dom.id)}
+                            disabled={isVerifyingDomain}
+                            className="btn btn-ghost px-3 h-8 text-xs font-semibold text-[#0075de] hover:bg-[#eff6ff] flex items-center gap-1.5"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${isVerifyingDomain ? 'animate-spin' : ''}`} />
+                            <span>{isVerifyingDomain ? 'Checking DoH...' : 'Verify DNS Records'}</span>
+                          </button>
+
+                          {dom.dns_check_details && (
+                            <button
+                              onClick={() => {
+                                setDohVerifyDetails(dom.dns_check_details);
+                                setShowDnsDetailsModal(true);
+                              }}
+                              className="btn btn-ghost px-2.5 h-8 text-xs text-[#5d5b54] hover:text-[#1a1a1a]"
+                            >
+                              <Terminal className="w-3 h-3 mr-1" />
+                              <span>DoH Logs</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* DNS Record Specifications Table */}
+                      <div className="space-y-3">
+                        <p className="text-xs font-medium text-[#37352f]">
+                          Add the following TXT record to your domain's DNS management (Cloudflare, Route53, Namecheap, GoDaddy):
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                          {/* Record 1: Type */}
+                          <div className="bg-white p-3 rounded-md border border-[#e5e3df]">
+                            <span className="text-[10px] font-bold text-[#787671] uppercase tracking-wider block mb-1">
+                              Record Type
+                            </span>
+                            <span className="font-mono font-semibold text-[#1a1a1a]">TXT</span>
+                          </div>
+
+                          {/* Record 2: Host / Name */}
+                          <div className="bg-white p-3 rounded-md border border-[#e5e3df] flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold text-[#787671] uppercase tracking-wider block mb-1">
+                                Host / Name
+                              </span>
+                              <span className="font-mono font-semibold text-[#1a1a1a] select-all">
+                                {dom.txt_record_host}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(dom.txt_record_host, `host-${dom.id}`)}
+                              className="text-[#787671] hover:text-[#1a1a1a] p-1.5 rounded hover:bg-[#f6f5f4]"
+                              title="Copy Host"
+                            >
+                              {copiedKey === `host-${dom.id}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+
+                          {/* Record 3: Value */}
+                          <div className="bg-white p-3 rounded-md border border-[#e5e3df] flex items-center justify-between">
+                            <div className="truncate mr-2">
+                              <span className="text-[10px] font-bold text-[#787671] uppercase tracking-wider block mb-1">
+                                TXT Value / Content
+                              </span>
+                              <span className="font-mono text-[#1a1a1a] select-all truncate block">
+                                {dom.txt_record_value}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(dom.txt_record_value, `val-${dom.id}`)}
+                              className="text-[#787671] hover:text-[#1a1a1a] p-1.5 rounded hover:bg-[#f6f5f4] shrink-0"
+                              title="Copy TXT Value"
+                            >
+                              {copiedKey === `val-${dom.id}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Optional Subdomain pointer */}
+                        <div className="bg-white p-3 rounded-md border border-[#e5e3df] flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono font-semibold text-[#5d5b54]">CNAME Option:</span>
+                            <span className="font-mono text-[#1a1a1a]">{dom.cname_record_host}</span>
+                            <span className="text-[#787671]">&rarr;</span>
+                            <span className="font-mono text-[#1a1a1a]">{dom.cname_target}</span>
+                          </div>
+                          <button
+                            onClick={() => copyToClipboard(`${dom.cname_record_host} CNAME ${dom.cname_target}`, `cname-${dom.id}`)}
+                            className="text-[#787671] hover:text-[#1a1a1a] p-1 rounded hover:bg-[#f6f5f4]"
+                          >
+                            {copiedKey === `cname-${dom.id}` ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Additional Authentication Policy Toggle */}
+                      <div className="pt-3 border-t border-[#ede9e4] flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-semibold text-[#1a1a1a] block">
+                            Enforce Corporate Domain Authentication
+                          </span>
+                          <p className="text-[11px] text-[#5d5b54]">
+                            Validate that signers and members with @{dom.domain} emails receive cryptographic identity assertion badges in audit certificates
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enforceDomainAuth}
+                          onChange={() => handleToggleDomainAuth(dom.id)}
+                          className="toggle"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* No domain registered yet - Claim form */
+              <form onSubmit={handleRegisterDomain} className="space-y-4">
+                <div className="bg-[#fcfbf9] rounded-lg p-4 border border-[#e5e3df]">
+                  <p className="text-xs text-[#37352f] leading-relaxed">
+                    By claiming and verifying your corporate domain via DNS, Docurama cryptographically validates that all users and signers from your company are authenticated under your organization's cryptographic authority without external vendor lock-in.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <div className="relative flex-1 w-full">
+                    <Globe className="w-4 h-4 text-[#787671] absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      placeholder="e.g. stalfe.com or yourcompany.com"
+                      value={newDomainInput}
+                      onChange={(e) => setNewDomainInput(e.target.value)}
+                      className="base-input w-full h-11 pl-10 pr-3 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isRegisteringDomain || !newDomainInput.trim()}
+                    className="btn btn-primary px-6 h-11 text-sm font-semibold whitespace-nowrap w-full sm:w-auto"
+                  >
+                    {isRegisteringDomain ? 'Registering...' : 'Claim & Verify Domain'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Card 2: Authentication & Access Security */}
@@ -2469,6 +2882,123 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   className="btn btn-primary text-xs px-5 h-10 font-semibold"
                 >
                   Create Token
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Create New Company Modal */}
+      {showCreateCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-notion-modal max-w-md w-full border border-[#e5e3df] overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-[#e5e3df] flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#eef2ff] text-[#4f46e5] flex items-center justify-center font-bold">
+                  <Building className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a]">Create New Company</h3>
+                  <p className="text-[11px] text-[#787671]">Spin up a dedicated organization workspace.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreateCompanyModal(false)}
+                className="text-[#787671] hover:text-[#1a1a1a] p-1 rounded-md hover:bg-[#f6f5f4]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCompanyInSettings} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">
+                  Company / Organization Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. StalFe Legal Partners"
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  className="base-input w-full h-10 px-3 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">
+                  Corporate Domain (Optional)
+                </label>
+                <div className="relative">
+                  <Globe className="w-3.5 h-3.5 text-[#787671] absolute left-3 top-3" />
+                  <input
+                    type="text"
+                    placeholder="e.g. stalfe.com (for DNS authentication verification)"
+                    value={newCompanyDomain}
+                    onChange={(e) => setNewCompanyDomain(e.target.value)}
+                    className="base-input w-full h-10 pl-9 pr-3 text-xs"
+                  />
+                </div>
+                <p className="text-[11px] text-[#787671] mt-1">
+                  Claiming your corporate domain provides cryptographic identity assertion and DNS-based authentication validation.
+                </p>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end space-x-2 border-t border-[#e5e3df]">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateCompanyModal(false)}
+                  className="btn btn-ghost px-4 h-9 text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingCompany || !newCompanyName.trim()}
+                  className="btn btn-primary px-4 h-9 text-xs font-semibold"
+                >
+                  {isCreatingCompany ? 'Creating...' : 'Create Organization'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 9. DoH DNS Query Details Inspector Modal */}
+      {showDnsDetailsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-notion-modal max-w-xl w-full border border-[#e5e3df] overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-[#e5e3df] flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#d9f3e1] text-[#1aae39] flex items-center justify-center font-bold">
+                  <Terminal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a1a]">DNS-over-HTTPS (DoH) Inspection Logs</h3>
+                  <p className="text-[11px] text-[#787671]">Cloudflare &amp; Google public DNS resolver response telemetry.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDnsDetailsModal(false)}
+                className="text-[#787671] hover:text-[#1a1a1a] p-1 rounded-md hover:bg-[#f6f5f4]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto font-mono text-xs">
+              <div className="bg-[#0f172a] text-[#38bdf8] p-4 rounded-lg overflow-x-auto shadow-inner">
+                <pre>{JSON.stringify(dohVerifyDetails, null, 2)}</pre>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setShowDnsDetailsModal(false)}
+                  className="btn btn-white text-xs px-4 h-9"
+                >
+                  Close
                 </button>
               </div>
             </div>
