@@ -15,6 +15,12 @@ async def lifespan(app: FastAPI):
     # Initialize database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT '(GMT+00:00) UTC';"))
+            await conn.execute(text("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS enforce_domain_auth BOOLEAN DEFAULT FALSE;"))
+        except Exception:
+            pass
     os.makedirs(settings.STORAGE_DIR, exist_ok=True)
     yield
     await engine.dispose()
