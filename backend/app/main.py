@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -6,23 +7,33 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine
 from app.api.router import api_router
 from app.api.ws import router as ws_router
+from app.services.reminder_sweeper import reminder_loop
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize database tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        try:
-            from sqlalchemy import text
-            await conn.execute(text("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT '(GMT+00:00) UTC';"))
-            await conn.execute(text("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS enforce_domain_auth BOOLEAN DEFAULT FALSE;"))
-        except Exception:
-            pass
+    # Schema changes are applied by backend/migrate.py before the server starts
+    # (see entrypoint.sh), so that they run exactly once rather than racing across
+    # uvicorn workers. Nothing here may create or alter tables.
     os.makedirs(settings.STORAGE_DIR, exist_ok=True)
+
+    reminder_task = None
+    if settings.REMINDERS_ENABLED:
+        # Started in every worker; the sweep itself takes an advisory lock so only
+        # one of them actually sends.
+        reminder_task = asyncio.create_task(reminder_loop())
+
     yield
+
+    if reminder_task is not None:
+        reminder_task.cancel()
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
+
     await engine.dispose()
 
 app = FastAPI(
@@ -50,11 +61,30 @@ app.include_router(ws_router)
 @app.get("/healthz")
 @app.get("/api/health")
 async def health_check():
+    """
+    Report the service's real signing readiness.
+
+    This previously returned a fixed "Docurama Root CA Certified" string regardless of
+    whether any signing material was installed, so a deployment that could not seal
+    anything still advertised itself as certified.
+    """
+    has_signing_cert = os.path.exists(settings.P12_PATH)
+    has_root_ca = os.path.exists(settings.ROOT_CA_PATH)
+
+    if has_signing_cert and has_root_ca:
+        signing = "ready"
+    elif has_signing_cert:
+        signing = "signing certificate present, root CA missing (long-term validation unavailable)"
+    else:
+        signing = "unavailable: no signing certificate installed, documents will complete unsealed"
+
     return {
         "status": "healthy",
         "service": "docurama-backend",
         "version": settings.VERSION,
-        "digital_trust": "Docurama Root CA Certified"
+        "signing": signing,
+        "signing_certificate_installed": has_signing_cert,
+        "root_ca_installed": has_root_ca,
     }
 
 # Mount built React frontend SPA if dist directory is present

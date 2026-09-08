@@ -1,0 +1,275 @@
+"""
+Outbound email.
+
+Docurama previously wrote audit events claiming invitations and reminders had been
+sent while no mail code existed at all. Those events end up on the evidentiary
+certificate, so the rule here is: this module reports precisely what happened, and
+callers only write a "sent" audit event after a send is confirmed.
+
+When SMTP is not configured, send attempts return sent=False with a reason rather
+than raising. A missing mail server must not prevent an envelope from being created,
+but it must never be recorded as a delivery either.
+"""
+import os
+import re
+import smtplib
+import ssl
+from dataclasses import dataclass, field
+from email.message import EmailMessage
+from email.utils import formataddr, make_msgid
+from typing import Dict, List, Optional
+
+from app.core.config import settings
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@dataclass
+class SendResult:
+    """Outcome of a single message. `sent` is only True when the server accepted it."""
+    recipient: str
+    sent: bool
+    message_id: Optional[str] = None
+    error: Optional[str] = None
+
+    def as_dict(self) -> Dict[str, Optional[str]]:
+        return {
+            "recipient": self.recipient,
+            "sent": self.sent,
+            "message_id": self.message_id,
+            "error": self.error,
+        }
+
+
+@dataclass
+class BatchResult:
+    """Aggregate outcome, used to decide what the audit trail may claim."""
+    results: List[SendResult] = field(default_factory=list)
+
+    @property
+    def sent_count(self) -> int:
+        return sum(1 for r in self.results if r.sent)
+
+    @property
+    def failed_count(self) -> int:
+        return sum(1 for r in self.results if not r.sent)
+
+    @property
+    def any_sent(self) -> bool:
+        return self.sent_count > 0
+
+    @property
+    def all_sent(self) -> bool:
+        return bool(self.results) and self.failed_count == 0
+
+    def summary(self) -> str:
+        if not self.results:
+            return "No recipients to notify."
+        if self.all_sent:
+            return f"Delivered to {self.sent_count} recipient(s)."
+        if self.any_sent:
+            return f"Delivered to {self.sent_count} of {len(self.results)} recipient(s)."
+        first_error = next((r.error for r in self.results if r.error), "unknown error")
+        return f"Delivery failed for all {len(self.results)} recipient(s): {first_error}"
+
+
+def is_configured() -> bool:
+    return bool(settings.SMTP_HOST and settings.SMTP_FROM)
+
+
+def _valid_address(address: str) -> bool:
+    return bool(address and _EMAIL_RE.match(address.strip()))
+
+
+def _build_message(to_address: str, to_name: str, subject: str, html_body: str, text_body: str) -> EmailMessage:
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((settings.SMTP_FROM_NAME or "Docurama", settings.SMTP_FROM))
+    msg["To"] = formataddr((to_name or to_address, to_address))
+    msg["Message-ID"] = make_msgid(domain=settings.SMTP_FROM.split("@")[-1])
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+    return msg
+
+
+def _attach_files(msg: EmailMessage, attachments: Optional[List[str]]) -> None:
+    for path in attachments or []:
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            msg.add_attachment(
+                data,
+                maintype="application",
+                subtype="pdf",
+                filename=os.path.basename(path),
+            )
+        except Exception as e:
+            print(f"[Mailer] Could not attach {path}: {e}")
+
+
+def _connect():
+    """Open an SMTP connection honouring the configured transport security."""
+    host, port = settings.SMTP_HOST, settings.SMTP_PORT
+    timeout = settings.SMTP_TIMEOUT
+
+    if settings.SMTP_USE_SSL:
+        context = ssl.create_default_context()
+        server = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
+    else:
+        server = smtplib.SMTP(host, port, timeout=timeout)
+        if settings.SMTP_USE_TLS:
+            server.starttls(context=ssl.create_default_context())
+
+    if settings.SMTP_USER:
+        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+    return server
+
+
+def send_email(
+    to_address: str,
+    to_name: str,
+    subject: str,
+    html_body: str,
+    text_body: str,
+    attachments: Optional[List[str]] = None,
+) -> SendResult:
+    """Send one message. Never raises; failures come back as sent=False."""
+    address = (to_address or "").strip()
+
+    if not _valid_address(address):
+        return SendResult(address, False, error="Recipient address is missing or malformed.")
+
+    if not is_configured():
+        return SendResult(
+            address,
+            False,
+            error="SMTP is not configured on this deployment (DOCURAMA_SMTP_HOST / DOCURAMA_SMTP_FROM).",
+        )
+
+    try:
+        msg = _build_message(address, to_name, subject, html_body, text_body)
+        _attach_files(msg, attachments)
+        with _connect() as server:
+            server.send_message(msg)
+        return SendResult(address, True, message_id=msg["Message-ID"])
+    except Exception as e:
+        return SendResult(address, False, error=f"{type(e).__name__}: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+def _shell(title: str, intro: str, body_html: str, cta_url: Optional[str], cta_label: Optional[str]) -> str:
+    button = ""
+    if cta_url and cta_label:
+        button = (
+            f'<p style="margin:28px 0;">'
+            f'<a href="{cta_url}" style="background:#1D72FE;color:#ffffff;text-decoration:none;'
+            f'padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block;">{cta_label}</a>'
+            f"</p>"
+            f'<p style="font-size:12px;color:#64748b;">Or paste this link into your browser:<br>'
+            f'<span style="word-break:break-all;">{cta_url}</span></p>'
+        )
+    return f"""<html><body style="margin:0;padding:24px;background:#f8fafc;font-family:Helvetica,Arial,sans-serif;color:#0f172a;">
+<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;padding:32px;">
+  <h1 style="font-size:18px;margin:0 0 8px;">{title}</h1>
+  <p style="font-size:14px;line-height:1.55;color:#334155;margin:0 0 16px;">{intro}</p>
+  {body_html}
+  {button}
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 14px;">
+  <p style="font-size:11px;color:#94a3b8;margin:0;">
+    Sent by Docurama. If you were not expecting this message you can safely ignore it.
+  </p>
+</div>
+</body></html>"""
+
+
+def signing_invitation(recipient_name: str, envelope_title: str, signing_url: str, sender_name: str):
+    subject = f"Signature requested: {envelope_title}"
+    intro = (
+        f"{sender_name} has sent you <strong>{envelope_title}</strong> to review and sign."
+    )
+    html = _shell(
+        "You have a document to sign",
+        intro,
+        '<p style="font-size:13px;color:#475569;">The link below is unique to you. Please do not forward it.</p>',
+        signing_url,
+        "Review & Sign",
+    )
+    text = (
+        f"{sender_name} has sent you '{envelope_title}' to review and sign.\n\n"
+        f"Open your personal signing link:\n{signing_url}\n\n"
+        "This link is unique to you. Please do not forward it.\n"
+    )
+    return subject, html, text
+
+
+def signing_reminder(recipient_name: str, envelope_title: str, signing_url: str, reminder_number: int):
+    subject = f"Reminder: {envelope_title} is waiting for your signature"
+    intro = (
+        f"This is a reminder that <strong>{envelope_title}</strong> is still awaiting your signature."
+    )
+    html = _shell(
+        "A document is waiting for you",
+        intro,
+        f'<p style="font-size:13px;color:#475569;">Reminder {reminder_number}.</p>',
+        signing_url,
+        "Review & Sign",
+    )
+    text = (
+        f"Reminder {reminder_number}: '{envelope_title}' is still awaiting your signature.\n\n"
+        f"{signing_url}\n"
+    )
+    return subject, html, text
+
+
+def completion_notice(recipient_name: str, envelope_title: str, verify_url: str, sealed: bool):
+    subject = f"Completed: {envelope_title}"
+    if sealed:
+        seal_line = (
+            '<p style="font-size:13px;color:#475569;">The completed document is attached, '
+            "sealed and timestamped. You can confirm it independently at the link below.</p>"
+        )
+    else:
+        # Never imply a seal that was not applied.
+        seal_line = (
+            '<p style="font-size:13px;color:#b45309;">The completed document is attached. '
+            "A cryptographic seal was not applied to this document; its audit trail remains "
+            "on record and can be checked at the link below.</p>"
+        )
+    html = _shell(
+        "All parties have signed",
+        f"<strong>{envelope_title}</strong> has been completed by all recipients.",
+        seal_line,
+        verify_url,
+        "Verify this document",
+    )
+    text = (
+        f"'{envelope_title}' has been completed by all recipients.\n\n"
+        + (
+            "The attached document is sealed and timestamped.\n"
+            if sealed
+            else "A cryptographic seal was not applied to the attached document.\n"
+        )
+        + f"\nVerify: {verify_url}\n"
+    )
+    return subject, html, text
+
+
+def decline_notice(recipient_name: str, envelope_title: str, decliner_name: str, reason: str):
+    subject = f"Declined: {envelope_title}"
+    html = _shell(
+        "A recipient declined to sign",
+        f"<strong>{decliner_name}</strong> declined to sign <strong>{envelope_title}</strong>.",
+        f'<p style="font-size:13px;color:#475569;">Reason given: {reason or "No reason provided."}</p>',
+        None,
+        None,
+    )
+    text = (
+        f"{decliner_name} declined to sign '{envelope_title}'.\n\n"
+        f"Reason: {reason or 'No reason provided.'}\n"
+    )
+    return subject, html, text

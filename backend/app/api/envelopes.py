@@ -5,7 +5,7 @@ import csv
 import io
 import json
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
 from app.services.webhook_dispatcher import WebhookDispatcher
+from app.services import mailer
 
 router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 
@@ -52,6 +53,7 @@ async def list_envelopes(
                 updated_at=env.updated_at,
                 recipients_count=len(recipients),
                 signed_count=signed_count,
+                seal_status=env.seal_status,
             )
         )
     return out
@@ -109,6 +111,7 @@ async def create_envelope(
             routing_order=r.get("routing_order", idx + 1),
             status="sent",
             signing_token=signing_token,
+            token_expires_at=datetime.now(timezone.utc) + timedelta(days=settings.SIGNING_TOKEN_EXPIRE_DAYS),
         )
         db.add(rec)
         await db.flush()
@@ -152,16 +155,36 @@ async def create_envelope(
         description=f"Envelope '{title}' created with SHA-256: {original_sha[:16]}...",
         hash_state=original_sha,
     )
+    db.add(event_created)
+    await db.commit()
+
+    # Invitations are dispatched synchronously so that the audit event describes the
+    # actual delivery outcome. The previous implementation recorded "Sent envelope
+    # invitations to N recipient(s)" while no mail was ever sent.
+    sender_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+    invite_batch = mailer.BatchResult()
+    for client_ref_id, rec_id in created_recipients.items():
+        rec = await db.get(Recipient, rec_id)
+        if not rec or rec.role not in ("signer", "approver"):
+            continue
+        signing_url = f"{settings.APP_URL}/s/{rec.signing_token}"
+        subject, html, text = mailer.signing_invitation(
+            rec.name, envelope.title, signing_url, sender_name
+        )
+        invite_batch.results.append(
+            mailer.send_email(rec.email, rec.name, subject, html, text)
+        )
+
     event_sent = AuditEvent(
         envelope_id=envelope.id,
-        event_type="sent",
+        event_type="sent" if invite_batch.any_sent else "send_failed",
         actor_name="Docurama Trust Engine",
-        actor_email="system@example.com",
+        actor_email=settings.SMTP_FROM or "system@docurama.local",
         ip_address=ip,
         user_agent=ua,
-        description=f"Sent envelope invitations to {len(recipients_data)} recipient(s).",
+        description=f"Envelope invitations: {invite_batch.summary()}",
     )
-    db.add_all([event_created, event_sent])
+    db.add(event_sent)
     await db.commit()
 
     await WebhookDispatcher.dispatch_event(
@@ -230,24 +253,37 @@ async def remind_envelope(
         return {"success": True, "message": "All recipients have already signed.", "reminded_count": 0}
 
     now = datetime.now(timezone.utc)
+    batch = mailer.BatchResult()
+
     for r in pending_signers:
-        r.reminders_sent_count = (r.reminders_sent_count or 0) + 1
-        r.last_reminded_at = now
+        signing_url = f"{settings.APP_URL}/s/{r.signing_token}"
+        reminder_number = (r.reminders_sent_count or 0) + 1
+        subject, html, text = mailer.signing_reminder(
+            r.name, envelope.title, signing_url, reminder_number
+        )
+        result = mailer.send_email(r.email, r.name, subject, html, text)
+        batch.results.append(result)
+        # The counter tracks delivered reminders. Incrementing on a failed send would
+        # silently exhaust a recipient's reminder budget without them hearing anything.
+        if result.sent:
+            r.reminders_sent_count = reminder_number
+            r.last_reminded_at = now
 
     audit = AuditEvent(
         envelope_id=envelope.id,
-        event_type="reminder_sent",
+        event_type="reminder_sent" if batch.any_sent else "reminder_failed",
         actor_name=f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email,
         actor_email=current_user.email,
-        description=f"Sent automated reminder to {len(pending_signers)} pending recipient(s).",
+        description=f"Manual reminder: {batch.summary()}",
     )
     db.add(audit)
     await db.commit()
 
     return {
-        "success": True,
-        "message": f"Reminders dispatched to {len(pending_signers)} recipient(s).",
-        "reminded_count": len(pending_signers)
+        "success": batch.any_sent,
+        "message": batch.summary(),
+        "reminded_count": batch.sent_count,
+        "failed_count": batch.failed_count,
     }
 
 @router.get("/{id}/export-csv")
