@@ -83,6 +83,48 @@ def overlay_fields_on_pdf(
     shutil.copy2(input_pdf_path, output_pdf_path)
     return output_pdf_path
 
+def _timestamp_statement(seal_status) -> str:
+    """
+    State the RFC 3161 timestamp only when the document actually carries one.
+
+    The previous wording asserted "RFC 3161 compliant timestamps" on every certificate,
+    including documents that completed with no seal at all.
+    """
+    if seal_status == "sealed":
+        return "The sealed document carries an RFC 3161 trusted timestamp. "
+    if seal_status == "unsealed":
+        return "This document was completed without a cryptographic seal or timestamp. "
+    return ""
+
+
+def _seal_summary(seal_status, pades_level):
+    """
+    Describe the cryptographic seal for the certificate summary table.
+
+    The digest of the sealed file cannot be printed inside the file it digests, so this
+    row reports the seal outcome instead. Counterparties confirm the digest through the
+    public verification portal using the verification code above.
+    """
+    if seal_status == "sealed":
+        level = pades_level or "PAdES"
+        return (
+            f"<font color='#16a34a'><b>SEALED</b></font> ({level}). "
+            "Confirm the sealed digest via the verification portal below."
+        )
+    if seal_status == "unsealed":
+        return (
+            "<font color='#b45309'><b>NOT SEALED</b></font>. This document was completed "
+            "without a cryptographic seal; its audit trail remains on record."
+        )
+    # The certificate page is bound into the document before that document is sealed,
+    # so at render time the outcome is not yet known. The verification portal holds the
+    # authoritative answer and is linked directly below.
+    return (
+        "Applied on completion. Confirm the seal and the sealed digest at the "
+        "verification portal below."
+    )
+
+
 def generate_certificate_of_completion_pdf(
     envelope_data: Dict[str, Any],
     recipients_data: List[Dict[str, Any]],
@@ -164,10 +206,25 @@ def generate_certificate_of_completion_pdf(
         qr_buf.seek(0)
         rl_qr = RLImage(qr_buf, width=72, height=72)
         
+        # The status line states what was actually achieved. A certificate that claims a
+        # seal the document does not carry is worse than one that admits the gap.
+        seal_status = envelope_data.get("seal_status")
+        pades_level = envelope_data.get("pades_level")
+        if seal_status == "sealed":
+            level_label = f" ({pades_level})" if pades_level else ""
+            status_line = f'<font color="#2563eb"><b>Status: COMPLETED &amp; CRYPTOGRAPHICALLY SEALED{level_label}</b></font>'
+        elif seal_status == "unsealed":
+            status_line = (
+                '<font color="#b45309"><b>Status: COMPLETED - NOT CRYPTOGRAPHICALLY SEALED</b></font>'
+            )
+        else:
+            # Rendered before sealing runs; the portal reports the confirmed state.
+            status_line = '<font color="#2563eb"><b>Status: COMPLETED</b></font>'
+
         header_text = f"""<b>DOCURAMA CERTIFICATE OF COMPLETION</b><br/>
 <font color="#64748b">Envelope ID: {envelope_data.get('id', '')}</font><br/>
 <font color="#64748b">Verification Code: {verification_code}</font><br/>
-<font color="#2563eb"><b>Status: COMPLETED & CRYPTOGRAPHICALLY SEALED</b></font>"""
+{status_line}"""
         
         header_table = Table([[Paragraph(header_text, title_style), rl_qr]], colWidths=[460, 80])
         header_table.setStyle(TableStyle([
@@ -187,7 +244,7 @@ def generate_certificate_of_completion_pdf(
             [Paragraph("Document Subject:", cell_bold), Paragraph(envelope_data.get("title", "Untitled Document"), cell_style)],
             [Paragraph("Completed Date (UTC):", cell_bold), Paragraph(str(envelope_data.get("completed_at", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))), cell_style)],
             [Paragraph("Original SHA-256:", cell_bold), Paragraph(f"<font face='Courier' size=8>{envelope_data.get('sha256_original', 'N/A')}</font>", cell_style)],
-            [Paragraph("Sealed SHA-256:", cell_bold), Paragraph(f"<font face='Courier' size=8>{envelope_data.get('sha256_signed', 'N/A')}</font>", cell_style)],
+            [Paragraph("Cryptographic Seal:", cell_bold), Paragraph(_seal_summary(seal_status, pades_level), cell_style)],
             [Paragraph("Corporate Domain:", cell_bold), Paragraph(f"<font color='#16a34a'><b>DNS VERIFIED & ATTESTED</b></font> ({verified_domain})" if verified_domain else "<font color='#64748b'>Standard Organization</font>", cell_style)],
             [Paragraph("Public Verify Portal:", cell_bold), Paragraph(f"<a href='{verify_url}' color='#2563eb'>{verify_url}</a>", cell_style)],
         ]
@@ -261,8 +318,16 @@ def generate_certificate_of_completion_pdf(
         elements.append(t_audit)
         elements.append(Spacer(1, 15))
         
-        # Cryptographic Trust Statement
-        cert_statement = """<font size=7 color="#64748b">This Certificate of Completion is an immutable electronic record generated automatically by Docurama. Every event is cryptographically anchored with SHA-256 message digests and RFC 3161 compliant timestamps. Scan the QR code or verify online at docurama.example.com/verify.</font>"""
+        # Cryptographic Trust Statement. Only SHA-256 digesting is unconditionally true;
+        # a trusted timestamp exists only when a seal was actually applied, so that half
+        # of the sentence is stated separately and only when it holds.
+        cert_statement = (
+            '<font size=7 color="#64748b">This Certificate of Completion is an electronic '
+            'record generated automatically by Docurama. Every event is anchored with a '
+            'SHA-256 message digest. '
+            + _timestamp_statement(seal_status)
+            + f'Scan the QR code or verify online at {verify_url}.</font>'
+        )
         elements.append(Paragraph(cert_statement, subtitle_style))
         
         doc.build(elements)

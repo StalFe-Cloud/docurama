@@ -29,6 +29,9 @@ class Account(Base):
     template_folders = relationship("TemplateFolder", back_populates="account", cascade="all, delete-orphan")
     domain_verifications = relationship("DomainVerification", back_populates="account", cascade="all, delete-orphan")
     webhooks = relationship("Webhook", back_populates="account", cascade="all, delete-orphan")
+    api_keys = relationship("ApiKey", back_populates="account", cascade="all, delete-orphan")
+    signing_certificates = relationship("SigningCertificate", back_populates="account", cascade="all, delete-orphan")
+    settings = relationship("AccountSetting", back_populates="account", cascade="all, delete-orphan")
 
 class User(Base):
     __tablename__ = "users"
@@ -118,6 +121,12 @@ class Envelope(Base):
     sha256_original = Column(String(64), nullable=True)
     sha256_signed = Column(String(64), nullable=True)
     verification_code = Column(String(64), unique=True, index=True, default=gen_uuid)
+
+    # Cryptographic seal outcome, recorded at completion time. The verification
+    # portal reads these instead of asserting that a seal was applied.
+    # Statuses: pending, sealed, unsealed
+    seal_status = Column(String(20), default="pending", index=True)
+    seal_details = Column(JSON, default=dict)
     
     completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
@@ -142,6 +151,8 @@ class Recipient(Base):
     # Statuses: waiting, sent, opened, signed, declined, delegated
     status = Column(String(50), default="waiting")
     signing_token = Column(String(128), unique=True, index=True, nullable=False)
+    # Signing links expire so an unused invitation cannot be redeemed indefinitely.
+    token_expires_at = Column(DateTime(timezone=True), nullable=True)
     signed_at = Column(DateTime(timezone=True), nullable=True)
     
     declined_reason = Column(Text, nullable=True)
@@ -226,7 +237,7 @@ class DomainVerification(Base):
     txt_record_host = Column(String(255), nullable=False)
     txt_record_value = Column(String(255), nullable=False)
     cname_record_host = Column(String(255), nullable=False)
-    cname_target = Column(String(255), nullable=False, default="docurama.example.com")
+    cname_target = Column(String(255), nullable=False, default="")  # set from settings.CNAME_TARGET
     web_confirmation_url = Column(String(500), nullable=True)
     
     verified_at = Column(DateTime(timezone=True), nullable=True)
@@ -287,3 +298,75 @@ class CorrectionRequest(Base):
     envelope = relationship("Envelope", backref="correction_requests")
     submitter = relationship("Recipient", backref="correction_requests")
     field = relationship("Field", backref="correction_requests")
+
+class ApiKey(Base):
+    """
+    Account-scoped API credential. Only the hash is stored, so a leaked database
+    row cannot be replayed as a key; the plaintext is shown once at creation.
+    """
+    __tablename__ = "api_keys"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    name = Column(String(255), nullable=False, default="API Key")
+    # Displayed in the UI so a key can be recognised without revealing it.
+    key_prefix = Column(String(16), nullable=False, index=True)
+    hashed_key = Column(String(255), nullable=False)
+    scopes = Column(JSON, default=list)  # ["read", "write"]
+
+    is_active = Column(Boolean, default=True)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    account = relationship("Account", back_populates="api_keys")
+
+class SigningCertificate(Base):
+    """
+    Metadata for a PKCS#12 signing certificate available to an account. The key
+    material itself stays on disk and is never held in the database.
+    """
+    __tablename__ = "signing_certificates"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    label = Column(String(255), nullable=False)
+    subject = Column(String(500), nullable=True)
+    issuer = Column(String(500), nullable=True)
+    serial_number = Column(String(128), nullable=True)
+    fingerprint_sha256 = Column(String(64), nullable=True)
+
+    valid_from = Column(DateTime(timezone=True), nullable=True)
+    valid_until = Column(DateTime(timezone=True), nullable=True)
+    is_default = Column(Boolean, default=False)
+    # Statuses: active, expired, revoked
+    status = Column(String(50), default="active", index=True)
+
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    account = relationship("Account", back_populates="signing_certificates")
+
+class AccountSetting(Base):
+    """
+    Per-account settings for one UI section (notifications, sms, mcp, branding).
+    A row per section keeps unrelated settings from contending on write.
+    """
+    __tablename__ = "account_settings"
+    __table_args__ = (
+        UniqueConstraint("account_id", "section", name="uq_account_setting_section"),
+    )
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    section = Column(String(50), nullable=False, index=True)
+    data = Column(JSON, default=dict)
+
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    account = relationship("Account", back_populates="settings")

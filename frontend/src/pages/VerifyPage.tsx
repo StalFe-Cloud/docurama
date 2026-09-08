@@ -27,6 +27,20 @@ export const VerifyPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'certificate' | 'cryptography'>('certificate');
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // The portal states only what the backend actually observed in the document.
+  // A check that did not run is reported as not established, never as success.
+  const describeResult = (r: VerificationResult): string => {
+    if (!r.has_digital_signature) {
+      return r.envelope_id
+        ? 'On Record, No Cryptographic Seal'
+        : 'No Digital Signature Found';
+    }
+    if (!r.signature_intact) return 'Document Altered Since Signing';
+    if (!r.is_valid) return 'Signature Did Not Validate';
+    if (r.pades_ltv_verified) return 'Cryptographically Sealed & Long-Term Verified';
+    return 'Cryptographically Sealed & Verified';
+  };
+
   const copyText = (val: string, id: string) => {
     navigator.clipboard.writeText(val);
     setCopiedField(id);
@@ -148,7 +162,9 @@ export const VerifyPage: React.FC = () => {
       )}
 
       {/* Verification Result Card */}
-      {result && (
+      {result && (() => {
+      const headline = describeResult(result);
+      return (
         <div className="rounded-3xl bg-white border border-[#E2E8F0] shadow-md overflow-hidden space-y-6 animate-in fade-in-50 duration-300">
           
           {/* Header Badge */}
@@ -165,14 +181,18 @@ export const VerifyPage: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-[#0F172A]">
-                  {result.is_valid ? 'Cryptographically Sealed & Verified' : 'Verification Issue Detected'}
+                  {headline}
                 </h2>
                 <p className="text-xs text-slate-600 mt-0.5">{result.message}</p>
               </div>
             </div>
 
-            <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              PAdES-LTV
+            <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${
+              result.pades_level
+                ? 'bg-slate-100 text-slate-700 border-slate-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              {result.pades_level || 'NO SEAL'}
             </span>
           </div>
 
@@ -236,7 +256,7 @@ export const VerifyPage: React.FC = () => {
                 )}
                 {result.completed_at && (
                   <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                    <span className="text-slate-500">Sealed Timestamp</span>
+                    <span className="text-slate-500">Completed (registry record)</span>
                     <span className="font-mono text-slate-700">{new Date(result.completed_at).toUTCString()}</span>
                   </div>
                 )}
@@ -254,10 +274,12 @@ export const VerifyPage: React.FC = () => {
                     <span className="font-medium text-slate-800 text-right">{result.certificate_subject}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Root Authority</span>
-                  <span className="font-semibold text-emerald-700">Docurama Root Certification Authority (FR)</span>
-                </div>
+                {result.certificate_issuer && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Issuing Authority</span>
+                    <span className="font-medium text-slate-800 text-right break-all">{result.certificate_issuer}</span>
+                  </div>
+                )}
               </div>
 
               {/* Audit Trail Events */}
@@ -287,128 +309,118 @@ export const VerifyPage: React.FC = () => {
             /* Cryptographic Deep-Dive Inspector View */
             <div className="p-6 space-y-6 pt-0 text-xs">
               
-              {/* 1. X.509 Certificate Chain Visualizer */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>X.509 v3 Certificate Trust Hierarchy</span>
-                  </h3>
-                  <span className="text-[10px] font-mono text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    Chain Validated
-                  </span>
-                </div>
+              {/* 1. Signing Certificate, as read from the document */}
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Signing Certificate</span>
+                </h3>
 
-                <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-indigo-200">
-                  
-                  {/* Root CA */}
-                  <div className="relative bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
-                    <div className="absolute -left-6 top-3.5 w-3.5 h-3.5 rounded-full bg-indigo-600 border-2 border-white" />
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-[#0F172A]">Docurama Global Root CA</span>
-                      <span className="text-[10px] font-mono text-slate-400">Trust Anchor</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
-                      <span>Algorithm: <strong className="text-slate-700">RSA 2048-bit • SHA-256</strong></span>
-                      <span>Constraints: <strong className="text-slate-700">CA:TRUE, PathLen:2</strong></span>
-                      <span>Validity: <strong className="text-slate-700">2024 to 2044</strong></span>
-                      <span>Serial: <strong className="text-slate-700 font-mono">0x4F9A...B821</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Intermediate CA */}
-                  <div className="relative bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-1">
-                    <div className="absolute -left-6 top-3.5 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-white" />
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-[#0F172A]">Docurama Document Issuing CA G2</span>
-                      <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded">Sub-CA</span>
-                    </div>
-                    <div className="text-[11px] text-slate-500 grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
-                      <span>Key Usage: <strong className="text-slate-700">Digital Signature, CRL Sign</strong></span>
-                      <span>Revocation Check: <strong className="text-emerald-700">OCSP Good (Cached)</strong></span>
-                      <span>SubFilter: <strong className="text-slate-700">adbe.pkcs7.detached</strong></span>
-                      <span>Profile: <strong className="text-slate-700">eIDAS Advanced QES</strong></span>
-                    </div>
-                  </div>
-
-                  {/* End-Entity Signer */}
-                  <div className="relative bg-white p-3.5 rounded-2xl border-2 border-indigo-100 shadow-2xs space-y-1 bg-indigo-50/20">
-                    <div className="absolute -left-6 top-3.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white" />
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-[#0F172A]">{result.certificate_subject || 'End-Entity Document Signer'}</span>
-                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                        Leaf Signature
+                {result.has_digital_signature ? (
+                  <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-[11px]">
+                    <div className="flex flex-col gap-1 pb-2 border-b border-slate-200">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold">Subject</span>
+                      <span className="font-mono text-slate-800 break-all">
+                        {result.certificate_subject || 'Not reported by the signature'}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500 grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
-                      <span>Format: <strong className="text-slate-700">PAdES-LTV (ETSI EN 319 142)</strong></span>
-                      <span>Digest Algorithm: <strong className="text-slate-700">SHA-256</strong></span>
-                      <span>Signature Length: <strong className="text-slate-700">256 bytes (PKCS#7)</strong></span>
-                      <span>Tamper Seal: <strong className="text-emerald-700 font-bold">Byte-Range Intact</strong></span>
+                    <div className="flex flex-col gap-1 pb-2 border-b border-slate-200">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold">Issuer</span>
+                      <span className="font-mono text-slate-800 break-all">
+                        {result.certificate_issuer || 'Not reported by the signature'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Conformance Level</span>
+                      <span className="font-mono font-bold text-slate-800">
+                        {result.pades_level || 'Not established'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Long-Term Validation (LTV)</span>
+                      <span className={`inline-flex items-center gap-1 font-semibold ${
+                        result.pades_ltv_verified ? 'text-emerald-700' : 'text-slate-500'
+                      }`}>
+                        {result.pades_ltv_verified
+                          ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />Verified</>
+                          : <><AlertTriangle className="w-3.5 h-3.5 text-slate-400" />Not verified</>}
+                      </span>
                     </div>
                   </div>
-
-                </div>
+                ) : (
+                  <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200 text-[11px] text-amber-800">
+                    This document carries no embedded digital signature, so there is no
+                    certificate chain to inspect.
+                  </div>
+                )}
               </div>
 
-              {/* 2. RFC 3161 Timestamp Authority (TSA) Token Details */}
+              {/* 2. RFC 3161 timestamp, shown only when one actually validated */}
               <div className="space-y-2.5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-[#1D72FE]" />
-                  <span>RFC 3161 Qualified Timestamp Authority (TSA) Token</span>
+                  <span>RFC 3161 Timestamp</span>
                 </h3>
 
-                <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-200/80 space-y-2.5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">TSA Provider</span>
-                      <span className="font-semibold text-slate-800">Docurama Certified RFC 3161 TSA Service</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Timestamp Precision</span>
-                      <span className="font-semibold text-emerald-700">1000 Microseconds Accuracy (Sub-Second)</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Generalized Time (GenTime)</span>
-                      <span className="font-mono text-slate-800">
-                        {result.completed_at ? new Date(result.completed_at).toISOString() : '2026-09-07T20:15:00.000Z'}
+                {result.has_timestamp ? (
+                  <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-[11px]">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <span className="text-slate-500">Token Status</span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        Validated
                       </span>
                     </div>
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200">
-                      <span className="text-slate-400 block text-[10px] uppercase font-bold">Cryptographic Nonce</span>
-                      <span className="font-mono text-slate-800">0x7F2A...E901 (Entropy Match Verified)</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-slate-400 text-[10px] uppercase font-bold">Timestamp (UTC)</span>
+                      <span className="font-mono text-slate-800 break-all">
+                        {result.timestamp_utc || result.timestamp_rfc3161}
+                      </span>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-[11px] text-slate-600">
+                    No trusted timestamp token was validated on this document.
+                  </div>
+                )}
               </div>
 
-              {/* 3. Byte-Range Tamper Verification (ISO 32000-1) */}
+              {/* 3. Document integrity */}
               <div className="space-y-2.5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                   <Binary className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Byte-Range Tamper Verification (ISO 32000-1 §12.8.1)</span>
+                  <span>Document Integrity (ISO 32000-1 &sect;12.8.1)</span>
                 </h3>
 
                 <div className="bg-[#F8FAFC] p-4 rounded-2xl border border-slate-200/80 space-y-2 text-[11px]">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                    <span className="text-slate-500">PDF SubFilter Specification:</span>
-                    <span className="font-mono font-bold text-slate-800">ETSI.CAdES.detached (PAdES Part 2)</span>
+                    <span className="text-slate-500">Byte-Range Integrity Check</span>
+                    {result.has_digital_signature ? (
+                      <span className={`inline-flex items-center gap-1 font-semibold ${
+                        result.signature_intact ? 'text-emerald-700' : 'text-rose-700'
+                      }`}>
+                        {result.signature_intact
+                          ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />No post-signing modifications</>
+                          : <><AlertTriangle className="w-3.5 h-3.5 text-rose-600" />Modified after signing</>}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-slate-500">Not applicable</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                    <span className="text-slate-500">Byte-Range Integrity Check:</span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      Zero Post-Signing Modifications Detected
+                    <span className="text-slate-500">Registry Seal Status</span>
+                    <span className="font-mono text-slate-800">
+                      {result.seal_status === 'sealed'
+                        ? 'Sealed at completion'
+                        : result.seal_status === 'unsealed'
+                        ? 'Completed without a seal'
+                        : 'Not recorded'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                    <span className="text-slate-500">Incremental Revision Level:</span>
-                    <span className="font-mono text-slate-800">Revision 1 (Sealed Document End-of-Stream)</span>
-                  </div>
                   <div className="flex flex-col gap-1 pt-1">
-                    <span className="text-slate-400 text-[10px]">Verified Document SHA-256 Digest:</span>
-                    <span className="font-mono text-[10px] text-emerald-800 bg-white p-2 rounded border border-slate-200 break-all">
-                      {result.sha256 || '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'}
+                    <span className="text-slate-400 text-[10px]">Document SHA-256 Digest</span>
+                    <span className="font-mono text-[10px] text-slate-800 bg-white p-2 rounded border border-slate-200 break-all">
+                      {result.sha256 || 'Not available'}
                     </span>
                   </div>
                 </div>
@@ -418,7 +430,8 @@ export const VerifyPage: React.FC = () => {
           )}
 
         </div>
-      )}
+      );
+      })()}
 
     </div>
   );

@@ -1,6 +1,8 @@
+import asyncio
 import os
 import io
 import uuid
+import shutil
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -27,9 +29,28 @@ from app.services.pdf_service import (
 )
 from app.services.crypto_engine import sign_pdf_with_pades, calculate_file_sha256
 from app.services.webhook_dispatcher import WebhookDispatcher
+from app.services import mailer
 from app.api.ws import manager
 
 router = APIRouter(prefix="/signing", tags=["signing"])
+
+def _assert_token_live(recipient: Recipient) -> None:
+    """
+    Reject a signing link whose expiry has passed. Recipients created before expiry
+    tracking carry no expiry and stay valid, so this cannot retroactively lock anyone out.
+    """
+    expires_at = getattr(recipient, "token_expires_at", None)
+    if expires_at is None:
+        return
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(
+            status_code=410,
+            detail="This signing link has expired. Please ask the sender to issue a new one.",
+        )
+
+
 
 @router.get("/{token}", response_model=SigningSessionOut)
 async def get_signing_session(
@@ -49,6 +70,8 @@ async def get_signing_session(
     recipient = result.scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid or expired signing link.")
+
+    _assert_token_live(recipient)
         
     envelope = recipient.envelope
     
@@ -97,6 +120,8 @@ async def get_signing_pdf(
     recipient = (await db.execute(query)).scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
         
     envelope = recipient.envelope
     pdf_path = envelope.signed_pdf_path or envelope.original_pdf_path
@@ -115,6 +140,8 @@ async def get_signing_pages(
     recipient = (await db.execute(query)).scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
     envelope = recipient.envelope
     pdf_path = envelope.original_pdf_path
     if not os.path.exists(pdf_path):
@@ -145,6 +172,8 @@ async def get_signing_page_image(
     recipient = (await db.execute(query)).scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
     envelope = recipient.envelope
     pdf_path = envelope.original_pdf_path
     if not os.path.exists(pdf_path):
@@ -172,6 +201,8 @@ async def mobile_handshake(
     recipient = (await db.execute(query)).scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
         
     envelope = recipient.envelope
     signing_url = f"{settings.APP_URL}/sign/{token}?mobile=true"
@@ -213,10 +244,40 @@ async def submit_signatures(
     recipient = result.scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
         
     envelope = recipient.envelope
     if envelope.status in ["completed", "voided", "declined"]:
         raise HTTPException(status_code=400, detail=f"Document is already {envelope.status}.")
+
+    if recipient.status == "signed":
+        raise HTTPException(status_code=400, detail="You have already signed this document.")
+
+    # Sequential routing: a recipient may only sign once everyone ahead of them has.
+    # The routing order was previously modelled but never enforced, so any recipient
+    # could sign at any time.
+    blocking = [
+        r for r in envelope.recipients
+        if r.role == "signer"
+        and r.status not in ["signed", "declined", "delegated"]
+        and (r.routing_order or 1) < (recipient.routing_order or 1)
+    ]
+    if blocking:
+        waiting_on = min(blocking, key=lambda r: (r.routing_order or 1))
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"This document is routed sequentially. It is not your turn yet; "
+                f"it is currently awaiting {waiting_on.name}."
+            ),
+        )
+
+    # Serialise completion. Without this lock two recipients submitting at the same
+    # moment can both observe "all signed" and each run the sealing pipeline.
+    await db.execute(
+        select(Envelope.id).where(Envelope.id == envelope.id).with_for_update()
+    )
 
     ip = request.client.host if request.client else "127.0.0.1"
     ua = request.headers.get("User-Agent", "Browser")
@@ -314,6 +375,16 @@ async def submit_signatures(
 
         # Generate Certificate of Completion PDF
         cert_pdf_path = os.path.join(storage_dir, f"{envelope.id}_certificate.pdf")
+        # Each signer's own recorded IP. Previously every row on the certificate was
+        # stamped with the last signer's address, misrepresenting the audit record.
+        sig_rows = (await db.execute(
+            select(Signature).where(Signature.envelope_id == envelope.id)
+        )).scalars().all()
+        ip_by_recipient = {}
+        for s in sig_rows:
+            if s.ip_address:
+                ip_by_recipient[s.recipient_id] = s.ip_address
+
         recipients_summary = [
             {
                 "name": r.name,
@@ -321,7 +392,7 @@ async def submit_signatures(
                 "role": r.role,
                 "status": r.status,
                 "signed_at": r.signed_at.strftime("%Y-%m-%d %H:%M:%S UTC") if r.signed_at else "N/A",
-                "ip_address": ip,
+                "ip_address": ip_by_recipient.get(r.id) or ("Not recorded" if r.status != "signed" else ip),
             }
             for r in envelope.recipients
         ]
@@ -342,9 +413,16 @@ async def submit_signatures(
             "title": envelope.title,
             "verification_code": envelope.verification_code,
             "sha256_original": envelope.sha256_original,
-            "sha256_signed": "Calculating...",
+            # The sealed file's digest cannot appear inside the document it digests.
+            # The certificate carries the original digest and the verification code,
+            # which is what a counterparty checks against the portal.
+            "sha256_signed": None,
             "completed_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
             "verified_domain": verified_domain_name,
+            # Unknown at render time; set explicitly only on the failure path, where the
+            # certificate is regenerated so the delivered document carries the warning.
+            "seal_status": None,
+            "pades_level": None,
         }
         
         audit_list = [
@@ -362,7 +440,14 @@ async def submit_signatures(
         append_certificate_page(flattened_pdf_path, cert_pdf_path, combined_pdf_path)
 
         final_sealed_path = os.path.join(storage_dir, f"{envelope.id}_sealed.pdf")
-        crypto_res = sign_pdf_with_pades(combined_pdf_path, final_sealed_path)
+        # Off the event loop, deliberately. pyHanko's sign_pdf() calls asyncio.run()
+        # internally, which raises "cannot be called from a running event loop" inside
+        # an async endpoint. Handing it a worker thread gives it a loop-free context.
+        # Sealing is also CPU- and network-bound (it reaches the TSA), so it has no
+        # business blocking the event loop regardless.
+        crypto_res = await asyncio.to_thread(
+            sign_pdf_with_pades, combined_pdf_path, final_sealed_path
+        )
 
         envelope.signed_pdf_path = final_sealed_path
         envelope.certificate_pdf_path = cert_pdf_path
@@ -370,13 +455,61 @@ async def submit_signatures(
         envelope.status = "completed"
         envelope.completed_at = datetime.now(timezone.utc)
 
+        # Record what the signing run actually achieved. The verification portal reads
+        # this rather than assuming a seal was applied.
+        sealed = bool(crypto_res.get("sealed"))
+        pades_level = crypto_res.get("pades_level")
+        envelope.seal_status = "sealed" if sealed else "unsealed"
+        seal_details = {
+            "sealed": sealed,
+            "pades_level": pades_level,
+            "subject": crypto_res.get("subject"),
+            "issuer": crypto_res.get("issuer"),
+            "timestamp_server": crypto_res.get("timestamp_server"),
+            "timestamp_utc": crypto_res.get("timestamp_utc"),
+            "error": crypto_res.get("error"),
+            "sealed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        if not sealed:
+            # Rebuild the certificate so the delivered document itself carries the
+            # warning, rather than the gap only being visible in the portal.
+            envelope_dict["seal_status"] = "unsealed"
+            envelope_dict["pades_level"] = None
+            audit_list.append({
+                "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "event_type": "seal_failed",
+                "actor_name": "Docurama Trust Engine",
+                "description": f"Cryptographic sealing did not complete: {crypto_res.get('error')}",
+            })
+            generate_certificate_of_completion_pdf(
+                envelope_dict, recipients_summary, audit_list, cert_pdf_path
+            )
+            append_certificate_page(flattened_pdf_path, cert_pdf_path, combined_pdf_path)
+            shutil.copy2(combined_pdf_path, final_sealed_path)
+            envelope.sha256_signed = calculate_file_sha256(final_sealed_path)
+
+        seal_details["sha256"] = envelope.sha256_signed
+        envelope.seal_details = seal_details
+
+        digest_fragment = (envelope.sha256_signed or "")[:16]
+        if sealed:
+            seal_description = (
+                f"Envelope completed and sealed at {pades_level or 'PAdES'} "
+                f"(SHA-256: {digest_fragment}...)."
+            )
+        else:
+            seal_description = (
+                f"Envelope completed but NOT cryptographically sealed: {crypto_res.get('error')} "
+                f"(SHA-256: {digest_fragment}...)."
+            )
+
         audit_sealed = AuditEvent(
             envelope_id=envelope.id,
             event_type="completed",
             actor_name="Docurama Trust Engine",
-            actor_email="system@example.com",
-            ip_address="127.0.0.1",
-            description=f"Envelope completed and sealed with Docurama PAdES-LTV (SHA-256: {envelope.sha256_signed[:16]}...).",
+            actor_email=settings.SYSTEM_ACTOR_EMAIL,
+            description=seal_description,
             hash_state=envelope.sha256_signed,
         )
         db.add(audit_sealed)
@@ -386,13 +519,61 @@ async def submit_signatures(
                 "envelope_id": envelope.id,
                 "title": envelope.title,
                 "verification_code": envelope.verification_code,
-                "sha256": envelope.sha256_signed
+                "sha256": envelope.sha256_signed,
+                "seal_status": envelope.seal_status,
+                "pades_level": pades_level
             }
         )
     else:
         envelope.status = "delivered"
 
     await db.commit()
+
+    if all_signed:
+        # Deliver the completed document to every party. The notice states the real
+        # seal outcome, so a document that was not sealed is never described as sealed.
+        verify_url = f"{settings.APP_URL}/verify?code={envelope.verification_code}"
+        attachments = [p for p in [envelope.signed_pdf_path] if p and os.path.exists(p)]
+        completion_batch = mailer.BatchResult()
+        for r in envelope.recipients:
+            subject, html, text = mailer.completion_notice(
+                r.name, envelope.title, verify_url, sealed
+            )
+            completion_batch.results.append(
+                mailer.send_email(r.email, r.name, subject, html, text, attachments=attachments)
+            )
+        db.add(AuditEvent(
+            envelope_id=envelope.id,
+            event_type="completion_notice_sent" if completion_batch.any_sent else "completion_notice_failed",
+            actor_name="Docurama Trust Engine",
+            actor_email=settings.SMTP_FROM or "system@docurama.local",
+            description=f"Completion notices: {completion_batch.summary()}",
+        ))
+        await db.commit()
+    else:
+        # Sequential routing: whoever is next can only act once notified.
+        remaining = [
+            r for r in envelope.recipients
+            if r.role == "signer" and r.status not in ["signed", "declined", "delegated"]
+        ]
+        if remaining:
+            next_signer = min(remaining, key=lambda r: (r.routing_order or 1))
+            signing_url = f"{settings.APP_URL}/s/{next_signer.signing_token}"
+            subject, html, text = mailer.signing_invitation(
+                next_signer.name, envelope.title, signing_url, recipient.name
+            )
+            notify = mailer.send_email(next_signer.email, next_signer.name, subject, html, text)
+            db.add(AuditEvent(
+                envelope_id=envelope.id,
+                event_type="sent" if notify.sent else "send_failed",
+                actor_name="Docurama Trust Engine",
+                actor_email=settings.SMTP_FROM or "system@docurama.local",
+                description=(
+                    f"Routing notification to {next_signer.name} ({next_signer.email}): "
+                    + ("delivered." if notify.sent else f"failed - {notify.error}")
+                ),
+            ))
+            await db.commit()
 
     await manager.broadcast_to_session(token, {
         "type": "COMPLETED" if all_signed else "STEP_SIGNED",
@@ -419,6 +600,8 @@ async def decline_signing(
     recipient = (await db.execute(query)).scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
     
     envelope = recipient.envelope
     recipient.status = "declined"
@@ -475,6 +658,8 @@ async def delegate_signing(
     recipient = (await db.execute(query)).scalar_one_or_none()
     if not recipient:
         raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
     
     envelope = recipient.envelope
     recipient.status = "delegated"

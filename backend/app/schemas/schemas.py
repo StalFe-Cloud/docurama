@@ -23,6 +23,22 @@ class CompanyUpdate(BaseModel):
     timezone: Optional[str] = None
     enforce_domain_auth: Optional[bool] = None
 
+class CompanyInviteRequest(BaseModel):
+    email: EmailStr
+    role: str = "member"  # owner, admin, manager, member
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+class CompanyInviteResponse(BaseModel):
+    success: bool
+    membership_id: str
+    user_id: str
+    email: str
+    role: str
+    is_new_user: bool
+    temporary_password: Optional[str] = None
+    message: str
+
 class CompanyMemberOut(BaseModel):
     id: str
     user_id: str
@@ -126,6 +142,7 @@ class RecipientOut(RecipientBase):
     delegated_at: Optional[datetime] = None
     reminders_sent_count: Optional[int] = 0
     last_reminded_at: Optional[datetime] = None
+    token_expires_at: Optional[datetime] = None
     created_at: datetime
     
     class Config:
@@ -160,6 +177,9 @@ class EnvelopeOut(BaseModel):
     updated_at: datetime
     recipients_count: Optional[int] = 0
     signed_count: Optional[int] = 0
+    # pending until completion, then sealed or unsealed. Reflects what the signing
+    # run actually achieved, never what it intended.
+    seal_status: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -171,6 +191,7 @@ class EnvelopeDetailOut(BaseModel):
     verification_code: str
     sha256_original: Optional[str] = None
     sha256_signed: Optional[str] = None
+    seal_status: Optional[str] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
@@ -219,6 +240,14 @@ class VerificationResponse(BaseModel):
     certificate_issuer: Optional[str] = None
     timestamp_rfc3161: Optional[str] = None
     pades_ltv_verified: bool = False
+    # Observed cryptographic state. These describe what was actually found in the
+    # document rather than what the platform intended to apply.
+    has_digital_signature: bool = False
+    signature_intact: bool = False
+    has_timestamp: bool = False
+    timestamp_utc: Optional[str] = None
+    pades_level: Optional[str] = None
+    seal_status: Optional[str] = None
     audit_trail: List[AuditEventOut] = []
     issuer_domain_verified: bool = False
     verified_domain: Optional[str] = None
@@ -395,3 +424,66 @@ class CorrectionRequestOut(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ---------------------------------------------------------------------------
+# Settings: API keys, signing certificates, per-section preferences
+# ---------------------------------------------------------------------------
+
+class ApiKeyCreate(BaseModel):
+    name: str = "API Key"
+    scopes: Optional[List[str]] = None
+    expires_in_days: Optional[int] = None
+
+class ApiKeyOut(BaseModel):
+    id: str
+    name: str
+    key_prefix: str
+    scopes: List[str] = []
+    is_active: bool = True
+    last_used_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class ApiKeyCreatedOut(ApiKeyOut):
+    # Returned once at creation and never retrievable again.
+    plaintext_key: str
+
+class SigningCertificateOut(BaseModel):
+    id: str
+    label: str
+    subject: Optional[str] = None
+    issuer: Optional[str] = None
+    serial_number: Optional[str] = None
+    fingerprint_sha256: Optional[str] = None
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_default: bool = False
+    status: str = "active"
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class SigningCertificateCreate(BaseModel):
+    label: str
+    subject: Optional[str] = None
+    issuer: Optional[str] = None
+    serial_number: Optional[str] = None
+    fingerprint_sha256: Optional[str] = None
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_default: bool = False
+
+class AccountSettingOut(BaseModel):
+    section: str
+    data: Dict[str, Any] = {}
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class AccountSettingUpdate(BaseModel):
+    data: Dict[str, Any]
