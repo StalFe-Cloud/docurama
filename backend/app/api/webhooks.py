@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.api.auth import get_current_user
 from app.models.models import User, Webhook, WebhookDelivery
 from app.schemas.schemas import WebhookCreate, WebhookOut, WebhookTestRequest, WebhookDeliveryOut
-from app.services.webhook_dispatcher import WebhookDispatcher
+from app.services.webhook_dispatcher import WebhookDispatcher, validate_webhook_url
 
 router = APIRouter()
 
@@ -37,6 +37,12 @@ async def create_webhook(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Reject private, loopback and link-local destinations at creation time so an
+    # account cannot point a webhook at internal services or cloud metadata.
+    allowed, reason = validate_webhook_url(req.url)
+    if not allowed:
+        raise HTTPException(status_code=400, detail=reason)
+
     wh = Webhook(
         account_id=current_user.account_id,
         url=req.url,

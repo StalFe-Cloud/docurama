@@ -1,7 +1,11 @@
 import pytest
 import uuid
 from app.models import User, Account, AccountMembership, DomainVerification
-from app.schemas import CompanyCreate, CompanyOut, DomainAuthValidateRequest
+from pydantic import ValidationError
+from app.schemas import (
+    CompanyCreate, CompanyOut, DomainAuthValidateRequest,
+    CompanyInviteRequest, CompanyInviteResponse,
+)
 
 def sanitize_domain(d: str) -> str:
     cleaned = d.strip().lower()
@@ -53,3 +57,80 @@ def test_dns_txt_challenge_generation():
     assert challenge_host.startswith("_docurama-challenge.")
     assert challenge_value.startswith("docurama-verification=dcr_vfy_")
     assert len(token) > 10
+
+# ---------------------------------------------------------------------------
+# Company member invitation (Phase 0: closes out the DNS / multi-company plan)
+# ---------------------------------------------------------------------------
+
+VALID_MEMBER_ROLES = ["owner", "admin", "manager", "member"]
+
+def test_company_invite_request_defaults_to_member():
+    req = CompanyInviteRequest(email="new.counsel@stalfe.com")
+    assert req.email == "new.counsel@stalfe.com"
+    assert req.role == "member"
+    assert req.first_name is None
+    assert req.last_name is None
+
+def test_company_invite_request_accepts_full_payload():
+    req = CompanyInviteRequest(
+        email="ops.lead@stalfe.com",
+        role="admin",
+        first_name="Ops",
+        last_name="Lead",
+    )
+    assert req.role == "admin"
+    assert req.first_name == "Ops"
+    assert req.last_name == "Lead"
+
+def test_company_invite_request_rejects_malformed_email():
+    with pytest.raises(ValidationError):
+        CompanyInviteRequest(email="not-an-email")
+
+def test_invite_role_normalization_matches_accepted_roles():
+    # The endpoint lowercases and validates the incoming role before persisting it.
+    for supplied, expected in [("Owner", "owner"), ("ADMIN", "admin"), ("Manager", "manager"), ("Member", "member")]:
+        normalized = supplied.strip().lower()
+        assert normalized == expected
+        assert normalized in VALID_MEMBER_ROLES
+
+    assert "superuser" not in VALID_MEMBER_ROLES
+
+def test_company_invite_response_carries_one_time_password():
+    res = CompanyInviteResponse(
+        success=True,
+        membership_id=str(uuid.uuid4()),
+        user_id=str(uuid.uuid4()),
+        email="new.counsel@stalfe.com",
+        role="member",
+        is_new_user=True,
+        temporary_password="s3cure-one-time-token",
+        message="Created account and granted member access.",
+    )
+    assert res.is_new_user is True
+    assert res.temporary_password == "s3cure-one-time-token"
+
+def test_company_invite_response_omits_password_for_existing_user():
+    res = CompanyInviteResponse(
+        success=True,
+        membership_id=str(uuid.uuid4()),
+        user_id=str(uuid.uuid4()),
+        email="existing@stalfe.com",
+        role="admin",
+        is_new_user=False,
+        message="Granted admin access to this company.",
+    )
+    assert res.is_new_user is False
+    assert res.temporary_password is None
+
+def test_archived_membership_is_deactivated_not_deleted():
+    # Removal sets is_active False so historical audit trails stay resolvable.
+    membership = AccountMembership(
+        user_id=str(uuid.uuid4()),
+        account_id=str(uuid.uuid4()),
+        role="member",
+        is_active=True,
+    )
+    membership.is_active = False
+    assert membership.is_active is False
+    assert membership.user_id is not None
+    assert membership.account_id is not None

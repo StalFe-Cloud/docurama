@@ -24,17 +24,28 @@ class FieldDetector:
         (re.compile(r'\b(title|company)\b', re.I), 'text', 160.0, 35.0),
     ]
 
+    # Suggested placements used when the document itself cannot be inspected. They are
+    # a starting point for the builder, not a claim about the document's contents.
+    FALLBACK_FIELDS = [
+        {"field_type": "signature", "page_number": 1, "x": 10.0, "y": 80.0, "width": 160.0, "height": 50.0, "name": "Signature (Fallback)", "confidence": 0.8},
+        {"field_type": "date", "page_number": 1, "x": 60.0, "y": 80.0, "width": 120.0, "height": 35.0, "name": "Date (Fallback)", "confidence": 0.8},
+    ]
+
     @classmethod
     def detect_fields(cls, pdf_path: str) -> List[Dict[str, Any]]:
         detected_fields: List[Dict[str, Any]] = []
         if not fitz:
-            # Fallback mock for environments without PyMuPDF
-            return [
-                {"field_type": "signature", "page_number": 1, "x": 10.0, "y": 80.0, "width": 160.0, "height": 50.0, "name": "Signature (Fallback)", "confidence": 0.8},
-                {"field_type": "date", "page_number": 1, "x": 60.0, "y": 80.0, "width": 120.0, "height": 35.0, "name": "Date (Fallback)", "confidence": 0.8}
-            ]
+            # PyMuPDF is unavailable, so nothing can be inspected.
+            return [dict(f) for f in cls.FALLBACK_FIELDS]
 
-        doc = fitz.open(pdf_path)
+        try:
+            doc = fitz.open(pdf_path)
+        except Exception as e:
+            # A missing, corrupt or non-PDF file. Detection is a convenience feature,
+            # so it degrades to the same suggested placements rather than propagating
+            # a PyMuPDF exception out of the request handler as a 500.
+            print(f"[FieldDetector] Could not open {pdf_path}: {e}")
+            return [dict(f) for f in cls.FALLBACK_FIELDS]
 
         try:
             for page_idx in range(len(doc)):

@@ -1,8 +1,10 @@
 import pytest
+from conftest import requires_argon2
 from app.core.security import get_password_hash, verify_password, create_access_token, decode_access_token, generate_secure_token
 from app.services.crypto_engine import calculate_bytes_sha256
 from app.services.qr_generator import generate_qr_base64
 
+@requires_argon2
 def test_password_hashing():
     pwd = "DocuramaStrongPassword2026!"
     hashed = get_password_hash(pwd)

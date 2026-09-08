@@ -2,6 +2,7 @@ import os
 import shutil
 import uuid
 import json
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from pydantic import BaseModel, EmailStr
@@ -15,6 +16,7 @@ from app.api.auth import get_current_user
 from app.models import User, Template, Envelope, Recipient, Field, AuditEvent
 from app.schemas import TemplateOut, AutoDetectResponse, DetectedField
 from app.services.field_detector import FieldDetector
+from app.services.preview_store import MAX_UPLOAD_BYTES, looks_like_pdf
 from app.services.crypto_engine import calculate_file_sha256
 
 router = APIRouter(prefix="/templates", tags=["templates"])
@@ -90,19 +92,39 @@ async def create_template(
 
 @router.post("/auto-detect", response_model=AutoDetectResponse)
 async def auto_detect_fields(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Analyzes an uploaded PDF and auto-detects signature lines, dates, and form widgets.
+
+    Requires a session, and validates the upload by content rather than by filename,
+    on the same terms as the document preview endpoint.
     """
     storage_dir = settings.STORAGE_DIR
     os.makedirs(storage_dir, exist_ok=True)
-    
+
     temp_path = os.path.join(storage_dir, f"temp_detect_{uuid.uuid4().hex}.pdf")
     try:
+        written = 0
+        first_chunk = True
         with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
+            while chunk := await file.read(1024 * 1024):
+                if first_chunk:
+                    if not looks_like_pdf(chunk):
+                        raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
+                    first_chunk = False
+                written += len(chunk)
+                if written > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Document exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit."
+                    )
+                buffer.write(chunk)
+
+        if written == 0:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+
         detected = FieldDetector.detect_fields(temp_path)
         return AutoDetectResponse(
             total_detected=len(detected),
@@ -172,7 +194,8 @@ async def start_public_template(
         role="signer",
         routing_order=1,
         status="sent",
-        signing_token=signing_token
+        signing_token=signing_token,
+        token_expires_at=datetime.now(timezone.utc) + timedelta(days=settings.SIGNING_TOKEN_EXPIRE_DAYS)
     )
     db.add(recipient)
     await db.flush()
