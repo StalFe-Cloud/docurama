@@ -44,6 +44,9 @@ class User(Base):
     last_name = Column(String(100), nullable=True, default="")
     role = Column(String(50), default="admin")  # admin, manager, member
     is_active = Column(Boolean, default=True)
+    # Deployment-wide administration, distinct from company roles. Gates the platform
+    # settings that every tenant falls back to, such as the default mail server.
+    is_platform_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     
@@ -370,3 +373,22 @@ class AccountSetting(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     account = relationship("Account", back_populates="settings")
+
+
+class PlatformSetting(Base):
+    """
+    Deployment-wide settings, for values that belong to the installation rather than
+    to any one tenant. An account with no profile of its own falls back to these, which
+    is what lets a new customer send mail without first standing up a mail server.
+
+    Same shape as AccountSetting deliberately: one row per section, so unrelated
+    settings do not contend on write.
+    """
+    __tablename__ = "platform_settings"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    section = Column(String(50), unique=True, nullable=False, index=True)
+    data = Column(JSON, default=dict)
+
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

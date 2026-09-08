@@ -18,6 +18,13 @@ import pytest
 
 DEPLOY_SCRIPT = pathlib.Path(__file__).resolve().parent.parent.parent / "deploy" / "deploy_to_vps.py"
 
+# The runtime image ships only the application, so deploy tooling is absent there by
+# design. These run on a developer host, where deployments are actually launched.
+pytestmark = pytest.mark.skipif(
+    not DEPLOY_SCRIPT.exists(),
+    reason="deploy tooling is not part of the runtime image; run this suite on the host",
+)
+
 
 @pytest.fixture(scope="module")
 def deploy():

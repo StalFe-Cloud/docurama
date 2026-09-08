@@ -9,6 +9,10 @@ from typing import Any, Dict
 
 # Sections the settings screen persists. Restricted so a caller cannot use the
 # settings store as arbitrary key-value storage.
+#
+# "smtp" is deliberately not here. This module's read path returns stored data
+# verbatim, and the mail profile holds an encrypted credential that must never reach
+# a browser. It has dedicated endpoints that redact on read and encrypt on write.
 VALID_SECTIONS = ["notifications", "sms", "mcp", "branding", "compliance"]
 
 # First-load state. Reported when no row exists yet, so the UI shows the same

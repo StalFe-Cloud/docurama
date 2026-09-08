@@ -5,6 +5,7 @@ The settings screen previously rendered these from hardcoded arrays in the React
 component, so nothing survived a page reload. Every endpoint here is scoped to the
 caller's active account, following the same pattern as envelopes and templates.
 """
+import asyncio
 from datetime import datetime, timezone
 from typing import List
 
@@ -14,7 +15,7 @@ from sqlalchemy.future import select
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models import AccountSetting, ApiKey, SigningCertificate, User
+from app.models import AccountSetting, ApiKey, PlatformSetting, SigningCertificate, User
 from app.schemas import (
     AccountSettingOut,
     AccountSettingUpdate,
@@ -23,8 +24,13 @@ from app.schemas import (
     ApiKeyOut,
     SigningCertificateCreate,
     SigningCertificateOut,
+    SmtpSettingsOut,
+    SmtpSettingsUpdate,
+    SmtpTestRequest,
+    SmtpTestResult,
 )
 from app.services import api_keys as api_key_service
+from app.services import mailer, smtp_config
 from app.services.account_settings import defaults_for, is_valid_section, merge_section
 
 router = APIRouter(tags=["settings"])
@@ -277,3 +283,145 @@ async def _clear_other_defaults(db: AsyncSession, account_id: str, exclude_id) -
     for other in rows:
         if exclude_id is None or other.id != exclude_id:
             other.is_default = False
+
+
+# ---------------------------------------------------------------------------
+# Mail server profile
+#
+# Separate from the generic settings sections above, which return stored data
+# verbatim. The mail profile holds an encrypted credential, so it is redacted on
+# read and encrypted on write, and it resolves through a platform default.
+# ---------------------------------------------------------------------------
+
+def _require_platform_admin(current_user: User) -> None:
+    if not getattr(current_user, "is_platform_admin", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a platform administrator can change deployment-wide settings.",
+        )
+
+
+async def _smtp_out(db: AsyncSession, stored, scope: str, account_id) -> SmtpSettingsOut:
+    """Redact for display and report which profile mail would actually go out through."""
+    effective = await smtp_config.resolve(db, account_id)
+    return SmtpSettingsOut(
+        **smtp_config.redact(stored),
+        effective_source=effective.source if effective else None,
+        scope=scope,
+    )
+
+
+@router.get("/settings/smtp/account", response_model=SmtpSettingsOut)
+async def get_account_smtp(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account_id = _require_account(current_user)
+    stored = await smtp_config.get_account_settings(db, account_id)
+    return await _smtp_out(db, stored, "account", account_id)
+
+
+@router.put("/settings/smtp/account", response_model=SmtpSettingsOut)
+async def update_account_smtp(
+    payload: SmtpSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    account_id = _require_account(current_user)
+
+    row = (await db.execute(
+        select(AccountSetting).where(
+            AccountSetting.account_id == account_id,
+            AccountSetting.section == smtp_config.SECTION,
+        )
+    )).scalar_one_or_none()
+
+    merged = smtp_config.apply_update(row.data if row else None, payload.model_dump(exclude_unset=True))
+
+    if row:
+        row.data = merged
+        row.updated_at = datetime.now(timezone.utc)
+    else:
+        row = AccountSetting(account_id=account_id, section=smtp_config.SECTION, data=merged)
+        db.add(row)
+
+    await db.commit()
+    await db.refresh(row)
+    return await _smtp_out(db, row.data, "account", account_id)
+
+
+@router.get("/platform/settings/smtp", response_model=SmtpSettingsOut)
+async def get_platform_smtp(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_platform_admin(current_user)
+    stored = await smtp_config.get_platform_settings(db)
+    return await _smtp_out(db, stored, "platform", current_user.account_id)
+
+
+@router.put("/platform/settings/smtp", response_model=SmtpSettingsOut)
+async def update_platform_smtp(
+    payload: SmtpSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_platform_admin(current_user)
+
+    row = (await db.execute(
+        select(PlatformSetting).where(PlatformSetting.section == smtp_config.SECTION)
+    )).scalar_one_or_none()
+
+    merged = smtp_config.apply_update(row.data if row else None, payload.model_dump(exclude_unset=True))
+
+    if row:
+        row.data = merged
+        row.updated_at = datetime.now(timezone.utc)
+    else:
+        row = PlatformSetting(section=smtp_config.SECTION, data=merged)
+        db.add(row)
+
+    await db.commit()
+    await db.refresh(row)
+    return await _smtp_out(db, row.data, "platform", current_user.account_id)
+
+
+@router.post("/settings/smtp/test", response_model=SmtpTestResult)
+async def send_test_email(
+    payload: SmtpTestRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Send a test message through whichever profile resolves for this account.
+
+    Catching a wrong password here is the difference between an operator fixing it in
+    the moment and a signer never receiving an invitation, with only an audit entry to
+    show for it.
+    """
+    account_id = _require_account(current_user)
+    config = await smtp_config.resolve(db, account_id)
+
+    if not mailer.is_configured(config):
+        return SmtpTestResult(
+            sent=False,
+            source=None,
+            message=(
+                "No mail server is configured for this company, and no platform default "
+                "is available."
+            ),
+        )
+
+    subject, html, text = mailer.smtp_test_message(config.from_email, config.source)
+    result = await asyncio.to_thread(
+        mailer.send_email, config, payload.to_email, "", subject, html, text
+    )
+
+    return SmtpTestResult(
+        sent=result.sent,
+        source=config.source,
+        message=(
+            f"Test message delivered to {payload.to_email} using the {config.source} profile."
+            if result.sent else f"Delivery failed: {result.error}"
+        ),
+    )

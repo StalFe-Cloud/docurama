@@ -9,6 +9,11 @@ callers only write a "sent" audit event after a send is confirmed.
 When SMTP is not configured, send attempts return sent=False with a reason rather
 than raising. A missing mail server must not prevent an envelope from being created,
 but it must never be recorded as a delivery either.
+
+The mail server is configured in the product, not in the environment, so every send
+takes the profile to use. services/smtp_config resolves it: the account's own profile
+first, then the platform default. Passing it in rather than reading a global is what
+allows one company to send from its own domain while another uses the platform's.
 """
 import os
 import re
@@ -19,7 +24,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from typing import Dict, List, Optional
 
-from app.core.config import settings
+from app.services.smtp_config import SmtpConfig
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -73,20 +78,24 @@ class BatchResult:
         return f"Delivery failed for all {len(self.results)} recipient(s): {first_error}"
 
 
-def is_configured() -> bool:
-    return bool(settings.SMTP_HOST and settings.SMTP_FROM)
+def is_configured(config: Optional[SmtpConfig]) -> bool:
+    """A profile is usable only when it names a server and a sender."""
+    return bool(config and config.is_usable)
 
 
 def _valid_address(address: str) -> bool:
     return bool(address and _EMAIL_RE.match(address.strip()))
 
 
-def _build_message(to_address: str, to_name: str, subject: str, html_body: str, text_body: str) -> EmailMessage:
+def _build_message(
+    config: SmtpConfig, to_address: str, to_name: str, subject: str,
+    html_body: str, text_body: str,
+) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = formataddr((settings.SMTP_FROM_NAME or "Docurama", settings.SMTP_FROM))
+    msg["From"] = formataddr((config.from_name or "Docurama", config.from_email))
     msg["To"] = formataddr((to_name or to_address, to_address))
-    msg["Message-ID"] = make_msgid(domain=settings.SMTP_FROM.split("@")[-1])
+    msg["Message-ID"] = make_msgid(domain=config.from_email.split("@")[-1])
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
     return msg
@@ -109,25 +118,23 @@ def _attach_files(msg: EmailMessage, attachments: Optional[List[str]]) -> None:
             print(f"[Mailer] Could not attach {path}: {e}")
 
 
-def _connect():
-    """Open an SMTP connection honouring the configured transport security."""
-    host, port = settings.SMTP_HOST, settings.SMTP_PORT
-    timeout = settings.SMTP_TIMEOUT
-
-    if settings.SMTP_USE_SSL:
+def _connect(config: SmtpConfig):
+    """Open an SMTP connection honouring the profile's transport security."""
+    if config.use_ssl:
         context = ssl.create_default_context()
-        server = smtplib.SMTP_SSL(host, port, timeout=timeout, context=context)
+        server = smtplib.SMTP_SSL(config.host, config.port, timeout=config.timeout, context=context)
     else:
-        server = smtplib.SMTP(host, port, timeout=timeout)
-        if settings.SMTP_USE_TLS:
+        server = smtplib.SMTP(config.host, config.port, timeout=config.timeout)
+        if config.use_tls:
             server.starttls(context=ssl.create_default_context())
 
-    if settings.SMTP_USER:
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+    if config.username:
+        server.login(config.username, config.password)
     return server
 
 
 def send_email(
+    config: Optional[SmtpConfig],
     to_address: str,
     to_name: str,
     subject: str,
@@ -141,17 +148,20 @@ def send_email(
     if not _valid_address(address):
         return SendResult(address, False, error="Recipient address is missing or malformed.")
 
-    if not is_configured():
+    if not is_configured(config):
         return SendResult(
             address,
             False,
-            error="SMTP is not configured on this deployment (DOCURAMA_SMTP_HOST / DOCURAMA_SMTP_FROM).",
+            error=(
+                "No mail server is configured. Set one under Settings, Notifications, "
+                "Email Delivery, or ask a platform administrator to configure the default."
+            ),
         )
 
     try:
-        msg = _build_message(address, to_name, subject, html_body, text_body)
+        msg = _build_message(config, address, to_name, subject, html_body, text_body)
         _attach_files(msg, attachments)
-        with _connect() as server:
+        with _connect(config) as server:
             server.send_message(msg)
         return SendResult(address, True, message_id=msg["Message-ID"])
     except Exception as e:
@@ -271,5 +281,29 @@ def decline_notice(recipient_name: str, envelope_title: str, decliner_name: str,
     text = (
         f"{decliner_name} declined to sign '{envelope_title}'.\n\n"
         f"Reason: {reason or 'No reason provided.'}\n"
+    )
+    return subject, html, text
+
+
+def smtp_test_message(from_email: str, source: str):
+    """
+    Confirmation that a mail profile works, sent from the settings screen.
+
+    Names the profile that carried it, so an operator can tell whether their own
+    configuration is in use or they are falling back to the platform default.
+    """
+    subject = "Docurama mail server test"
+    profile = "this company's own mail server" if source == "account" else "the platform default mail server"
+    html = _shell(
+        "Mail delivery is working",
+        f"This test message was sent through <strong>{profile}</strong> ({from_email}).",
+        '<p style="font-size:13px;color:#475569;">Signature requests, reminders and '
+        'completion notices will be delivered this way.</p>',
+        None,
+        None,
+    )
+    text = (
+        f"This test message was sent through {profile} ({from_email}).\n\n"
+        "Signature requests, reminders and completion notices will be delivered this way.\n"
     )
     return subject, html, text

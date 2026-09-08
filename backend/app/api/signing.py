@@ -29,7 +29,7 @@ from app.services.pdf_service import (
 )
 from app.services.crypto_engine import sign_pdf_with_pades, calculate_file_sha256
 from app.services.webhook_dispatcher import WebhookDispatcher
-from app.services import mailer
+from app.services import mailer, smtp_config
 from app.api.ws import manager
 
 router = APIRouter(prefix="/signing", tags=["signing"])
@@ -534,19 +534,20 @@ async def submit_signatures(
         # seal outcome, so a document that was not sealed is never described as sealed.
         verify_url = f"{settings.APP_URL}/verify?code={envelope.verification_code}"
         attachments = [p for p in [envelope.signed_pdf_path] if p and os.path.exists(p)]
+        smtp = await smtp_config.resolve(db, envelope.account_id)
         completion_batch = mailer.BatchResult()
         for r in envelope.recipients:
             subject, html, text = mailer.completion_notice(
                 r.name, envelope.title, verify_url, sealed
             )
             completion_batch.results.append(
-                mailer.send_email(r.email, r.name, subject, html, text, attachments=attachments)
+                mailer.send_email(smtp, r.email, r.name, subject, html, text, attachments=attachments)
             )
         db.add(AuditEvent(
             envelope_id=envelope.id,
             event_type="completion_notice_sent" if completion_batch.any_sent else "completion_notice_failed",
             actor_name="Docurama Trust Engine",
-            actor_email=settings.SMTP_FROM or "system@docurama.local",
+            actor_email=settings.SYSTEM_ACTOR_EMAIL,
             description=f"Completion notices: {completion_batch.summary()}",
         ))
         await db.commit()
@@ -562,12 +563,13 @@ async def submit_signatures(
             subject, html, text = mailer.signing_invitation(
                 next_signer.name, envelope.title, signing_url, recipient.name
             )
-            notify = mailer.send_email(next_signer.email, next_signer.name, subject, html, text)
+            smtp = await smtp_config.resolve(db, envelope.account_id)
+            notify = mailer.send_email(smtp, next_signer.email, next_signer.name, subject, html, text)
             db.add(AuditEvent(
                 envelope_id=envelope.id,
                 event_type="sent" if notify.sent else "send_failed",
                 actor_name="Docurama Trust Engine",
-                actor_email=settings.SMTP_FROM or "system@docurama.local",
+                actor_email=settings.SYSTEM_ACTOR_EMAIL,
                 description=(
                     f"Routing notification to {next_signer.name} ({next_signer.email}): "
                     + ("delivered." if notify.sent else f"failed - {notify.error}")

@@ -72,17 +72,10 @@ class Settings(BaseSettings):
     SIGNING_CONTACT_EMAIL: str = os.getenv("DOCURAMA_SIGNING_CONTACT_EMAIL", "")
     SYSTEM_ACTOR_EMAIL: str = os.getenv("DOCURAMA_SYSTEM_ACTOR_EMAIL", "")
 
-    # Outbound email. When SMTP_HOST is unset the mailer reports every send as
-    # not-delivered rather than failing silently, so the audit trail stays truthful.
-    SMTP_HOST: str = os.getenv("DOCURAMA_SMTP_HOST", "")
-    SMTP_PORT: int = int(os.getenv("DOCURAMA_SMTP_PORT", "587"))
-    SMTP_USER: str = os.getenv("DOCURAMA_SMTP_USER", "")
-    SMTP_PASSWORD: str = os.getenv("DOCURAMA_SMTP_PASSWORD", "")
-    SMTP_FROM: str = os.getenv("DOCURAMA_SMTP_FROM", "")
-    SMTP_FROM_NAME: str = os.getenv("DOCURAMA_SMTP_FROM_NAME", "Docurama")
-    SMTP_USE_TLS: bool = os.getenv("DOCURAMA_SMTP_USE_TLS", "true").lower() not in ("false", "0", "no")
-    SMTP_USE_SSL: bool = os.getenv("DOCURAMA_SMTP_USE_SSL", "false").lower() in ("true", "1", "yes")
-    SMTP_TIMEOUT: int = int(os.getenv("DOCURAMA_SMTP_TIMEOUT", "20"))
+    # Outbound email is configured in the product, not here: per company under
+    # Settings, with a platform-wide default for companies that have not set their
+    # own. See services/smtp_config. A mail server belongs to whoever sends the mail,
+    # and a tenant cannot edit the deployment environment.
 
     # Automatic reminder sweep for envelopes awaiting signature.
     REMINDERS_ENABLED: bool = os.getenv("DOCURAMA_REMINDERS_ENABLED", "true").lower() not in ("false", "0", "no")
@@ -146,7 +139,7 @@ def _derive_host_defaults(cfg: "Settings") -> None:
     if not cfg.SIGNING_CONTACT_EMAIL:
         cfg.SIGNING_CONTACT_EMAIL = f"legal@{host}" if host else ""
     if not cfg.SYSTEM_ACTOR_EMAIL:
-        cfg.SYSTEM_ACTOR_EMAIL = cfg.SMTP_FROM or (f"system@{host}" if host else "system")
+        cfg.SYSTEM_ACTOR_EMAIL = f"system@{host}" if host else "system"
 
 
 settings = Settings()

@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models import AuditEvent, Envelope, Recipient
-from app.services import mailer
+from app.services import mailer, smtp_config
 
 # Arbitrary but stable identifier for the sweep's advisory lock.
 _ADVISORY_LOCK_KEY = 0x0D0C0A17
@@ -63,9 +63,6 @@ async def sweep_once() -> int:
     Send one round of due reminders. Returns the number delivered.
     Safe to call when SMTP is unconfigured: nothing is sent and nothing is recorded.
     """
-    if not mailer.is_configured():
-        return 0
-
     interval_days = settings.REMINDER_INTERVAL_DAYS
     max_reminders = settings.REMINDER_MAX_COUNT
     now = datetime.now(timezone.utc)
@@ -102,6 +99,12 @@ async def sweep_once() -> int:
                     next_order = min((r.routing_order or 1) for r in outstanding)
                     due = [r for r in due if (r.routing_order or 1) == next_order]
 
+                # Per account: one tenant having no mail server must not stop another's
+                # reminders going out.
+                smtp = await smtp_config.resolve(session, envelope.account_id)
+                if not mailer.is_configured(smtp):
+                    continue
+
                 batch = mailer.BatchResult()
                 for recipient in due:
                     signing_url = f"{settings.APP_URL}/s/{recipient.signing_token}"
@@ -109,7 +112,7 @@ async def sweep_once() -> int:
                     subject, html, body = mailer.signing_reminder(
                         recipient.name, envelope.title, signing_url, reminder_number
                     )
-                    result = mailer.send_email(recipient.email, recipient.name, subject, html, body)
+                    result = mailer.send_email(smtp, recipient.email, recipient.name, subject, html, body)
                     batch.results.append(result)
                     if result.sent:
                         recipient.reminders_sent_count = reminder_number
@@ -121,7 +124,7 @@ async def sweep_once() -> int:
                         envelope_id=envelope.id,
                         event_type="reminder_sent" if batch.any_sent else "reminder_failed",
                         actor_name="Docurama Reminder Service",
-                        actor_email=settings.SMTP_FROM or "system@docurama.local",
+                        actor_email=settings.SYSTEM_ACTOR_EMAIL,
                         description=f"Automatic reminder: {batch.summary()}",
                     ))
 

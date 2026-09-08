@@ -78,6 +78,9 @@ class UserOut(BaseModel):
     last_name: Optional[str] = ""
     role: str
     is_active: bool
+    # Deployment-wide administration, distinct from the company role. Gates the platform
+    # default mail profile in Settings.
+    is_platform_admin: bool = False
     account_id: Optional[str] = None
     account_name: Optional[str] = None
     companies: Optional[List[CompanyOut]] = []
@@ -487,3 +490,47 @@ class AccountSettingOut(BaseModel):
 
 class AccountSettingUpdate(BaseModel):
     data: Dict[str, Any]
+
+# ---------------------------------------------------------------------------
+# Mail server profile
+#
+# The password is write-only. It is accepted on update, never returned on read;
+# password_set reports whether one is stored.
+# ---------------------------------------------------------------------------
+
+class SmtpSettingsOut(BaseModel):
+    enabled: bool = False
+    host: str = ""
+    port: int = 587
+    username: str = ""
+    password_set: bool = False
+    from_email: str = ""
+    from_name: str = "Docurama"
+    use_tls: bool = True
+    use_ssl: bool = False
+    timeout: int = 20
+    # "account", "platform", or None when nothing usable is configured. Lets the UI say
+    # which profile mail is actually going out through.
+    effective_source: Optional[str] = None
+    scope: str = "account"
+
+class SmtpSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    username: Optional[str] = None
+    # Omit to leave the stored password untouched; send "" to clear it.
+    password: Optional[str] = None
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
+    use_tls: Optional[bool] = None
+    use_ssl: Optional[bool] = None
+    timeout: Optional[int] = None
+
+class SmtpTestRequest(BaseModel):
+    to_email: EmailStr
+
+class SmtpTestResult(BaseModel):
+    sent: bool
+    source: Optional[str] = None
+    message: str

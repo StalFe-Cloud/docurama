@@ -109,6 +109,7 @@ async def build_user_out(user: User, db: AsyncSession) -> UserOut:
         last_name=user.last_name,
         role=user.role,
         is_active=user.is_active,
+        is_platform_admin=bool(getattr(user, "is_platform_admin", False)),
         account_id=user.account_id,
         account_name=account_name,
         companies=companies_list,

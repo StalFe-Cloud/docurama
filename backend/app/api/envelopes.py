@@ -20,7 +20,7 @@ from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
 from app.services.webhook_dispatcher import WebhookDispatcher
-from app.services import mailer
+from app.services import mailer, smtp_config
 
 router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 
@@ -162,6 +162,8 @@ async def create_envelope(
     # actual delivery outcome. The previous implementation recorded "Sent envelope
     # invitations to N recipient(s)" while no mail was ever sent.
     sender_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+    # Resolved once per batch: the account's own mail profile, else the platform default.
+    smtp = await smtp_config.resolve(db, envelope.account_id)
     invite_batch = mailer.BatchResult()
     for client_ref_id, rec_id in created_recipients.items():
         rec = await db.get(Recipient, rec_id)
@@ -172,14 +174,14 @@ async def create_envelope(
             rec.name, envelope.title, signing_url, sender_name
         )
         invite_batch.results.append(
-            mailer.send_email(rec.email, rec.name, subject, html, text)
+            mailer.send_email(smtp, rec.email, rec.name, subject, html, text)
         )
 
     event_sent = AuditEvent(
         envelope_id=envelope.id,
         event_type="sent" if invite_batch.any_sent else "send_failed",
         actor_name="Docurama Trust Engine",
-        actor_email=settings.SMTP_FROM or "system@docurama.local",
+        actor_email=settings.SYSTEM_ACTOR_EMAIL,
         ip_address=ip,
         user_agent=ua,
         description=f"Envelope invitations: {invite_batch.summary()}",
@@ -253,6 +255,7 @@ async def remind_envelope(
         return {"success": True, "message": "All recipients have already signed.", "reminded_count": 0}
 
     now = datetime.now(timezone.utc)
+    smtp = await smtp_config.resolve(db, envelope.account_id)
     batch = mailer.BatchResult()
 
     for r in pending_signers:
@@ -261,7 +264,7 @@ async def remind_envelope(
         subject, html, text = mailer.signing_reminder(
             r.name, envelope.title, signing_url, reminder_number
         )
-        result = mailer.send_email(r.email, r.name, subject, html, text)
+        result = mailer.send_email(smtp, r.email, r.name, subject, html, text)
         batch.results.append(result)
         # The counter tracks delivered reminders. Incrementing on a failed send would
         # silently exhaust a recipient's reminder budget without them hearing anything.

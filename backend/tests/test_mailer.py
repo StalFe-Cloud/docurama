@@ -17,48 +17,53 @@ from app.services.reminder_sweeper import _is_due
 # Send results
 # ---------------------------------------------------------------------------
 
-def test_unconfigured_smtp_reports_not_sent(monkeypatch):
-    """With no SMTP host the mailer must report failure, not silently succeed."""
-    monkeypatch.setattr(mailer.settings, "SMTP_HOST", "")
-    monkeypatch.setattr(mailer.settings, "SMTP_FROM", "")
+def _usable_profile(**overrides):
+    """A resolved mail profile, of the shape services/smtp_config produces."""
+    from app.services.smtp_config import SmtpConfig
 
-    result = mailer.send_email("signer@example.com", "Signer", "s", "<p>h</p>", "t")
+    defaults = dict(
+        host="smtp.example.com", port=587, username="", password="",
+        from_email="no-reply@example.com", from_name="Docurama",
+        use_tls=True, use_ssl=False, timeout=20, source="account",
+    )
+    defaults.update(overrides)
+    return SmtpConfig(**defaults)
+
+
+def test_unconfigured_smtp_reports_not_sent():
+    """With no profile the mailer must report failure, not silently succeed."""
+    result = mailer.send_email(None, "signer@example.com", "Signer", "s", "<p>h</p>", "t")
 
     assert result.sent is False
-    assert "not configured" in result.error
+    assert "No mail server is configured" in result.error
     assert result.message_id is None
 
 
-def test_malformed_address_is_rejected_without_sending(monkeypatch):
-    monkeypatch.setattr(mailer.settings, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(mailer.settings, "SMTP_FROM", "no-reply@example.com")
+def test_malformed_address_is_rejected_without_sending():
+    config = _usable_profile()
 
     for bad in ["", "   ", "not-an-email", "missing@domain", "@example.com"]:
-        result = mailer.send_email(bad, "Nobody", "s", "<p>h</p>", "t")
+        result = mailer.send_email(config, bad, "Nobody", "s", "<p>h</p>", "t")
         assert result.sent is False
         assert result.message_id is None
 
 
 def test_send_failure_is_captured_not_raised(monkeypatch):
     """A dead mail server must not propagate an exception into the request path."""
-    monkeypatch.setattr(mailer.settings, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(mailer.settings, "SMTP_FROM", "no-reply@example.com")
-
-    def boom():
+    def boom(config):
         raise ConnectionRefusedError("connection refused")
 
     monkeypatch.setattr(mailer, "_connect", boom)
 
-    result = mailer.send_email("signer@example.com", "Signer", "s", "<p>h</p>", "t")
+    result = mailer.send_email(
+        _usable_profile(), "signer@example.com", "Signer", "s", "<p>h</p>", "t"
+    )
 
     assert result.sent is False
     assert "ConnectionRefusedError" in result.error
 
 
 def test_successful_send_reports_message_id(monkeypatch):
-    monkeypatch.setattr(mailer.settings, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(mailer.settings, "SMTP_FROM", "no-reply@example.com")
-
     sent_messages = []
 
     class FakeServer:
@@ -71,9 +76,11 @@ def test_successful_send_reports_message_id(monkeypatch):
         def send_message(self, msg):
             sent_messages.append(msg)
 
-    monkeypatch.setattr(mailer, "_connect", lambda: FakeServer())
+    monkeypatch.setattr(mailer, "_connect", lambda config: FakeServer())
 
-    result = mailer.send_email("signer@example.com", "Signer", "Subject", "<p>h</p>", "t")
+    result = mailer.send_email(
+        _usable_profile(), "signer@example.com", "Signer", "Subject", "<p>h</p>", "t"
+    )
 
     assert result.sent is True
     assert result.message_id
@@ -214,11 +221,12 @@ def test_recipient_without_any_anchor_is_not_due():
     assert _is_due(r, now, interval_days=3, max_reminders=3) is False
 
 
-@pytest.mark.asyncio
-async def test_sweep_is_a_noop_without_smtp(monkeypatch):
-    """The sweep must not touch the database when it cannot send anything."""
+def test_sweep_skips_accounts_without_a_mail_server():
+    """
+    The sweep resolves a profile per account, so one company lacking a mail server must
+    not stop another's reminders. Mirrors the guard in sweep_once, which needs a database
+    to exercise directly.
+    """
     from app.services import reminder_sweeper
 
-    monkeypatch.setattr(reminder_sweeper.mailer, "is_configured", lambda: False)
-
-    assert await reminder_sweeper.sweep_once() == 0
+    assert reminder_sweeper.mailer.is_configured(None) is False

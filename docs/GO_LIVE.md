@@ -101,14 +101,15 @@ Required, and enforced at startup:
 delegate to, the contact embedded in every signature, and the portal URL printed on every
 Certificate of Completion.
 
-SMTP is required for anyone to receive a signing link:
+SMTP is **not** configured here. See step 6: it is set in the product after deploy, so a
+company can send from its own domain without editing the deployment.
 
-```
-DOCURAMA_SMTP_HOST / _PORT / _USER / _PASSWORD / _FROM
-```
-
-Leave it unset and envelopes still complete, but the audit trail records `send_failed` and
+Until it is set, envelopes still complete but the audit trail records `send_failed` and
 recipients get nothing.
+
+> Mail passwords are encrypted with a key derived from `DOCURAMA_SECRET_KEY`. Rotating that
+> key makes stored passwords undecryptable and they must be entered again. The profile is
+> reported as unusable rather than attempted with a wrong credential.
 
 ---
 
@@ -188,7 +189,24 @@ Expect `PASSED: sealed at PAdES-B-LTA, verified, and tampering detected.`
 
 ---
 
-## 5. Activate DNS domain verification
+## 5. Configure the mail server
+
+Sign in, then Settings, Notifications, Email Delivery. As the platform administrator set
+the deployment default, which every company falls back to; individual companies can later
+override it to send from their own domain. Use Send test email before relying on it: a
+wrong password caught here is an operator fixing it in the moment, rather than a signer
+never receiving an invitation.
+
+The promoted platform administrator is the owner of the earliest account, set by migration
+`0005`. Confirm with:
+
+```bash
+docker exec docurama-postgres psql -U docurama -d docurama -tAc   "SELECT email FROM users WHERE is_platform_admin = TRUE;"
+```
+
+---
+
+## 6. Activate DNS domain verification
 
 Shipped but never used: no challenge record has ever been published, so no domain has ever
 actually been verified.

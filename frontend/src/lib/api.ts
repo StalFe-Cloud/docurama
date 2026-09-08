@@ -187,6 +187,46 @@ export interface SigningCertificateItem {
   created_at?: string;
 }
 
+export interface SessionUser {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  role: string;
+  is_active: boolean;
+  // Deployment-wide administration, distinct from the company role.
+  is_platform_admin?: boolean;
+  account_id?: string;
+  account_name?: string;
+  companies?: CompanyItem[];
+  domain_verified?: boolean;
+  verified_domain?: string | null;
+  auth_assurance_level?: string;
+}
+
+export interface SmtpSettings {
+  enabled: boolean;
+  host: string;
+  port: number;
+  username: string;
+  // The password is write-only: the server never returns it, only whether one is stored.
+  password_set: boolean;
+  from_email: string;
+  from_name: string;
+  use_tls: boolean;
+  use_ssl: boolean;
+  timeout: number;
+  // Which profile mail actually goes out through: 'account', 'platform', or null.
+  effective_source?: string | null;
+  scope: string;
+}
+
+export interface SmtpTestResult {
+  sent: boolean;
+  source?: string | null;
+  message: string;
+}
+
 export interface AccountSettingSection {
   section: string;
   data: Record<string, any>;
@@ -770,6 +810,57 @@ export const api = {
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Failed to remove certificate');
+    }
+    return res.json();
+  },
+
+  // Mail server. Account-scoped, falling back to the platform default.
+  getAccountSmtp: async (): Promise<SmtpSettings> => {
+    const res = await fetch(`${API_BASE}/settings/smtp/account`);
+    if (!res.ok) throw new Error('Failed to load mail settings');
+    return res.json();
+  },
+  updateAccountSmtp: async (data: Partial<SmtpSettings> & { password?: string }): Promise<SmtpSettings> => {
+    const res = await fetch(`${API_BASE}/settings/smtp/account`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to save mail settings');
+    }
+    return res.json();
+  },
+  getPlatformSmtp: async (): Promise<SmtpSettings> => {
+    const res = await fetch(`${API_BASE}/platform/settings/smtp`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to load platform mail settings');
+    }
+    return res.json();
+  },
+  updatePlatformSmtp: async (data: Partial<SmtpSettings> & { password?: string }): Promise<SmtpSettings> => {
+    const res = await fetch(`${API_BASE}/platform/settings/smtp`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to save platform mail settings');
+    }
+    return res.json();
+  },
+  sendTestEmail: async (toEmail: string): Promise<SmtpTestResult> => {
+    const res = await fetch(`${API_BASE}/settings/smtp/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_email: toEmail }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to send test email');
     }
     return res.json();
   }

@@ -53,6 +53,7 @@ import {
   DomainVerifyResult,
   SigningCertificateItem,
   ApiKeyItem,
+  SmtpSettings,
 } from '../lib/api';
 import { ApiDocsPage } from './ApiDocsPage';
 
@@ -324,6 +325,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
     loadCertificates();
     loadApiKeys();
     loadNotificationSettings();
+    loadSmtp('account');
   }, []);
 
   const loadCompanies = async () => {
@@ -505,6 +507,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   // -------------------------------------------------------------
   // TAB 5: Notifications State
   // -------------------------------------------------------------
+  // Mail server. The password is write-only: the server reports only whether one is
+  // stored, so the field stays blank and an empty submit leaves the stored one alone.
+  const [smtp, setSmtp] = useState<SmtpSettings | null>(null);
+  const [smtpScope, setSmtpScope] = useState<'account' | 'platform'>('account');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpBusy, setSmtpBusy] = useState(false);
+  const [smtpError, setSmtpError] = useState<string | null>(null);
+  const [smtpTestTo, setSmtpTestTo] = useState('');
+  const [smtpTestResult, setSmtpTestResult] = useState<string | null>(null);
+
   const [notifyOnComplete, setNotifyOnComplete] = useState(true);
   const [bccAuditEmail, setBccAuditEmail] = useState('audit@docurama.com');
   const [enableReminders, setEnableReminders] = useState(true);
@@ -568,6 +580,70 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
       setCertsError(e?.message || 'Unable to load signing certificates.');
     } finally {
       setIsLoadingCerts(false);
+    }
+  };
+
+  const loadSmtp = async (scope: 'account' | 'platform' = smtpScope) => {
+    try {
+      setSmtpError(null);
+      setSmtp(scope === 'platform' ? await api.getPlatformSmtp() : await api.getAccountSmtp());
+    } catch (e: any) {
+      setSmtpError(e?.message || 'Unable to load mail settings.');
+      setSmtp(null);
+    }
+  };
+
+  const switchSmtpScope = async (scope: 'account' | 'platform') => {
+    setSmtpScope(scope);
+    setSmtpPassword('');
+    setSmtpTestResult(null);
+    await loadSmtp(scope);
+  };
+
+  const saveSmtp = async () => {
+    if (!smtp) return;
+    try {
+      setSmtpBusy(true);
+      setSmtpError(null);
+      const payload: any = {
+        enabled: smtp.enabled,
+        host: smtp.host,
+        port: Number(smtp.port) || 587,
+        username: smtp.username,
+        from_email: smtp.from_email,
+        from_name: smtp.from_name,
+        use_tls: smtp.use_tls,
+        use_ssl: smtp.use_ssl,
+      };
+      // Only send the password when one was typed, so saving another field cannot
+      // wipe a stored credential the form never received.
+      if (smtpPassword) payload.password = smtpPassword;
+
+      const updated = smtpScope === 'platform'
+        ? await api.updatePlatformSmtp(payload)
+        : await api.updateAccountSmtp(payload);
+      setSmtp(updated);
+      setSmtpPassword('');
+      triggerSave('Mail server settings saved.');
+    } catch (e: any) {
+      setSmtpError(e?.message || 'Failed to save mail settings.');
+    } finally {
+      setSmtpBusy(false);
+    }
+  };
+
+  const sendSmtpTest = async () => {
+    const to = smtpTestTo.trim() || user?.email || '';
+    if (!to) return;
+    try {
+      setSmtpBusy(true);
+      setSmtpTestResult(null);
+      const res = await api.sendTestEmail(to);
+      setSmtpTestResult(res.message);
+    } catch (e: any) {
+      setSmtpTestResult(e?.message || 'Test send failed.');
+    } finally {
+      setSmtpBusy(false);
     }
   };
 
@@ -2145,6 +2221,193 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
           <div className="mb-6">
             <h1 className="text-3xl font-semibold text-[#1a1a1a] tracking-tight font-semibold">Email Notifications</h1>
             <p className="text-sm text-[#5d5b54] mt-1">Configure automated completion alerts, audit copies, and scheduled signature reminders.</p>
+          </div>
+
+          {/* Card 0: Email Delivery. Configured here rather than in the deployment, so a
+              company can send from its own domain. */}
+          <div className="bg-white rounded-lg p-6 border border-[#e5e3df] shadow-sm">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#ede9e4]">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-md bg-[#dcecfa] text-[#0075de] flex items-center justify-center font-bold">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[#1a1a1a]">Email Delivery (SMTP)</h2>
+                  <p className="text-xs text-[#5d5b54]">
+                    The mail server that carries signature requests, reminders and completion notices
+                  </p>
+                </div>
+              </div>
+              {user?.is_platform_admin && (
+                <div className="flex rounded-lg border border-[#e5e3df] overflow-hidden text-xs font-semibold">
+                  {(['account', 'platform'] as const).map(scope => (
+                    <button
+                      key={scope}
+                      onClick={() => switchSmtpScope(scope)}
+                      className={`px-3 py-1.5 transition-colors ${
+                        smtpScope === scope ? 'bg-[#0075de] text-white' : 'bg-white text-[#5d5b54] hover:bg-[#fafaf9]'
+                      }`}
+                    >
+                      {scope === 'account' ? 'This company' : 'Platform default'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {smtpError && (
+              <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700">
+                {smtpError}
+              </div>
+            )}
+
+            {smtp && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-[#fafaf9] border border-[#ede9e4]">
+                  <div>
+                    <span className="text-sm font-medium text-[#1a1a1a]">
+                      {smtpScope === 'platform' ? 'Use this as the platform default' : 'Send using this company\u2019s own mail server'}
+                    </span>
+                    <p className="text-[11px] text-[#787671] mt-0.5">
+                      {smtp.effective_source === 'account'
+                        ? 'Mail is currently sent using this company\u2019s own server.'
+                        : smtp.effective_source === 'platform'
+                        ? 'Mail is currently sent using the platform default.'
+                        : 'No mail server is configured, so nothing is being delivered.'}
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle"
+                    checked={smtp.enabled}
+                    onChange={(e) => setSmtp({ ...smtp, enabled: e.target.checked })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">Host</label>
+                    <input
+                      type="text"
+                      value={smtp.host}
+                      onChange={(e) => setSmtp({ ...smtp, host: e.target.value })}
+                      placeholder="smtp.example.com"
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">Port</label>
+                    <input
+                      type="number"
+                      value={smtp.port}
+                      onChange={(e) => setSmtp({ ...smtp, port: Number(e.target.value) })}
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={smtp.username}
+                      onChange={(e) => setSmtp({ ...smtp, username: e.target.value })}
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">
+                      Password
+                      {smtp.password_set && (
+                        <span className="ml-2 font-normal text-[#787671]">stored; leave blank to keep</span>
+                      )}
+                    </label>
+                    <input
+                      type="password"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      placeholder={smtp.password_set ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : 'Not set'}
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">From address</label>
+                    <input
+                      type="email"
+                      value={smtp.from_email}
+                      onChange={(e) => setSmtp({ ...smtp, from_email: e.target.value })}
+                      placeholder="no-reply@yourcompany.com"
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">From name</label>
+                    <input
+                      type="text"
+                      value={smtp.from_name}
+                      onChange={(e) => setSmtp({ ...smtp, from_name: e.target.value })}
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smtp.use_tls}
+                      onChange={(e) => setSmtp({ ...smtp, use_tls: e.target.checked })}
+                    />
+                    <span className="text-[#37352f]">STARTTLS</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smtp.use_ssl}
+                      onChange={(e) => setSmtp({ ...smtp, use_ssl: e.target.checked })}
+                    />
+                    <span className="text-[#37352f]">Implicit SSL</span>
+                  </label>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3 pt-3 border-t border-[#ede9e4]">
+                  <div className="flex-grow">
+                    <label className="block text-xs font-semibold text-[#37352f] mb-1">Send a test to</label>
+                    <input
+                      type="email"
+                      value={smtpTestTo}
+                      onChange={(e) => setSmtpTestTo(e.target.value)}
+                      placeholder={user?.email || 'you@example.com'}
+                      className="base-input w-full h-10 text-xs px-3"
+                    />
+                  </div>
+                  <button
+                    onClick={sendSmtpTest}
+                    disabled={smtpBusy}
+                    className="btn btn-white h-10 px-4 text-xs font-semibold border border-[#e5e3df] disabled:opacity-60"
+                  >
+                    Send test email
+                  </button>
+                  <button
+                    onClick={saveSmtp}
+                    disabled={smtpBusy}
+                    className="btn btn-primary h-10 px-5 text-xs font-semibold disabled:opacity-60"
+                  >
+                    {smtpBusy ? 'Working...' : 'Save'}
+                  </button>
+                </div>
+
+                {smtpTestResult && (
+                  <p className="text-[11px] text-[#5d5b54] bg-[#fafaf9] border border-[#ede9e4] rounded-lg p-2.5">
+                    {smtpTestResult}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Card 1: Signer Completion Alerts */}
