@@ -52,7 +52,7 @@ async def list_domains(
                 txt_record_host=f"_docurama-challenge.{user_domain}",
                 txt_record_value=f"docurama-verification={token}",
                 cname_record_host=f"docurama.{user_domain}",
-                cname_target="docurama.example.com",
+                cname_target=settings.CNAME_TARGET,
                 web_confirmation_url=f"https://{user_domain}/.well-known/docurama-verification"
             )
             # Check if immediately verifiable
@@ -107,7 +107,7 @@ async def create_domain(
         txt_record_host=f"_docurama-challenge.{clean_domain}",
         txt_record_value=f"docurama-verification={token}",
         cname_record_host=f"docurama.{clean_domain}",
-        cname_target="docurama.example.com",
+        cname_target=settings.CNAME_TARGET,
         web_confirmation_url=f"https://{clean_domain}/.well-known/docurama-verification"
     )
 

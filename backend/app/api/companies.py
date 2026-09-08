@@ -10,11 +10,12 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, get_password_hash, generate_secure_token
 from app.api.auth import get_current_user
 from app.models import User, Account, AccountMembership, DomainVerification
 from app.schemas import (
-    CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse
+    CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse,
+    CompanyInviteRequest, CompanyInviteResponse
 )
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -77,6 +78,25 @@ async def format_company_out(account: Account, user_id: str, active_account_id: 
         domain_verification_status=domain_rec.status if domain_rec else "unverified",
         created_at=account.created_at
     )
+
+VALID_MEMBER_ROLES = ["owner", "admin", "manager", "member"]
+
+async def require_company_admin(company_id: str, current_user: User, db: AsyncSession) -> AccountMembership:
+    """Resolve the caller's membership and assert owner/admin privileges on the company."""
+    query = select(AccountMembership).where(
+        AccountMembership.user_id == current_user.id,
+        AccountMembership.account_id == company_id,
+        AccountMembership.is_active == True
+    ).options(selectinload(AccountMembership.account))
+    membership = (await db.execute(query)).scalar_one_or_none()
+    if not membership or not membership.account:
+        raise HTTPException(status_code=403, detail="Access denied to this company.")
+    if membership.role not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only company owners and administrators can manage members."
+        )
+    return membership
 
 @router.get("", response_model=List[CompanyOut])
 async def list_user_companies(
@@ -155,7 +175,7 @@ async def create_company(
             txt_record_host=f"_docurama-challenge.{clean_domain}",
             txt_record_value=f"docurama-verification={token}",
             cname_record_host=f"docurama.{clean_domain}",
-            cname_target="docurama.example.com",
+            cname_target=settings.CNAME_TARGET,
             web_confirmation_url=f"https://{clean_domain}/.well-known/docurama-verification"
         )
         db.add(domain_rec)
@@ -172,7 +192,7 @@ async def create_company(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -218,7 +238,7 @@ async def switch_company(
         key=settings.SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
@@ -270,15 +290,7 @@ async def update_company(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(AccountMembership).where(
-        AccountMembership.user_id == current_user.id,
-        AccountMembership.account_id == company_id,
-        AccountMembership.is_active == True
-    ).options(selectinload(AccountMembership.account))
-    res = await db.execute(query)
-    membership = res.scalar_one_or_none()
-    if not membership or not membership.account or membership.role not in ["owner", "admin"]:
-        raise HTTPException(status_code=403, detail="Only company owners and administrators can modify settings.")
+    membership = await require_company_admin(company_id, current_user, db)
 
     account = membership.account
     if company_in.name is not None and company_in.name.strip():
@@ -332,3 +344,166 @@ async def list_company_members(
             created_at=m.created_at
         ))
     return out
+
+@router.post("/{company_id}/members", response_model=CompanyInviteResponse, status_code=status.HTTP_201_CREATED)
+async def invite_company_member(
+    company_id: str,
+    invite_in: CompanyInviteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Invite a user to the company. Creates the user account when the email is unknown,
+    then grants an active membership with the requested role.
+    """
+    caller = await require_company_admin(company_id, current_user, db)
+
+    role = (invite_in.role or "member").strip().lower()
+    if role not in VALID_MEMBER_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Must be one of: {', '.join(VALID_MEMBER_ROLES)}."
+        )
+    if role == "owner" and caller.role != "owner":
+        raise HTTPException(status_code=403, detail="Only a company owner can grant the owner role.")
+
+    email = invite_in.email.strip().lower()
+
+    # Enforce domain authentication policy when the company requires it
+    account = caller.account
+    if getattr(account, "enforce_domain_auth", False):
+        invitee_domain = email.split("@")[1] if "@" in email else ""
+        dom_q = select(DomainVerification).where(
+            DomainVerification.account_id == company_id,
+            DomainVerification.domain == invitee_domain,
+            DomainVerification.status == "verified"
+        )
+        if not (await db.execute(dom_q)).scalars().first():
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"This company enforces DNS domain authentication. "
+                    f"The address @{invitee_domain} is not covered by a verified corporate domain."
+                )
+            )
+
+    user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+
+    is_new_user = False
+    temporary_password = None
+    if not user:
+        is_new_user = True
+        temporary_password = generate_secure_token(12)
+        user = User(
+            account_id=company_id,
+            email=email,
+            hashed_password=get_password_hash(temporary_password),
+            first_name=invite_in.first_name or "",
+            last_name=invite_in.last_name or "",
+            role="admin" if role in ["owner", "admin"] else "member",
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+
+    existing = (await db.execute(
+        select(AccountMembership).where(
+            AccountMembership.user_id == user.id,
+            AccountMembership.account_id == company_id
+        )
+    )).scalar_one_or_none()
+
+    if existing and existing.is_active:
+        raise HTTPException(status_code=409, detail="This user is already a member of the company.")
+
+    if existing:
+        # Reactivate a previously archived membership
+        existing.is_active = True
+        existing.role = role
+        membership = existing
+    else:
+        membership = AccountMembership(
+            user_id=user.id,
+            account_id=company_id,
+            role=role,
+            is_active=True
+        )
+        db.add(membership)
+
+    await db.commit()
+    await db.refresh(membership)
+
+    return CompanyInviteResponse(
+        success=True,
+        membership_id=membership.id,
+        user_id=user.id,
+        email=user.email,
+        role=membership.role,
+        is_new_user=is_new_user,
+        temporary_password=temporary_password,
+        message=(
+            f"Created account for {user.email} and granted {membership.role} access."
+            if is_new_user else
+            f"Granted {user.email} {membership.role} access to this company."
+        )
+    )
+
+@router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_200_OK)
+async def remove_company_member(
+    company_id: str,
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Archive a member's access to the company. Membership rows are deactivated rather than
+    deleted so that historical audit trails remain resolvable.
+    """
+    await require_company_admin(company_id, current_user, db)
+
+    target = (await db.execute(
+        select(AccountMembership).where(
+            AccountMembership.user_id == user_id,
+            AccountMembership.account_id == company_id
+        ).options(selectinload(AccountMembership.user))
+    )).scalar_one_or_none()
+
+    if not target or not target.is_active:
+        raise HTTPException(status_code=404, detail="Active membership not found for this company.")
+
+    if target.role == "owner":
+        owner_count = (await db.execute(
+            select(func.count()).select_from(AccountMembership).where(
+                AccountMembership.account_id == company_id,
+                AccountMembership.role == "owner",
+                AccountMembership.is_active == True
+            )
+        )).scalar() or 0
+        if owner_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot remove the last remaining owner. Transfer ownership first."
+            )
+
+    target.is_active = False
+
+    # If this was the removed user's active company, move them to another membership
+    removed_user = target.user
+    if removed_user and removed_user.account_id == company_id:
+        fallback = (await db.execute(
+            select(AccountMembership).where(
+                AccountMembership.user_id == user_id,
+                AccountMembership.account_id != company_id,
+                AccountMembership.is_active == True
+            ).order_by(AccountMembership.created_at.asc())
+        )).scalars().first()
+        removed_user.account_id = fallback.account_id if fallback else None
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "user_id": user_id,
+        "company_id": company_id,
+        "message": f"Removed {removed_user.email if removed_user else user_id} from this company."
+    }
