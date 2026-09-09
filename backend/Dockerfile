@@ -20,7 +20,10 @@ COPY certs/ /app/certs/
 COPY app/ /app/app/
 COPY alembic/ /app/alembic/
 COPY alembic.ini migrate.py entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
+# Strip CR and mark executable. Git on Windows can rewrite this file to CRLF,
+# which makes the kernel look for an interpreter named "/bin/sh" and the
+# container fails to start with a misleading "no such file or directory".
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 

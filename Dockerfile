@@ -45,7 +45,10 @@ COPY backend/certs/ /app/certs/
 COPY backend/app/ /app/app/
 COPY backend/alembic/ /app/alembic/
 COPY backend/alembic.ini backend/migrate.py backend/entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
+# Strip CR and mark executable. Git on Windows can rewrite this file to CRLF,
+# which makes the kernel look for an interpreter named "/bin/sh" and the
+# container fails to start with a misleading "no such file or directory".
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Copy built frontend assets from Stage 1
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist

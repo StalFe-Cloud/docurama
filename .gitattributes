@@ -1,0 +1,8 @@
+# Shell scripts and anything executed inside a Linux container must keep LF endings.
+# A CRLF shebang makes the kernel look for an interpreter named "/bin/sh\r", which fails
+# at container start with a misleading "no such file or directory".
+* text=auto
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+*.py text eol=lf
