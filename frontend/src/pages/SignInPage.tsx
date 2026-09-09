@@ -8,8 +8,11 @@ interface SignInPageProps {
 }
 
 export const SignInPage: React.FC<SignInPageProps> = ({ onSuccess, onCancel }) => {
-  const [email, setEmail] = useState('admin@docurama.com');
-  const [password, setPassword] = useState('Docurama2026!');
+  // Empty, always. Anything seeded here is compiled into the public JavaScript bundle
+  // and served to every visitor, which is how a working administrator password came to
+  // be readable at the sign-in page.
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 

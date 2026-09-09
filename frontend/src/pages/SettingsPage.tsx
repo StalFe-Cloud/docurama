@@ -457,7 +457,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   // -------------------------------------------------------------
   const [firstName, setFirstName] = useState(user?.first_name || 'Executive');
   const [lastName, setLastName] = useState(user?.last_name || 'Admin');
-  const [email, setEmail] = useState(user?.email || 'admin@docurama.com');
+  const [email, setEmail] = useState(user?.email || '');
   const [hasSavedSignature, setHasSavedSignature] = useState(true);
   const [hasSavedInitials, setHasSavedInitials] = useState(true);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);

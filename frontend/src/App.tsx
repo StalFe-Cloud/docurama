@@ -145,6 +145,31 @@ export const App: React.FC = () => {
   // 6. Direct Settings Route: /settings, /settings/account, /settings/profile, etc.
   if (path.startsWith('/settings')) {
     const subtab = path.replace('/settings', '').replace('/', '') || 'account';
+
+    // Settings is account data. It previously rendered for anyone, because a hardcoded
+    // administrator identity stood in for a signed-out visitor and made the page look
+    // authenticated while every request behind it failed.
+    if (!user) {
+      return (
+        <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+          <Header
+            currentTab="signin"
+            onSelectTab={(tab) => setCurrentTab(tab)}
+            onNewEnvelope={() => setCurrentTab('builder')}
+            user={user}
+            onLogout={handleLogout}
+            onSignIn={() => setCurrentTab('signin')}
+          />
+          <main className="flex-1 flex items-center justify-center">
+            <SignInPage
+              onSuccess={(u) => setUser(u)}
+              onCancel={() => { window.location.href = '/'; }}
+            />
+          </main>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <Header
@@ -154,13 +179,13 @@ export const App: React.FC = () => {
             else setCurrentTab(tab);
           }}
           onNewEnvelope={() => setCurrentTab('builder')}
-          user={user || { email: 'admin@docurama.com', first_name: 'Admin', role: 'admin' }}
+          user={user}
           onLogout={handleLogout}
           onSignIn={() => setCurrentTab('signin')}
           onUserUpdate={(u) => setUser(u)}
         />
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
-          <SettingsPage user={user || { email: 'admin@docurama.com', first_name: 'Admin', role: 'admin' }} initialSubtab={subtab} />
+          <SettingsPage user={user} initialSubtab={subtab} />
         </main>
       </div>
     );

@@ -284,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({
                       {activeCompanyName}
                     </span>
                     <span className="text-xs text-[#1a1a1a] truncate block font-medium mt-0.5">
-                      {user?.email || "admin@docurama.com"}
+                      {user?.email || ""}
                     </span>
                     {isDomainVerified && (
                       <div className="mt-1 flex items-center text-[10px] text-emerald-700 font-medium">
