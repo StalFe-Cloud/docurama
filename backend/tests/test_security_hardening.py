@@ -297,3 +297,71 @@ def test_wrong_password_yields_no_upgrade():
 
     assert ok is False
     assert upgraded is None
+
+
+# ---------------------------------------------------------------------------
+# Password change.
+#
+# The Profile screen has always shown a password form. Until now there was no endpoint
+# behind it and the button reported "Password changed successfully" unconditionally.
+# Someone rotating a credential they believe is exposed is exactly the person who must
+# not be wrongly reassured.
+# ---------------------------------------------------------------------------
+
+@requires_argon2
+def test_changed_password_replaces_the_old_one():
+    from app.core.security import get_password_hash, verify_and_upgrade_password
+
+    original = "OriginalPassword123!"
+    stored = get_password_hash(original)
+    assert verify_and_upgrade_password(original, stored)[0] is True
+
+    replacement = get_password_hash("ReplacementPassword456!")
+
+    # The new password works and the old one stops working. A rotation that leaves the
+    # previous credential valid has not rotated anything.
+    assert verify_and_upgrade_password("ReplacementPassword456!", replacement)[0] is True
+    assert verify_and_upgrade_password(original, replacement)[0] is False
+
+
+@requires_argon2
+def test_a_wrong_current_password_does_not_verify():
+    """The endpoint gates on this, so a wrong current password must fail closed."""
+    from app.core.security import get_password_hash, verify_and_upgrade_password
+
+    stored = get_password_hash("TheRealPassword123!")
+
+    assert verify_and_upgrade_password("not-the-password", stored)[0] is False
+    assert verify_and_upgrade_password("", stored)[0] is False
+
+
+def test_password_change_schema_requires_both_values():
+    """Neither field may be omitted: the current one is what authorises the change."""
+    from pydantic import ValidationError
+    from app.schemas import PasswordChangeRequest
+
+    with pytest.raises(ValidationError):
+        PasswordChangeRequest(new_password="LongEnoughPassword1")
+    with pytest.raises(ValidationError):
+        PasswordChangeRequest(current_password="whatever")
+
+    req = PasswordChangeRequest(current_password="old", new_password="LongEnoughPassword1")
+    assert req.current_password == "old"
+
+
+def test_change_password_endpoint_exists_and_is_guarded():
+    """
+    The rules the endpoint enforces, asserted against its source: a verified current
+    password, a minimum length, and a new value that actually differs.
+    """
+    import pathlib
+
+    auth = (pathlib.Path(__file__).resolve().parent.parent / "app" / "api" / "auth.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert '@router.post("/change-password"' in auth
+    assert "verify_and_upgrade_password(" in auth
+    assert "current password is incorrect" in auth
+    assert "at least 12 characters" in auth
+    assert "must differ from the current one" in auth

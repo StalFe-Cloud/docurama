@@ -1,5 +1,6 @@
 from app.schemas.schemas import (
     UserCreate, UserLogin, UserOut, TokenResponse,
+    PasswordChangeRequest, PasswordChangeResponse,
     CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse,
     CompanyInviteRequest, CompanyInviteResponse,
     ApiKeyCreate, ApiKeyOut, ApiKeyCreatedOut,
@@ -24,6 +25,7 @@ from app.schemas.schemas import (
 
 __all__ = [
     "UserCreate", "UserLogin", "UserOut", "TokenResponse",
+    "PasswordChangeRequest", "PasswordChangeResponse",
     "CompanyCreate", "CompanyOut", "CompanyUpdate", "CompanyMemberOut", "CompanySwitchResponse",
     "CompanyInviteRequest", "CompanyInviteResponse",
     "ApiKeyCreate", "ApiKeyOut", "ApiKeyCreatedOut",

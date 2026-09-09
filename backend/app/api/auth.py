@@ -12,7 +12,10 @@ from app.core.security import (
     create_access_token, decode_access_token,
 )
 from app.models import User, Account, AccountMembership, DomainVerification, ApiKey
-from app.schemas import UserCreate, UserLogin, UserOut, TokenResponse, CompanyOut
+from app.schemas import (
+    UserCreate, UserLogin, UserOut, TokenResponse, CompanyOut,
+    PasswordChangeRequest, PasswordChangeResponse,
+)
 from app.services import api_keys as api_key_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -298,6 +301,61 @@ async def get_me(
     db: AsyncSession = Depends(get_db)
 ):
     return await build_user_out(current_user, db)
+
+@router.post("/change-password", response_model=PasswordChangeResponse)
+async def change_password(
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Change the signed-in user's password.
+
+    The Profile screen has always shown a password form, but there was no endpoint behind
+    it: the button reported "Password changed successfully" and nothing happened. Someone
+    changing a password because they believe it is exposed is exactly the person who must
+    not be told a rotation succeeded when it did not.
+
+    The current password is required and verified. Knowing a live session is not enough
+    to take a credential over, and a wrong current password is rejected rather than
+    quietly ignored.
+    """
+    # verify_and_upgrade_password rather than a bare check, matching sign-in: the stored
+    # hash may still be bcrypt from before argon2 became the default, and the returned
+    # replacement is discarded here only because the hash is about to be rewritten anyway.
+    current_ok, _rehash = verify_and_upgrade_password(
+        payload.current_password, current_user.hashed_password
+    )
+    if not current_ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your current password is incorrect.",
+        )
+
+    new_password = payload.new_password or ""
+    if len(new_password) < 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose a password of at least 12 characters.",
+        )
+    if new_password == payload.current_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The new password must differ from the current one.",
+        )
+
+    current_user.hashed_password = get_password_hash(new_password)
+    current_user.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    # The session cookie is a JWT signed with the deployment secret, so it survives a
+    # password change. That is the expected behaviour here: the user changing their own
+    # password stays signed in on the device they are using.
+    return PasswordChangeResponse(
+        success=True,
+        message="Your password has been changed. Use it the next time you sign in.",
+    )
+
 
 @router.post("/logout")
 async def logout(response: Response):

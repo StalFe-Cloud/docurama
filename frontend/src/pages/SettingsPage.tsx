@@ -325,6 +325,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
     loadCertificates();
     loadApiKeys();
     loadNotificationSettings();
+    loadSigningSettings();
     loadSmtp('account');
   }, []);
 
@@ -512,6 +513,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const [smtp, setSmtp] = useState<SmtpSettings | null>(null);
   const [smtpScope, setSmtpScope] = useState<'account' | 'platform'>('account');
   const [smtpPassword, setSmtpPassword] = useState('');
+  const [sectionError, setSectionError] = useState<string | null>(null);
+  const [unavailableNotice, setUnavailableNotice] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [smtpBusy, setSmtpBusy] = useState(false);
   const [smtpError, setSmtpError] = useState<string | null>(null);
   const [smtpTestTo, setSmtpTestTo] = useState('');
@@ -569,6 +577,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const triggerSave = (msg: string = 'Configuration preferences saved successfully.') => {
     setSaveNotice(msg);
     setTimeout(() => setSaveNotice(null), 3500);
+  };
+
+  /**
+   * For controls whose feature is not built. They previously showed the same green
+   * confirmation as a real save, so the screen reported work it had not done. Saying
+   * "not available" is the honest form and is what belongs here until the feature
+   * exists.
+   */
+  const notAvailable = (feature: string) => {
+    setUnavailableNotice(`${feature} is not available yet, so nothing was changed.`);
+    setTimeout(() => setUnavailableNotice(null), 4500);
   };
 
   const loadCertificates = async () => {
@@ -666,6 +685,95 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
       if (typeof s.template === 'string') setSmsTemplate(s.template);
     } catch {
       // Leave the on-screen defaults in place when the section cannot be read.
+    }
+  };
+
+  const loadSigningSettings = async () => {
+    try {
+      const [signing, compliance] = await Promise.all([
+        api.getSettingSection('signing'),
+        api.getSettingSection('compliance'),
+      ]);
+
+      const s = signing.data || {};
+      if (typeof s.enforce_signing_order === 'boolean') setEnforceSigningOrder(s.enforce_signing_order);
+      if (typeof s.allow_decline === 'boolean') setAllowDecline(s.allow_decline);
+      if (typeof s.allow_delegation === 'boolean') setAllowDelegate(s.allow_delegation);
+      if (typeof s.allow_resubmission === 'boolean') setAllowResubmit(s.allow_resubmission);
+      if (typeof s.show_signature_id === 'boolean') setWithSignatureId(s.show_signature_id);
+      if (typeof s.flatten_pdf_fields === 'boolean') setFlattenPdf(s.flatten_pdf_fields);
+      if (typeof s.combine_audit_log === 'boolean') setCombinePdfAuditLog(s.combine_audit_log);
+      if (typeof s.allow_multiple_signatures === 'boolean') setMultiSignatures(s.allow_multiple_signatures);
+      if (typeof s.prefill_signature === 'boolean') setPrefillSignatures(s.prefill_signature);
+      if (typeof s.expirable_links === 'boolean') setExpirableLinks(s.expirable_links);
+      if (typeof s.require_auth_downloads === 'boolean') setRequireAuthDownloads(s.require_auth_downloads);
+      if (typeof s.download_filename_format === 'string') setDownloadFormat(s.download_filename_format);
+      if (typeof s.tsa_url === 'string' && s.tsa_url) setTimeserverUrl(s.tsa_url);
+
+      const c = compliance.data || {};
+      if (typeof c.require_reason_for_signing === 'boolean') setRequireSigningReason(c.require_reason_for_signing);
+      if (typeof c.enforce_two_factor === 'boolean') setForce2fa(c.enforce_two_factor);
+
+    } catch {
+      // Leave the on-screen defaults when a section cannot be read.
+    }
+  };
+
+  const saveSection = async (section: string, patch: Record<string, any>, message: string) => {
+    try {
+      setSectionError(null);
+      await api.updateSettingSection(section, patch);
+      triggerSave(message);
+    } catch (e: any) {
+      // A failure has to be visible. These controls previously reported success
+      // unconditionally, which is the defect being removed.
+      setSectionError(e?.message || `Failed to save ${section} settings.`);
+    }
+  };
+
+  const handleSaveOrganisation = async () => {
+    const companyId = user?.account_id;
+    if (!companyId) return;
+    try {
+      setSectionError(null);
+      await api.updateCompany(companyId, { name: companyName, timezone });
+      await loadCompanies();
+      triggerSave('Organization profile updated.');
+    } catch (e: any) {
+      setSectionError(e?.message || 'Failed to update the organization profile.');
+    }
+  };
+
+  const saveSigningSetting = (patch: Record<string, any>, message: string) =>
+    saveSection('signing', patch, message);
+
+  const saveComplianceSetting = (patch: Record<string, any>, message: string) =>
+    saveSection('compliance', patch, message);
+
+  const saveProfileSetting = (patch: Record<string, any>, message: string) =>
+    saveSection('profile', patch, message);
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    if (!currentPassword || !newPassword) {
+      setPasswordError('Enter your current password and a new one.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('The new passwords do not match.');
+      return;
+    }
+    try {
+      setPasswordBusy(true);
+      const res = await api.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      triggerSave(res.message);
+    } catch (e: any) {
+      setPasswordError(e?.message || 'Failed to change your password.');
+    } finally {
+      setPasswordBusy(false);
     }
   };
 
@@ -892,6 +1000,33 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
         </div>
       </div>
 
+      {/* A save that failed. Without this the request errors silently and the screen
+          is indistinguishable from one where the save worked. */}
+      {sectionError && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="bg-red-50 text-red-800 px-4 py-3 rounded-lg shadow-notion-mockup border border-red-300 flex items-start space-x-3 text-xs font-medium max-w-sm">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <span className="block font-semibold">Not saved</span>
+              <span>{sectionError}</span>
+            </div>
+            <button onClick={() => setSectionError(null)} className="text-red-500 hover:text-red-700 shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Not-implemented notice. Deliberately not the success styling. */}
+      {unavailableNotice && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="bg-amber-50 text-amber-900 px-4 py-3 rounded-lg shadow-notion-mockup border border-amber-300 flex items-center space-x-3 text-xs font-medium">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>{unavailableNotice}</span>
+          </div>
+        </div>
+      )}
+
       {/* Floating Save Confirmation Notification */}
       {saveNotice && (
         <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-3 duration-200">
@@ -975,7 +1110,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
 
               <div className="pt-2 flex justify-end">
                 <button
-                  onClick={() => triggerSave('Organization profile updated.')}
+                  onClick={handleSaveOrganisation}
                   className="btn btn-primary px-6 h-11 font-semibold text-sm"
                 >
                   Save Changes
@@ -1287,7 +1422,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 checked={force2fa}
                 onChange={(e) => {
                   setForce2fa(e.target.checked);
-                  triggerSave('Two-factor enforcement preference updated.');
+                  saveComplianceSetting({ enforce_two_factor: e.target.checked }, 'Two-factor enforcement preference updated.');
                 }}
                 className="toggle"
               />
@@ -1317,7 +1452,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={withSignatureId}
                   onChange={(e) => {
                     setWithSignatureId(e.target.checked);
-                    triggerSave('Signature ID display preference updated.');
+                    saveSigningSetting({ show_signature_id: e.target.checked }, 'Signature ID display preference updated.');
                   }}
                   className="toggle"
                 />
@@ -1333,7 +1468,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={requireSigningReason}
                   onChange={(e) => {
                     setRequireSigningReason(e.target.checked);
-                    triggerSave('Signing reason requirement updated.');
+                    saveComplianceSetting({ require_reason_for_signing: e.target.checked }, 'Signing reason requirement updated.');
                   }}
                   className="toggle"
                 />
@@ -1349,7 +1484,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={combinePdfAuditLog}
                   onChange={(e) => {
                     setCombinePdfAuditLog(e.target.checked);
-                    triggerSave('PDF audit log combination preference updated.');
+                    saveSigningSetting({ combine_audit_log: e.target.checked }, 'PDF audit log combination preference updated.');
                   }}
                   className="toggle"
                 />
@@ -1365,7 +1500,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={enforceSigningOrder}
                   onChange={(e) => {
                     setEnforceSigningOrder(e.target.checked);
-                    triggerSave('Signing order enforcement updated.');
+                    saveSigningSetting({ enforce_signing_order: e.target.checked }, 'Signing order enforcement updated.');
                   }}
                   className="toggle"
                 />
@@ -1396,7 +1531,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={expirableLinks}
                   onChange={(e) => {
                     setExpirableLinks(e.target.checked);
-                    triggerSave('Download link expiration updated.');
+                    saveSigningSetting({ expirable_links: e.target.checked }, 'Download link expiration updated.');
                   }}
                   className="toggle"
                 />
@@ -1412,7 +1547,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={requireAuthDownloads}
                   onChange={(e) => {
                     setRequireAuthDownloads(e.target.checked);
-                    triggerSave('Authentication requirement updated.');
+                    saveSigningSetting({ require_auth_downloads: e.target.checked }, 'Authentication requirement updated.');
                   }}
                   className="toggle"
                 />
@@ -1428,7 +1563,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={prefillSignatures}
                   onChange={(e) => {
                     setPrefillSignatures(e.target.checked);
-                    triggerSave('Signature prefill preference updated.');
+                    saveSigningSetting({ prefill_signature: e.target.checked }, 'Signature prefill preference updated.');
                   }}
                   className="toggle"
                 />
@@ -1444,7 +1579,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={allowResubmit}
                   onChange={(e) => {
                     setAllowResubmit(e.target.checked);
-                    triggerSave('Resubmission policy updated.');
+                    saveSigningSetting({ allow_resubmission: e.target.checked }, 'Resubmission policy updated.');
                   }}
                   className="toggle"
                 />
@@ -1460,7 +1595,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={allowDecline}
                   onChange={(e) => {
                     setAllowDecline(e.target.checked);
-                    triggerSave('Decline option updated.');
+                    saveSigningSetting({ allow_decline: e.target.checked }, 'Decline option updated.');
                   }}
                   className="toggle"
                 />
@@ -1476,7 +1611,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={allowDelegate}
                   onChange={(e) => {
                     setAllowDelegate(e.target.checked);
-                    triggerSave('Delegation option updated.');
+                    saveSigningSetting({ allow_delegation: e.target.checked }, 'Delegation option updated.');
                   }}
                   className="toggle"
                 />
@@ -1506,7 +1641,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               <button
                 onClick={() => {
                   if (confirm('CAUTION: Are you absolutely certain you want to delete this workspace? This cannot be undone.')) {
-                    triggerSave('Workspace deletion initiated.');
+                    notAvailable('Workspace deletion');
                   }
                 }}
                 className="btn btn-outline btn-error text-xs font-semibold px-4 py-2.5 rounded-md whitespace-nowrap self-start sm:self-auto"
@@ -1572,7 +1707,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               </div>
               <div className="pt-2 flex justify-end">
                 <button
-                  onClick={() => triggerSave('Profile credentials updated.')}
+                  onClick={() => saveProfileSetting({ contact_email: email }, 'Profile updated.')}
                   className="btn btn-primary px-6 h-11 font-semibold text-sm"
                 >
                   Update Profile
@@ -1611,7 +1746,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                         <button
                           onClick={() => {
                             setHasSavedSignature(false);
-                            triggerSave('Signature stamp removed.');
+                            notAvailable('Saved signature stamps');
                           }}
                           className="absolute top-2 right-2 text-xs font-semibold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md"
                         >
@@ -1654,7 +1789,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                         <button
                           onClick={() => {
                             setHasSavedInitials(false);
-                            triggerSave('Initials stamp removed.');
+                            notAvailable('Saved initials stamps');
                           }}
                           className="absolute top-2 right-2 text-xs font-semibold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md font-sans"
                         >
@@ -1694,22 +1829,50 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
             <div className="space-y-4 max-w-xl">
               <div>
                 <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">New Password</label>
-                <input type="password" placeholder="••••••••••••" className="base-input w-full h-11 px-3.5" />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 12 characters"
+                  className="base-input w-full h-11 px-3.5"
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">Confirm Password</label>
-                <input type="password" placeholder="••••••••••••" className="base-input w-full h-11 px-3.5" />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat the new password"
+                  className="base-input w-full h-11 px-3.5"
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">Current Password</label>
-                <input type="password" placeholder="••••••••••••" className="base-input w-full h-11 px-3.5" />
-                <p className="mt-1.5 text-xs text-[#5d5b54]">
-                  Forgot your password? <button onClick={() => triggerSave('Password reset link dispatched.')} className="text-[#0075de] hover:underline font-semibold">Click here to reset it via email</button>.
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Your current password"
+                  className="base-input w-full h-11 px-3.5"
+                />
+                <p className="mt-1.5 text-xs text-[#787671]">
+                  Password reset by email is not available yet. Ask a company administrator
+                  to issue you a new password.
                 </p>
               </div>
+              {passwordError && (
+                <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700">
+                  {passwordError}
+                </div>
+              )}
               <div className="pt-2">
-                <button onClick={() => triggerSave('Password changed successfully.')} className="btn btn-primary px-6 h-11 font-semibold text-sm">
-                  Update Password
+                <button
+                  onClick={handleChangePassword}
+                  disabled={passwordBusy}
+                  className="btn btn-primary px-6 h-11 font-semibold text-sm disabled:opacity-60"
+                >
+                  {passwordBusy ? 'Updating...' : 'Update Password'}
                 </button>
               </div>
             </div>
@@ -1751,7 +1914,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   <button
                     onClick={() => {
                       setTwoFactorConfigured(false);
-                      triggerSave('2FA has been deactivated.');
+                      notAvailable('Two-factor authentication');
                     }}
                     className="btn btn-outline btn-error text-xs font-semibold px-4 py-2 rounded-md"
                   >
@@ -2135,7 +2298,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               </div>
               <div className="pt-2">
                 <button
-                  onClick={() => triggerSave('RFC 3161 TSA endpoint saved and validated.')}
+                  onClick={() => saveSigningSetting({ tsa_url: timeserverUrl }, 'RFC 3161 timestamp authority saved.')}
                   className="btn btn-primary px-6 py-2.5 rounded-md text-sm font-semibold"
                 >
                   Save Timeserver URL
@@ -2167,7 +2330,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={multiSignatures}
                   onChange={(e) => {
                     setMultiSignatures(e.target.checked);
-                    triggerSave('Multiple digital signature preference updated.');
+                    saveSigningSetting({ allow_multiple_signatures: e.target.checked }, 'Multiple digital signature preference updated.');
                   }}
                   className="toggle"
                 />
@@ -2183,7 +2346,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   checked={flattenPdf}
                   onChange={(e) => {
                     setFlattenPdf(e.target.checked);
-                    triggerSave('PDF form field flattening updated.');
+                    saveSigningSetting({ flatten_pdf_fields: e.target.checked }, 'PDF form field flattening updated.');
                   }}
                   className="toggle"
                 />
@@ -2198,7 +2361,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   value={downloadFormat}
                   onChange={(e) => {
                     setDownloadFormat(e.target.value);
-                    triggerSave('Download filename format updated.');
+                    saveSigningSetting({ download_filename_format: e.target.value }, 'Download filename format updated.');
                   }}
                   className="base-select bg-[#fafaf9]/50 focus:bg-white rounded-md text-sm max-w-md w-full h-11"
                 >
@@ -2269,7 +2432,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                       {smtpScope === 'platform' ? 'Use this as the platform default' : 'Send using this company\u2019s own mail server'}
                     </span>
                     <p className="text-[11px] text-[#787671] mt-0.5">
-                      {smtp.effective_source === 'account'
+                      {!smtp.enabled && smtp.host
+                        ? 'This profile is saved but switched off, so no mail is being sent. Turn it on to start delivering.'
+                        : smtp.effective_source === 'account'
                         ? 'Mail is currently sent using this company\u2019s own server.'
                         : smtp.effective_source === 'platform'
                         ? 'Mail is currently sent using the platform default.'
@@ -3274,7 +3439,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                     setTwoFactorConfigured(true);
                     setShowTwoFactorModal(false);
                     setTotpInputCode('');
-                    triggerSave('Two-factor authentication successfully enabled.');
+                    notAvailable('Two-factor authentication');
                   }}
                   className="btn btn-primary text-xs px-5 h-10 font-semibold"
                 >
@@ -3316,7 +3481,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={() => {
                     setHasSavedSignature(true);
                     setShowSignatureModal(false);
-                    triggerSave('Signature stamp uploaded.');
+                    notAvailable('Saved signature stamps');
                   }} />
                 </label>
               </div>
@@ -3334,7 +3499,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   onClick={() => {
                     setHasSavedSignature(true);
                     setShowSignatureModal(false);
-                    triggerSave('Pre-saved signature stamp saved.');
+                    notAvailable('Saved signature stamps');
                   }}
                   className="btn btn-primary text-xs px-5 h-10 font-semibold"
                 >
@@ -3386,7 +3551,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   onClick={() => {
                     setHasSavedInitials(true);
                     setShowInitialsModal(false);
-                    triggerSave('Initials stamp saved.');
+                    notAvailable('Saved initials stamps');
                   }}
                   className="btn btn-primary text-xs px-5 h-10 font-semibold"
                 >

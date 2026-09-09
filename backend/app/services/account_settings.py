@@ -13,7 +13,7 @@ from typing import Any, Dict
 # "smtp" is deliberately not here. This module's read path returns stored data
 # verbatim, and the mail profile holds an encrypted credential that must never reach
 # a browser. It has dedicated endpoints that redact on read and encrypt on write.
-VALID_SECTIONS = ["notifications", "sms", "mcp", "branding", "compliance"]
+VALID_SECTIONS = ["notifications", "sms", "mcp", "branding", "compliance", "signing", "profile"]
 
 # First-load state. Reported when no row exists yet, so the UI shows the same
 # thing before and after the first save.
@@ -29,6 +29,29 @@ DEFAULT_SECTION_DATA: Dict[str, Dict[str, Any]] = {
     "mcp": {"enabled": False, "allowed_tools": []},
     "branding": {"accent_color": "#1D72FE", "logo_url": None},
     "compliance": {"part_11_enabled": False, "require_reason_for_signing": False},
+    # Signing behaviour and document delivery. These were rendered as live controls that
+    # reported success and stored nothing, so the defaults below are what every account
+    # has effectively been running with.
+    "signing": {
+        "enforce_signing_order": True,
+        "allow_decline": True,
+        "allow_delegation": True,
+        "allow_resubmission": False,
+        "show_signature_id": True,
+        "flatten_pdf_fields": True,
+        "combine_audit_log": True,
+        "allow_multiple_signatures": True,
+        "prefill_signature": False,
+        "download_filename_format": "{document.name} - {submission.status}.pdf",
+        "download_link_expiry_hours": 168,
+        "tsa_url": None,
+    },
+    # Organisation-facing profile fields shown on the Account tab.
+    "profile": {
+        "organisation_name": None,
+        "contact_email": None,
+        "support_url": None,
+    },
 }
 
 

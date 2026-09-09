@@ -71,6 +71,14 @@ class CompanySwitchResponse(BaseModel):
     access_token: str
     user: Any
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class PasswordChangeResponse(BaseModel):
+    success: bool
+    message: str
+
 class UserOut(BaseModel):
     id: str
     email: EmailStr

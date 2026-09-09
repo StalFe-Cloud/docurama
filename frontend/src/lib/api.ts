@@ -364,6 +364,18 @@ export const api = {
     }
     return res.json();
   },
+  changePassword: async (current_password: string, new_password: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password, new_password }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to change password');
+    }
+    return res.json();
+  },
   logout: async () => {
     await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
   },
