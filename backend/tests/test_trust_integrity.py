@@ -8,6 +8,7 @@ These tests pin the rule that no failure path may produce a positive assertion.
 """
 import os
 import tempfile
+from datetime import datetime, timezone
 
 import pytest
 
@@ -468,3 +469,134 @@ async def test_blocking_helper_survives_a_running_event_loop():
         blocking_helper_like_pyhanko()
 
     assert await asyncio.to_thread(blocking_helper_like_pyhanko) == "sealed"
+
+
+# ---------------------------------------------------------------------------
+# Signing capability.
+#
+# /api/health reported "ready" whenever two files existed on disk. A certificate with
+# the wrong passphrase, or one past its validity window, is present and useless: every
+# envelope would complete unsealed while the endpoint said the deployment was ready.
+# Capability must be established by opening the certificate, not by stat()ing a path.
+# ---------------------------------------------------------------------------
+
+def _clear_capability_cache():
+    from app.services import crypto_engine
+    crypto_engine._capability_cache["checked_at"] = None
+    crypto_engine._capability_cache["result"] = None
+
+
+def test_missing_certificate_is_not_ready(monkeypatch):
+    from app.core import config
+    from app.services.crypto_engine import signing_capability
+
+    _clear_capability_cache()
+    monkeypatch.setattr(config.settings, "P12_PATH", "/nonexistent/missing.p12")
+
+    result = signing_capability(force=True)
+
+    assert result["ready"] is False
+    assert result["status"] == "unavailable"
+    assert result["certificate_installed"] is False
+    assert "unsealed" in result["detail"]
+
+
+def test_unopenable_certificate_is_not_ready(unsigned_pdf_path, monkeypatch):
+    """
+    The exact false positive: a file exists, so the old check said "ready", but the
+    passphrase is wrong so nothing can be signed.
+    """
+    from app.core import config
+    from app.services import crypto_engine
+
+    _clear_capability_cache()
+    # A real file that is not a loadable PKCS#12, standing in for a wrong passphrase.
+    monkeypatch.setattr(config.settings, "P12_PATH", unsigned_pdf_path)
+    monkeypatch.setattr(crypto_engine, "load_docurama_p12", lambda: (None, None, []))
+
+    result = crypto_engine.signing_capability(force=True)
+
+    assert result["certificate_installed"] is True     # the file is there
+    assert result["ready"] is False                    # but it cannot sign
+    assert result["status"] == "unusable"
+    assert "passphrase" in result["detail"]
+
+
+def test_capability_never_leaks_the_path_or_passphrase(monkeypatch):
+    """The result is served on a public endpoint."""
+    from app.core import config
+    from app.services.crypto_engine import signing_capability
+
+    _clear_capability_cache()
+    monkeypatch.setattr(config.settings, "P12_PATH", "/very/secret/path/signer.p12")
+    monkeypatch.setattr(config.settings, "P12_PASSWORD", "hunter2-the-real-passphrase")
+
+    blob = repr(signing_capability(force=True))
+
+    assert "/very/secret/path" not in blob
+    assert "hunter2" not in blob
+
+
+def _fake_cert(not_before, not_after):
+    class FakeName:
+        def rfc4514_string(self):
+            return "CN=Test Signer,O=Test,C=FR"
+
+    class FakeCert:
+        not_valid_before_utc = not_before
+        not_valid_after_utc = not_after
+        subject = FakeName()
+        issuer = FakeName()
+
+    return FakeCert()
+
+
+@pytest.mark.parametrize("days_out,expected_status,expected_ready", [
+    (-1, "expired", False),           # past its validity window
+    (10, "expiring_critical", True),  # inside the critical window
+    (60, "expiring_soon", True),      # inside the warning window
+    (400, "ready", True),             # comfortably valid
+])
+def test_expiry_is_classified_and_gates_readiness(days_out, expected_status, expected_ready, monkeypatch):
+    """
+    An expired signer does not degrade gracefully: sealing simply stops. The warning
+    has to arrive before that, not after.
+    """
+    from datetime import timedelta
+    from app.core import config
+    from app.services import crypto_engine
+
+    _clear_capability_cache()
+    now = datetime.now(timezone.utc)
+    cert = _fake_cert(now - timedelta(days=365), now + timedelta(days=days_out))
+
+    monkeypatch.setattr(config.settings, "P12_PATH", __file__)          # any existing file
+    monkeypatch.setattr(config.settings, "ROOT_CA_PATH", __file__)
+    monkeypatch.setattr(crypto_engine, "load_docurama_p12", lambda: ("key", cert, []))
+
+    result = crypto_engine.signing_capability(force=True)
+
+    assert result["status"] == expected_status
+    assert result["ready"] is expected_ready
+    assert result["days_until_expiry"] == days_out - 1 or result["days_until_expiry"] == days_out
+
+
+def test_missing_root_ca_is_reported_as_degraded_not_ready(monkeypatch):
+    """Sealing still works, but revocation info cannot be embedded, so LTV is out of reach."""
+    from datetime import timedelta
+    from app.core import config
+    from app.services import crypto_engine
+
+    _clear_capability_cache()
+    now = datetime.now(timezone.utc)
+    cert = _fake_cert(now - timedelta(days=1), now + timedelta(days=400))
+
+    monkeypatch.setattr(config.settings, "P12_PATH", __file__)
+    monkeypatch.setattr(config.settings, "ROOT_CA_PATH", "/nonexistent/root.crt")
+    monkeypatch.setattr(crypto_engine, "load_docurama_p12", lambda: ("key", cert, []))
+
+    result = crypto_engine.signing_capability(force=True)
+
+    assert result["ready"] is True
+    assert result["status"] == "degraded"
+    assert "long-term validation" in result["detail"]

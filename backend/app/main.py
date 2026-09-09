@@ -11,6 +11,7 @@ from app.core.database import engine
 from app.api.router import api_router
 from app.api.ws import router as ws_router
 from app.services.reminder_sweeper import reminder_loop
+from app.services.crypto_engine import signing_capability
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,27 +65,32 @@ async def health_check():
     """
     Report the service's real signing readiness.
 
-    This previously returned a fixed "Docurama Root CA Certified" string regardless of
-    whether any signing material was installed, so a deployment that could not seal
-    anything still advertised itself as certified.
-    """
-    has_signing_cert = os.path.exists(settings.P12_PATH)
-    has_root_ca = os.path.exists(settings.ROOT_CA_PATH)
+    Two rounds of the same defect have been removed here. It first returned a fixed
+    "Docurama Root CA Certified" string regardless of whether any signing material
+    existed. It then reported "ready" whenever two files were present on disk, which
+    is not capability: a certificate with the wrong passphrase, or one past its
+    validity window, is present and useless, and every envelope would have completed
+    unsealed while the endpoint said the deployment was ready.
 
-    if has_signing_cert and has_root_ca:
-        signing = "ready"
-    elif has_signing_cert:
-        signing = "signing certificate present, root CA missing (long-term validation unavailable)"
-    else:
-        signing = "unavailable: no signing certificate installed, documents will complete unsealed"
+    The answer now comes from opening the certificate and reading its validity window.
+    """
+    # Cached in the engine, so the 15 second container healthcheck does not reparse a
+    # PKCS#12 on every probe.
+    capability = await asyncio.to_thread(signing_capability)
 
     return {
         "status": "healthy",
         "service": "docurama-backend",
         "version": settings.VERSION,
-        "signing": signing,
-        "signing_certificate_installed": has_signing_cert,
-        "root_ca_installed": has_root_ca,
+        "signing": capability["status"],
+        "signing_ready": capability["ready"],
+        "signing_detail": capability["detail"],
+        "signing_certificate_installed": capability["certificate_installed"],
+        "root_ca_installed": capability["root_ca_installed"],
+        # A certificate is public material; it is embedded in every document it signs.
+        "signing_certificate_subject": capability["subject"],
+        "signing_certificate_expires_at": capability["expires_at"],
+        "signing_certificate_days_remaining": capability["days_until_expiry"],
     }
 
 # Mount built React frontend SPA if dist directory is present

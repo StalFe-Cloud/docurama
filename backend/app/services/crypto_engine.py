@@ -62,6 +62,128 @@ def load_docurama_p12():
 load_Docurama_p12 = load_docurama_p12
 
 
+# A certificate nearing expiry is reported before it stops working, because an expired
+# signer does not degrade gracefully: every envelope silently completes unsealed.
+EXPIRY_CRITICAL_DAYS = 30
+EXPIRY_WARNING_DAYS = 90
+
+# Parsing a PKCS#12 on every request would be wasteful, and the container healthcheck
+# runs every 15 seconds. The answer changes only when the certificate is replaced.
+_CAPABILITY_CACHE_SECONDS = 300
+_capability_cache = {"checked_at": None, "result": None}
+
+
+def signing_capability(force: bool = False) -> Dict[str, Any]:
+    """
+    Report whether this deployment can actually seal a document.
+
+    Existence of a file is not capability. A certificate whose passphrase is wrong,
+    whose validity window has passed, or which is not a PKCS#12 at all, is present on
+    disk and useless. Reporting "ready" on the strength of a path existing is the same
+    unchecked claim this module exists to eliminate, one level up.
+
+    Returns a dict whose "ready" key is True only when the certificate loaded and is
+    currently within its validity window. Never raises, and never includes the
+    passphrase or a filesystem path, since this is surfaced on a public endpoint.
+    """
+    now = datetime.now(timezone.utc)
+
+    cached = _capability_cache.get("result")
+    checked_at = _capability_cache.get("checked_at")
+    if not force and cached is not None and checked_at is not None:
+        if (now - checked_at).total_seconds() < _CAPABILITY_CACHE_SECONDS:
+            return dict(cached)
+
+    result: Dict[str, Any] = {
+        "ready": False,
+        "status": "unavailable",
+        "detail": "",
+        "certificate_installed": os.path.exists(settings.P12_PATH),
+        "root_ca_installed": os.path.exists(settings.ROOT_CA_PATH),
+        "subject": None,
+        "issuer": None,
+        "expires_at": None,
+        "days_until_expiry": None,
+    }
+
+    if not result["certificate_installed"]:
+        result["status"] = "unavailable"
+        result["detail"] = "No signing certificate is installed; documents will complete unsealed."
+        _cache(now, result)
+        return dict(result)
+
+    key, cert, _extra = load_docurama_p12()
+    if cert is None or key is None:
+        # The usual cause is a wrong DOCURAMA_P12_PASSWORD. Say so plainly: this used
+        # to present as "ready" while every seal failed.
+        result["status"] = "unusable"
+        result["detail"] = (
+            "The signing certificate could not be opened. The configured passphrase is "
+            "probably wrong, or the file is not a valid PKCS#12. Documents will complete unsealed."
+        )
+        _cache(now, result)
+        return dict(result)
+
+    try:
+        not_before = cert.not_valid_before_utc
+        not_after = cert.not_valid_after_utc
+    except AttributeError:  # cryptography < 42 naming
+        not_before = cert.not_valid_before.replace(tzinfo=timezone.utc)
+        not_after = cert.not_valid_after.replace(tzinfo=timezone.utc)
+
+    days_remaining = (not_after - now).days
+    result.update({
+        "subject": cert.subject.rfc4514_string(),
+        "issuer": cert.issuer.rfc4514_string(),
+        "expires_at": not_after.isoformat(),
+        "days_until_expiry": days_remaining,
+    })
+
+    if now > not_after:
+        result["status"] = "expired"
+        result["detail"] = (
+            f"The signing certificate expired on {not_after.date()}. "
+            "Documents will complete unsealed until it is replaced."
+        )
+    elif now < not_before:
+        result["status"] = "not_yet_valid"
+        result["detail"] = f"The signing certificate is not valid until {not_before.date()}."
+    elif not result["root_ca_installed"]:
+        # Sealing works, but without the root there is no validation context, so
+        # revocation information cannot be embedded and LTV is unreachable.
+        result["ready"] = True
+        result["status"] = "degraded"
+        result["detail"] = (
+            "Signing is available, but the root CA is missing, so long-term validation "
+            "information cannot be embedded."
+        )
+    elif days_remaining <= EXPIRY_CRITICAL_DAYS:
+        result["ready"] = True
+        result["status"] = "expiring_critical"
+        result["detail"] = (
+            f"The signing certificate expires in {days_remaining} day(s), on {not_after.date()}. "
+            "Replace it now; sealing stops the moment it expires."
+        )
+    elif days_remaining <= EXPIRY_WARNING_DAYS:
+        result["ready"] = True
+        result["status"] = "expiring_soon"
+        result["detail"] = (
+            f"The signing certificate expires in {days_remaining} day(s), on {not_after.date()}."
+        )
+    else:
+        result["ready"] = True
+        result["status"] = "ready"
+        result["detail"] = f"Signing is available. Certificate valid until {not_after.date()}."
+
+    _cache(now, result)
+    return dict(result)
+
+
+def _cache(now, result) -> None:
+    _capability_cache["checked_at"] = now
+    _capability_cache["result"] = dict(result)
+
+
 def _build_validation_context():
     """
     Build a validation context that can validate both our own signer and the
