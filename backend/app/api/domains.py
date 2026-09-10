@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.api.auth import get_current_user
 from app.models import User, DomainVerification, Account, AccountMembership
 from app.schemas import (

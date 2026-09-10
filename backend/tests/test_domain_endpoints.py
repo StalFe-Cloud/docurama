@@ -34,6 +34,21 @@ async def member_and_admin(db_session):
     return account, admin, member, domain
 
 
+@pytest.fixture
+async def owner_with_membership(db_session):
+    account = Account(name="Owner Co")
+    db_session.add(account)
+    await db_session.flush()
+    owner = User(account_id=account.id, email="owner@ownerco.example",
+                 hashed_password=get_password_hash("a-long-password-1234"),
+                 role="owner", is_active=True)
+    db_session.add(owner)
+    await db_session.flush()
+    db_session.add(AccountMembership(user_id=owner.id, account_id=account.id, role="owner"))
+    await db_session.commit()
+    return account, owner
+
+
 async def _login(client, email, password="a-long-password-1234"):
     resp = await client.post("/api/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
@@ -76,3 +91,13 @@ async def test_public_status_reveals_no_organization(client, member_and_admin):
     assert resp.status_code == 200
     body = resp.json()
     assert body == {"domain": "acme.example", "is_verified": True}
+
+
+async def test_create_domain_registers_pending_domain(client, owner_with_membership):
+    account, owner = owner_with_membership
+    await _login(client, "owner@ownerco.example")
+    resp = await client.post("/api/domains", json={"domain": "acme.example"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["domain"] == "acme.example"
+    assert body["status"] == "pending"
