@@ -15,7 +15,12 @@ FORBIDDEN_DASHES = {"\u2014": "em-dash (U+2014)", "\u2013": "en-dash (U+2013)"}
 
 
 def audit_directory(root_dir):
-    exclude_dirs = [".git", "node_modules", "dist", ".pytest_cache", "__pycache__", "data", "storage"]
+    # Local agent-harness and review scratch state is not product copy; quoting
+    # third-party material inside briefs and diffs must not flip the gate.
+    exclude_dirs = [
+        ".git", "node_modules", "dist", ".pytest_cache", "__pycache__",
+        "data", "storage", ".zcode", ".superpowers",
+    ]
 
     term_findings = []
     dash_findings = []

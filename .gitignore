@@ -54,3 +54,6 @@ cookies.txt
 
 # Local agent-harness scratch state
 .zcode/
+
+# Agent review scratch state
+.superpowers/
