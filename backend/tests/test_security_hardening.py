@@ -224,6 +224,28 @@ def test_development_may_use_defaults():
     _validate_production_secrets(cfg)  # must not raise
 
 
+def test_production_guard_rejects_engine_compose_secret():
+    cfg = Settings(
+        ENV="production",
+        SECRET_KEY="docurama-production-secret-key-2026-crypto",
+        P12_PASSWORD="a-real-p12-password",
+        APP_URL="https://docurama.stalfe.com",
+    )
+    with pytest.raises(RuntimeError) as exc:
+        _validate_production_secrets(cfg)
+    assert "shipped with the repository" in str(exc.value)
+
+
+def test_production_guard_accepts_fresh_secret():
+    cfg = Settings(
+        ENV="production",
+        SECRET_KEY="f" * 48,
+        P12_PASSWORD="a-real-p12-password",
+        APP_URL="https://docurama.stalfe.com",
+    )
+    _validate_production_secrets(cfg)  # must not raise
+
+
 # ---------------------------------------------------------------------------
 # Password hashing scheme
 #

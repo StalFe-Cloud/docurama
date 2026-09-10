@@ -129,7 +129,7 @@ To build the self-contained, standalone `docurama:latest` container image locall
 docker build -t docurama:latest .
 ```
 
-To run the standalone container with persistent storage:
+To run the standalone container with persistent storage, export `DOCURAMA_SECRET_KEY` in your shell first (generate one as shown in section 1); the engine stack refuses to start without it:
 
 ```bash
 docker compose -f docker-compose.engine.yml up -d

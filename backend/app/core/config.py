@@ -8,6 +8,13 @@ from typing import List
 DEV_SECRET_KEY = "docurama-development-secret-key-not-for-production"
 DEV_P12_PASSWORD = "docurama_dev_cert_pass"
 
+# Values that have shipped inside repository files. A secret that was ever printed
+# in a compose file or README is public knowledge, so production refuses each of
+# them exactly like the development default.
+KNOWN_WEAK_SECRET_KEYS = {
+    "docurama-production-secret-key-2026-crypto",
+}
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Docurama"
@@ -102,6 +109,8 @@ def _validate_production_secrets(cfg: "Settings") -> None:
     problems = []
     if cfg.SECRET_KEY == DEV_SECRET_KEY:
         problems.append("DOCURAMA_SECRET_KEY is still the built-in development value")
+    if cfg.SECRET_KEY in KNOWN_WEAK_SECRET_KEYS:
+        problems.append("DOCURAMA_SECRET_KEY is a value shipped with the repository; generate a fresh one")
     if len(cfg.SECRET_KEY) < 32:
         problems.append("DOCURAMA_SECRET_KEY must be at least 32 characters")
     if cfg.P12_PASSWORD == DEV_P12_PASSWORD:
