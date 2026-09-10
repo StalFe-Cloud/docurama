@@ -36,8 +36,16 @@ docker compose -f "$APP_DIR/docker-compose.yml" up -d docurama-api
 
 echo "[restore] verifying health"
 sleep 10
-curl -fsS "http://127.0.0.1:8000/api/health" | grep '"status": "healthy"' || {
-  echo "health check failed after restore; investigate before touching anything else" >&2
-  exit 1
-}
-echo "[restore] complete"
+# The published entrypoint is the frontend proxy on host port 3002; the API's own
+# port 8000 is internal to the compose network.
+HEALTH_URL="${DOCURAMA_HEALTH_URL:-http://127.0.0.1:3002/api/health}"
+for i in $(seq 1 30); do
+  if curl -fsS "$HEALTH_URL" | grep -q '"status": "healthy"'; then
+    echo "[restore] healthy at $HEALTH_URL"
+    echo "[restore] complete"
+    exit 0
+  fi
+  sleep 10
+done
+echo "health check failed after restore; investigate before touching anything else" >&2
+exit 1
