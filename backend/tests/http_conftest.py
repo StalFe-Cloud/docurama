@@ -27,6 +27,12 @@ async def db_session():
 
 @pytest_asyncio.fixture
 async def client(db_session):
+    # The rate limiter counts per client address in-process and every test's
+    # requests share one address, so counts would accumulate across tests
+    # without a reset and trip unrelated limits mid-suite.
+    from app.core.rate_limit import limiter
+    limiter.reset()
+
     async def override_get_db():
         yield db_session
 

@@ -38,3 +38,6 @@ pytest-asyncio>=0.24
 # Async SQLite driver: the HTTP-level test harness runs the real app against
 # an in-memory database instead of the production PostgreSQL engine.
 aiosqlite>=0.20
+# In-process rate limiting for the authentication and public upload endpoints,
+# so credential stuffing and upload flooding are throttled per client address.
+slowapi>=0.1.9

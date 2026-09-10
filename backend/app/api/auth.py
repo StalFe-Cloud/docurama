@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.core.security import (
     verify_and_upgrade_password, get_password_hash,
     create_access_token, decode_access_token,
@@ -219,7 +220,9 @@ async def get_current_user(
     return user
 
 @router.post("/register", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     user_in: UserCreate,
     response: Response,
     db: AsyncSession = Depends(get_db)
@@ -281,7 +284,9 @@ async def register(
 # Returns TokenResponse normally, or LoginChallengeResponse when a second factor is
 # enrolled, so no single response_model applies.
 @router.post("/login")
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db)
@@ -531,7 +536,9 @@ async def disable_totp(
 
 
 @router.post("/totp/verify", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def verify_totp_login(
+    request: Request,
     payload: TotpLoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -591,6 +598,7 @@ async def verify_totp_login(
 
 
 @router.post("/request-password-reset", response_model=GenericAckResponse)
+@limiter.limit("5/minute")
 async def request_password_reset(
     payload: PasswordResetRequest,
     request: Request,

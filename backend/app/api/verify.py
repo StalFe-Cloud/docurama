@@ -10,12 +10,13 @@ import os
 import shutil
 import tempfile
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.models import Envelope, DomainVerification
 from app.schemas import VerificationResponse, AuditEventOut
 from app.services.crypto_engine import calculate_file_sha256, verify_document_integrity
@@ -120,7 +121,9 @@ async def verify_by_code(
 
 
 @router.post("/upload", response_model=VerificationResponse)
+@limiter.limit("10/minute")
 async def verify_by_upload(
+    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
