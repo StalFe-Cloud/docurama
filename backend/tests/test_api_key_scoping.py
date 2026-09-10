@@ -110,3 +110,31 @@ async def test_change_password_refuses_api_key_auth(client, db_session):
     )
     assert resp.status_code == 403
     assert "interactive session" in resp.json()["detail"]
+
+
+async def test_switch_company_refuses_api_key_auth(client, db_session):
+    account = Account(name="D")
+    db_session.add(account)
+    await db_session.flush()
+    owner = User(
+        account_id=account.id,
+        email="owner4@example.com",
+        hashed_password=get_password_hash("a-long-password-1234"),
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(owner)
+    await db_session.flush()
+    db_session.add(AccountMembership(user_id=owner.id, account_id=account.id, role="owner"))
+    await db_session.commit()
+
+    # Switching rebinds the signed-in user's active company and mints a session
+    # cookie, which a detached request-scoped owner cannot do: the refresh after
+    # the mutation blows up into a 500. A machine credential must get a clean 403.
+    key = await _make_key(db_session, account, owner, ["read", "write"])
+    resp = await client.post(
+        f"/api/companies/{account.id}/switch",
+        headers={"X-Api-Key": key},
+    )
+    assert resp.status_code == 403
+    assert "interactive session" in resp.json()["detail"]

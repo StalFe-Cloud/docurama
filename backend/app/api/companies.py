@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, generate_secure_token
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, require_interactive_session
 from app.models import (
     User, Account, AccountMembership, DomainVerification,
     Template, TemplateFolder, Envelope, Webhook, ApiKey, AccountSetting,
@@ -138,6 +138,7 @@ async def create_company(
     company_in: CompanyCreate,
     response: Response,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db)
 ):
     clean_name = company_in.name.strip()
@@ -210,6 +211,7 @@ async def switch_company(
     company_id: str,
     response: Response,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db)
 ):
     # Verify membership
