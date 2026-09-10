@@ -71,6 +71,81 @@ class CompanySwitchResponse(BaseModel):
     access_token: str
     user: Any
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+class GenericAckResponse(BaseModel):
+    """
+    Deliberately uninformative. The reset request answers identically whether or not
+    the address is registered, so this response cannot be used to enumerate accounts.
+    """
+    success: bool
+    message: str
+
+class TotpEnrolStart(BaseModel):
+    secret: str
+    provisioning_uri: str
+    qr_base64: str
+
+class TotpEnrolConfirm(BaseModel):
+    code: str
+
+class TotpEnrolResult(BaseModel):
+    enabled: bool
+    recovery_codes: List[str] = []
+    message: str
+
+class TotpStatus(BaseModel):
+    enabled: bool
+    confirmed_at: Optional[datetime] = None
+    recovery_codes_remaining: int = 0
+
+class TotpDisableRequest(BaseModel):
+    # Re-authentication, so a walk-up on an unlocked session cannot strip the factor.
+    password: str
+
+class LoginChallengeResponse(BaseModel):
+    """
+    Returned when a password is correct but a second factor is required. Carries no
+    session and no user detail, only a short-lived token naming the pending sign-in.
+    """
+    mfa_required: bool = True
+    challenge_token: str
+    message: str
+
+class TotpLoginRequest(BaseModel):
+    challenge_token: str
+    # Either a 6-digit code or a recovery code.
+    code: str
+
+class StampOut(BaseModel):
+    id: str
+    kind: str
+    url: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class StampSaveRequest(BaseModel):
+    kind: str
+    # A data URL from the drawing pad, or omitted when a file is uploaded.
+    data_url: Optional[str] = None
+
+class WorkspaceDeleteRequest(BaseModel):
+    # Typing the name is the confirmation; a checkbox is too easy to click through.
+    confirm_name: str
+
+class WorkspaceDeleteResult(BaseModel):
+    success: bool
+    templates_removed: int
+    envelopes_retained: int
+    message: str
+
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str

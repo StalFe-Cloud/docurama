@@ -285,6 +285,57 @@ def decline_notice(recipient_name: str, envelope_title: str, decliner_name: str,
     return subject, html, text
 
 
+def password_reset(recipient_name: str, reset_link: str, ttl_minutes: int):
+    """
+    A password reset link.
+
+    States the expiry, and that an unrequested mail can be ignored: the request
+    endpoint deliberately answers the same for unknown addresses, so one of these can
+    legitimately reach someone who did not ask for it.
+    """
+    subject = "Reset your Docurama password"
+    intro = "We received a request to reset the password on your Docurama account."
+    html = _shell(
+        "Reset your password",
+        intro,
+        f'<p style="font-size:13px;color:#475569;">This link works once and expires in '
+        f'{ttl_minutes} minutes. If you did not request it, no action is needed and your '
+        f'password stays as it is.</p>',
+        reset_link,
+        "Choose a new password",
+    )
+    text = (
+        "We received a request to reset the password on your Docurama account.\n\n"
+        f"{reset_link}\n\n"
+        f"This link works once and expires in {ttl_minutes} minutes. "
+        "If you did not request it, no action is needed.\n"
+    )
+    return subject, html, text
+
+
+def password_changed_notice(recipient_name: str, when_utc: str):
+    """
+    Tell someone their password changed, after the fact.
+
+    A change the account holder did not make should be visible to them rather than
+    silent. This is the message that surfaces a compromise.
+    """
+    subject = "Your Docurama password was changed"
+    html = _shell(
+        "Your password was changed",
+        f"The password on your Docurama account was changed on {when_utc}.",
+        '<p style="font-size:13px;color:#b45309;">If this was not you, reset your password '
+        'immediately and review who has access to your account.</p>',
+        None,
+        None,
+    )
+    text = (
+        f"The password on your Docurama account was changed on {when_utc}.\n\n"
+        "If this was not you, reset your password immediately.\n"
+    )
+    return subject, html, text
+
+
 def smtp_test_message(from_email: str, source: str):
     """
     Confirmation that a mail profile works, sent from the settings screen.

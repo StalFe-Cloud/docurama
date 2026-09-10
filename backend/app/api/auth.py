@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
@@ -11,12 +12,17 @@ from app.core.security import (
     verify_and_upgrade_password, get_password_hash,
     create_access_token, decode_access_token,
 )
-from app.models import User, Account, AccountMembership, DomainVerification, ApiKey
+from app.models import (
+    User, Account, AccountMembership, DomainVerification, ApiKey, PasswordResetToken,
+)
 from app.schemas import (
     UserCreate, UserLogin, UserOut, TokenResponse, CompanyOut,
     PasswordChangeRequest, PasswordChangeResponse,
+    PasswordResetRequest, PasswordResetConfirm, GenericAckResponse,
 )
 from app.services import api_keys as api_key_service
+from app.services import password_reset as reset_service
+from app.services import mailer, smtp_config
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -354,6 +360,125 @@ async def change_password(
     return PasswordChangeResponse(
         success=True,
         message="Your password has been changed. Use it the next time you sign in.",
+    )
+
+
+@router.post("/request-password-reset", response_model=GenericAckResponse)
+async def request_password_reset(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Begin a password reset.
+
+    Answers identically whether or not the address is registered. A response that
+    differed would let anyone test which addresses have accounts, and the whole point
+    of this endpoint is that it is callable by someone who is not signed in.
+
+    A failure to send mail is logged but not disclosed, for the same reason.
+    """
+    email = (payload.email or "").strip().lower()
+    acknowledgement = GenericAckResponse(
+        success=True,
+        message=(
+            "If that address has an account, a reset link is on its way. "
+            "The link works once and expires shortly."
+        ),
+    )
+
+    user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    if not user or not user.is_active:
+        return acknowledgement
+
+    plaintext, hashed = reset_service.generate_token()
+    db.add(PasswordResetToken(
+        user_id=user.id,
+        hashed_token=hashed,
+        expires_at=reset_service.expiry_from_now(),
+        requested_ip=request.client.host if request.client else None,
+    ))
+    await db.commit()
+
+    config = await smtp_config.resolve(db, user.account_id)
+    link = reset_service.reset_url(settings.APP_URL, plaintext)
+    subject, html, text = mailer.password_reset(
+        user.first_name or user.email, link, reset_service.TOKEN_TTL_MINUTES
+    )
+    result = await asyncio.to_thread(
+        mailer.send_email, config, user.email, user.first_name or user.email, subject, html, text
+    )
+    if not result.sent:
+        # Visible to the operator in the logs, invisible to the caller.
+        print(f"[Auth] password reset mail not delivered to {user.email}: {result.error}")
+
+    return acknowledgement
+
+
+@router.post("/reset-password", response_model=PasswordChangeResponse)
+async def reset_password(
+    payload: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Redeem a reset token and set a new password.
+
+    The token is looked up by hash, checked for expiry and prior use, and burned in
+    the same transaction that changes the password, so a link cannot be replayed.
+    """
+    submitted = (payload.token or "").strip()
+    hashed = reset_service.hash_token(submitted)
+
+    row = (await db.execute(
+        select(PasswordResetToken).where(PasswordResetToken.hashed_token == hashed)
+    )).scalar_one_or_none()
+
+    # One message for every failure mode. Distinguishing "unknown" from "expired"
+    # tells an attacker whether a guessed token ever existed.
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This reset link is invalid or has expired. Request a new one.",
+    )
+    if row is None or not reset_service.is_redeemable(row.expires_at, row.used_at):
+        raise invalid
+
+    user = (await db.execute(select(User).where(User.id == row.user_id))).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise invalid
+
+    rejection = reset_service.validate_new_password(payload.new_password)
+    if rejection:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=rejection)
+
+    now = datetime.now(timezone.utc)
+    user.hashed_password = get_password_hash(payload.new_password)
+    user.updated_at = now
+    row.used_at = now
+
+    # Any other outstanding link for this account is now stale. Leaving them live
+    # would mean an older email could still take the account over afterwards.
+    others = (await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+    )).scalars().all()
+    for other in others:
+        other.used_at = now
+
+    await db.commit()
+
+    config = await smtp_config.resolve(db, user.account_id)
+    subject, html, text = mailer.password_changed_notice(
+        user.first_name or user.email, now.strftime("%Y-%m-%d %H:%M UTC")
+    )
+    await asyncio.to_thread(
+        mailer.send_email, config, user.email, user.first_name or user.email, subject, html, text
+    )
+
+    return PasswordChangeResponse(
+        success=True,
+        message="Your password has been reset. Sign in with your new password.",
     )
 
 

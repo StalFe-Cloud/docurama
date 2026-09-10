@@ -20,6 +20,9 @@ class Account(Base):
     subdomain = Column(String(100), unique=True, nullable=True)
     timezone = Column(String(100), default="(GMT+00:00) UTC")
     enforce_domain_auth = Column(Boolean, default=False)
+    # Set when a workspace is removed. The row survives because envelopes reference it
+    # and their verification codes must keep resolving.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     
     users = relationship("User", back_populates="account", cascade="all, delete-orphan")
@@ -47,6 +50,16 @@ class User(Base):
     # Deployment-wide administration, distinct from company roles. Gates the platform
     # settings that every tenant falls back to, such as the default mail server.
     is_platform_admin = Column(Boolean, default=False)
+
+    # Two-factor authentication. The secret is encrypted at rest with the same Fernet
+    # helper used for mail passwords. totp_enabled is set only after a submitted code
+    # verifies, so generating a secret cannot lock anyone out of their own account.
+    totp_secret_encrypted = Column(Text, nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    totp_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    # Hashed, single-use. Without these a lost device is a lost account, because a
+    # password reset alone does not clear a second factor.
+    totp_recovery_codes = Column(JSON, default=list)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     
@@ -392,3 +405,50 @@ class PlatformSetting(Base):
 
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+class PasswordResetToken(Base):
+    """
+    A single-use, time-limited token for recovering an account by email.
+
+    Only the hash is stored, following the API key pattern: a leaked database row
+    cannot be replayed as a reset link. The plaintext exists solely in the email.
+    """
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    hashed_token = Column(String(255), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    # Set the moment the token is redeemed, so a link cannot be used twice even
+    # within its validity window.
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+    requested_ip = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    user = relationship("User", backref="password_reset_tokens")
+
+class UserStamp(Base):
+    """
+    A saved signature or initials image, reused at signing time.
+
+    The image lives on the storage volume like every other document artefact; only
+    its path is held here.
+    """
+    __tablename__ = "user_stamps"
+    __table_args__ = (
+        UniqueConstraint("user_id", "kind", name="uq_user_stamp_kind"),
+    )
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # signature or initials
+    kind = Column(String(20), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    content_type = Column(String(50), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user = relationship("User", backref="stamps")

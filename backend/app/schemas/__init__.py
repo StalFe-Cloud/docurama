@@ -1,6 +1,11 @@
 from app.schemas.schemas import (
     UserCreate, UserLogin, UserOut, TokenResponse,
     PasswordChangeRequest, PasswordChangeResponse,
+    PasswordResetRequest, PasswordResetConfirm, GenericAckResponse,
+    TotpEnrolStart, TotpEnrolConfirm, TotpEnrolResult, TotpStatus, TotpDisableRequest,
+    LoginChallengeResponse, TotpLoginRequest,
+    StampOut, StampSaveRequest,
+    WorkspaceDeleteRequest, WorkspaceDeleteResult,
     CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse,
     CompanyInviteRequest, CompanyInviteResponse,
     ApiKeyCreate, ApiKeyOut, ApiKeyCreatedOut,
@@ -26,6 +31,11 @@ from app.schemas.schemas import (
 __all__ = [
     "UserCreate", "UserLogin", "UserOut", "TokenResponse",
     "PasswordChangeRequest", "PasswordChangeResponse",
+    "PasswordResetRequest", "PasswordResetConfirm", "GenericAckResponse",
+    "TotpEnrolStart", "TotpEnrolConfirm", "TotpEnrolResult", "TotpStatus", "TotpDisableRequest",
+    "LoginChallengeResponse", "TotpLoginRequest",
+    "StampOut", "StampSaveRequest",
+    "WorkspaceDeleteRequest", "WorkspaceDeleteResult",
     "CompanyCreate", "CompanyOut", "CompanyUpdate", "CompanyMemberOut", "CompanySwitchResponse",
     "CompanyInviteRequest", "CompanyInviteResponse",
     "ApiKeyCreate", "ApiKeyOut", "ApiKeyCreatedOut",
