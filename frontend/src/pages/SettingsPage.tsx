@@ -54,8 +54,10 @@ import {
   SigningCertificateItem,
   ApiKeyItem,
   SmtpSettings,
+  TotpEnrolStart,
 } from '../lib/api';
 import { ApiDocsPage } from './ApiDocsPage';
+import { StampPad } from '../components/StampPad';
 
 // Company member row as rendered by the Users tab. Backed by GET /api/companies/{id}/members.
 interface MemberRow {
@@ -324,6 +326,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
     loadMembers();
     loadCertificates();
     loadApiKeys();
+    loadTotpStatus();
+    loadStamps();
     loadNotificationSettings();
     loadSigningSettings();
     loadSmtp('account');
@@ -465,6 +469,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const [initialsText, setInitialsText] = useState('EA');
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showInitialsModal, setShowInitialsModal] = useState(false);
+  // Two-factor enrolment. The secret and QR come from the server; the factor is not
+  // active until a submitted code verifies, so twoFactorConfigured mirrors the server
+  // rather than being set optimistically when the dialog opens.
+  const [totpEnrol, setTotpEnrol] = useState<TotpEnrolStart | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [totpBusy, setTotpBusy] = useState(false);
+  const [totpError, setTotpError] = useState<string | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [recoveryRemaining, setRecoveryRemaining] = useState(0);
+  const [disablePassword, setDisablePassword] = useState('');
+
+  // Saved stamps, keyed by kind. A cache-busting suffix forces the img to refetch
+  // after a save, since the URL itself never changes.
+  const [stamps, setStamps] = useState<Record<string, string | null>>({ signature: null, initials: null });
+  const [stampError, setStampError] = useState<string | null>(null);
+  const [drawnSignature, setDrawnSignature] = useState<string | null>(null);
+
+  // Workspace deletion
+  const [showDeleteWorkspace, setShowDeleteWorkspace] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
   const [twoFactorConfigured, setTwoFactorConfigured] = useState(false);
   const [totpInputCode, setTotpInputCode] = useState('');
@@ -588,6 +615,157 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const notAvailable = (feature: string) => {
     setUnavailableNotice(`${feature} is not available yet, so nothing was changed.`);
     setTimeout(() => setUnavailableNotice(null), 4500);
+  };
+
+  const loadTotpStatus = async () => {
+    try {
+      const s = await api.getTotpStatus();
+      setTwoFactorConfigured(s.enabled);
+      setRecoveryRemaining(s.recovery_codes_remaining || 0);
+    } catch {
+      // Leave the current view rather than claiming a state we could not read.
+    }
+  };
+
+  const loadStamps = async () => {
+    try {
+      const saved = await api.getStamps();
+      const next: Record<string, string | null> = { signature: null, initials: null };
+      for (const s of saved) next[s.kind] = `${s.url}?v=${Date.now()}`;
+      setStamps(next);
+      setHasSavedSignature(Boolean(next.signature));
+      setHasSavedInitials(Boolean(next.initials));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleStartTotpEnrolment = async () => {
+    try {
+      setTotpBusy(true);
+      setTotpError(null);
+      setRecoveryCodes([]);
+      setTotpEnrol(await api.startTotpEnrolment());
+      setShowTwoFactorModal(true);
+    } catch (e: any) {
+      setTotpError(e?.message || 'Could not start enrolment.');
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const handleConfirmTotp = async () => {
+    try {
+      setTotpBusy(true);
+      setTotpError(null);
+      const res = await api.confirmTotpEnrolment(totpCode.trim());
+      setRecoveryCodes(res.recovery_codes || []);
+      setTotpCode('');
+      setTotpEnrol(null);
+      await loadTotpStatus();
+      triggerSave(res.message);
+    } catch (e: any) {
+      setTotpError(e?.message || 'That code is not valid.');
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const handleDisableTotp = async () => {
+    try {
+      setTotpBusy(true);
+      setTotpError(null);
+      const res = await api.disableTotp(disablePassword);
+      setDisablePassword('');
+      setRecoveryCodes([]);
+      await loadTotpStatus();
+      triggerSave(res.message);
+    } catch (e: any) {
+      setTotpError(e?.message || 'Could not turn off two-factor authentication.');
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const renderInitialsToDataUrl = (text: string): string | null => {
+    const value = (text || '').trim();
+    if (!value) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 140;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    // Transparent ground, so the stamp composites onto the document rather than
+    // covering it with a white block.
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0075de';
+    ctx.font = 'italic 64px Georgia, "Times New Roman", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(value.split('').join('.') + '.', canvas.width / 2, canvas.height / 2);
+    return canvas.toDataURL('image/png');
+  };
+
+  const handleSaveStamp = async (kind: string, dataUrl: string) => {
+    try {
+      setStampError(null);
+      await api.saveStamp(kind, dataUrl);
+      await loadStamps();
+      triggerSave(`Saved ${kind}.`);
+    } catch (e: any) {
+      setStampError(e?.message || `Could not save the ${kind}.`);
+    }
+  };
+
+  const handleUploadStamp = async (kind: string, file: File) => {
+    try {
+      setStampError(null);
+      await api.uploadStamp(kind, file);
+      await loadStamps();
+      triggerSave(`Saved ${kind}.`);
+    } catch (e: any) {
+      setStampError(e?.message || `Could not upload the ${kind}.`);
+    }
+  };
+
+  const handleDeleteStamp = async (kind: string) => {
+    try {
+      setStampError(null);
+      const res = await api.deleteStamp(kind);
+      await loadStamps();
+      triggerSave(res.message);
+    } catch (e: any) {
+      setStampError(e?.message || `Could not remove the ${kind}.`);
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    const companyId = user?.account_id;
+    if (!companyId) return;
+    try {
+      setDeleteBusy(true);
+      setDeleteError(null);
+      const res = await api.deleteWorkspace(companyId, deleteConfirmName.trim());
+      // Completed documents are retained deliberately; say so rather than implying
+      // everything was erased.
+      triggerSave(res.message);
+      setShowDeleteWorkspace(false);
+      window.location.href = '/';
+    } catch (e: any) {
+      setDeleteError(e?.message || 'Could not delete the workspace.');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleRequestPasswordReset = async () => {
+    try {
+      setPasswordError(null);
+      const res = await api.requestPasswordReset(user?.email || email);
+      triggerSave(res.message);
+    } catch (e: any) {
+      setPasswordError(e?.message || 'Could not start a password reset.');
+    }
   };
 
   const loadCertificates = async () => {
@@ -1641,7 +1819,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               <button
                 onClick={() => {
                   if (confirm('CAUTION: Are you absolutely certain you want to delete this workspace? This cannot be undone.')) {
-                    notAvailable('Workspace deletion');
+                    setDeleteConfirmName('');
+                    setDeleteError(null);
+                    setShowDeleteWorkspace(true);
                   }
                 }}
                 className="btn btn-outline btn-error text-xs font-semibold px-4 py-2.5 rounded-md whitespace-nowrap self-start sm:self-auto"
@@ -1746,7 +1926,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                         <button
                           onClick={() => {
                             setHasSavedSignature(false);
-                            notAvailable('Saved signature stamps');
+                            handleDeleteStamp('signature');
                           }}
                           className="absolute top-2 right-2 text-xs font-semibold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md"
                         >
@@ -1789,7 +1969,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                         <button
                           onClick={() => {
                             setHasSavedInitials(false);
-                            notAvailable('Saved initials stamps');
+                            handleDeleteStamp('initials');
                           }}
                           className="absolute top-2 right-2 text-xs font-semibold text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md font-sans"
                         >
@@ -1914,7 +2094,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   <button
                     onClick={() => {
                       setTwoFactorConfigured(false);
-                      notAvailable('Two-factor authentication');
+                      if (twoFactorConfigured) { handleDisableTotp(); } else { handleStartTotpEnrolment(); }
                     }}
                     className="btn btn-outline btn-error text-xs font-semibold px-4 py-2 rounded-md"
                   >
@@ -3439,7 +3619,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                     setTwoFactorConfigured(true);
                     setShowTwoFactorModal(false);
                     setTotpInputCode('');
-                    notAvailable('Two-factor authentication');
+                    handleConfirmTotp();
                   }}
                   className="btn btn-primary text-xs px-5 h-10 font-semibold"
                 >
@@ -3467,6 +3647,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 Draw your signature stamp in the pad below or upload a high-resolution PNG image with transparent background.
               </p>
 
+              <StampPad onChange={setDrawnSignature} height={160} />
+
               <div className="h-44 rounded-md border-2 border-dashed border-[#c8c4be] bg-white flex flex-col items-center justify-center relative cursor-crosshair">
                 <svg className="w-64 h-24" viewBox="0 0 200 60" fill="none">
                   <path d="M10 40C30 15 50 48 70 30C90 12 110 50 135 25C150 10 160 45 190 28" stroke="#1D72FE" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -3478,10 +3660,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 <span>Format: Vector SVG &amp; PNG</span>
                 <label className="text-[#0075de] hover:underline cursor-pointer font-semibold">
                   Upload image file
-                  <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={() => {
-                    setHasSavedSignature(true);
+                  <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    await handleUploadStamp('signature', file);
                     setShowSignatureModal(false);
-                    notAvailable('Saved signature stamps');
+                    e.target.value = '';
                   }} />
                 </label>
               </div>
@@ -3496,12 +3680,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setHasSavedSignature(true);
+                  disabled={!drawnSignature}
+                  onClick={async () => {
+                    if (!drawnSignature) return;
+                    await handleSaveStamp('signature', drawnSignature);
+                    setDrawnSignature(null);
                     setShowSignatureModal(false);
-                    notAvailable('Saved signature stamps');
                   }}
-                  className="btn btn-primary text-xs px-5 h-10 font-semibold"
+                  className="btn btn-primary text-xs px-5 h-10 font-semibold disabled:opacity-50"
                 >
                   Save Signature
                 </button>
@@ -3548,12 +3734,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setHasSavedInitials(true);
+                  disabled={!initialsText.trim()}
+                  onClick={async () => {
+                    const dataUrl = renderInitialsToDataUrl(initialsText);
+                    if (!dataUrl) return;
+                    await handleSaveStamp('initials', dataUrl);
                     setShowInitialsModal(false);
-                    notAvailable('Saved initials stamps');
                   }}
-                  className="btn btn-primary text-xs px-5 h-10 font-semibold"
+                  className="btn btn-primary text-xs px-5 h-10 font-semibold disabled:opacity-50"
                 >
                   Save Initials
                 </button>

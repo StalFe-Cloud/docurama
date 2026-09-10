@@ -204,6 +204,44 @@ export interface SessionUser {
   auth_assurance_level?: string;
 }
 
+export interface TotpEnrolStart {
+  secret: string;
+  provisioning_uri: string;
+  qr_base64: string;
+}
+
+export interface TotpEnrolResult {
+  enabled: boolean;
+  recovery_codes: string[];
+  message: string;
+}
+
+export interface TotpStatus {
+  enabled: boolean;
+  confirmed_at?: string | null;
+  recovery_codes_remaining: number;
+}
+
+export interface LoginChallenge {
+  mfa_required: true;
+  challenge_token: string;
+  message: string;
+}
+
+export interface StampItem {
+  id: string;
+  kind: string;
+  url: string;
+  created_at?: string;
+}
+
+export interface WorkspaceDeleteResult {
+  success: boolean;
+  templates_removed: number;
+  envelopes_retained: number;
+  message: string;
+}
+
 export interface SmtpSettings {
   enabled: boolean;
   host: string;
@@ -364,6 +402,130 @@ export const api = {
     }
     return res.json();
   },
+  // Password recovery
+  requestPasswordReset: async (email: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/auth/request-password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error('Could not start a password reset');
+    return res.json();
+  },
+  resetPassword: async (token: string, new_password: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not reset the password');
+    }
+    return res.json();
+  },
+
+  // Two-factor authentication
+  getTotpStatus: async (): Promise<TotpStatus> => {
+    const res = await fetch(`${API_BASE}/auth/totp/status`);
+    if (!res.ok) throw new Error('Could not read two-factor status');
+    return res.json();
+  },
+  startTotpEnrolment: async (): Promise<TotpEnrolStart> => {
+    const res = await fetch(`${API_BASE}/auth/totp/enrol`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not start enrolment');
+    }
+    return res.json();
+  },
+  confirmTotpEnrolment: async (code: string): Promise<TotpEnrolResult> => {
+    const res = await fetch(`${API_BASE}/auth/totp/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'That code is not valid');
+    }
+    return res.json();
+  },
+  disableTotp: async (password: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/auth/totp/disable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not turn off two-factor authentication');
+    }
+    return res.json();
+  },
+  verifyTotpLogin: async (challenge_token: string, code: string) => {
+    const res = await fetch(`${API_BASE}/auth/totp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challenge_token, code }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'That code is not valid');
+    }
+    return res.json();
+  },
+
+  // Saved signature and initials stamps
+  getStamps: async (): Promise<StampItem[]> => {
+    const res = await fetch(`${API_BASE}/stamps`);
+    if (!res.ok) throw new Error('Could not load saved stamps');
+    return res.json();
+  },
+  saveStamp: async (kind: string, dataUrl: string): Promise<StampItem> => {
+    const form = new FormData();
+    form.append('data_url', dataUrl);
+    const res = await fetch(`${API_BASE}/stamps/${kind}`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not save the stamp');
+    }
+    return res.json();
+  },
+  uploadStamp: async (kind: string, file: File): Promise<StampItem> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/stamps/${kind}`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not upload the stamp');
+    }
+    return res.json();
+  },
+  deleteStamp: async (kind: string): Promise<{ success: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/stamps/${kind}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not remove the stamp');
+    }
+    return res.json();
+  },
+
+  // Workspace removal. Completed documents are retained so their verification codes
+  // keep resolving; the response reports how many.
+  deleteWorkspace: async (companyId: string, confirm_name: string): Promise<WorkspaceDeleteResult> => {
+    const res = await fetch(`${API_BASE}/companies/${companyId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm_name }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not delete the workspace');
+    }
+    return res.json();
+  },
+
   changePassword: async (current_password: string, new_password: string): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE}/auth/change-password`, {
       method: 'POST',
