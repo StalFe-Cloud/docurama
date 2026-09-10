@@ -135,7 +135,7 @@ async def build_user_out(user: User, db: AsyncSession) -> UserOut:
         created_at=user.created_at
     )
 
-async def _user_from_api_key(presented: str, db: AsyncSession) -> Optional[User]:
+async def _user_from_api_key(presented: str, request: Request, db: AsyncSession) -> Optional[User]:
     """
     Resolve an issued API key to the user who created it.
 
@@ -162,13 +162,23 @@ async def _user_from_api_key(presented: str, db: AsyncSession) -> Optional[User]
         if not owner or not owner.is_active:
             return None
 
-        # The key is bound to the account it was issued for, not to whatever the
-        # owner has since switched to.
-        if owner.account_id != key.account_id:
-            owner.account_id = key.account_id
+        # A key authorises only what its scopes allow. Fail closed: a key with no
+        # scopes can do nothing, which is the only safe meaning of an empty list.
+        scopes = key.scopes or []
+        mutating = request.method.upper() not in ("GET", "HEAD", "OPTIONS")
+        if mutating and "write" not in scopes:
+            raise HTTPException(status_code=403, detail="This API key is read-only")
+        if not mutating and "read" not in scopes:
+            raise HTTPException(status_code=403, detail="This API key has no read scope")
 
         key.last_used_at = datetime.now(timezone.utc)
         await db.commit()
+
+        # Detach the owner before rebinding the account so the binding is request
+        # scoped only. Previously every key call rewrote the owner's active company
+        # in the database, which made machine traffic corrupt interactive sessions.
+        db.expunge(owner)
+        owner.account_id = key.account_id
         return owner
 
     return None
@@ -181,7 +191,7 @@ async def get_current_user(
     # Issued API keys authenticate machine callers against the documented API.
     api_key = request.headers.get("X-Api-Key")
     if api_key:
-        key_user = await _user_from_api_key(api_key.strip(), db)
+        key_user = await _user_from_api_key(api_key.strip(), request, db)
         if key_user:
             return key_user
         raise HTTPException(
