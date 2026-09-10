@@ -28,3 +28,9 @@ requires_argon2 = pytest.mark.skipif(
     not _argon2_available(),
     reason="argon2-cffi is not installed in this interpreter; run the suite in the container image",
 )
+
+# The HTTP-level fixtures live in their own module so later test files can
+# import them directly (from tests.http_conftest import client). pytest only
+# auto-discovers fixtures in conftest modules, so they are re-exported here to
+# register them suite-wide for tests that request them without importing.
+from http_conftest import client, db_session  # noqa: E402, F401
