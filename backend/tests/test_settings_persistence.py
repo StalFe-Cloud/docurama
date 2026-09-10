@@ -238,3 +238,65 @@ def test_created_key_response_requires_the_plaintext():
 
     with pytest.raises(ValidationError):
         ApiKeyCreatedOut(id="k1", name="n", key_prefix="deadbeef", scopes=[], is_active=True)
+
+
+# ---------------------------------------------------------------------------
+# Saved stamps
+#
+# The Profile screen reported "Signature stamp saved" and stored nothing. These
+# cover the rules that keep a user-supplied image, which ends up composited onto a
+# legal document, from being trusted.
+# ---------------------------------------------------------------------------
+
+def test_only_known_stamp_kinds_are_accepted():
+    from app.services import stamp_store
+
+    assert stamp_store.is_valid_kind("signature") is True
+    assert stamp_store.is_valid_kind("initials") is True
+    for bad in ["", "avatar", "logo", "../../etc/passwd"]:
+        assert stamp_store.is_valid_kind(bad) is False
+
+
+def test_stamp_content_type_comes_from_the_bytes():
+    """A declared mime type is a client assertion; the magic bytes are evidence."""
+    from app.services import stamp_store
+
+    assert stamp_store.detect_content_type(b"\x89PNG\r\n\x1a\n rest") == "image/png"
+    assert stamp_store.detect_content_type(b"\xff\xd8\xff\xe0 rest") == "image/jpeg"
+    # A renamed executable or a script must not pass.
+    assert stamp_store.detect_content_type(b"MZ\x90\x00") is None
+    assert stamp_store.detect_content_type(b"<svg onload=alert(1)>") is None
+    assert stamp_store.detect_content_type(b"") is None
+
+
+def test_oversized_stamp_is_refused():
+    from app.services import stamp_store
+
+    too_big = b"\x89PNG\r\n\x1a\n" + (b"x" * stamp_store.MAX_STAMP_BYTES)
+    content_type, error = stamp_store.validate_image(too_big)
+    assert content_type is None
+    assert "exceeds" in error
+
+
+def test_stamp_path_refuses_ids_it_did_not_mint():
+    from app.services import stamp_store
+
+    for bad in ["../../etc/passwd", "stamp_short", "", "stamp_" + "g" * 32]:
+        with pytest.raises(ValueError):
+            stamp_store.stamp_path("/storage", bad, "image/png")
+
+    ok = stamp_store.stamp_path("/storage", stamp_store.new_stamp_id(), "image/png")
+    assert ok.endswith(".png")
+
+
+def test_data_url_must_be_a_real_image():
+    from app.services import stamp_store
+
+    data, error = stamp_store.decode_data_url("data:text/html;base64,PGh0bWw+")
+    assert data is None and "PNG or JPEG" in error
+
+    data, error = stamp_store.decode_data_url("not-a-data-url")
+    assert data is None and error
+
+    data, error = stamp_store.decode_data_url("")
+    assert data is None and error

@@ -12,10 +12,14 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, generate_secure_token
 from app.api.auth import get_current_user
-from app.models import User, Account, AccountMembership, DomainVerification
+from app.models import (
+    User, Account, AccountMembership, DomainVerification,
+    Template, TemplateFolder, Envelope, Webhook, ApiKey, AccountSetting,
+)
 from app.schemas import (
     CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse,
-    CompanyInviteRequest, CompanyInviteResponse
+    CompanyInviteRequest, CompanyInviteResponse,
+    WorkspaceDeleteRequest, WorkspaceDeleteResult
 )
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -119,7 +123,9 @@ async def list_user_companies(
 
     companies: List[CompanyOut] = []
     for m in memberships:
-        if m.account:
+        # A deleted workspace keeps its row so completed envelopes still resolve at the
+        # verification portal, but it must not appear as somewhere you can work.
+        if m.account and getattr(m.account, "deleted_at", None) is None:
             comp_out = await format_company_out(
                 m.account, current_user.id, current_user.account_id, db, user_role=m.role
             )
@@ -507,3 +513,112 @@ async def remove_company_member(
         "company_id": company_id,
         "message": f"Removed {removed_user.email if removed_user else user_id} from this company."
     }
+
+
+@router.delete("/{company_id}", response_model=WorkspaceDeleteResult)
+async def delete_company(
+    company_id: str,
+    payload: WorkspaceDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Remove a workspace while keeping the evidence it produced.
+
+    Templates, folders, drafts, webhooks, API keys, settings and memberships go. Every
+    completed envelope stays, with its hashes, its audit trail and its sealed file.
+
+    That asymmetry is deliberate. A verification code printed on a certificate of
+    completion has been handed to counterparties who had no part in this decision, and
+    the platform's whole claim is that such a code keeps resolving. Deleting a
+    workspace must not silently invalidate someone else's evidence.
+
+    The account row survives for the same reason: envelopes reference it, and the
+    portal reports issuer domain attestation from it. It is marked deleted and
+    detached instead.
+    """
+    membership = await require_company_admin(company_id, current_user, db)
+    if membership.role != "owner":
+        raise HTTPException(
+            status_code=403,
+            detail="Only a company owner can delete the workspace.",
+        )
+
+    account = membership.account
+    if getattr(account, "deleted_at", None) is not None:
+        raise HTTPException(status_code=400, detail="This workspace has already been deleted.")
+
+    # Typing the name is the confirmation. A checkbox is too easy to click through for
+    # something with no undo.
+    if (payload.confirm_name or "").strip() != (account.name or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Type the workspace name exactly to confirm deletion.",
+        )
+
+    completed_statuses = ("completed", "signed")
+    retained = (await db.execute(
+        select(func.count()).select_from(Envelope).where(
+            Envelope.account_id == company_id,
+            Envelope.status.in_(completed_statuses),
+        )
+    )).scalar() or 0
+
+    # Drafts and in-flight envelopes carry no evidentiary weight: nobody has been
+    # given a verification code for a document that was never completed.
+    unfinished = (await db.execute(
+        select(Envelope).where(
+            Envelope.account_id == company_id,
+            Envelope.status.notin_(completed_statuses),
+        )
+    )).scalars().all()
+    for envelope in unfinished:
+        await db.delete(envelope)
+
+    templates = (await db.execute(
+        select(Template).where(Template.account_id == company_id)
+    )).scalars().all()
+    templates_removed = len(templates)
+    for template in templates:
+        await db.delete(template)
+
+    for model in (TemplateFolder, Webhook, ApiKey, AccountSetting, DomainVerification):
+        rows = (await db.execute(
+            select(model).where(model.account_id == company_id)
+        )).scalars().all()
+        for row in rows:
+            await db.delete(row)
+
+    # Detach every member, moving each to another workspace they belong to so that
+    # deleting one does not strand someone with no active account.
+    memberships = (await db.execute(
+        select(AccountMembership)
+        .where(AccountMembership.account_id == company_id)
+        .options(selectinload(AccountMembership.user))
+    )).scalars().all()
+
+    for member in memberships:
+        user = member.user
+        member.is_active = False
+        if user and user.account_id == company_id:
+            fallback = (await db.execute(
+                select(AccountMembership).where(
+                    AccountMembership.user_id == user.id,
+                    AccountMembership.account_id != company_id,
+                    AccountMembership.is_active == True  # noqa: E712 - SQL expression
+                ).order_by(AccountMembership.created_at.asc())
+            )).scalars().first()
+            user.account_id = fallback.account_id if fallback else None
+
+    account.deleted_at = utcnow()
+    await db.commit()
+
+    return WorkspaceDeleteResult(
+        success=True,
+        templates_removed=templates_removed,
+        envelopes_retained=retained,
+        message=(
+            f"Workspace deleted. {retained} completed document(s) were kept so their "
+            "verification codes continue to resolve."
+        ),
+    )

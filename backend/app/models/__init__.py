@@ -1,7 +1,8 @@
 from app.models.models import (
     Account, User, AccountMembership, Template, Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification, CorrectionRequest,
     ApiKey, SigningCertificate, AccountSetting,
-    PasswordResetToken, UserStamp, PlatformSetting
+    PasswordResetToken, UserStamp,
+    TemplateFolder, Webhook, WebhookDelivery, PlatformSetting
 )
 
 __all__ = [
@@ -21,5 +22,8 @@ __all__ = [
     "AccountSetting",
     "PasswordResetToken",
     "UserStamp",
+    "TemplateFolder",
+    "Webhook",
+    "WebhookDelivery",
     "PlatformSetting",
 ]
