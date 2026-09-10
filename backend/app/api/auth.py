@@ -1,7 +1,8 @@
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -19,10 +20,15 @@ from app.schemas import (
     UserCreate, UserLogin, UserOut, TokenResponse, CompanyOut,
     PasswordChangeRequest, PasswordChangeResponse,
     PasswordResetRequest, PasswordResetConfirm, GenericAckResponse,
+    TotpEnrolStart, TotpEnrolConfirm, TotpEnrolResult, TotpStatus, TotpDisableRequest,
+    LoginChallengeResponse, TotpLoginRequest,
 )
 from app.services import api_keys as api_key_service
 from app.services import password_reset as reset_service
 from app.services import mailer, smtp_config
+from app.services import totp as totp_service
+from app.core.secrets import decrypt_secret, encrypt_secret
+from app.services.qr_generator import generate_qr_base64
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -263,7 +269,9 @@ async def register(
     enriched_user = await build_user_out(user, db)
     return TokenResponse(access_token=token, user=enriched_user)
 
-@router.post("/login", response_model=TokenResponse)
+# Returns TokenResponse normally, or LoginChallengeResponse when a second factor is
+# enrolled, so no single response_model applies.
+@router.post("/login")
 async def login(
     credentials: UserLogin,
     response: Response,
@@ -288,6 +296,17 @@ async def login(
         await db.commit()
         await db.refresh(user)
 
+    # A correct password is not a session when a second factor is enrolled. Return a
+    # short-lived challenge instead, carrying no user detail: the caller has proved
+    # one factor, and nothing about the account is disclosed until they prove the other.
+    if getattr(user, "totp_enabled", False):
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=LoginChallengeResponse(
+                challenge_token=_issue_mfa_challenge(user),
+                message="Enter the code from your authenticator app.",
+            ).model_dump(),
+        )
 
     token = create_access_token(subject=user.id, claims={"role": user.role, "email": user.email, "account_id": user.account_id})
     response.set_cookie(
@@ -361,6 +380,205 @@ async def change_password(
         success=True,
         message="Your password has been changed. Use it the next time you sign in.",
     )
+
+
+# A pending sign-in that has cleared the password but not the second factor. Short
+# lived and single purpose: it authorises submitting a code, nothing else.
+MFA_CHALLENGE_MINUTES = 5
+
+
+def _issue_mfa_challenge(user: User) -> str:
+    return create_access_token(
+        subject=user.id,
+        expires_delta=timedelta(minutes=MFA_CHALLENGE_MINUTES),
+        claims={"purpose": "mfa_challenge", "email": user.email},
+    )
+
+
+def _user_id_from_challenge(token: str) -> Optional[str]:
+    payload = decode_access_token(token or "")
+    if not payload or payload.get("purpose") != "mfa_challenge":
+        return None
+    return payload.get("sub")
+
+
+def _totp_secret_for(user: User) -> Optional[str]:
+    encrypted = getattr(user, "totp_secret_encrypted", None)
+    if not encrypted:
+        return None
+    try:
+        return decrypt_secret(encrypted)
+    except Exception:
+        # A secret encrypted under a rotated DOCURAMA_SECRET_KEY cannot be read. Treat
+        # it as absent rather than as a factor that can never be satisfied.
+        return None
+
+
+@router.get("/totp/status", response_model=TotpStatus)
+async def totp_status(current_user: User = Depends(get_current_user)):
+    return TotpStatus(
+        enabled=bool(getattr(current_user, "totp_enabled", False)),
+        confirmed_at=getattr(current_user, "totp_confirmed_at", None),
+        recovery_codes_remaining=len(getattr(current_user, "totp_recovery_codes", None) or []),
+    )
+
+
+@router.post("/totp/enrol", response_model=TotpEnrolStart)
+async def start_totp_enrolment(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Begin enrolment: mint a secret and return it with a scannable QR.
+
+    Deliberately does not enable the factor. Enabling on generation would lock the
+    user out the moment they closed the dialog without finishing, so totp_enabled is
+    only set once a submitted code proves the app is configured.
+    """
+    if getattr(current_user, "totp_enabled", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is already enabled. Disable it first to re-enrol.",
+        )
+
+    secret = totp_service.generate_secret()
+    current_user.totp_secret_encrypted = encrypt_secret(secret)
+    current_user.totp_enabled = False
+    current_user.totp_confirmed_at = None
+    await db.commit()
+
+    uri = totp_service.provisioning_uri(secret, current_user.email)
+    return TotpEnrolStart(
+        secret=secret,
+        provisioning_uri=uri,
+        qr_base64=generate_qr_base64(uri, box_size=6, border=2),
+    )
+
+
+@router.post("/totp/confirm", response_model=TotpEnrolResult)
+async def confirm_totp_enrolment(
+    payload: TotpEnrolConfirm,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Finish enrolment by proving the authenticator works, then hand over recovery codes.
+    """
+    secret = _totp_secret_for(current_user)
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start enrolment first, then enter the code your app shows.",
+        )
+
+    if not totp_service.verify_code(secret, payload.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That code is not valid. Check your authenticator app and try again.",
+        )
+
+    plaintext_codes, hashed_codes = totp_service.generate_recovery_codes()
+    current_user.totp_enabled = True
+    current_user.totp_confirmed_at = datetime.now(timezone.utc)
+    current_user.totp_recovery_codes = hashed_codes
+    await db.commit()
+
+    return TotpEnrolResult(
+        enabled=True,
+        recovery_codes=plaintext_codes,
+        message=(
+            "Two-factor authentication is on. Save these recovery codes now; each works "
+            "once and they are not shown again."
+        ),
+    )
+
+
+@router.post("/totp/disable", response_model=GenericAckResponse)
+async def disable_totp(
+    payload: TotpDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Turn the factor off, re-authenticating with the password first.
+
+    A live session is not sufficient: otherwise anyone who walks up to an unlocked
+    machine can strip the second factor without knowing the password.
+    """
+    ok, _rehash = verify_and_upgrade_password(payload.password, current_user.hashed_password)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your password is incorrect.",
+        )
+
+    current_user.totp_enabled = False
+    current_user.totp_secret_encrypted = None
+    current_user.totp_confirmed_at = None
+    current_user.totp_recovery_codes = []
+    await db.commit()
+
+    return GenericAckResponse(success=True, message="Two-factor authentication is off.")
+
+
+@router.post("/totp/verify", response_model=TokenResponse)
+async def verify_totp_login(
+    payload: TotpLoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Second step of sign-in: exchange a challenge plus a code for a session.
+
+    Accepts either a current TOTP code or a recovery code, and a recovery code is
+    burned on use.
+    """
+    user_id = _user_id_from_challenge(payload.challenge_token)
+    rejected = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="That sign-in attempt has expired. Start again.",
+    )
+    if not user_id:
+        raise rejected
+
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user or not user.is_active or not getattr(user, "totp_enabled", False):
+        raise rejected
+
+    submitted = (payload.code or "").strip()
+    secret = _totp_secret_for(user)
+    accepted = bool(secret) and totp_service.verify_code(secret, submitted)
+
+    if not accepted:
+        # Fall back to a recovery code, which is burned whether or not the rest of
+        # the sign-in succeeds.
+        used, remaining = totp_service.consume_recovery_code(
+            submitted, getattr(user, "totp_recovery_codes", None) or []
+        )
+        if used:
+            user.totp_recovery_codes = remaining
+            await db.commit()
+            accepted = True
+
+    if not accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That code is not valid.",
+        )
+
+    token = create_access_token(
+        subject=user.id,
+        claims={"role": user.role, "email": user.email, "account_id": user.account_id},
+    )
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+    return TokenResponse(access_token=token, user=await build_user_out(user, db))
 
 
 @router.post("/request-password-reset", response_model=GenericAckResponse)
