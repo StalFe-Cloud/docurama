@@ -8,6 +8,7 @@ import { SigningStudioPage } from './pages/SigningStudioPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SignInPage } from './pages/SignInPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicFormPage } from './pages/PublicFormPage';
 import { ApiDocsPage } from './pages/ApiDocsPage';
 import { api } from './lib/api';
@@ -69,6 +70,19 @@ export const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] p-2 sm:p-6">
         <SigningStudioPage token={token} onDone={() => { window.location.href = '/verify'; }} />
+      </div>
+    );
+  }
+
+  // Password reset email link: /reset-password?token=...
+  // The reset email has always linked here; without this route the link fell through
+  // to the landing page and the reset could never be completed.
+  if (path === '/reset-password') {
+    return (
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+        <main className="flex-1 flex items-center justify-center">
+          <ResetPasswordPage onDone={() => { window.location.href = '/sign_in'; }} />
+        </main>
       </div>
     );
   }
