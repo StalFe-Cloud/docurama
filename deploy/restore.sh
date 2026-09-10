@@ -18,8 +18,14 @@ STORAGE_TAR="$BACKUP_DIR/storage-$STAMP.tar.gz"
 echo "[restore] stopping the API so nothing writes mid-restore"
 docker compose -f "$APP_DIR/docker-compose.yml" stop docurama-api
 
+echo "[restore] resetting database schema"
+# A restore replaces the database rather than merging into it; psql without
+# ON_ERROR_STOP would carry on after errors and report success on a partial load.
+docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" \
+  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
 echo "[restore] restoring database"
-gunzip -c "$DB_DUMP" | docker exec -i "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB"
+gunzip -c "$DB_DUMP" | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB"
 
 echo "[restore] restoring storage"
 if [ -d "$APP_DIR/data/storage" ]; then
@@ -40,7 +46,7 @@ sleep 10
 # port 8000 is internal to the compose network.
 HEALTH_URL="${DOCURAMA_HEALTH_URL:-http://127.0.0.1:3002/api/health}"
 for i in $(seq 1 30); do
-  if curl -fsS "$HEALTH_URL" | grep -q '"status": "healthy"'; then
+  if curl -fsS "$HEALTH_URL" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
     echo "[restore] healthy at $HEALTH_URL"
     echo "[restore] complete"
     exit 0

@@ -6,17 +6,20 @@ set -euo pipefail
 TAG="${1:?usage: ./deploy/upgrade.sh <git-tag>}"
 HEALTH_URL="${DOCURAMA_HEALTH_URL:-https://docurama.stalfe.com/api/health}"
 
+# The deploy helper resolves paths relative to the repository root.
+cd "$(dirname "$0")/.."
+
 git fetch --tags
 CURRENT="$(git rev-parse HEAD)"
 git checkout "$TAG"
 trap 'git checkout -' EXIT
 
 echo "[upgrade] deploying $TAG"
-python deploy/deploy_to_vps.py
+python3 deploy/deploy_to_vps.py || python deploy/deploy_to_vps.py
 
 echo "[upgrade] waiting for healthy"
 for i in $(seq 1 30); do
-  if curl -fsS "$HEALTH_URL" | grep -q '"status": "healthy"'; then
+  if curl -fsS "$HEALTH_URL" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
     echo "[upgrade] healthy at $HEALTH_URL"
     exit 0
   fi
