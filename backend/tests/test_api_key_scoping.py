@@ -79,3 +79,34 @@ async def test_api_key_use_does_not_rewrite_active_account(client, db_session):
         select(User).where(User.id == owner.id)
     )).scalar_one()
     assert fresh.account_id == account_b.id  # unchanged in the database
+
+
+async def test_change_password_refuses_api_key_auth(client, db_session):
+    account = Account(name="C")
+    db_session.add(account)
+    await db_session.flush()
+    owner = User(
+        account_id=account.id,
+        email="owner3@example.com",
+        hashed_password=get_password_hash("a-long-password-1234"),
+        role="admin",
+        is_active=True,
+    )
+    db_session.add(owner)
+    await db_session.flush()
+    await db_session.commit()
+
+    # A write-scoped key passes the scope gate, yet must still be refused:
+    # the owner object handed to the endpoint is detached, so the password
+    # mutation would silently no-op behind a success message.
+    key = await _make_key(db_session, account, owner, ["read", "write"])
+    resp = await client.post(
+        "/api/auth/change-password",
+        headers={"X-Api-Key": key},
+        json={
+            "current_password": "a-long-password-1234",
+            "new_password": "another-long-password-123",
+        },
+    )
+    assert resp.status_code == 403
+    assert "interactive session" in resp.json()["detail"]

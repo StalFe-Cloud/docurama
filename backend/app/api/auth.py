@@ -174,6 +174,11 @@ async def _user_from_api_key(presented: str, request: Request, db: AsyncSession)
         key.last_used_at = datetime.now(timezone.utc)
         await db.commit()
 
+        # Mark how this request authenticated so interactive-only endpoints can
+        # refuse machine credentials before their mutation no-ops on a detached
+        # owner (see require_interactive_session below).
+        request.state.auth_via = "api_key"
+
         # Detach the owner before rebinding the account so the binding is request
         # scoped only. Previously every key call rewrote the owner's active company
         # in the database, which made machine traffic corrupt interactive sessions.
@@ -228,6 +233,18 @@ async def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or disabled")
     return user
+
+
+async def require_interactive_session(request: Request) -> None:
+    """Account-management endpoints mutate the signed-in user; an API key is a
+    machine credential and its owner object is request-scoped, so mutations
+    silently no-op. Refuse instead of pretending to succeed."""
+    if getattr(request.state, "auth_via", None) == "api_key":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint requires an interactive session, not an API key.",
+        )
+
 
 @router.post("/register", response_model=TokenResponse)
 @limiter.limit("5/minute")
@@ -355,6 +372,7 @@ async def get_me(
 async def change_password(
     payload: PasswordChangeRequest,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -450,6 +468,7 @@ async def totp_status(current_user: User = Depends(get_current_user)):
 @router.post("/totp/enrol", response_model=TotpEnrolStart)
 async def start_totp_enrolment(
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -483,6 +502,7 @@ async def start_totp_enrolment(
 async def confirm_totp_enrolment(
     payload: TotpEnrolConfirm,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -521,6 +541,7 @@ async def confirm_totp_enrolment(
 async def disable_totp(
     payload: TotpDisableRequest,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
