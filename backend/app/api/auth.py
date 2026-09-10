@@ -224,6 +224,15 @@ async def register(
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
+    if not settings.registration_open:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Registration is closed on this deployment. "
+                "Ask an existing administrator to invite you."
+            ),
+        )
+
     query = select(User).where(User.email == user_in.email)
     existing = (await db.execute(query)).scalar_one_or_none()
     if existing:

@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Deployment environment. Anything other than "development" enables production guards.
     ENV: str = os.getenv("DOCURAMA_ENV", "production")
 
+    # Deployment mode. selfhost: one operator, registration closed unless opened
+    # deliberately. cloud: the public multi-tenant platform, registration open.
+    DEPLOYMENT_MODE: str = os.getenv("DOCURAMA_DEPLOYMENT_MODE", "selfhost")
+
     # Server URLs
     APP_URL: str = os.getenv("DOCURAMA_APP_URL", "https://docurama.example.com")
     ALLOWED_ORIGINS: List[str] = [
@@ -95,6 +99,14 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.ENV.strip().lower() in ("development", "dev", "local", "test")
+
+    @property
+    def registration_open(self) -> bool:
+        if self.DEPLOYMENT_MODE.strip().lower() == "cloud":
+            return True
+        return os.getenv("DOCURAMA_PUBLIC_REGISTRATION", "false").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
 
 
 def _validate_production_secrets(cfg: "Settings") -> None:

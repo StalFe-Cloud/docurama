@@ -4,7 +4,9 @@ from pydantic import BaseModel, EmailStr, Field as PydanticField
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    # Same floor as password change and reset. Registration used to accept
+    # anything, so the weakest credential in the system was set at sign-up.
+    password: str = PydanticField(min_length=12)
     first_name: Optional[str] = ""
     last_name: Optional[str] = ""
 
