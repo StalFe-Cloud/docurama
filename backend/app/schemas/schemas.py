@@ -443,8 +443,6 @@ class DomainVerifyResponse(BaseModel):
 class DomainPublicStatus(BaseModel):
     domain: str
     is_verified: bool
-    verified_at: Optional[datetime] = None
-    organization_name: Optional[str] = None
 
 class DomainAuthValidateRequest(BaseModel):
     email: EmailStr
@@ -454,7 +452,6 @@ class DomainAuthValidateResponse(BaseModel):
     domain: str
     assurance_level: str  # "enterprise_domain_verified" or "standard"
     txt_record_host: Optional[str] = None
-    verification_token: Optional[str] = None
     verified_at: Optional[datetime] = None
     organization_name: Optional[str] = None
     message: str

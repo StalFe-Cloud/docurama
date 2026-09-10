@@ -8,6 +8,10 @@ defaults on purpose, so the environment is marked before app modules import.
 import os
 
 os.environ.setdefault("DOCURAMA_ENV", "development")
+# The HTTP harness speaks plain http, and a Secure session cookie is never sent
+# over an insecure scheme, so cookie-backed sign-in flows under test would 401
+# on every request after login even though login itself succeeded.
+os.environ.setdefault("DOCURAMA_COOKIE_SECURE", "false")
 
 import pytest  # noqa: E402
 

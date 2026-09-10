@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.api.auth import get_current_user
-from app.models import User, DomainVerification, Account
+from app.models import User, DomainVerification, Account, AccountMembership
 from app.schemas import (
     DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
     DomainAuthValidateRequest, DomainAuthValidateResponse
@@ -197,6 +197,19 @@ async def toggle_domain_enforcement(
     if not domain_rec:
         raise HTTPException(status_code=404, detail="Domain record not found.")
 
+    membership = (await db.execute(
+        select(AccountMembership).where(
+            AccountMembership.user_id == current_user.id,
+            AccountMembership.account_id == current_user.account_id,
+            AccountMembership.is_active == True,
+        )
+    )).scalar_one_or_none()
+    if not membership or membership.role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owners and admins can change domain authentication enforcement.",
+        )
+
     act_query = select(Account).where(Account.id == current_user.account_id)
     account = (await db.execute(act_query)).scalar_one_or_none()
     if not account:
@@ -216,6 +229,7 @@ async def toggle_domain_enforcement(
 @router.post("/validate-authentication", response_model=DomainAuthValidateResponse)
 async def validate_domain_authentication(
     req: DomainAuthValidateRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -243,7 +257,6 @@ async def validate_domain_authentication(
             domain=email_domain,
             assurance_level="enterprise_domain_verified",
             txt_record_host=rec.txt_record_host,
-            verification_token=rec.verification_token,
             verified_at=rec.verified_at,
             organization_name=org_name,
             message=f"Cryptographic domain authentication confirmed for @{email_domain}. Verified via DNS challenge record ({rec.txt_record_host}) resolving through DNS-over-HTTPS."
@@ -254,7 +267,6 @@ async def validate_domain_authentication(
         domain=email_domain,
         assurance_level="standard",
         txt_record_host=f"_docurama-challenge.{email_domain}",
-        verification_token=None,
         verified_at=None,
         organization_name=None,
         message=f"Domain @{email_domain} does not have an active verified DNS challenge record. Default standard identity assurance applies."
@@ -276,9 +288,4 @@ async def get_public_domain_status(
     if not rec:
         return DomainPublicStatus(domain=clean, is_verified=False)
 
-    return DomainPublicStatus(
-        domain=rec.domain,
-        is_verified=(rec.status == "verified"),
-        verified_at=rec.verified_at,
-        organization_name=rec.account.name if rec.account else None
-    )
+    return DomainPublicStatus(domain=rec.domain, is_verified=(rec.status == "verified"))
