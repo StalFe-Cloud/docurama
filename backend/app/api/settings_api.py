@@ -22,6 +22,7 @@ from app.schemas import (
     ApiKeyCreate,
     ApiKeyCreatedOut,
     ApiKeyOut,
+    DeliverabilityCheckRequest,
     SigningCertificateCreate,
     SigningCertificateOut,
     SmtpSettingsOut,
@@ -30,7 +31,7 @@ from app.schemas import (
     SmtpTestResult,
 )
 from app.services import api_keys as api_key_service
-from app.services import mailer, smtp_config
+from app.services import mail_deliverability, mailer, smtp_config
 from app.services.account_settings import defaults_for, is_valid_section, merge_section
 
 router = APIRouter(tags=["settings"])
@@ -425,3 +426,14 @@ async def send_test_email(
             if result.sent else f"Delivery failed: {result.error}"
         ),
     )
+
+
+@router.post("/settings/deliverability")
+async def check_deliverability(
+    payload: DeliverabilityCheckRequest,
+    current_user: User = Depends(get_current_user),
+):
+    domain = mail_deliverability.sanitize_domain(payload.domain)
+    if not domain or "." not in domain:
+        raise HTTPException(status_code=400, detail="Provide a valid domain, for example example.com.")
+    return await mail_deliverability.check_domain(domain)

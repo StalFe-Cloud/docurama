@@ -616,3 +616,6 @@ class SmtpTestResult(BaseModel):
     sent: bool
     source: Optional[str] = None
     message: str
+
+class DeliverabilityCheckRequest(BaseModel):
+    domain: str
