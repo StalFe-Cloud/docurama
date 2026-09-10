@@ -25,9 +25,9 @@ from app.services.preview_store import (
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
-def _resolve(doc_id: str) -> str:
+def _resolve(doc_id: str, account_id: str) -> str:
     try:
-        return preview_path(settings.STORAGE_DIR, doc_id)
+        return preview_path(settings.STORAGE_DIR, doc_id, account_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Document not found.")
 
@@ -45,8 +45,12 @@ async def create_document_preview(
     os.makedirs(storage_dir, exist_ok=True)
     purge_expired_previews(storage_dir)
 
+    if not current_user.account_id:
+        raise HTTPException(status_code=400, detail="No active workspace; previews are per workspace.")
+
     doc_id = new_doc_id()
-    pdf_path = preview_path(storage_dir, doc_id)
+    pdf_path = preview_path(storage_dir, doc_id, current_user.account_id)
+    os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
     # Stream to disk with a hard cap, checking the magic bytes on the first chunk.
     written = 0
@@ -113,7 +117,9 @@ async def get_document_page_image(
     current_user: User = Depends(get_current_user),
 ):
     """Render a page of an uploaded preview as a PNG."""
-    pdf_path = _resolve(doc_id)
+    if not current_user.account_id:
+        raise HTTPException(status_code=400, detail="No active workspace.")
+    pdf_path = _resolve(doc_id, current_user.account_id)
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="Document not found.")
 

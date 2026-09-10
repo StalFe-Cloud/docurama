@@ -138,10 +138,15 @@ def test_preview_path_refuses_foreign_ids():
     """A path is only ever built from an id this service minted."""
     import pytest as _pytest
 
-    with _pytest.raises(ValueError):
-        preview_path("/storage", "../../etc/passwd")
+    account_id = "01234567-89ab-cdef-0123-456789abcdef"
 
-    ok = preview_path("/storage", new_doc_id())
+    with _pytest.raises(ValueError):
+        preview_path("/storage", "../../etc/passwd", account_id)
+
+    with _pytest.raises(ValueError):
+        preview_path("/storage", new_doc_id(), "../../etc/passwd")
+
+    ok = preview_path("/storage", new_doc_id(), account_id)
     assert ok.endswith(".pdf")
 
 
