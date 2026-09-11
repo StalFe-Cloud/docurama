@@ -326,6 +326,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const [dohVerifyDetails, setDohVerifyDetails] = useState<any>(null);
   const [enforceDomainAuth, setEnforceDomainAuth] = useState(Boolean(user?.domain_verified));
   const [showDnsDetailsModal, setShowDnsDetailsModal] = useState(false);
+  // Guided DNS setup state
+  const [domainSetup, setDomainSetup] = useState<Record<string, any>>({});
+  const [isLoadingSetup, setIsLoadingSetup] = useState<string | null>(null);
+  const [cfToken, setCfToken] = useState('');
+  const [isCfCreating, setIsCfCreating] = useState(false);
+  const [cfMessage, setCfMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showCfSection, setShowCfSection] = useState(false);
+  const [lastChecks, setLastChecks] = useState<Record<string, any[]>>({});
+  const [isLoadingItEmail, setIsLoadingItEmail] = useState(false);
 
   useEffect(() => {
     loadCompanies();
@@ -443,6 +452,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
         verified_at: res.verified_at,
         dns_check_details: res.dns_details
       } : d));
+      if (res.checks) {
+        setLastChecks(prev => ({ ...prev, [domainId]: res.checks! }));
+      }
       if (res.success) {
         triggerSave(`DNS Verification Succeeded: ${res.domain} is verified for enterprise authentication!`);
       } else {
@@ -462,6 +474,47 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
       triggerSave(res.message);
     } catch (e: any) {
       alert(e.message || 'Failed to toggle domain authentication');
+    }
+  };
+
+  const loadDomainSetup = async (domainId: string) => {
+    if (domainSetup[domainId]) return;
+    try {
+      setIsLoadingSetup(domainId);
+      const setup = await api.getDomainSetup(domainId);
+      setDomainSetup(prev => ({ ...prev, [domainId]: setup }));
+    } catch {
+      // silently fail; the card still shows the raw records
+    } finally {
+      setIsLoadingSetup(null);
+    }
+  };
+
+  const handleItEmail = async (domainId: string) => {
+    try {
+      setIsLoadingItEmail(true);
+      const draft = await api.getItEmailDraft(domainId);
+      const mailto = `mailto:?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+      window.open(mailto, '_blank');
+    } catch (e: any) {
+      alert(e.message || 'Failed to prepare email draft');
+    } finally {
+      setIsLoadingItEmail(false);
+    }
+  };
+
+  const handleCfCreate = async (domainId: string) => {
+    if (!cfToken.trim()) return;
+    try {
+      setIsCfCreating(true);
+      setCfMessage(null);
+      const res = await api.createCloudflareRecord(domainId, cfToken.trim());
+      setCfMessage({ ok: true, text: res.message });
+      setCfToken('');
+    } catch (e: any) {
+      setCfMessage({ ok: false, text: e.message || 'Cloudflare record creation failed' });
+    } finally {
+      setIsCfCreating(false);
     }
   };
 
@@ -1513,6 +1566,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               <div className="space-y-6">
                 {domainsList.map((dom) => {
                   const isVerified = dom.status === 'verified';
+                  const setup = domainSetup[dom.id];
+                  // Load setup guidance for pending domains on first render
+                  if (!isVerified && !setup && isLoadingSetup !== dom.id) {
+                    loadDomainSetup(dom.id);
+                  }
+                  const checks = lastChecks[dom.id];
                   return (
                     <div key={dom.id} className="rounded-lg border border-[#e5e3df] p-5 bg-[#fafafa] space-y-4">
                       {/* Top Header */}
@@ -1557,10 +1616,36 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                         </div>
                       </div>
 
+                      {/* Provider detection banner */}
+                      {setup && (
+                        <div className={`px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 ${
+                          setup.provider
+                            ? 'bg-blue-50 border border-blue-200 text-blue-800'
+                            : 'bg-[#f6f5f4] border border-[#e5e3df] text-[#5d5b54]'
+                        }`}>
+                          <Globe className="w-3.5 h-3.5 shrink-0" />
+                          {setup.provider
+                            ? `Your DNS is managed by ${setup.provider.charAt(0).toUpperCase() + setup.provider.slice(1)} -- follow the steps below.`
+                            : 'We could not detect your DNS provider. Follow the generic steps below.'}
+                        </div>
+                      )}
+
+                      {/* Setup steps */}
+                      {setup && !isVerified && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-[#37352f]">Setup steps:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-xs text-[#37352f] pl-1">
+                            {setup.steps.map((step: string, i: number) => (
+                              <li key={i} className="leading-relaxed">{step}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+
                       {/* DNS Record Specifications Table */}
                       <div className="space-y-3">
                         <p className="text-xs font-medium text-[#37352f]">
-                          Add the following TXT record to your domain's DNS management (Cloudflare, Route53, Namecheap, GoDaddy):
+                          DNS records to add:
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
@@ -1627,6 +1712,95 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                           </button>
                         </div>
                       </div>
+
+                      {/* Action rows: IT email + Cloudflare one-click */}
+                      {!isVerified && (
+                        <div className="space-y-3 pt-2 border-t border-[#ede9e4]">
+                          {/* IT email button */}
+                          <button
+                            onClick={() => handleItEmail(dom.id)}
+                            disabled={isLoadingItEmail}
+                            className="btn btn-ghost w-full justify-start px-3 h-9 text-xs font-medium text-[#37352f] hover:bg-[#f6f5f4] flex items-center gap-2"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-[#787671]" />
+                            {isLoadingItEmail ? 'Preparing...' : 'Email these instructions to my IT team'}
+                            <ExternalLink className="w-3 h-3 text-[#787671] ml-auto" />
+                          </button>
+
+                          {/* Cloudflare one-click */}
+                          {setup?.provider === 'cloudflare' && (
+                            <div className="space-y-2">
+                              <button
+                                onClick={() => setShowCfSection(!showCfSection)}
+                                className="btn btn-ghost w-full justify-start px-3 h-9 text-xs font-medium text-[#37352f] hover:bg-[#f6f5f4] flex items-center gap-2"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                                One-click: create the record via Cloudflare API
+                                <ChevronRight className={`w-3 h-3 text-[#787671] ml-auto transition-transform ${showCfSection ? 'rotate-90' : ''}`} />
+                              </button>
+                              {showCfSection && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-3 text-xs">
+                                  <p className="text-blue-800 leading-relaxed">
+                                    Create a <strong>scoped API token</strong> in your Cloudflare dashboard with <strong>Zone.DNS Edit</strong> permission
+                                    for <strong>{dom.domain}</strong> only. Paste it below. The token is used once and never stored.
+                                  </p>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="password"
+                                      value={cfToken}
+                                      onChange={(e) => setCfToken(e.target.value)}
+                                      placeholder="Cloudflare API token"
+                                      className="base-input flex-1 h-9 text-xs font-mono"
+                                    />
+                                    <button
+                                      onClick={() => handleCfCreate(dom.id)}
+                                      disabled={isCfCreating || !cfToken.trim()}
+                                      className="btn btn-primary px-4 h-9 text-xs font-semibold whitespace-nowrap"
+                                    >
+                                      {isCfCreating ? 'Creating...' : 'Create Record'}
+                                    </button>
+                                  </div>
+                                  {cfMessage && (
+                                    <p className={`text-xs ${cfMessage.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                                      {cfMessage.text}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Verification checks summary */}
+                      {checks && checks.length > 0 && (
+                        <div className="pt-3 border-t border-[#ede9e4] space-y-2">
+                          <p className="text-xs font-semibold text-[#37352f]">Verification checks:</p>
+                          <div className="space-y-1.5">
+                            {checks.map((c: any, i: number) => {
+                              const label = c.method === 'dns_txt' ? 'TXT record'
+                                : c.method === 'dns_subdomain_pointer' ? 'Subdomain pointing'
+                                : 'Website file';
+                              return (
+                                <div key={i} className="flex items-start gap-2 text-xs">
+                                  {c.ok
+                                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                                    : <X className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />}
+                                  <div>
+                                    <span className="font-medium text-[#1a1a1a]">{label}</span>
+                                    <p className="text-[#787671] text-[11px] mt-0.5">
+                                      Expected: {typeof c.expected === 'string' ? c.expected : JSON.stringify(c.expected)}
+                                    </p>
+                                    <p className="text-[#787671] text-[11px]">
+                                      Found: {typeof c.found === 'string' ? c.found : Array.isArray(c.found) && c.found.length === 0 ? 'none' : JSON.stringify(c.found)}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Additional Authentication Policy Toggle */}
                       <div className="pt-3 border-t border-[#ede9e4] flex items-center justify-between">
