@@ -8,6 +8,7 @@ import { SigningStudioPage } from './pages/SigningStudioPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SignInPage } from './pages/SignInPage';
+import { OnboardingPage } from './pages/OnboardingPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicFormPage } from './pages/PublicFormPage';
 import { ApiDocsPage } from './pages/ApiDocsPage';
@@ -82,6 +83,17 @@ export const App: React.FC = () => {
       <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
         <main className="flex-1 flex items-center justify-center">
           <ResetPasswordPage onDone={() => { window.location.href = '/sign_in'; }} />
+        </main>
+      </div>
+    );
+  }
+
+  // Post-signup onboarding questionnaire: /onboarding
+  if (path === '/onboarding') {
+    return (
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+        <main className="flex-1 flex items-center justify-center">
+          <OnboardingPage />
         </main>
       </div>
     );

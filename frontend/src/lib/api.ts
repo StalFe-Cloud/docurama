@@ -543,6 +543,28 @@ export const api = {
     }
     return res.json();
   },
+  // Signup questionnaire. Submitted once when a new account finishes onboarding;
+  // the backend merges partial answers, so the payload is the full set.
+  submitOnboarding: async (answers: {
+    role?: string;
+    use_case?: string;
+    monthly_volume?: string;
+    team_size?: string;
+    vertical?: string;
+    completed?: boolean;
+  }): Promise<Record<string, any>> => {
+    const res = await fetch(`${API_BASE}/onboarding`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(answers),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not save your onboarding answers');
+    }
+    return res.json();
+  },
   logout: async () => {
     await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
   },
