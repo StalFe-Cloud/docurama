@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,10 +12,30 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.database import engine
 from app.core.rate_limit import limiter
+from app.core.tenant_middleware import TenantHostMiddleware
 from app.api.router import api_router
 from app.api.ws import router as ws_router
 from app.services.reminder_sweeper import reminder_loop
 from app.services.crypto_engine import signing_capability
+
+
+def build_cors_policy(cfg):
+    """
+    Cloud deployments serve every tenant subdomain, so a fixed origin list can
+    never be complete; a strict regex over the cloud domain replaces it. Self-host
+    keeps the explicit list: it has exactly the origins the operator named.
+    """
+    if (cfg.DEPLOYMENT_MODE or "").strip().lower() != "cloud":
+        return list(cfg.ALLOWED_ORIGINS), None
+
+    cloud_domain = cfg.CLOUD_DOMAIN.strip().lower()
+    pattern = (
+        r"^https://([a-z0-9-]+\.)*"
+        + cloud_domain.replace(".", r"\.")
+        + r"$"
+    )
+    # APP_URL's host (e.g. app.docurama.eu) already matches the pattern.
+    return [], re.compile(pattern)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,13 +76,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware
+cors_origins, cors_origin_regex = build_cors_policy(settings)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex.pattern if cors_origin_regex else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Captures the request host on every request, in every mode, before routing.
+app.add_middleware(TenantHostMiddleware)
 
 # Mount API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)

@@ -16,9 +16,11 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.api.auth import get_current_user
+from app.api.tenant import require_tenant_binding
 from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
+from app.services.tenant_resolver import TenantContext
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.services import mailer, smtp_config
 
@@ -27,7 +29,8 @@ router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 @router.get("", response_model=List[EnvelopeOut])
 async def list_envelopes(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = (
         select(Envelope)
@@ -213,7 +216,8 @@ async def create_envelope(
 async def get_envelope(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = (
         select(Envelope)
@@ -293,7 +297,8 @@ async def remind_envelope(
 async def export_envelope_csv(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     """
     Exports all submission fields and signer responses as CSV.
@@ -462,7 +467,8 @@ async def void_envelope(
 async def download_signed_pdf(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Envelope).where(Envelope.id == id, Envelope.account_id == current_user.account_id)
     envelope = (await db.execute(query)).scalar_one_or_none()
@@ -480,7 +486,8 @@ async def download_signed_pdf(
 async def download_certificate(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Envelope).where(Envelope.id == id, Envelope.account_id == current_user.account_id)
     envelope = (await db.execute(query)).scalar_one_or_none()

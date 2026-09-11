@@ -13,11 +13,13 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.auth import get_current_user
+from app.api.tenant import require_tenant_binding
 from app.models import User, Template, Envelope, Recipient, Field, AuditEvent
 from app.schemas import TemplateOut, AutoDetectResponse, DetectedField
 from app.services.field_detector import FieldDetector
 from app.services.preview_store import MAX_UPLOAD_BYTES, looks_like_pdf
 from app.services.crypto_engine import calculate_file_sha256
+from app.services.tenant_resolver import TenantContext
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
@@ -29,7 +31,8 @@ class PublicStartRequest(BaseModel):
 async def list_templates(
     folder_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Template).where(Template.account_id == current_user.account_id)
     if folder_id:
@@ -238,7 +241,8 @@ async def start_public_template(
 async def get_template(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Template).where(Template.id == id, Template.account_id == current_user.account_id)
     template = (await db.execute(query)).scalar_one_or_none()
@@ -250,7 +254,8 @@ async def get_template(
 async def delete_template(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Template).where(Template.id == id, Template.account_id == current_user.account_id)
     template = (await db.execute(query)).scalar_one_or_none()
