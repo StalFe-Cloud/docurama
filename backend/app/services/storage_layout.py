@@ -19,7 +19,7 @@ def account_root(storage_dir: str, account_id: str) -> str:
 
 
 def artifact_path(storage_dir: str, account_id: str, filename: str) -> str:
-    if not filename or os.path.basename(filename) != filename:
+    if not filename or "/" in filename or "\\" in filename or os.path.basename(filename) != filename:
         raise ValueError(f"Artifact filename must be a bare name: {filename!r}")
     return os.path.join(account_root(storage_dir, account_id), filename)
 
