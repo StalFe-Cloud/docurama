@@ -26,9 +26,21 @@ async def create_folder(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    name = req.name.strip()
+    existing = await db.execute(
+        select(TemplateFolder).where(
+            TemplateFolder.account_id == current_user.account_id,
+            TemplateFolder.name == name
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A folder with this name already exists."
+        )
     folder = TemplateFolder(
         account_id=current_user.account_id,
-        name=req.name,
+        name=name,
         color=req.color or "#4f46e5",
         parent_id=req.parent_id
     )
