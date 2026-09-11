@@ -16,9 +16,12 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.api.auth import get_current_user
+from app.api.tenant import require_tenant_binding
 from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
+from app.services.storage_layout import artifact_path, ensure_dir
+from app.services.tenant_resolver import TenantContext
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.services import mailer, smtp_config
 
@@ -27,7 +30,8 @@ router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 @router.get("", response_model=List[EnvelopeOut])
 async def list_envelopes(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = (
         select(Envelope)
@@ -74,7 +78,9 @@ async def create_envelope(
     envelope_id = str(uuid.uuid4())
     verification_code = str(uuid.uuid4()).replace("-", "")[:24].upper()
     file_ext = os.path.splitext(file.filename)[1] or ".pdf"
-    original_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original{file_ext}")
+    original_pdf_path = artifact_path(settings.STORAGE_DIR, current_user.account_id,
+                                      f"{envelope_id}_original{file_ext}")
+    ensure_dir(os.path.dirname(original_pdf_path))
     
     with open(original_pdf_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -213,7 +219,8 @@ async def create_envelope(
 async def get_envelope(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = (
         select(Envelope)
@@ -293,7 +300,8 @@ async def remind_envelope(
 async def export_envelope_csv(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     """
     Exports all submission fields and signer responses as CSV.
@@ -364,7 +372,6 @@ async def bulk_send_envelopes(
     reader = csv.DictReader(io.StringIO(content.decode("utf-8", errors="ignore")))
     
     dispatched_envelopes = []
-    storage_dir = settings.STORAGE_DIR
 
     for row in reader:
         name = row.get("name") or row.get("Name") or "Signer"
@@ -373,7 +380,9 @@ async def bulk_send_envelopes(
             continue
 
         envelope_id = str(uuid.uuid4())
-        new_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original.pdf")
+        new_pdf_path = artifact_path(settings.STORAGE_DIR, template.account_id,
+                                     f"{envelope_id}_original.pdf")
+        ensure_dir(os.path.dirname(new_pdf_path))
         shutil.copyfile(template.pdf_path, new_pdf_path)
         sha256_orig = calculate_file_sha256(new_pdf_path)
         ver_code = f"DCR-{uuid.uuid4().hex[:12].upper()}"
@@ -462,7 +471,8 @@ async def void_envelope(
 async def download_signed_pdf(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Envelope).where(Envelope.id == id, Envelope.account_id == current_user.account_id)
     envelope = (await db.execute(query)).scalar_one_or_none()
@@ -480,7 +490,8 @@ async def download_signed_pdf(
 async def download_certificate(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Envelope).where(Envelope.id == id, Envelope.account_id == current_user.account_id)
     envelope = (await db.execute(query)).scalar_one_or_none()

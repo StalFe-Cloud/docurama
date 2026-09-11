@@ -13,13 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# The build context is the repository root (docker-compose.yml sets context: .
+# with dockerfile: backend/Dockerfile) so the operator scripts/ directory below
+# can ship inside the API image.
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY certs/ /app/certs/
-COPY app/ /app/app/
-COPY alembic/ /app/alembic/
-COPY alembic.ini migrate.py entrypoint.sh /app/
+COPY backend/certs/ /app/certs/
+COPY backend/app/ /app/app/
+COPY backend/alembic/ /app/alembic/
+COPY backend/alembic.ini backend/migrate.py backend/entrypoint.sh /app/
+# Ship the operator scripts (grant_platform_admin.py and friends) so they can be
+# run inside the API container as documented.
+COPY scripts/ /app/scripts/
 # Strip CR and mark executable. Git on Windows can rewrite this file to CRLF,
 # which makes the kernel look for an interpreter named "/bin/sh" and the
 # container fails to start with a misleading "no such file or directory".

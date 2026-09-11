@@ -111,6 +111,23 @@ To run migrations by hand:
 cd backend && python migrate.py
 ```
 
+### 1b. Deployment Modes
+
+Docurama runs in two modes, selected with `DOCURAMA_DEPLOYMENT_MODE`:
+
+- `selfhost` (default): one operator, one domain. Public registration is closed
+  unless you set `DOCURAMA_PUBLIC_REGISTRATION=true`; platform features such as
+  billing, quotas, and tenant subdomain routing are off.
+- `cloud`: the public multi-tenant platform. Registration is open, tenant
+  workspaces are served at `<company>.<DOCURAMA_CLOUD_DOMAIN>`, verified custom
+  domains route to their tenant, and billing/quotas are active.
+
+Grant the platform administrator (deployment-wide settings) with:
+
+```bash
+python scripts/grant_platform_admin.py ops@example.com
+```
+
 ### 2. Multi-Container Microservices (Recommended for Production)
 
 ```bash

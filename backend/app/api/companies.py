@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, generate_secure_token
 from app.api.auth import get_current_user, require_interactive_session
+from app.services.tenancy import subdomain_available, subdomain_error
 from app.models import (
     User, Account, AccountMembership, DomainVerification,
     Template, TemplateFolder, Envelope, Webhook, ApiKey, AccountSetting,
@@ -145,7 +146,18 @@ async def create_company(
     if not clean_name:
         raise HTTPException(status_code=400, detail="Company name cannot be blank.")
 
-    subdomain = company_in.subdomain or f"{slugify(clean_name)}-{uuid.uuid4().hex[:6]}"
+    if company_in.subdomain:
+        subdomain = company_in.subdomain.strip().lower()
+        problem = subdomain_error(subdomain)
+        if problem:
+            raise HTTPException(status_code=400, detail=problem)
+        if not await subdomain_available(db, subdomain):
+            raise HTTPException(
+                status_code=409,
+                detail=f"The subdomain '{subdomain}' is already taken.",
+            )
+    else:
+        subdomain = f"{slugify(clean_name)}-{uuid.uuid4().hex[:6]}"
 
     # Create new account
     new_account = Account(

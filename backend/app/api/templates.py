@@ -13,11 +13,14 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.auth import get_current_user
+from app.api.tenant import require_tenant_binding
 from app.models import User, Template, Envelope, Recipient, Field, AuditEvent
 from app.schemas import TemplateOut, AutoDetectResponse, DetectedField
 from app.services.field_detector import FieldDetector
 from app.services.preview_store import MAX_UPLOAD_BYTES, looks_like_pdf
 from app.services.crypto_engine import calculate_file_sha256
+from app.services.storage_layout import artifact_path, ensure_dir
+from app.services.tenant_resolver import TenantContext
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
@@ -29,7 +32,8 @@ class PublicStartRequest(BaseModel):
 async def list_templates(
     folder_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Template).where(Template.account_id == current_user.account_id)
     if folder_id:
@@ -61,7 +65,9 @@ async def create_template(
     if file:
         template_id = str(uuid.uuid4())
         ext = os.path.splitext(file.filename)[1] or ".pdf"
-        pdf_path = os.path.join(storage_dir, f"template_{template_id}{ext}")
+        pdf_path = artifact_path(settings.STORAGE_DIR, current_user.account_id,
+                                 f"template_{template_id}{ext}")
+        ensure_dir(os.path.dirname(pdf_path))
         with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
@@ -168,8 +174,9 @@ async def start_public_template(
         raise HTTPException(status_code=404, detail="Public form not available.")
 
     envelope_id = str(uuid.uuid4())
-    storage_dir = settings.STORAGE_DIR
-    new_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original.pdf")
+    new_pdf_path = artifact_path(settings.STORAGE_DIR, template.account_id,
+                                 f"{envelope_id}_original.pdf")
+    ensure_dir(os.path.dirname(new_pdf_path))
     shutil.copyfile(template.pdf_path, new_pdf_path)
     sha256_orig = calculate_file_sha256(new_pdf_path)
 
@@ -238,7 +245,8 @@ async def start_public_template(
 async def get_template(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Template).where(Template.id == id, Template.account_id == current_user.account_id)
     template = (await db.execute(query)).scalar_one_or_none()
@@ -250,7 +258,8 @@ async def get_template(
 async def delete_template(
     id: str,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _tenant: TenantContext = Depends(require_tenant_binding)
 ):
     query = select(Template).where(Template.id == id, Template.account_id == current_user.account_id)
     template = (await db.execute(query)).scalar_one_or_none()

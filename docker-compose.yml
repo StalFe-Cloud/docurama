@@ -21,8 +21,10 @@ services:
 
   docurama-api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Repository-root context so backend/Dockerfile can COPY scripts/ (the
+      # operator scripts) into the API image.
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: docurama-api
     restart: always
     env_file:

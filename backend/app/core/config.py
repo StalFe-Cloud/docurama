@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # deliberately. cloud: the public multi-tenant platform, registration open.
     DEPLOYMENT_MODE: str = os.getenv("DOCURAMA_DEPLOYMENT_MODE", "selfhost")
 
+    # Cloud platform domain. Tenant subdomains live under it (acme.docurama.eu).
+    CLOUD_DOMAIN: str = os.getenv("DOCURAMA_CLOUD_DOMAIN", "docurama.eu")
+
     # Server URLs
     APP_URL: str = os.getenv("DOCURAMA_APP_URL", "https://docurama.example.com")
     ALLOWED_ORIGINS: List[str] = [
@@ -154,6 +157,11 @@ def _derive_host_defaults(cfg: "Settings") -> None:
     from urllib.parse import urlparse
 
     host = (urlparse(cfg.APP_URL).hostname or "").strip()
+
+    # A trailing dot (DNS root notation, e.g. "docurama.eu." typed by an operator)
+    # would silently break the cloud CORS regex and host parsing, so strip it here
+    # alongside the other normalized host-derived values.
+    cfg.CLOUD_DOMAIN = cfg.CLOUD_DOMAIN.strip().rstrip(".")
 
     if not cfg.CNAME_TARGET:
         cfg.CNAME_TARGET = host
