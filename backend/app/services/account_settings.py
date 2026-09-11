@@ -13,7 +13,7 @@ from typing import Any, Dict
 # "smtp" is deliberately not here. This module's read path returns stored data
 # verbatim, and the mail profile holds an encrypted credential that must never reach
 # a browser. It has dedicated endpoints that redact on read and encrypt on write.
-VALID_SECTIONS = ["notifications", "sms", "mcp", "branding", "compliance", "signing", "profile"]
+VALID_SECTIONS = ["notifications", "sms", "mcp", "branding", "compliance", "signing", "profile", "onboarding"]
 
 # First-load state. Reported when no row exists yet, so the UI shows the same
 # thing before and after the first save.
@@ -51,6 +51,16 @@ DEFAULT_SECTION_DATA: Dict[str, Dict[str, Any]] = {
         "organisation_name": None,
         "contact_email": None,
         "support_url": None,
+    },
+    # Answers from the post-signup questionnaire. Later phases read these to adapt
+    # billing, templates, and tours to the account.
+    "onboarding": {
+        "role": None,
+        "use_case": None,
+        "monthly_volume": None,
+        "team_size": None,
+        "vertical": None,
+        "completed": False,
     },
 }
 

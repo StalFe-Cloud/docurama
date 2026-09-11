@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api import (
     auth, envelopes, templates, signing, verify, ws, domains, folders, webhooks,
-    documents, companies, settings_api, stamps,
+    documents, companies, settings_api, stamps, onboarding,
 )
 
 api_router = APIRouter()
@@ -17,4 +17,5 @@ api_router.include_router(verify.router)
 api_router.include_router(domains.router)
 api_router.include_router(settings_api.router)
 api_router.include_router(stamps.router)
+api_router.include_router(onboarding.router)
 
