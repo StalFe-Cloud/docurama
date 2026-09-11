@@ -108,3 +108,68 @@ def test_normalization_is_not_the_caller_problem(candidate):
 
     # Callers may pass loosely; validation judges the normalized form.
     assert subdomain_error(candidate.strip().lower()) is None
+
+
+async def test_autogen_subdomain_never_violates_the_rules(client, db_session,
+                                                          monkeypatch):
+    from app.api import companies as companies_api
+    from app.core.security import get_password_hash
+    from app.models import Account, AccountMembership, User
+    from app.services.tenancy import subdomain_error
+
+    # A company name that slugifies to nothing must not produce an invalid label.
+    monkeypatch.setattr(companies_api, "slugify", lambda text: "")
+    account = Account(name="Seed")
+    db_session.add(account)
+    await db_session.flush()
+    owner = User(account_id=account.id, email="autogen@example.com",
+                 hashed_password=get_password_hash("a-long-password-1234"),
+                 role="admin", is_active=True)
+    db_session.add(owner)
+    await db_session.flush()
+    db_session.add(AccountMembership(user_id=owner.id, account_id=account.id,
+                                     role="owner"))
+    await db_session.commit()
+
+    login = await client.post("/api/auth/login",
+                              json={"email": "autogen@example.com",
+                                    "password": "a-long-password-1234"})
+    assert login.status_code == 200
+
+    resp = await client.post("/api/companies", json={"name": "!!!"})
+    assert resp.status_code == 200
+    generated = resp.json()["subdomain"]
+    assert subdomain_error(generated) is None
+
+
+async def test_subdomain_race_returns_409(client, db_session, monkeypatch):
+    from app.api import companies as companies_api
+    from app.core.security import get_password_hash
+    from app.models import Account, AccountMembership, User
+
+    account = Account(name="Seed", subdomain="race-name")
+    db_session.add(account)
+    await db_session.flush()
+    owner = User(account_id=account.id, email="racer@example.com",
+                 hashed_password=get_password_hash("a-long-password-1234"),
+                 role="admin", is_active=True)
+    db_session.add(owner)
+    await db_session.flush()
+    db_session.add(AccountMembership(user_id=owner.id, account_id=account.id,
+                                     role="owner"))
+    await db_session.commit()
+
+    # Simulate the race: the availability pre-check passes (the rival row was not
+    # visible yet), then the insert hits the unique constraint on commit.
+    async def available(db, candidate):
+        return True
+    monkeypatch.setattr(companies_api, "subdomain_available", available)
+
+    login = await client.post("/api/auth/login",
+                              json={"email": "racer@example.com",
+                                    "password": "a-long-password-1234"})
+    assert login.status_code == 200
+
+    resp = await client.post("/api/companies", json={"name": "Rival",
+                                                     "subdomain": "race-name"})
+    assert resp.status_code == 409
