@@ -48,15 +48,9 @@ async def require_tenant_binding(
     db: AsyncSession = Depends(get_db),
 ) -> TenantContext:
     context = await current_tenant(request, db)
-    if context.kind == PLATFORM:
-        return context
-    if context.kind == UNKNOWN:
-        raise HTTPException(status_code=404, detail="Unknown workspace.")
-    if context.account_id and current_user.account_id != context.account_id:
-        raise HTTPException(
-            status_code=403,
-            detail="This workspace is not served here. Sign in at the platform root.",
-        )
+    rejection = await binding_rejection(db, request, current_user)
+    if rejection is not None:
+        raise rejection
     return context
 
 

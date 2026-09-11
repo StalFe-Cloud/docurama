@@ -198,6 +198,15 @@ async def get_current_user(
     if api_key:
         key_user = await _user_from_api_key(api_key.strip(), request, db)
         if key_user:
+            # Cloud mode: every authenticated call must belong to the host's
+            # workspace. Late import: this module is imported by app.api.tenant
+            # at load time.
+            from app.api.tenant import binding_rejection
+
+            rejection = await binding_rejection(db, request, key_user)
+            if rejection is not None:
+                raise rejection
+
             return key_user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
