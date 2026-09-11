@@ -320,8 +320,23 @@ async def register(
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
         
-    # Create default Account
-    account = Account(name=f"{user_in.first_name or 'User'}'s Organization")
+    # Create default Account (7-Day Plus Trial in Cloud mode, Unlimited in Self-host mode)
+    is_cloud = (settings.DEPLOYMENT_MODE or "").strip().lower() == "cloud"
+    now = datetime.now(timezone.utc)
+    if is_cloud:
+        account = Account(
+            name=f"{user_in.first_name or 'User'}'s Organization",
+            plan="plus",
+            is_trial=True,
+            trial_ends_at=now + timedelta(days=7),
+            billing_interval="monthly",
+        )
+    else:
+        account = Account(
+            name=f"{user_in.first_name or 'User'}'s Organization",
+            plan="unlimited",
+            is_trial=False,
+        )
     db.add(account)
     await db.flush()
     

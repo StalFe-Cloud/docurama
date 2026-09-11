@@ -20,8 +20,13 @@ class Account(Base):
     subdomain = Column(String(100), unique=True, nullable=True)
     timezone = Column(String(100), default="(GMT+00:00) UTC")
     enforce_domain_auth = Column(Boolean, default=False)
-    # Subscription Plan and Quotas
-    plan = Column(String(32), nullable=False, default="free")
+    # Subscription Plan, Trial, and Quotas
+    plan = Column(String(32), nullable=False, default="plus")
+    is_trial = Column(Boolean, default=False, nullable=False)
+    trial_ends_at = Column(DateTime(timezone=True), nullable=True)
+    billing_interval = Column(String(16), default="monthly", nullable=False)
+    stripe_customer_id = Column(String(64), nullable=True)
+    stripe_subscription_id = Column(String(64), nullable=True)
     plan_expires_at = Column(DateTime(timezone=True), nullable=True)
     custom_envelope_limit = Column(Integer, nullable=True)
     custom_seat_limit = Column(Integer, nullable=True)

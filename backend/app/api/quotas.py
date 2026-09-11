@@ -74,6 +74,12 @@ async def update_account_plan(
         )
 
     account.plan = plan_norm
+    if payload.is_trial is not None:
+        account.is_trial = payload.is_trial
+    if payload.trial_ends_at is not None:
+        account.trial_ends_at = payload.trial_ends_at
+    if payload.billing_interval is not None:
+        account.billing_interval = payload.billing_interval
     if payload.plan_expires_at is not None:
         account.plan_expires_at = payload.plan_expires_at
     if payload.custom_envelope_limit is not None:

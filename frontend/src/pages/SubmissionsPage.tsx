@@ -20,14 +20,18 @@ import {
   Send,
   Upload,
   LayoutGrid,
-  List
+  List,
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import { api, Envelope, TemplateItem, AccountUsage } from '../lib/api';
+import { PricingModal } from '../components/PricingModal';
 
 export const SubmissionsPage: React.FC = () => {
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<AccountUsage | null>(null);
+  const [showPricingModal, setShowPricingModal] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedEnvelope, setSelectedEnvelope] = useState<Envelope | null>(null);
@@ -231,49 +235,80 @@ export const SubmissionsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Plan Usage & Quota Banner */}
-      {usage && usage.envelopes_limit !== null && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 p-4 rounded-2xl border border-blue-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-[#1D72FE]">
-                {usage.plan_display_name} Plan
-              </span>
-              <span className="text-xs text-slate-500">
-                Cycle renews in {usage.days_remaining_in_cycle} days
-              </span>
+      {/* Plan Usage, Trial & Quota Banner */}
+      {usage && (
+        usage.is_trial_expired ? (
+          <div className="bg-gradient-to-r from-rose-50 to-amber-50/60 p-4 rounded-2xl border border-rose-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700">
+                  Trial Expired
+                </span>
+                <span className="text-xs font-semibold text-rose-600">
+                  Your 7-day Plus trial has ended
+                </span>
+              </div>
+              <p className="text-xs text-slate-700 font-medium">
+                Existing signed documents remain permanently accessible in your archive. Upgrade your subscription to continue dispatching new envelopes.
+              </p>
             </div>
-            <p className="text-xs text-slate-700 font-medium">
-              You have dispatched <strong>{usage.envelopes_used}</strong> of <strong>{usage.envelopes_limit}</strong> monthly envelopes.
-              {usage.is_quota_exceeded && (
-                <span className="text-rose-600 font-bold ml-1.5">(Quota Exceeded)</span>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="w-32 bg-slate-200 rounded-full h-2 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  usage.is_quota_exceeded
-                    ? 'bg-rose-500'
-                    : (usage.envelopes_used / (usage.envelopes_limit || 1)) >= 0.8
-                    ? 'bg-amber-500'
-                    : 'bg-[#1D72FE]'
-                }`}
-                style={{
-                  width: `${Math.min(100, (usage.envelopes_used / (usage.envelopes_limit || 1)) * 100)}%`
-                }}
-              />
-            </div>
-            <a
-              href="/settings"
-              onClick={(e) => { e.preventDefault(); window.location.pathname = '/settings'; }}
-              className="btn btn-primary text-xs py-1.5 px-3 rounded-xl shrink-0"
+            <button
+              onClick={() => setShowPricingModal(true)}
+              className="btn btn-primary text-xs py-2 px-4 rounded-xl shrink-0 shadow-sm flex items-center gap-1.5"
             >
-              Manage Plan
-            </a>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Upgrade Plan</span>
+            </button>
           </div>
-        </div>
+        ) : usage.envelopes_limit !== null ? (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 p-4 rounded-2xl border border-blue-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-[#1D72FE]">
+                  {usage.plan_display_name} Plan
+                </span>
+                {usage.is_trial ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-600" />
+                    Trial: {usage.trial_days_remaining ?? 7} days left (No Card Required)
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-500">
+                    Cycle renews in {usage.days_remaining_in_cycle} days
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-700 font-medium">
+                You have dispatched <strong>{usage.envelopes_used}</strong> of <strong>{usage.envelopes_limit}</strong> monthly envelopes.
+                {usage.is_quota_exceeded && (
+                  <span className="text-rose-600 font-bold ml-1.5">(Quota Exceeded)</span>
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="w-32 bg-slate-200 rounded-full h-2 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    usage.is_quota_exceeded
+                      ? 'bg-rose-500'
+                      : (usage.envelopes_used / (usage.envelopes_limit || 1)) >= 0.8
+                      ? 'bg-amber-500'
+                      : 'bg-[#1D72FE]'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (usage.envelopes_used / (usage.envelopes_limit || 1)) * 100)}%`
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => setShowPricingModal(true)}
+                className="btn btn-primary text-xs py-1.5 px-3 rounded-xl shrink-0"
+              >
+                {usage.is_trial ? 'Upgrade to Paid' : 'Plans & Pricing'}
+              </button>
+            </div>
+          </div>
+        ) : null
       )}
 
       {/* Filter Tabs Matching Production */}
@@ -566,6 +601,13 @@ export const SubmissionsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Pricing and Tier Upgrade Modal */}
+      <PricingModal
+        isOpen={showPricingModal}
+        onClose={() => setShowPricingModal(false)}
+        usage={usage}
+      />
 
     </div>
   );

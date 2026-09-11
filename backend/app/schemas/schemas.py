@@ -663,22 +663,29 @@ class AccountUsageOut(BaseModel):
     plan: str
     plan_display_name: str
     plan_expires_at: Optional[datetime] = None
-    
+
+    # Trial Lifecycle
+    is_trial: bool = False
+    trial_ends_at: Optional[datetime] = None
+    trial_days_remaining: Optional[int] = None
+    is_trial_expired: bool = False
+    billing_interval: str = "monthly"
+
     # Envelope Quota
     envelopes_used: int
     envelopes_limit: Optional[int] = None  # None = unlimited
     envelopes_remaining: Optional[int] = None
-    
+
     # Seats Quota
     seats_used: int
     seats_limit: Optional[int] = None  # None = unlimited
     seats_remaining: Optional[int] = None
-    
+
     # Billing cycle
     cycle_start: datetime
     cycle_end: datetime
     days_remaining_in_cycle: int
-    
+
     # Allowed Features & Channels
     allowed_channels: List[str]
     can_use_custom_domain: bool
@@ -687,6 +694,9 @@ class AccountUsageOut(BaseModel):
 
 class AccountPlanUpdateIn(BaseModel):
     plan: str
+    is_trial: Optional[bool] = None
+    trial_ends_at: Optional[datetime] = None
+    billing_interval: Optional[str] = None
     plan_expires_at: Optional[datetime] = None
     custom_envelope_limit: Optional[int] = None
     custom_seat_limit: Optional[int] = None
