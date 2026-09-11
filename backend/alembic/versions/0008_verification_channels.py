@@ -5,7 +5,7 @@ or signing a document. This migration adds columns to track the selected
 channel (email, sms, whatsapp, telegram), recipient phone number, secure
 OTP hash, expiration timestamp, attempt count, and confirmation timestamp.
 
-Revision ID: 0008_recipient_verification_channels
+Revision ID: 0008_verification_channels
 Revises: 0007_template_folder_unique_name
 Create Date: 2026-09-11
 """
@@ -14,13 +14,18 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "0008_recipient_verification_channels"
+revision: str = "0008_verification_channels"
 down_revision: Union[str, None] = "0007_template_folder_unique_name"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Widen version_num so long revision names never cause StringDataRightTruncation
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE character varying(64)")
+
     op.add_column(
         "recipients",
         sa.Column("verification_channel", sa.String(length=50), nullable=False, server_default="none")
