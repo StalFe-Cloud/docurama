@@ -138,10 +138,15 @@ def test_preview_path_refuses_foreign_ids():
     """A path is only ever built from an id this service minted."""
     import pytest as _pytest
 
-    with _pytest.raises(ValueError):
-        preview_path("/storage", "../../etc/passwd")
+    account_id = "01234567-89ab-cdef-0123-456789abcdef"
 
-    ok = preview_path("/storage", new_doc_id())
+    with _pytest.raises(ValueError):
+        preview_path("/storage", "../../etc/passwd", account_id)
+
+    with _pytest.raises(ValueError):
+        preview_path("/storage", new_doc_id(), "../../etc/passwd")
+
+    ok = preview_path("/storage", new_doc_id(), account_id)
     assert ok.endswith(".pdf")
 
 
@@ -221,6 +226,28 @@ def test_production_refuses_placeholder_app_url():
 def test_development_may_use_defaults():
     """Local development must stay runnable with the shipped values."""
     cfg = _settings(ENV="development", SECRET_KEY=DEV_SECRET_KEY, P12_PASSWORD=DEV_P12_PASSWORD)
+    _validate_production_secrets(cfg)  # must not raise
+
+
+def test_production_guard_rejects_engine_compose_secret():
+    cfg = Settings(
+        ENV="production",
+        SECRET_KEY="docurama-production-secret-key-2026-crypto",
+        P12_PASSWORD="a-real-p12-password",
+        APP_URL="https://docurama.stalfe.com",
+    )
+    with pytest.raises(RuntimeError) as exc:
+        _validate_production_secrets(cfg)
+    assert "shipped with the repository" in str(exc.value)
+
+
+def test_production_guard_accepts_fresh_secret():
+    cfg = Settings(
+        ENV="production",
+        SECRET_KEY="f" * 48,
+        P12_PASSWORD="a-real-p12-password",
+        APP_URL="https://docurama.stalfe.com",
+    )
     _validate_production_secrets(cfg)  # must not raise
 
 

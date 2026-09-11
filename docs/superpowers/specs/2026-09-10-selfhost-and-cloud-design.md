@@ -1,4 +1,4 @@
-# Docurama: Self-Host Hardening + EU Cloud SaaS — Design Spec
+# Docurama: Self-Host Hardening + EU Cloud SaaS - Design Spec
 
 Date: 2026-09-10
 Status: Approved (user-approved master plan)
@@ -6,7 +6,7 @@ Status: Approved (user-approved master plan)
 ## 1. Strategy
 
 One codebase, two deployment modes (`DOCURAMA_DEPLOYMENT_MODE=selfhost|cloud`).
-Positioning: **"The EU signer"** — sovereign EU hosting, real PAdES-LTA cryptography,
+Positioning: **"The EU signer"** - sovereign EU hosting, real PAdES-LTA cryptography,
 QES via a qualified trust-service partner, fair pricing without envelope starvation,
 and a self-host story DocuSign cannot offer.
 
@@ -47,7 +47,7 @@ Urgent exposures found (drive Phase 0):
 | 9 | Domain enforcement toggle lacks admin check; two domain endpoints leak org data | `backend/app/api/domains.py` |
 | 10 | No CI/CD; no upgrade/backup tooling; deploy scripts hardcode host 212.47.79.52 | `deploy/`, repo root |
 
-## 4. Phase 0 — Secure & stabilize docurama.stalfe.com (~2 weeks)
+## 4. Phase 0 - Secure & stabilize docurama.stalfe.com (~2 weeks)
 
 ### 4.1 Day-one security
 - Delete `cookies.txt` from the repo; invalidate the session it contains.
@@ -85,14 +85,14 @@ Urgent exposures found (drive Phase 0):
 - HTTP-level endpoint tests (FastAPI TestClient) with multi-tenant fixtures, targeting
   the isolation gaps above; the existing suite is unit/service-only.
 
-## 5. Phase 1 — Cloud foundation + product experience, docurama.eu (~6–8 weeks)
+## 5. Phase 1 - Cloud foundation + product experience, docurama.eu (~6-8 weeks)
 
 1. Capability layer: deployment mode + registry (registration, billing, quotas,
    subdomains, custom domains); API/UI to grant `is_platform_admin` (flag exists in the
    model with no setter anywhere).
-2. Tenant routing: wildcard TLS for `*.docurama.eu`; host→Account middleware resolving
-   subdomain and verified custom domains; dynamic host validation replaces the fixed
-   `ALLOWED_ORIGINS` list in cloud mode; reserved-subdomain blocklist; per-account
+2. Tenant routing: wildcard TLS for `*.docurama.eu`; host-to-Account middleware
+   resolving subdomain and verified custom domains; dynamic host validation replaces the
+   fixed `ALLOWED_ORIGINS` list in cloud mode; reserved-subdomain blocklist; per-account
    branding applied on custom domains.
 3. Tenant isolation: new artifacts under `storage/accounts/<account_id>/`; DB-stored
    absolute paths keep legacy files readable; account-scoped previews; per-endpoint
@@ -105,17 +105,17 @@ Urgent exposures found (drive Phase 0):
    admin-email click-link); auto-recheck with found-vs-expected diagnostics.
 5. Signer verification channels: `VerificationChannel` interface with Email OTP (free,
    default), Telegram Bot (free), WhatsApp Cloud API (near-free: authentication
-   messages ~€0.003–0.03; service conversations free and unlimited), real SMS via an EU
-   aggregator (paid, Business tier). Wired to the existing `sms` settings section.
-6. Onboarding: signup questionnaire (role, use case, volume, team size) → adaptive
-   template packs per vertical (HR, Sales, Legal, Real Estate, Finance) → onboarding
-   checklist (stamp → first envelope → optional domain verify → invite team → SMTP) →
-   cursor-guided tours (react-joyride) → contextual empty states → "first envelope in
+   messages ~EUR 0.003-0.03; service conversations free and unlimited), real SMS via an
+   EU aggregator (paid, Business tier). Wired to the existing `sms` settings section.
+6. Onboarding: signup questionnaire (role, use case, volume, team size) then adaptive
+   template packs per vertical (HR, Sales, Legal, Real Estate, Finance) then onboarding
+   checklist (stamp, first envelope, optional domain verify, invite team, SMTP) then
+   cursor-guided tours (react-joyride), contextual empty states, "first envelope in
    5 minutes" email drip. Signers: zero-account, mobile-first.
-7. UI/UX redesign: design tokens + dark mode → component library (repo has ~2
-   components and a 3,937-line SettingsPage to decompose) → page-by-page refresh
+7. UI/UX redesign: design tokens + dark mode, component library (repo has ~2
+   components and a 3,937-line SettingsPage to decompose), page-by-page refresh
    (dashboard with insights, builder with snap guides and undo/redo, signing studio,
-   ⌘K command palette, keyboard shortcuts).
+   command palette, keyboard shortcuts).
 8. Quotas & metering: Plan model (envelopes/mo, storage, seats); single quota service;
    usage metering hooked on `envelope.created`; per-account rate limits.
 9. Billing (Stripe, hybrid): checkout, billing portal, webhooks, dunning; Enterprise
@@ -124,7 +124,7 @@ Urgent exposures found (drive Phase 0):
     export; hard delete with grace period; separate `docurama-eu` compose project and
     staging; deploy scripts parameterized; CI image publishing.
 
-## 6. Phase 2 — Trust program, parity, differentiation (quarterly)
+## 6. Phase 2 - Trust program, parity, differentiation (quarterly)
 
 Trust & certification program:
 - Free now: CSA STAR Level 1 (CAIQ v4) with public STAR Registry listing; SSL Labs A+;
@@ -147,17 +147,17 @@ advanced audit exports; SSO/SAML + SCIM (Enterprise); EUDI-Wallet readiness watc
 
 | Tier | Price | Limits | Notes |
 |------|-------|--------|-------|
-| Free | €0 | 5 envelopes/mo, 1 seat | Unlimited signers/templates, no watermark, email OTP |
-| Plus | €9/user/mo annual (€12 monthly) | Fair-use 300 envelopes/user/mo | Branding, custom domain, WhatsApp/Telegram verify, API + webhooks |
-| Business | €17/user/mo annual (€21 monthly) | Same envelopes | + SMS verify, audit exports, shared folders, priority support, SSO when shipped |
-| Enterprise | Custom | Custom | QES add-on (~€2–4/envelope), SAML/SCIM, self-host license, DPA, SLA |
+| Free | EUR 0 | 5 envelopes/mo, 1 seat | Unlimited signers/templates, no watermark, email OTP |
+| Plus | EUR 9/user/mo annual (EUR 12 monthly) | Fair-use 300 envelopes/user/mo | Branding, custom domain, WhatsApp/Telegram verify, API + webhooks |
+| Business | EUR 17/user/mo annual (EUR 21 monthly) | Same envelopes | + SMS verify, audit exports, shared folders, priority support, SSO when shipped |
+| Enterprise | Custom | Custom | QES add-on (~EUR 2-4/envelope), SAML/SCIM, self-host license, DPA, SLA |
 
-Signers always free. Every envelope footer: "Signed securely with Docurama — verify free."
+Signers always free. Every envelope footer: "Signed securely with Docurama - verify free."
 
 ## 8. Go-live plan
 
-1. Phase 0 hardening + Trust Center live on stalfe → private-beta credibility.
-2. docurama.eu closed beta with 20–50 EU SME design partners across target verticals.
+1. Phase 0 hardening + Trust Center live on stalfe -> private-beta credibility.
+2. docurama.eu closed beta with 20-50 EU SME design partners across target verticals.
 3. Public launch: Product Hunt, HN, EU tech press, LinkedIn.
 4. Channel partnerships: accounting firms, HR platforms, real-estate agencies, notaries.
 - Demand engines: programmatic SEO comparison pages, free-tier virality via signer
@@ -165,14 +165,15 @@ Signers always free. Every envelope footer: "Signed securely with Docurama — v
 - Unit economics: COGS per envelope is storage cents + free TSA + near-free OTP; QES
   billed at pass-through.
 - KPIs: activation (first envelope < 24h), weekly active senders, envelope volume,
-  free→paid conversion, logo churn, support tickets per envelope.
-- Timeline: weeks 1–2 Phase 0; weeks 3–10 Phase 1 + beta; weeks 11–12 Trust Center,
+  free-to-paid conversion, logo churn, support tickets per envelope.
+- Timeline: weeks 1-2 Phase 0; weeks 3-10 Phase 1 + beta; weeks 11-12 Trust Center,
   polish, public launch; Phase 2 quarterly thereafter.
 
 ## 9. Competitive research basis (2026)
 
-- DocuSign: $10–$65/user/mo with 10 envelopes/user/mo caps even on paid tiers.
-- DocuSeal: free cloud ~10 docs/mo; Pro ~$20/user/mo; AGPL community self-host edition.
+- DocuSign: $10-$65/user/mo with 10 envelopes/user/mo caps even on paid tiers.
+- The leading open-source competitor: free cloud ~10 docs/mo; Pro ~$20/user/mo; AGPL
+  community self-host edition.
 - QES available as single-API integrations from multiple QTSPs; WhatsApp Business API:
-  service conversations free, authentication templates ~€0.003–0.03; Telegram Bot API
-  free.
+  service conversations free, authentication templates ~EUR 0.003-0.03; Telegram Bot
+  API free.

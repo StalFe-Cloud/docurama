@@ -8,6 +8,13 @@ from typing import List
 DEV_SECRET_KEY = "docurama-development-secret-key-not-for-production"
 DEV_P12_PASSWORD = "docurama_dev_cert_pass"
 
+# Values that have shipped inside repository files. A secret that was ever printed
+# in a compose file or README is public knowledge, so production refuses each of
+# them exactly like the development default.
+KNOWN_WEAK_SECRET_KEYS = {
+    "docurama-production-secret-key-2026-crypto",
+}
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Docurama"
@@ -16,6 +23,10 @@ class Settings(BaseSettings):
 
     # Deployment environment. Anything other than "development" enables production guards.
     ENV: str = os.getenv("DOCURAMA_ENV", "production")
+
+    # Deployment mode. selfhost: one operator, registration closed unless opened
+    # deliberately. cloud: the public multi-tenant platform, registration open.
+    DEPLOYMENT_MODE: str = os.getenv("DOCURAMA_DEPLOYMENT_MODE", "selfhost")
 
     # Server URLs
     APP_URL: str = os.getenv("DOCURAMA_APP_URL", "https://docurama.example.com")
@@ -89,6 +100,14 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         return self.ENV.strip().lower() in ("development", "dev", "local", "test")
 
+    @property
+    def registration_open(self) -> bool:
+        if self.DEPLOYMENT_MODE.strip().lower() == "cloud":
+            return True
+        return os.getenv("DOCURAMA_PUBLIC_REGISTRATION", "false").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
+
 
 def _validate_production_secrets(cfg: "Settings") -> None:
     """
@@ -102,6 +121,8 @@ def _validate_production_secrets(cfg: "Settings") -> None:
     problems = []
     if cfg.SECRET_KEY == DEV_SECRET_KEY:
         problems.append("DOCURAMA_SECRET_KEY is still the built-in development value")
+    if cfg.SECRET_KEY in KNOWN_WEAK_SECRET_KEYS:
+        problems.append("DOCURAMA_SECRET_KEY is a value shipped with the repository; generate a fresh one")
     if len(cfg.SECRET_KEY) < 32:
         problems.append("DOCURAMA_SECRET_KEY must be at least 32 characters")
     if cfg.P12_PASSWORD == DEV_P12_PASSWORD:

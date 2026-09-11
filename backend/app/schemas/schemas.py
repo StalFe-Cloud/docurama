@@ -4,7 +4,9 @@ from pydantic import BaseModel, EmailStr, Field as PydanticField
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    # Same floor as password change and reset. Registration used to accept
+    # anything, so the weakest credential in the system was set at sign-up.
+    password: str = PydanticField(min_length=12)
     first_name: Optional[str] = ""
     last_name: Optional[str] = ""
 
@@ -441,8 +443,6 @@ class DomainVerifyResponse(BaseModel):
 class DomainPublicStatus(BaseModel):
     domain: str
     is_verified: bool
-    verified_at: Optional[datetime] = None
-    organization_name: Optional[str] = None
 
 class DomainAuthValidateRequest(BaseModel):
     email: EmailStr
@@ -452,7 +452,6 @@ class DomainAuthValidateResponse(BaseModel):
     domain: str
     assurance_level: str  # "enterprise_domain_verified" or "standard"
     txt_record_host: Optional[str] = None
-    verification_token: Optional[str] = None
     verified_at: Optional[datetime] = None
     organization_name: Optional[str] = None
     message: str
@@ -617,3 +616,6 @@ class SmtpTestResult(BaseModel):
     sent: bool
     source: Optional[str] = None
     message: str
+
+class DeliverabilityCheckRequest(BaseModel):
+    domain: str

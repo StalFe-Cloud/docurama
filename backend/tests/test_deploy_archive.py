@@ -49,6 +49,9 @@ def deploy():
     "some/nested/private.key",
     "certs/server.pem",
     "a/b/keystore.jks",
+    "cookies.txt",
+    "backend/site_cookies.txt",
+    "a/b/curl_cookies.txt",
 ])
 def test_secrets_are_recognised(deploy, path):
     assert deploy.is_secret_path(path) is True
@@ -61,6 +64,7 @@ def test_secrets_are_recognised(deploy, path):
     "frontend/src/lib/api.ts",
     "docker-compose.yml",
     "README.md",
+    "docs/cookies_policy.md",
 ])
 def test_shipped_files_are_not_flagged(deploy, path):
     assert deploy.is_secret_path(path) is False
@@ -143,3 +147,38 @@ def test_the_real_repository_archives_without_secrets(deploy):
     finally:
         if os.path.exists(tar_path):
             os.remove(tar_path)
+
+
+def test_scratch_dirs_and_cookie_jars_never_enter_the_archive(deploy, tmp_path, monkeypatch):
+    """
+    git keeps agent scratch directories and cookie jars out of history, but tarfile
+    does not consult .gitignore. The builder must drop them itself, the same way it
+    drops a developer's .env.
+    """
+    source = tmp_path / "tree"
+    (source / "backend" / "app").mkdir(parents=True)
+    (source / "backend" / "app" / "main.py").write_text("x", encoding="utf-8")
+    (source / ".superpowers").mkdir()
+    (source / ".superpowers" / "brief.md").write_text("x", encoding="utf-8")
+    (source / ".zcode").mkdir()
+    (source / ".zcode" / "session.json").write_text("x", encoding="utf-8")
+    (source / "cookies.txt").write_text("x", encoding="utf-8")
+    (source / "backend" / "site_cookies.txt").write_text("x", encoding="utf-8")
+
+    # create_deploy_archive() packages the tree one level above its own module
+    # directory, because the real script lives in deploy/. Mirror that layout so
+    # the synthetic tree is the archive root.
+    monkeypatch.setattr(deploy, "__file__", str(source / "deploy" / "deploy_to_vps.py"))
+    tar_path = deploy.create_deploy_archive()
+    try:
+        with tarfile.open(tar_path, "r:gz") as tar:
+            names = [n.replace("\\", "/") for n in tar.getnames()]
+    finally:
+        if os.path.exists(tar_path):
+            os.remove(tar_path)
+
+    assert "backend/app/main.py" in names
+    assert not any(n.startswith(".superpowers/") for n in names)
+    assert not any(n.startswith(".zcode/") for n in names)
+    assert not any(n.split("/")[-1] == "cookies.txt" for n in names)
+    assert not any(n.split("/")[-1].endswith("_cookies.txt") for n in names)

@@ -5,9 +5,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.database import engine
+from app.core.rate_limit import limiter
 from app.api.router import api_router
 from app.api.ws import router as ws_router
 from app.services.reminder_sweeper import reminder_loop
@@ -45,6 +48,11 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json"
 )
+
+# Rate limiting: the shared limiter must sit on app.state and its exhaustion
+# exception must map to a 429 before any middleware or route runs.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware
 app.add_middleware(

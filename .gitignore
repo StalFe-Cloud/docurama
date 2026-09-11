@@ -47,3 +47,13 @@ postgres/
 Thumbs.db
 *.swp
 *~
+
+# Exported cookie jars must never be committed; they contain live sessions.
+cookies.txt
+*_cookies.txt
+
+# Local agent-harness scratch state
+.zcode/
+
+# Agent review scratch state
+.superpowers/

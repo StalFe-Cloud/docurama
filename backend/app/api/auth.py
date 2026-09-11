@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.core.security import (
     verify_and_upgrade_password, get_password_hash,
     create_access_token, decode_access_token,
@@ -134,7 +135,7 @@ async def build_user_out(user: User, db: AsyncSession) -> UserOut:
         created_at=user.created_at
     )
 
-async def _user_from_api_key(presented: str, db: AsyncSession) -> Optional[User]:
+async def _user_from_api_key(presented: str, request: Request, db: AsyncSession) -> Optional[User]:
     """
     Resolve an issued API key to the user who created it.
 
@@ -161,13 +162,28 @@ async def _user_from_api_key(presented: str, db: AsyncSession) -> Optional[User]
         if not owner or not owner.is_active:
             return None
 
-        # The key is bound to the account it was issued for, not to whatever the
-        # owner has since switched to.
-        if owner.account_id != key.account_id:
-            owner.account_id = key.account_id
+        # A key authorises only what its scopes allow. Fail closed: a key with no
+        # scopes can do nothing, which is the only safe meaning of an empty list.
+        scopes = key.scopes or []
+        mutating = request.method.upper() not in ("GET", "HEAD", "OPTIONS")
+        if mutating and "write" not in scopes:
+            raise HTTPException(status_code=403, detail="This API key is read-only")
+        if not mutating and "read" not in scopes:
+            raise HTTPException(status_code=403, detail="This API key has no read scope")
 
         key.last_used_at = datetime.now(timezone.utc)
         await db.commit()
+
+        # Mark how this request authenticated so interactive-only endpoints can
+        # refuse machine credentials before their mutation no-ops on a detached
+        # owner (see require_interactive_session below).
+        request.state.auth_via = "api_key"
+
+        # Detach the owner before rebinding the account so the binding is request
+        # scoped only. Previously every key call rewrote the owner's active company
+        # in the database, which made machine traffic corrupt interactive sessions.
+        db.expunge(owner)
+        owner.account_id = key.account_id
         return owner
 
     return None
@@ -180,7 +196,7 @@ async def get_current_user(
     # Issued API keys authenticate machine callers against the documented API.
     api_key = request.headers.get("X-Api-Key")
     if api_key:
-        key_user = await _user_from_api_key(api_key.strip(), db)
+        key_user = await _user_from_api_key(api_key.strip(), request, db)
         if key_user:
             return key_user
         raise HTTPException(
@@ -218,12 +234,35 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or disabled")
     return user
 
+
+async def require_interactive_session(request: Request) -> None:
+    """Account-management endpoints mutate the signed-in user; an API key is a
+    machine credential and its owner object is request-scoped, so mutations
+    silently no-op. Refuse instead of pretending to succeed."""
+    if getattr(request.state, "auth_via", None) == "api_key":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint requires an interactive session, not an API key.",
+        )
+
+
 @router.post("/register", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     user_in: UserCreate,
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
+    if not settings.registration_open:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Registration is closed on this deployment. "
+                "Ask an existing administrator to invite you."
+            ),
+        )
+
     query = select(User).where(User.email == user_in.email)
     existing = (await db.execute(query)).scalar_one_or_none()
     if existing:
@@ -272,7 +311,9 @@ async def register(
 # Returns TokenResponse normally, or LoginChallengeResponse when a second factor is
 # enrolled, so no single response_model applies.
 @router.post("/login")
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     credentials: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db)
@@ -331,6 +372,7 @@ async def get_me(
 async def change_password(
     payload: PasswordChangeRequest,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -426,6 +468,7 @@ async def totp_status(current_user: User = Depends(get_current_user)):
 @router.post("/totp/enrol", response_model=TotpEnrolStart)
 async def start_totp_enrolment(
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -459,6 +502,7 @@ async def start_totp_enrolment(
 async def confirm_totp_enrolment(
     payload: TotpEnrolConfirm,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -497,6 +541,7 @@ async def confirm_totp_enrolment(
 async def disable_totp(
     payload: TotpDisableRequest,
     current_user: User = Depends(get_current_user),
+    _interactive: None = Depends(require_interactive_session),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -522,7 +567,9 @@ async def disable_totp(
 
 
 @router.post("/totp/verify", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def verify_totp_login(
+    request: Request,
     payload: TotpLoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -582,6 +629,7 @@ async def verify_totp_login(
 
 
 @router.post("/request-password-reset", response_model=GenericAckResponse)
+@limiter.limit("5/minute")
 async def request_password_reset(
     payload: PasswordResetRequest,
     request: Request,
