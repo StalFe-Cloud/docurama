@@ -4,9 +4,10 @@ Tenant routing end to end: host headers resolve to tenants, unknown tenants get
 request at B's hostname.
 """
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from app.core.security import get_password_hash
-from app.models import Account, AccountMembership, Envelope, Template, User
+from app.models import Account, AccountMembership, Envelope, User
 
 PASSWORD = "a-long-password-1234"
 
@@ -47,23 +48,25 @@ async def _login(client, email):
     assert resp.status_code == 200, resp.text
 
 
-async def test_middleware_records_host_on_state(client):
-    # The probe uses a unique path and stays registered on the shared app on
-    # purpose: Starlette appends routes, so the brief's routes.pop(0) would
-    # remove the app's first real route rather than the probe. Asserting on the
-    # response body keeps the check self-contained.
-    from fastapi import Request
+async def test_middleware_records_host_on_state():
+    # The middleware is exercised on an app this test owns: appending a probe
+    # route to the shared module-level app only works until a catch-all route
+    # (registered whenever the built SPA exists) shadows everything appended
+    # after it.
+    from fastapi import FastAPI, Request
 
-    from app.main import app
+    from app.core.tenant_middleware import TenantHostMiddleware
 
-    if not any(getattr(r, "path", None) == "/api/_tenant_probe"
-               for r in app.router.routes):
+    probe_app = FastAPI()
+    probe_app.add_middleware(TenantHostMiddleware)
 
-        @app.get("/api/_tenant_probe")
-        async def probe(request: Request):
-            return {"host": getattr(request.state, "tenant_host", None)}
+    @probe_app.get("/api/_tenant_probe")
+    async def probe(request: Request):
+        return {"host": getattr(request.state, "tenant_host", None)}
 
-    resp = await client.get("/api/_tenant_probe",
+    async with AsyncClient(transport=ASGITransport(app=probe_app),
+                           base_url="http://test") as ac:
+        resp = await ac.get("/api/_tenant_probe",
                             headers={"Host": "acme.docurama.eu"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["host"] == "acme.docurama.eu"
