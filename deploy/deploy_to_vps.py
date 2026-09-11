@@ -74,11 +74,12 @@ def preflight_env_check():
         "DOCURAMA_DATABASE_URL, DOCURAMA_SECRET_KEY and DOCURAMA_P12_PASSWORD."
     )
 
-# Directories never shipped: build output, local virtualenvs, caches, and the runtime
-# data the server owns.
+# Directories never shipped: build output, local virtualenvs, caches, local agent
+# scratch space, and the runtime data the server owns.
 EXCLUDE_DIRS = {
     "node_modules", ".git", ".pytest_cache", "__pycache__", "dist", "build",
     ".venv", "venv", "env", "storage", "data", "uploads", ".mypy_cache", ".ruff_cache",
+    ".superpowers", ".zcode",
 }
 
 # Files never shipped, matched on the archive-relative path.
@@ -101,6 +102,11 @@ def is_secret_path(rel_path):
 
     # .env in any directory, except the committed example.
     if name == ".env" or (name.startswith(".env.") and name != ".env.example"):
+        return True
+
+    # Cookie jars hold live session tokens; gitignored, but tarfile does not read
+    # .gitignore, so they have to be named here too.
+    if name == "cookies.txt" or name.endswith("_cookies.txt"):
         return True
 
     # Anything under a certs/ directory other than its README.
