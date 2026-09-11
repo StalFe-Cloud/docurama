@@ -37,7 +37,8 @@ import {
   Scale,
   Info,
   Clock,
-  Send
+  Send,
+  Mail
 } from 'lucide-react';
 import { api, DocumentPage, ContractAnalysisReport, CorrectionRequestItem } from '../lib/api';
 
@@ -69,8 +70,18 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
   const [isCompleted, setIsCompleted] = useState(false);
   const [completedCode, setCompletedCode] = useState('');
   
+  // Signer Identity Verification Gate State
+  const [isVerified, setIsVerified] = useState<boolean>(true);
+  const [otpCode, setOtpCode] = useState<string>('');
+  const [otpSending, setOtpSending] = useState<boolean>(false);
+  const [otpVerifying, setOtpVerifying] = useState<boolean>(false);
+  const [otpError, setOtpError] = useState<string>('');
+  const [otpSuccessMsg, setOtpSuccessMsg] = useState<string>('');
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+
   // Passkey Biometrics
   const [biometricStatus, setBiometricStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
+
 
   // Contract Intelligence State
   const [analysisReport, setAnalysisReport] = useState<ContractAnalysisReport | null>(null);
@@ -123,6 +134,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
       ]);
 
       setSession(sessionData);
+      setIsVerified(Boolean(sessionData.is_verified));
       setPages(pagesData.pages || []);
 
       if (sessionData.recipient?.name) {
@@ -145,6 +157,48 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (cooldownRemaining <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownRemaining(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownRemaining]);
+
+  const handleSendOtp = async () => {
+    try {
+      setOtpSending(true);
+      setOtpError('');
+      const res = await api.sendSigningOtp(token);
+      setOtpSuccessMsg(res.message || 'Verification passcode dispatched.');
+      setCooldownRemaining(res.cooldown_seconds || 30);
+      setTimeout(() => setOtpSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setOtpError(err.message || 'Failed to send verification code.');
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode || otpCode.length !== 6) return;
+    try {
+      setOtpVerifying(true);
+      setOtpError('');
+      await api.verifySigningOtp(token, otpCode);
+      setIsVerified(true);
+      // Reload pages since they are now unlocked
+      const pagesData = await api.getSigningPages(token).catch(() => ({ page_count: 0, pages: [] }));
+      setPages(pagesData.pages || []);
+    } catch (err: any) {
+      setOtpError(err.message || 'Invalid verification code.');
+    } finally {
+      setOtpVerifying(false);
+    }
+  };
+
 
   const initWebSocket = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -565,6 +619,96 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
             <ShieldCheck className="w-4 h-4" />
             View Public Verification Certificate
           </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (session?.requires_verification && !isVerified) {
+    const channel = session.verification_channel || 'email_otp';
+    const channelLabel =
+      channel === 'sms_otp' ? 'SMS Text Message' :
+      channel === 'whatsapp_otp' ? 'WhatsApp' :
+      channel === 'telegram_otp' ? 'Telegram' : 'Email Address';
+
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4 bg-[#F8FAFC]">
+        <div className="max-w-md w-full p-8 rounded-3xl bg-white border border-slate-200 text-center space-y-6 shadow-xl animate-in zoom-in-95 duration-300">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#1D72FE] border border-blue-100 mx-auto flex items-center justify-center shadow-sm">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div>
+            <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-blue-50 text-[#1D72FE] border border-blue-200 inline-block mb-2">
+              Two-Factor Identity Challenge
+            </span>
+            <h2 className="text-2xl font-bold text-[#0F172A]">Identity Verification Required</h2>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              To review and sign <strong>{session.envelope_title}</strong>, the sender requires identity verification via {channelLabel}.
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-2 text-left">
+            <div className="flex items-center justify-between text-slate-500">
+              <span>Verification Channel:</span>
+              <span className="font-semibold text-slate-800">{channelLabel}</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-500">
+              <span>Delivery Target:</span>
+              <span className="font-mono text-slate-800 font-semibold">{session.target_obfuscated || session.recipient?.email}</span>
+            </div>
+          </div>
+
+          {otpError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 text-left">
+              {otpError}
+            </div>
+          )}
+
+          {otpSuccessMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 text-left">
+              {otpSuccessMsg}
+            </div>
+          )}
+
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 text-left">
+                6-Digit Verification Passcode
+              </label>
+              <input
+                type="text"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => {
+                  setOtpCode(e.target.value.replace(/\D/g, ''));
+                  setOtpError('');
+                }}
+                placeholder="123456"
+                className="w-full text-center text-2xl font-mono tracking-widest py-3 px-4 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#1D72FE] focus:border-[#1D72FE] bg-slate-50 font-bold"
+                autoFocus
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={otpVerifying || otpCode.length !== 6}
+              className="w-full btn btn-primary py-3 rounded-xl text-sm font-bold shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {otpVerifying ? 'Verifying Code...' : 'Verify and Unlock Document'}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Did not receive code?</span>
+            <button
+              type="button"
+              onClick={handleSendOtp}
+              disabled={otpSending || cooldownRemaining > 0}
+              className="text-[#1D72FE] font-semibold hover:underline disabled:opacity-50 disabled:no-underline"
+            >
+              {cooldownRemaining > 0 ? `Resend in ${cooldownRemaining}s` : otpSending ? 'Sending...' : 'Send / Resend Code'}
+            </button>
+          </div>
         </div>
       </div>
     );

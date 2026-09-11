@@ -271,11 +271,17 @@ def generate_certificate_of_completion_pdf(
         ]
         
         for r in recipients_data:
+            v_chan = r.get("verification_channel") or "none"
+            if v_chan != "none":
+                v_label = f"<br/><font color='#16a34a'><b>Auth: {v_chan.replace('_', ' ').title()} Verified</b></font>"
+            else:
+                v_label = "<br/><font color='#64748b'>Auth: Direct Signing Link</font>"
+
             signers_table_data.append([
                 Paragraph(f"<b>{r.get('name', '')}</b><br/><font color='#64748b'>{r.get('email', '')}</font>", cell_style),
                 Paragraph(f"{r.get('role', 'signer').upper()}<br/><font color='#16a34a'><b>{r.get('status', 'signed').upper()}</b></font>", cell_style),
                 Paragraph(str(r.get("signed_at", "N/A")), cell_style),
-                Paragraph(f"IP: {r.get('ip_address', 'Recorded')}<br/>User-Agent: Verified", cell_style),
+                Paragraph(f"IP: {r.get('ip_address', 'Recorded')}<br/>User-Agent: Verified{v_label}", cell_style),
             ])
             
         t_signers = Table(signers_table_data, colWidths=[160, 100, 130, 150])

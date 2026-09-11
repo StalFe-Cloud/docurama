@@ -221,6 +221,8 @@ class RecipientBase(BaseModel):
     email: EmailStr
     role: str = "signer"  # signer, viewer, approver
     routing_order: int = 1
+    verification_channel: str = "none"  # none, email_otp, sms_otp, whatsapp_otp, telegram_otp
+    phone: Optional[str] = None
 
 class RecipientCreate(RecipientBase):
     pass
@@ -237,6 +239,7 @@ class RecipientOut(RecipientBase):
     reminders_sent_count: Optional[int] = 0
     last_reminded_at: Optional[datetime] = None
     token_expires_at: Optional[datetime] = None
+    verified_at: Optional[datetime] = None
     created_at: datetime
     
     class Config:
@@ -304,8 +307,28 @@ class SigningSessionOut(BaseModel):
     pdf_url: str
     fields: List[FieldOut]
     all_recipients: List[RecipientOut]
+    requires_verification: bool = False
+    verification_channel: Optional[str] = "none"
+    target_obfuscated: Optional[str] = None
+    is_verified: bool = True
+
+class SigningVerificationSendResponse(BaseModel):
+    success: bool
+    channel: str
+    target_obfuscated: str
+    message: str
+    cooldown_seconds: int = 30
+
+class SigningVerificationVerifyRequest(BaseModel):
+    code: str
+
+class SigningVerificationVerifyResponse(BaseModel):
+    success: bool
+    verified: bool
+    message: str
 
 class SignatureSubmission(BaseModel):
+
     field_id: str
     value: str
 
