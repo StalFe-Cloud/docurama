@@ -347,6 +347,27 @@ export interface WebhookItem {
   created_at: string;
 }
 
+export interface AccountUsage {
+  account_id: string;
+  account_name: string;
+  plan: string;
+  plan_display_name: string;
+  plan_expires_at?: string | null;
+  envelopes_used: number;
+  envelopes_limit?: number | null;
+  envelopes_remaining?: number | null;
+  seats_used: number;
+  seats_limit?: number | null;
+  seats_remaining?: number | null;
+  cycle_start: string;
+  cycle_end: string;
+  days_remaining_in_cycle: number;
+  allowed_channels: string[];
+  can_use_custom_domain: boolean;
+  can_use_api_keys: boolean;
+  is_quota_exceeded: boolean;
+}
+
 export interface ContractRiskFlag {
   category: string;
   severity: 'low' | 'medium' | 'high';
@@ -1137,6 +1158,14 @@ export const api = {
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Failed to send test email');
+    }
+    return res.json();
+  },
+  getAccountUsage: async (): Promise<AccountUsage> => {
+    const res = await fetch(`${API_BASE}/quotas/usage`);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to load account quota usage');
     }
     return res.json();
   }

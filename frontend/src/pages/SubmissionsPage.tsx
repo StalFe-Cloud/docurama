@@ -22,11 +22,12 @@ import {
   LayoutGrid,
   List
 } from 'lucide-react';
-import { api, Envelope, TemplateItem } from '../lib/api';
+import { api, Envelope, TemplateItem, AccountUsage } from '../lib/api';
 
 export const SubmissionsPage: React.FC = () => {
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usage, setUsage] = useState<AccountUsage | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedEnvelope, setSelectedEnvelope] = useState<Envelope | null>(null);
@@ -41,6 +42,7 @@ export const SubmissionsPage: React.FC = () => {
 
   useEffect(() => {
     loadEnvelopes();
+    api.getAccountUsage().then(setUsage).catch(() => null);
   }, []);
 
   const showToast = (msg: string) => {
@@ -228,6 +230,51 @@ export const SubmissionsPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Plan Usage & Quota Banner */}
+      {usage && usage.envelopes_limit !== null && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 p-4 rounded-2xl border border-blue-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-[#1D72FE]">
+                {usage.plan_display_name} Plan
+              </span>
+              <span className="text-xs text-slate-500">
+                Cycle renews in {usage.days_remaining_in_cycle} days
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 font-medium">
+              You have dispatched <strong>{usage.envelopes_used}</strong> of <strong>{usage.envelopes_limit}</strong> monthly envelopes.
+              {usage.is_quota_exceeded && (
+                <span className="text-rose-600 font-bold ml-1.5">(Quota Exceeded)</span>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="w-32 bg-slate-200 rounded-full h-2 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  usage.is_quota_exceeded
+                    ? 'bg-rose-500'
+                    : (usage.envelopes_used / (usage.envelopes_limit || 1)) >= 0.8
+                    ? 'bg-amber-500'
+                    : 'bg-[#1D72FE]'
+                }`}
+                style={{
+                  width: `${Math.min(100, (usage.envelopes_used / (usage.envelopes_limit || 1)) * 100)}%`
+                }}
+              />
+            </div>
+            <a
+              href="/settings"
+              onClick={(e) => { e.preventDefault(); window.location.pathname = '/settings'; }}
+              className="btn btn-primary text-xs py-1.5 px-3 rounded-xl shrink-0"
+            >
+              Manage Plan
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Filter Tabs Matching Production */}
       <div className="flex items-center justify-between gap-4">

@@ -29,12 +29,15 @@ def build_cors_policy(cfg):
         return list(cfg.ALLOWED_ORIGINS), None
 
     cloud_domain = cfg.CLOUD_DOMAIN.strip().lower()
+    domains = [cloud_domain]
+    if "docurama.eu" not in domains:
+        domains.append("docurama.eu")
     pattern = (
-        r"^https://([a-z0-9-]+\.)*"
-        + cloud_domain.replace(".", r"\.")
-        + r"$"
+        r"^https://([a-z0-9-]+\.)*("
+        + "|".join(d.replace(".", r"\.") for d in domains)
+        + r")$"
     )
-    # APP_URL's host (e.g. app.docurama.eu) already matches the pattern.
+    # APP_URL's host (e.g. app.docurama.rvrad.com) already matches the pattern.
     return [], re.compile(pattern)
 
 @asynccontextmanager

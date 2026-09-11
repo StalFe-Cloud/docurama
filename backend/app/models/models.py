@@ -20,6 +20,13 @@ class Account(Base):
     subdomain = Column(String(100), unique=True, nullable=True)
     timezone = Column(String(100), default="(GMT+00:00) UTC")
     enforce_domain_auth = Column(Boolean, default=False)
+    # Subscription Plan and Quotas
+    plan = Column(String(32), nullable=False, default="free")
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True)
+    custom_envelope_limit = Column(Integer, nullable=True)
+    custom_seat_limit = Column(Integer, nullable=True)
+    billing_cycle_anchor = Column(DateTime(timezone=True), nullable=True)
+
     # Set when a workspace is removed. The row survives because envelopes reference it
     # and their verification codes must keep resolving.
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
