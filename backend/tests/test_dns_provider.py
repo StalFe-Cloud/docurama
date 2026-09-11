@@ -43,6 +43,16 @@ async def test_failed_lookup_is_reported_not_guessed(monkeypatch):
     assert result["steps"] == dns_provider.GENERIC_STEPS
 
 
+async def test_route53_detected_by_awsdns_token(monkeypatch):
+    async def fake_doh(name, rtype):
+        return _ns_answers(["ns-123.awsdns-16.com", "ns-879.awsdns-45.net"])
+
+    monkeypatch.setattr(dns_provider, "doh_query", fake_doh)
+    result = await dns_provider.detect_provider("acme.example")
+    assert result["provider"] == "aws"
+    assert any("Route 53" in s or "AWS" in s for s in result["steps"])
+
+
 def test_tutorials_reference_the_challenge_host_pattern():
     for key, steps in dns_provider.PROVIDER_TUTORIALS.items():
         assert steps, key

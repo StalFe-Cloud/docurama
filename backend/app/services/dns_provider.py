@@ -18,7 +18,7 @@ PROVIDER_NS_SUFFIXES: Dict[str, tuple] = {
     "hetzner": ("hetzner.com", "hetzner.de"),
     "gandi": ("gandi.net",),
     "googledns": ("googledomains.com", "dns.google"),
-    "aws": ("awsdns.net",),
+    "aws": ("awsdns",),
     "digitalocean": ("digitalocean.com",),
     "porkbun": ("porkbun.com",),
 }
@@ -107,8 +107,12 @@ PROVIDER_TUTORIALS: Dict[str, List[str]] = {
 def _provider_for(nameserver: str):
     lowered = (nameserver or "").lower()
     for key, suffixes in PROVIDER_NS_SUFFIXES.items():
-        if any(lowered.endswith(sfx) for sfx in suffixes):
-            return key
+        for sfx in suffixes:
+            if "." in sfx:
+                if lowered.endswith(sfx):
+                    return key
+            elif f".{sfx}" in f".{lowered}":
+                return key
     return None
 
 
