@@ -463,6 +463,9 @@ class DomainAuthValidateResponse(BaseModel):
     organization_name: Optional[str] = None
     message: str
 
+class CloudflareTokenRequest(BaseModel):
+    api_token: str
+
 # Webhook Schemas
 class WebhookCreate(BaseModel):
     url: str

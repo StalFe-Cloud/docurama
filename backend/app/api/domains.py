@@ -12,7 +12,8 @@ from app.api.auth import get_current_user
 from app.models import User, DomainVerification, Account, AccountMembership
 from app.schemas import (
     DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
-    DomainAuthValidateRequest, DomainAuthValidateResponse
+    DomainAuthValidateRequest, DomainAuthValidateResponse,
+    CloudflareTokenRequest,
 )
 from app.services.domain_verifier import verify_client_domain, summarize_checks
 from app.services.dns_provider import detect_provider
@@ -301,6 +302,42 @@ async def domain_it_email_draft(
         "Thanks!"
     )
     return {"subject": subject, "body": body}
+
+
+@router.post("/{domain_id}/cloudflare")
+async def create_cloudflare_challenge(
+    domain_id: str,
+    payload: CloudflareTokenRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.api.companies import require_company_admin
+    from app.services.cloudflare_dns import create_challenge_record
+
+    await require_company_admin(current_user.account_id, current_user, db)
+    domain_rec = (await db.execute(
+        select(DomainVerification).where(
+            DomainVerification.id == domain_id,
+            DomainVerification.account_id == current_user.account_id,
+        )
+    )).scalar_one_or_none()
+    if not domain_rec:
+        raise HTTPException(status_code=404, detail="Domain record not found.")
+
+    result = await create_challenge_record(
+        payload.api_token, domain_rec.domain,
+        domain_rec.txt_record_host, domain_rec.txt_record_value,
+    )
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return {
+        "success": True,
+        "record_id": result["record_id"],
+        "message": (f"TXT record created at {domain_rec.txt_record_host}. "
+                    "Cloudflare changes usually appear within a minute or two; "
+                    "press Verify."),
+    }
 
 
 @router.post("/validate-authentication", response_model=DomainAuthValidateResponse)
