@@ -1,8 +1,9 @@
 """
 Docurama Quota, Metering & Plan Service
 
-Enforces envelope volume quotas, active seat limits, and feature availability
-across Free, Pro, Business, Enterprise, and Self-Host deployments.
+Enforces envelope volume quotas, active seat limits, trial lifecycle,
+and feature availability across Plus (7-Day Trial), Business Team,
+Enterprise, and Self-Host Unlimited deployments.
 """
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, List, Dict, Any
@@ -15,34 +16,28 @@ from app.models.models import Account, AccountMembership, Envelope, User
 
 
 class PlanTier:
-    FREE = "free"
-    PRO = "pro"
+    PLUS = "plus"
     BUSINESS = "business"
     ENTERPRISE = "enterprise"
     UNLIMITED = "unlimited"
+    # Legacy compatibility aliases
+    FREE = "free"
+    PRO = "pro"
 
 
 PLAN_DEFINITIONS: Dict[str, Dict[str, Any]] = {
-    PlanTier.FREE: {
-        "display_name": "Free",
-        "envelopes_per_month": 5,
+    PlanTier.PLUS: {
+        "display_name": "Plus",
+        "envelopes_per_month": 30,
         "seats": 1,
-        "allowed_channels": ["none", "email_otp"],
+        "allowed_channels": ["none", "email_otp", "sms_otp"],
         "can_use_custom_domain": False,
         "can_use_api_keys": False,
     },
-    PlanTier.PRO: {
-        "display_name": "Pro",
-        "envelopes_per_month": 50,
-        "seats": 5,
-        "allowed_channels": ["none", "email_otp", "sms_otp", "whatsapp_otp", "telegram_otp"],
-        "can_use_custom_domain": False,
-        "can_use_api_keys": True,
-    },
     PlanTier.BUSINESS: {
-        "display_name": "Business",
-        "envelopes_per_month": 500,
-        "seats": 20,
+        "display_name": "Business Team",
+        "envelopes_per_month": 250,
+        "seats": 3,
         "allowed_channels": ["none", "email_otp", "sms_otp", "whatsapp_otp", "telegram_otp"],
         "can_use_custom_domain": True,
         "can_use_api_keys": True,
@@ -64,24 +59,67 @@ PLAN_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "can_use_api_keys": True,
     },
 }
+# Backward compatibility aliases
+PLAN_DEFINITIONS[PlanTier.FREE] = PLAN_DEFINITIONS[PlanTier.PLUS]
+PLAN_DEFINITIONS[PlanTier.PRO] = PLAN_DEFINITIONS[PlanTier.PLUS]
 
 
 def get_effective_plan(account: Account) -> str:
     """
     Resolve the active plan for an account.
     In self-host mode, accounts default to unlimited unless explicitly set to a paid tier.
-    In cloud mode, accounts default to free.
+    In cloud mode, accounts default to plus.
     """
     is_cloud = (settings.DEPLOYMENT_MODE or "").strip().lower() == "cloud"
     plan = getattr(account, "plan", None)
     if not is_cloud:
-        if not plan or plan in (PlanTier.FREE, PlanTier.UNLIMITED, ""):
+        if not plan or plan in (PlanTier.PLUS, PlanTier.FREE, PlanTier.PRO, PlanTier.UNLIMITED, ""):
             return PlanTier.UNLIMITED
         return plan
 
-    if not plan:
-        return PlanTier.FREE
+    if not plan or plan in (PlanTier.FREE, PlanTier.PRO):
+        return PlanTier.PLUS
     return plan
+
+
+def is_trial_active(account: Account, ref_date: Optional[datetime] = None) -> bool:
+    """
+    Check if the account is currently within its 7-day trial window.
+    """
+    if not getattr(account, "is_trial", False):
+        return False
+    trial_ends = getattr(account, "trial_ends_at", None)
+    if not trial_ends:
+        return False
+    now = ref_date or datetime.now(timezone.utc)
+    return now < trial_ends
+
+
+def is_account_write_allowed(account: Account, ref_date: Optional[datetime] = None) -> Tuple[bool, str]:
+    """
+    Verify if the account is permitted to perform write operations (creating envelopes, inviting members).
+    Self-host mode is always allowed.
+    In cloud mode:
+    - If is_trial is True, must not be expired.
+    - If paid plan, must not be expired if plan_expires_at is set.
+    Returns (is_allowed, reason_code).
+    """
+    is_cloud = (settings.DEPLOYMENT_MODE or "").strip().lower() == "cloud"
+    if not is_cloud:
+        return True, "ALLOWED"
+
+    now = ref_date or datetime.now(timezone.utc)
+    if getattr(account, "is_trial", False):
+        trial_ends = getattr(account, "trial_ends_at", None)
+        if trial_ends and now >= trial_ends:
+            return False, "TRIAL_EXPIRED"
+        return True, "TRIAL_ACTIVE"
+
+    expires_at = getattr(account, "plan_expires_at", None)
+    if expires_at and now >= expires_at:
+        return False, "PLAN_EXPIRED"
+
+    return True, "ACTIVE"
 
 
 def get_billing_period(account: Account, ref_date: Optional[datetime] = None) -> Tuple[datetime, datetime]:
@@ -130,7 +168,7 @@ def get_envelope_limit(account: Account) -> Optional[int]:
         return account.custom_envelope_limit
 
     plan = get_effective_plan(account)
-    defn = PLAN_DEFINITIONS.get(plan, PLAN_DEFINITIONS[PlanTier.FREE])
+    defn = PLAN_DEFINITIONS.get(plan, PLAN_DEFINITIONS[PlanTier.PLUS])
     return defn["envelopes_per_month"]
 
 
@@ -144,7 +182,7 @@ def get_seat_limit(account: Account) -> Optional[int]:
         return account.custom_seat_limit
 
     plan = get_effective_plan(account)
-    defn = PLAN_DEFINITIONS.get(plan, PLAN_DEFINITIONS[PlanTier.FREE])
+    defn = PLAN_DEFINITIONS.get(plan, PLAN_DEFINITIONS[PlanTier.PLUS])
     return defn["seats"]
 
 
@@ -187,9 +225,13 @@ async def check_envelope_quota(account: Account, db: AsyncSession) -> Tuple[bool
     Validate whether the account can create another envelope.
     Returns (is_allowed, envelopes_used, envelope_limit).
     """
+    allowed_write, reason = is_account_write_allowed(account)
     limit = get_envelope_limit(account)
     cycle_start, cycle_end = get_billing_period(account)
     used = await count_envelopes_in_period(account.id, cycle_start, cycle_end, db)
+
+    if not allowed_write:
+        return False, used, limit
 
     if limit is None:
         return True, used, None
@@ -202,8 +244,12 @@ async def check_seat_quota(account: Account, db: AsyncSession) -> Tuple[bool, in
     Validate whether the account can add/invite another team member.
     Returns (is_allowed, seats_used, seat_limit).
     """
+    allowed_write, reason = is_account_write_allowed(account)
     limit = get_seat_limit(account)
     used = await count_active_seats(account.id, db)
+
+    if not allowed_write:
+        return False, used, limit
 
     if limit is None:
         return True, used, None
@@ -216,8 +262,9 @@ async def get_usage_summary(account: Account, db: AsyncSession) -> Dict[str, Any
     Compute a comprehensive usage and quota report for the account.
     """
     plan = get_effective_plan(account)
-    defn = PLAN_DEFINITIONS.get(plan, PLAN_DEFINITIONS[PlanTier.FREE])
+    defn = PLAN_DEFINITIONS.get(plan, PLAN_DEFINITIONS[PlanTier.PLUS])
     cycle_start, cycle_end = get_billing_period(account)
+    now = datetime.now(timezone.utc)
 
     envelopes_used = await count_envelopes_in_period(account.id, cycle_start, cycle_end, db)
     envelopes_limit = get_envelope_limit(account)
@@ -231,20 +278,28 @@ async def get_usage_summary(account: Account, db: AsyncSession) -> Dict[str, Any
         max(0, seats_limit - seats_used) if seats_limit is not None else None
     )
 
-    now = datetime.now(timezone.utc)
-    days_remaining = max(0, (cycle_end - now).days)
+    is_trial = getattr(account, "is_trial", False)
+    trial_ends = getattr(account, "trial_ends_at", None)
+    is_trial_expired = is_trial and bool(trial_ends and now >= trial_ends)
+    trial_days_remaining = (
+        max(0, (trial_ends - now).days) if is_trial and trial_ends and not is_trial_expired else 0
+    ) if is_trial else None
 
-    is_quota_exceeded = (
-        (envelopes_limit is not None and envelopes_used >= envelopes_limit) or
-        (seats_limit is not None and seats_used > seats_limit)
-    )
+    is_envelope_capped = envelopes_limit is not None and envelopes_used >= envelopes_limit
+    is_seat_capped = seats_limit is not None and seats_used > seats_limit
+    is_quota_exceeded = is_envelope_capped or is_seat_capped or is_trial_expired
 
     return {
         "account_id": account.id,
-        "account_name": account.name,
+        "account_name": getattr(account, "name", "Workspace"),
         "plan": plan,
         "plan_display_name": defn["display_name"],
         "plan_expires_at": getattr(account, "plan_expires_at", None),
+        "is_trial": is_trial,
+        "trial_ends_at": trial_ends,
+        "trial_days_remaining": trial_days_remaining,
+        "is_trial_expired": is_trial_expired,
+        "billing_interval": getattr(account, "billing_interval", "monthly"),
         "envelopes_used": envelopes_used,
         "envelopes_limit": envelopes_limit,
         "envelopes_remaining": envelopes_remaining,
@@ -253,7 +308,7 @@ async def get_usage_summary(account: Account, db: AsyncSession) -> Dict[str, Any
         "seats_remaining": seats_remaining,
         "cycle_start": cycle_start,
         "cycle_end": cycle_end,
-        "days_remaining_in_cycle": days_remaining,
+        "days_remaining_in_cycle": max(0, (cycle_end - now).days),
         "allowed_channels": defn["allowed_channels"],
         "can_use_custom_domain": defn["can_use_custom_domain"],
         "can_use_api_keys": defn["can_use_api_keys"],

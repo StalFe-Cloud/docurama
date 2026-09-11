@@ -38,6 +38,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { api, TemplateFolder, DetectedField, DocumentPreview, DocumentPage, AccountUsage } from '../lib/api';
+import { PricingModal } from '../components/PricingModal';
 
 interface BuilderPageProps {
   onSuccess: (envelopeId: string) => void;
@@ -96,6 +97,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [usage, setUsage] = useState<AccountUsage | null>(null);
+  const [showPricingModal, setShowPricingModal] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -290,8 +292,15 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
       return;
     }
 
+    if (usage?.is_trial_expired) {
+      setError('Your 7-day Plus trial has expired. Upgrade your plan to send new documents.');
+      setShowPricingModal(true);
+      return;
+    }
+
     if (usage?.is_quota_exceeded) {
       setError(`Your account has reached its monthly envelope limit (${usage.envelopes_used}/${usage.envelopes_limit}). Upgrade your plan to send new documents.`);
+      setShowPricingModal(true);
       return;
     }
 
@@ -499,14 +508,24 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
             <Settings2 className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="btn btn-primary px-4 py-2 text-xs font-bold shadow-sm flex items-center gap-2"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>{submitting ? 'Dispatching...' : 'Send Document'}</span>
-          </button>
+          {usage?.is_trial_expired ? (
+            <button
+              onClick={() => setShowPricingModal(true)}
+              className="btn btn-primary px-4 py-2 text-xs font-bold shadow-sm flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Upgrade Plan (Trial Ended)</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="btn btn-primary px-4 py-2 text-xs font-bold shadow-sm flex items-center gap-2"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{submitting ? 'Dispatching...' : 'Send Document'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -863,6 +882,13 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
           </div>
         </div>
       )}
+
+      {/* Pricing and Tier Upgrade Modal */}
+      <PricingModal
+        isOpen={showPricingModal}
+        onClose={() => setShowPricingModal(false)}
+        usage={usage}
+      />
 
     </div>
   );

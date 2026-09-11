@@ -73,12 +73,19 @@ async def create_envelope(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    # Enforce monthly envelope quota
+    # Enforce monthly envelope quota and trial validity
     account = await db.get(Account, current_user.account_id)
     if account:
         allowed, used, limit = await check_envelope_quota(account, db)
         if not allowed:
             cloud_domain = settings.CLOUD_DOMAIN
+            if getattr(account, "is_trial", False) and getattr(account, "trial_ends_at", None):
+                now = datetime.now(timezone.utc)
+                if now >= account.trial_ends_at:
+                    raise HTTPException(
+                        status_code=402,
+                        detail=f"Your 7-day Plus trial has expired. Please upgrade your plan at https://{cloud_domain} to send more documents.",
+                    )
             raise HTTPException(
                 status_code=402,
                 detail=f"Monthly envelope quota reached ({used}/{limit}). Please upgrade your plan at https://{cloud_domain} to send more documents.",

@@ -353,6 +353,11 @@ export interface AccountUsage {
   plan: string;
   plan_display_name: string;
   plan_expires_at?: string | null;
+  is_trial: boolean;
+  trial_ends_at?: string | null;
+  trial_days_remaining?: number | null;
+  is_trial_expired: boolean;
+  billing_interval: string;
   envelopes_used: number;
   envelopes_limit?: number | null;
   envelopes_remaining?: number | null;
