@@ -83,6 +83,23 @@ At minimum set `POSTGRES_PASSWORD`, `DOCURAMA_DATABASE_URL`, `DOCURAMA_SECRET_KE
 and `DOCURAMA_P12_PASSWORD`. Set `DOCURAMA_ENV=development` to run locally with the
 built-in defaults, and `DOCURAMA_COOKIE_SECURE=false` to sign in over plain http.
 
+### 1b. Deployment Modes
+
+Docurama runs in two modes, selected with `DOCURAMA_DEPLOYMENT_MODE`:
+
+- `selfhost` (default): one operator, one domain. Public registration is closed
+  unless you set `DOCURAMA_PUBLIC_REGISTRATION=true`; platform features such as
+  billing, quotas, and tenant subdomain routing are off.
+- `cloud`: the public multi-tenant platform. Registration is open, tenant
+  workspaces are served at `<company>.<DOCURAMA_CLOUD_DOMAIN>`, verified custom
+  domains route to their tenant, and billing/quotas are active.
+
+Grant the platform administrator (deployment-wide settings) with:
+
+```bash
+python scripts/grant_platform_admin.py ops@example.com
+```
+
 ### 1a. Database Migrations
 
 Schema changes are managed by Alembic and applied by the API container's entrypoint
