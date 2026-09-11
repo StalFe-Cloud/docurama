@@ -25,6 +25,7 @@ from app.schemas.schemas import (
     DetectedField, AutoDetectResponse,
     DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
     DomainAuthValidateRequest, DomainAuthValidateResponse,
+    CloudflareTokenRequest,
     WebhookCreate, WebhookOut, WebhookDeliveryOut, WebhookTestRequest,
     CorrectionRequestCreate, CorrectionRequestOut
 )
@@ -56,6 +57,7 @@ __all__ = [
     "DetectedField", "AutoDetectResponse",
     "DomainCreate", "DomainOut", "DomainVerifyResponse", "DomainPublicStatus",
     "DomainAuthValidateRequest", "DomainAuthValidateResponse",
+    "CloudflareTokenRequest",
     "WebhookCreate", "WebhookOut", "WebhookDeliveryOut", "WebhookTestRequest",
     "CorrectionRequestCreate", "CorrectionRequestOut"
 ]

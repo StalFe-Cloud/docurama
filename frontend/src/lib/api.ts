@@ -305,6 +305,7 @@ export interface DomainVerifyResult {
   verified_at?: string;
   enforce_domain_auth?: boolean;
   auth_assurance_level?: string;
+  checks?: { method: string; expected: string; found: any; ok: boolean }[];
 }
 
 export interface VerificationResult {
@@ -922,6 +923,28 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete domain');
+  },
+  getDomainSetup: async (domainId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/domains/${domainId}/setup`);
+    if (!res.ok) throw new Error('Failed to load domain setup guidance');
+    return res.json();
+  },
+  getItEmailDraft: async (domainId: string): Promise<{ subject: string; body: string }> => {
+    const res = await fetch(`${API_BASE}/domains/${domainId}/it-email`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to prepare the IT-team email draft');
+    return res.json();
+  },
+  createCloudflareRecord: async (domainId: string, apiToken: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/domains/${domainId}/cloudflare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_token: apiToken }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || 'Cloudflare record creation failed');
+    return body;
   },
 
   // Webhooks

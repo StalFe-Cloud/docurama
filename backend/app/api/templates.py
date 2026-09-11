@@ -19,7 +19,7 @@ from app.schemas import TemplateOut, AutoDetectResponse, DetectedField
 from app.services.field_detector import FieldDetector
 from app.services.preview_store import MAX_UPLOAD_BYTES, looks_like_pdf
 from app.services.crypto_engine import calculate_file_sha256
-from app.services.storage_layout import artifact_path, ensure_dir
+from app.services.storage_layout import best_effort_artifact_path, ensure_dir
 from app.services.tenant_resolver import TenantContext
 
 router = APIRouter(prefix="/templates", tags=["templates"])
@@ -65,8 +65,8 @@ async def create_template(
     if file:
         template_id = str(uuid.uuid4())
         ext = os.path.splitext(file.filename)[1] or ".pdf"
-        pdf_path = artifact_path(settings.STORAGE_DIR, current_user.account_id,
-                                 f"template_{template_id}{ext}")
+        pdf_path = best_effort_artifact_path(settings.STORAGE_DIR, current_user.account_id,
+                                             f"template_{template_id}{ext}")
         ensure_dir(os.path.dirname(pdf_path))
         with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -174,8 +174,8 @@ async def start_public_template(
         raise HTTPException(status_code=404, detail="Public form not available.")
 
     envelope_id = str(uuid.uuid4())
-    new_pdf_path = artifact_path(settings.STORAGE_DIR, template.account_id,
-                                 f"{envelope_id}_original.pdf")
+    new_pdf_path = best_effort_artifact_path(settings.STORAGE_DIR, template.account_id,
+                                             f"{envelope_id}_original.pdf")
     ensure_dir(os.path.dirname(new_pdf_path))
     shutil.copyfile(template.pdf_path, new_pdf_path)
     sha256_orig = calculate_file_sha256(new_pdf_path)

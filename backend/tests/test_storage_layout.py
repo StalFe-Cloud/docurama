@@ -90,3 +90,18 @@ async def test_template_upload_lands_in_account_dir(client, db_session, tmp_path
     assert account_dir.is_dir()
     files = list(account_dir.iterdir())
     assert files, "no artifact written under the account directory"
+
+
+def test_best_effort_path_falls_back_to_flat_for_none_account():
+    from app.services.storage_layout import best_effort_artifact_path
+
+    path = best_effort_artifact_path("/data", None, "env_original.pdf")
+    assert path == os.path.join("/data", "env_original.pdf")
+
+
+def test_best_effort_path_namespaces_valid_accounts():
+    from app.services.storage_layout import best_effort_artifact_path
+
+    path = best_effort_artifact_path("/data", "0b5a9a4e-1111-4222-8333-444455556666",
+                                     "env_original.pdf")
+    assert os.path.join("accounts", "0b5a9a4e-1111-4222-8333-444455556666") in path

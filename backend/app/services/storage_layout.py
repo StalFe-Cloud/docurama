@@ -24,6 +24,17 @@ def artifact_path(storage_dir: str, account_id: str, filename: str) -> str:
     return os.path.join(account_root(storage_dir, account_id), filename)
 
 
+def best_effort_artifact_path(storage_dir: str, account_id, filename: str) -> str:
+    """
+    Namespaced path when the row has an account, legacy flat path when it does
+    not. Legacy NULL-account rows must keep writing where they always wrote
+    instead of failing the whole request.
+    """
+    if account_id and is_valid_account_id(account_id):
+        return artifact_path(storage_dir, account_id, filename)
+    return os.path.join(storage_dir, filename)
+
+
 def ensure_dir(path: str) -> str:
     os.makedirs(path, exist_ok=True)
     return path

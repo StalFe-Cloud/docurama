@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
@@ -161,7 +162,10 @@ async def create_company(
                 detail=f"The subdomain '{subdomain}' is already taken.",
             )
     else:
-        subdomain = f"{slugify(clean_name)}-{uuid.uuid4().hex[:6]}"
+        slug = slugify(clean_name)
+        subdomain = f"{slug}-{uuid.uuid4().hex[:6]}"
+        if subdomain_error(subdomain):
+            subdomain = f"company-{uuid.uuid4().hex[:10]}"
 
     # Create new account
     new_account = Account(
@@ -171,39 +175,49 @@ async def create_company(
         enforce_domain_auth=False
     )
     db.add(new_account)
-    await db.flush()
 
-    # Create membership as owner
-    membership = AccountMembership(
-        user_id=current_user.id,
-        account_id=new_account.id,
-        role="owner",
-        is_active=True
-    )
-    db.add(membership)
+    try:
+        await db.flush()
 
-    # Set as active account for current user
-    current_user.account_id = new_account.id
-
-    # If domain provided, register DomainVerification
-    if company_in.domain:
-        clean_domain = company_in.domain.strip().lower()
-        token = f"dcr_vfy_{uuid.uuid4().hex[:16]}"
-        domain_rec = DomainVerification(
+        # Create membership as owner
+        membership = AccountMembership(
+            user_id=current_user.id,
             account_id=new_account.id,
-            domain=clean_domain,
-            status="pending",
-            verification_token=token,
-            verification_method="dns_txt",
-            txt_record_host=f"_docurama-challenge.{clean_domain}",
-            txt_record_value=f"docurama-verification={token}",
-            cname_record_host=f"docurama.{clean_domain}",
-            cname_target=settings.CNAME_TARGET,
-            web_confirmation_url=f"https://{clean_domain}/.well-known/docurama-verification"
+            role="owner",
+            is_active=True
         )
-        db.add(domain_rec)
+        db.add(membership)
 
-    await db.commit()
+        # Set as active account for current user
+        current_user.account_id = new_account.id
+
+        # If domain provided, register DomainVerification
+        if company_in.domain:
+            clean_domain = company_in.domain.strip().lower()
+            token = f"dcr_vfy_{uuid.uuid4().hex[:16]}"
+            domain_rec = DomainVerification(
+                account_id=new_account.id,
+                domain=clean_domain,
+                status="pending",
+                verification_token=token,
+                verification_method="dns_txt",
+                txt_record_host=f"_docurama-challenge.{clean_domain}",
+                txt_record_value=f"docurama-verification={token}",
+                cname_record_host=f"docurama.{clean_domain}",
+                cname_target=settings.CNAME_TARGET,
+                web_confirmation_url=f"https://{clean_domain}/.well-known/docurama-verification"
+            )
+            db.add(domain_rec)
+
+        await db.commit()
+    except IntegrityError:
+        # The availability pre-check passed, but another request claimed the
+        # subdomain first: the unique constraint decided the race instead.
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="That subdomain was just claimed by another workspace. Pick another.",
+        )
     await db.refresh(new_account)
 
     # Refresh session cookie with new account_id

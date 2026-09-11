@@ -12,9 +12,11 @@ from app.api.auth import get_current_user
 from app.models import User, DomainVerification, Account, AccountMembership
 from app.schemas import (
     DomainCreate, DomainOut, DomainVerifyResponse, DomainPublicStatus,
-    DomainAuthValidateRequest, DomainAuthValidateResponse
+    DomainAuthValidateRequest, DomainAuthValidateResponse,
+    CloudflareTokenRequest,
 )
-from app.services.domain_verifier import verify_client_domain
+from app.services.domain_verifier import verify_client_domain, summarize_checks
+from app.services.dns_provider import detect_provider
 
 router = APIRouter(prefix="/domains", tags=["domains"])
 
@@ -160,7 +162,13 @@ async def verify_domain(
         message=message,
         method_matched=domain_rec.verification_method if is_verified else None,
         dns_details=details,
-        verified_at=domain_rec.verified_at
+        verified_at=domain_rec.verified_at,
+        checks=summarize_checks(
+            domain_rec.domain,
+            domain_rec.verification_token,
+            details,
+            method
+        )
     )
 
 @router.delete("/{domain_id}")
@@ -226,6 +234,111 @@ async def toggle_domain_enforcement(
         "enforce_domain_auth": account.enforce_domain_auth,
         "message": f"Enterprise domain authentication requirement is now {'enforced' if account.enforce_domain_auth else 'optional'} for {domain_rec.domain}."
     }
+
+@router.get("/{domain_id}/setup")
+async def domain_setup_guidance(
+    domain_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    domain_rec = (await db.execute(
+        select(DomainVerification).where(
+            DomainVerification.id == domain_id,
+            DomainVerification.account_id == current_user.account_id,
+        )
+    )).scalar_one_or_none()
+    if not domain_rec:
+        raise HTTPException(status_code=404, detail="Domain record not found.")
+
+    guidance = await detect_provider(domain_rec.domain)
+    return {
+        "domain": domain_rec.domain,
+        "provider": guidance["provider"],
+        "nameservers": guidance["nameservers"],
+        "steps": guidance["steps"],
+        "records": [
+            {"type": "TXT",
+             "host": domain_rec.txt_record_host,
+             "value": domain_rec.txt_record_value},
+        ],
+        "web_confirmation_url": domain_rec.web_confirmation_url,
+    }
+
+@router.post("/{domain_id}/it-email")
+async def domain_it_email_draft(
+    domain_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """A ready-to-send draft for the customer's IT team. The server never sends it."""
+    domain_rec = (await db.execute(
+        select(DomainVerification).where(
+            DomainVerification.id == domain_id,
+            DomainVerification.account_id == current_user.account_id,
+        )
+    )).scalar_one_or_none()
+    if not domain_rec:
+        raise HTTPException(status_code=404, detail="Domain record not found.")
+
+    account = (await db.execute(
+        select(Account).where(Account.id == current_user.account_id)
+    )).scalar_one_or_none()
+    org = account.name if account else "our organization"
+
+    subject = f"Action needed: add one DNS record to verify {domain_rec.domain} for Docurama"
+    body = (
+        "Hi team,\n\n"
+        f"To use {domain_rec.domain} with Docurama ({org}), our DNS needs one TXT record "
+        "so Docurama can verify that we control the domain.\n\n"
+        "Please add this DNS record:\n"
+        f"  Type:  TXT\n"
+        f"  Host:  {domain_rec.txt_record_host}\n"
+        f"  Value: {domain_rec.txt_record_value}\n\n"
+        "Leave the TTL at its default. If our DNS is managed by another team or provider, "
+        "please forward this to them.\n\n"
+        "Once the record is saved, verification is done from Docurama under "
+        "Settings, Domains (press Verify). New DNS records can take from a few minutes "
+        "to an hour to become visible.\n\n"
+        "Thanks!"
+    )
+    return {"subject": subject, "body": body}
+
+
+@router.post("/{domain_id}/cloudflare")
+async def create_cloudflare_challenge(
+    domain_id: str,
+    payload: CloudflareTokenRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.api.companies import require_company_admin
+    from app.services.cloudflare_dns import create_challenge_record
+
+    await require_company_admin(current_user.account_id, current_user, db)
+    domain_rec = (await db.execute(
+        select(DomainVerification).where(
+            DomainVerification.id == domain_id,
+            DomainVerification.account_id == current_user.account_id,
+        )
+    )).scalar_one_or_none()
+    if not domain_rec:
+        raise HTTPException(status_code=404, detail="Domain record not found.")
+
+    result = await create_challenge_record(
+        payload.api_token, domain_rec.domain,
+        domain_rec.txt_record_host, domain_rec.txt_record_value,
+    )
+    if not result["ok"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return {
+        "success": True,
+        "record_id": result["record_id"],
+        "message": (f"TXT record created at {domain_rec.txt_record_host}. "
+                    "Cloudflare changes usually appear within a minute or two; "
+                    "press Verify."),
+    }
+
 
 @router.post("/validate-authentication", response_model=DomainAuthValidateResponse)
 async def validate_domain_authentication(

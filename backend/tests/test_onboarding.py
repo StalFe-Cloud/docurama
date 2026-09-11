@@ -102,3 +102,28 @@ async def test_endpoint_refuses_api_keys(client, db_session, owner_world):
     resp = await client.post("/api/onboarding", json={"vertical": "hr"},
                              headers={"X-Api-Key": plaintext})
     assert resp.status_code == 403
+
+
+async def test_create_folder_duplicate_name_returns_409(client, db_session, owner_world):
+    account, owner = owner_world
+    await _login(client, "owner@example.com")
+
+    first = await client.post("/api/folders", json={"name": "Contracts"})
+    assert first.status_code == 201, first.text
+
+    duplicate = await client.post("/api/folders", json={"name": "  Contracts  "})
+    assert duplicate.status_code == 409, duplicate.text
+    assert duplicate.json()["detail"] == "A folder with this name already exists."
+
+
+async def test_duplicate_folder_names_are_rejected_by_schema(db_session, owner_world):
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import TemplateFolder
+
+    account, owner = owner_world
+    db_session.add(TemplateFolder(account_id=account.id, name="Employment & HR"))
+    await db_session.commit()
+    db_session.add(TemplateFolder(account_id=account.id, name="Employment & HR"))
+    with pytest.raises(IntegrityError):
+        await db_session.commit()

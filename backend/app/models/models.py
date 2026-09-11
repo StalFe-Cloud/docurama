@@ -85,7 +85,10 @@ class AccountMembership(Base):
 
 class TemplateFolder(Base):
     __tablename__ = "template_folders"
-    
+    __table_args__ = (
+        UniqueConstraint("account_id", "name", name="uq_template_folder_account_name"),
+    )
+
     id = Column(String(36), primary_key=True, default=gen_uuid)
     account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False)
     name = Column(String(255), nullable=False)
