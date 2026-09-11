@@ -28,11 +28,24 @@ from app.services.pdf_service import (
     render_pdf_page_png
 )
 from app.services.crypto_engine import sign_pdf_with_pades, calculate_file_sha256
+from app.services.storage_layout import artifact_path, ensure_dir
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.services import mailer, smtp_config
 from app.api.ws import manager
 
 router = APIRouter(prefix="/signing", tags=["signing"])
+
+def _envelope_artifact_path(envelope: Envelope, filename: str) -> str:
+    """
+    Completion artifacts live in the owning account's storage directory. Rows
+    created before accounts existed keep their flat, original-path-derived
+    directory, so legacy envelopes complete exactly as they always did.
+    """
+    if envelope.account_id:
+        path = artifact_path(settings.STORAGE_DIR, envelope.account_id, filename)
+        ensure_dir(os.path.dirname(path))
+        return path
+    return os.path.join(os.path.dirname(envelope.original_pdf_path), filename)
 
 def _assert_token_live(recipient: Recipient) -> None:
     """
@@ -356,8 +369,7 @@ async def submit_signatures(
     all_signed = all(s.status == "signed" for s in signers)
 
     if all_signed:
-        storage_dir = os.path.dirname(envelope.original_pdf_path)
-        flattened_pdf_path = os.path.join(storage_dir, f"{envelope.id}_flattened.pdf")
+        flattened_pdf_path = _envelope_artifact_path(envelope, f"{envelope.id}_flattened.pdf")
         
         fields_list = [
             {
@@ -374,7 +386,7 @@ async def submit_signatures(
         overlay_fields_on_pdf(envelope.original_pdf_path, flattened_pdf_path, fields_list)
 
         # Generate Certificate of Completion PDF
-        cert_pdf_path = os.path.join(storage_dir, f"{envelope.id}_certificate.pdf")
+        cert_pdf_path = _envelope_artifact_path(envelope, f"{envelope.id}_certificate.pdf")
         # Each signer's own recorded IP. Previously every row on the certificate was
         # stamped with the last signer's address, misrepresenting the audit record.
         sig_rows = (await db.execute(
@@ -436,10 +448,10 @@ async def submit_signatures(
         ]
         generate_certificate_of_completion_pdf(envelope_dict, recipients_summary, audit_list, cert_pdf_path)
 
-        combined_pdf_path = os.path.join(storage_dir, f"{envelope.id}_combined.pdf")
+        combined_pdf_path = _envelope_artifact_path(envelope, f"{envelope.id}_combined.pdf")
         append_certificate_page(flattened_pdf_path, cert_pdf_path, combined_pdf_path)
 
-        final_sealed_path = os.path.join(storage_dir, f"{envelope.id}_sealed.pdf")
+        final_sealed_path = _envelope_artifact_path(envelope, f"{envelope.id}_sealed.pdf")
         # Off the event loop, deliberately. pyHanko's sign_pdf() calls asyncio.run()
         # internally, which raises "cannot be called from a running event loop" inside
         # an async endpoint. Handing it a worker thread gives it a loop-free context.

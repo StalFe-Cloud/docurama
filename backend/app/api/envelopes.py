@@ -20,6 +20,7 @@ from app.api.tenant import require_tenant_binding
 from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
+from app.services.storage_layout import artifact_path, ensure_dir
 from app.services.tenant_resolver import TenantContext
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.services import mailer, smtp_config
@@ -77,7 +78,9 @@ async def create_envelope(
     envelope_id = str(uuid.uuid4())
     verification_code = str(uuid.uuid4()).replace("-", "")[:24].upper()
     file_ext = os.path.splitext(file.filename)[1] or ".pdf"
-    original_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original{file_ext}")
+    original_pdf_path = artifact_path(settings.STORAGE_DIR, current_user.account_id,
+                                      f"{envelope_id}_original{file_ext}")
+    ensure_dir(os.path.dirname(original_pdf_path))
     
     with open(original_pdf_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -369,7 +372,6 @@ async def bulk_send_envelopes(
     reader = csv.DictReader(io.StringIO(content.decode("utf-8", errors="ignore")))
     
     dispatched_envelopes = []
-    storage_dir = settings.STORAGE_DIR
 
     for row in reader:
         name = row.get("name") or row.get("Name") or "Signer"
@@ -378,7 +380,9 @@ async def bulk_send_envelopes(
             continue
 
         envelope_id = str(uuid.uuid4())
-        new_pdf_path = os.path.join(storage_dir, f"{envelope_id}_original.pdf")
+        new_pdf_path = artifact_path(settings.STORAGE_DIR, template.account_id,
+                                     f"{envelope_id}_original.pdf")
+        ensure_dir(os.path.dirname(new_pdf_path))
         shutil.copyfile(template.pdf_path, new_pdf_path)
         sha256_orig = calculate_file_sha256(new_pdf_path)
         ver_code = f"DCR-{uuid.uuid4().hex[:12].upper()}"
