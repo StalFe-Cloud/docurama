@@ -192,6 +192,8 @@ def deploy():
     run_scp(archive_path, remote_tar)
 
     run_ssh("cd /opt/docurama && docker compose down 2>/dev/null || true", check=False)
+    # Clean stale alembic versions before extracting to prevent multiple heads
+    run_ssh("rm -rf /opt/docurama/backend/alembic/versions/* 2>/dev/null || true", check=False)
     # Extracting over the deployment now leaves the server's own secrets untouched.
     run_ssh(f"tar -xzf {remote_tar} -C /opt/docurama && rm -f {remote_tar}")
     run_ssh("mkdir -p /opt/docurama/backend/certs")
