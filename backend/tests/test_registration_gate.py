@@ -53,9 +53,9 @@ async def test_cloud_mode_refuses_registration_from_tenant_hosts(client, registr
     resp = await client.post("/api/auth/register", json={
         "email": "stray@example.com",
         "password": "a-long-enough-password-123",
-    }, headers={"Host": "acme.docurama.eu"})
+    }, headers={"Host": f"acme.{config.settings.CLOUD_DOMAIN}"})
     assert resp.status_code == 403
-    assert "app.docurama.eu" in resp.json()["detail"]
+    assert f"app.{config.settings.CLOUD_DOMAIN}" in resp.json()["detail"]
 
 
 async def test_cloud_mode_allows_registration_on_platform_hosts(client, registration_env,
@@ -63,9 +63,9 @@ async def test_cloud_mode_allows_registration_on_platform_hosts(client, registra
     from app.core import config
 
     monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
-    monkeypatch.setattr(config.settings, "APP_URL", "https://app.docurama.eu")
+    monkeypatch.setattr(config.settings, "APP_URL", f"https://app.{config.settings.CLOUD_DOMAIN}")
     resp = await client.post("/api/auth/register", json={
         "email": "legit@example.com",
         "password": "a-long-enough-password-123",
-    }, headers={"Host": "app.docurama.eu"})
+    }, headers={"Host": f"app.{config.settings.CLOUD_DOMAIN}"})
     assert resp.status_code == 200

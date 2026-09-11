@@ -17,6 +17,7 @@ from app.api.auth import get_current_user, require_interactive_session
 from app.services.tenancy import subdomain_available, subdomain_error
 from app.services import mailer, smtp_config
 from app.services import password_reset as password_reset_service
+from app.services.quotas import check_seat_quota
 from app.models import (
     User, Account, AccountMembership, DomainVerification,
     Template, TemplateFolder, Envelope, Webhook, ApiKey, AccountSetting,
@@ -408,8 +409,18 @@ async def invite_company_member(
 
     email = invite_in.email.strip().lower()
 
-    # Enforce domain authentication policy when the company requires it
+    # Enforce team seat limit
     account = caller.account
+    if account:
+        allowed, used, limit = await check_seat_quota(account, db)
+        if not allowed:
+            cloud_domain = settings.CLOUD_DOMAIN
+            raise HTTPException(
+                status_code=402,
+                detail=f"Team seat limit reached ({used}/{limit}). Please upgrade your plan at https://{cloud_domain} to add more members.",
+            )
+
+    # Enforce domain authentication policy when the company requires it
     if getattr(account, "enforce_domain_auth", False):
         invitee_domain = email.split("@")[1] if "@" in email else ""
         dom_q = select(DomainVerification).where(

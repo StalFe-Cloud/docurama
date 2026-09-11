@@ -37,7 +37,7 @@ import {
   ChevronRight,
   ChevronLeft
 } from 'lucide-react';
-import { api, TemplateFolder, DetectedField, DocumentPreview, DocumentPage } from '../lib/api';
+import { api, TemplateFolder, DetectedField, DocumentPreview, DocumentPage, AccountUsage } from '../lib/api';
 
 interface BuilderPageProps {
   onSuccess: (envelopeId: string) => void;
@@ -95,12 +95,14 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
   const [detectionNotice, setDetectionNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [usage, setUsage] = useState<AccountUsage | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   useEffect(() => {
     loadFolders();
+    api.getAccountUsage().then(setUsage).catch(() => null);
   }, []);
 
   const loadFolders = async () => {
@@ -285,6 +287,11 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
     const invalidRecipient = recipients.find(r => !r.name.trim() || !r.email.trim());
     if (invalidRecipient) {
       setError('Please fill out name and email for all recipients.');
+      return;
+    }
+
+    if (usage?.is_quota_exceeded) {
+      setError(`Your account has reached its monthly envelope limit (${usage.envelopes_used}/${usage.envelopes_limit}). Upgrade your plan to send new documents.`);
       return;
     }
 

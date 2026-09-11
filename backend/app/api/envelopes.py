@@ -17,12 +17,13 @@ from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.api.auth import get_current_user
 from app.api.tenant import require_tenant_binding
-from app.models import User, Envelope, Recipient, Field, AuditEvent, Template
+from app.models import User, Account, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
 from app.services.storage_layout import best_effort_artifact_path, ensure_dir
 from app.services.tenant_resolver import TenantContext
 from app.services.webhook_dispatcher import WebhookDispatcher
+from app.services.quotas import check_envelope_quota, get_effective_plan, PLAN_DEFINITIONS, PlanTier
 from app.services import mailer, smtp_config
 
 router = APIRouter(prefix="/envelopes", tags=["envelopes"])
@@ -72,6 +73,17 @@ async def create_envelope(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Enforce monthly envelope quota
+    account = await db.get(Account, current_user.account_id)
+    if account:
+        allowed, used, limit = await check_envelope_quota(account, db)
+        if not allowed:
+            cloud_domain = settings.CLOUD_DOMAIN
+            raise HTTPException(
+                status_code=402,
+                detail=f"Monthly envelope quota reached ({used}/{limit}). Please upgrade your plan at https://{cloud_domain} to send more documents.",
+            )
+
     storage_dir = settings.STORAGE_DIR
     os.makedirs(storage_dir, exist_ok=True)
     
@@ -116,6 +128,16 @@ async def create_envelope(
                 status_code=400,
                 detail=f"Phone number is required for recipient '{r.get('name', 'Signer')}' with {v_channel.replace('_', ' ').title()} verification.",
             )
+
+        if account:
+            defn = PLAN_DEFINITIONS.get(get_effective_plan(account), PLAN_DEFINITIONS[PlanTier.FREE])
+            allowed_channels = defn.get("allowed_channels", ["none", "email_otp"])
+            if v_channel not in allowed_channels:
+                cloud_domain = settings.CLOUD_DOMAIN
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"The '{v_channel.replace('_', ' ').title()}' verification channel is not available on your {defn['display_name']} plan. Please upgrade your plan at https://{cloud_domain}.",
+                )
 
         rec = Recipient(
             envelope_id=envelope.id,

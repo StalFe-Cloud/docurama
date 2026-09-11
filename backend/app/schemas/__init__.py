@@ -28,7 +28,8 @@ from app.schemas.schemas import (
     DomainAuthValidateRequest, DomainAuthValidateResponse,
     CloudflareTokenRequest,
     WebhookCreate, WebhookOut, WebhookDeliveryOut, WebhookTestRequest,
-    CorrectionRequestCreate, CorrectionRequestOut
+    CorrectionRequestCreate, CorrectionRequestOut,
+    AccountUsageOut, AccountPlanUpdateIn
 )
 
 __all__ = [
@@ -61,5 +62,6 @@ __all__ = [
     "DomainAuthValidateRequest", "DomainAuthValidateResponse",
     "CloudflareTokenRequest",
     "WebhookCreate", "WebhookOut", "WebhookDeliveryOut", "WebhookTestRequest",
-    "CorrectionRequestCreate", "CorrectionRequestOut"
+    "CorrectionRequestCreate", "CorrectionRequestOut",
+    "AccountUsageOut", "AccountPlanUpdateIn"
 ]

@@ -652,3 +652,42 @@ class SmtpTestResult(BaseModel):
 
 class DeliverabilityCheckRequest(BaseModel):
     domain: str
+
+# ---------------------------------------------------------------------------
+# Account Plans & Quotas
+# ---------------------------------------------------------------------------
+
+class AccountUsageOut(BaseModel):
+    account_id: str
+    account_name: str
+    plan: str
+    plan_display_name: str
+    plan_expires_at: Optional[datetime] = None
+    
+    # Envelope Quota
+    envelopes_used: int
+    envelopes_limit: Optional[int] = None  # None = unlimited
+    envelopes_remaining: Optional[int] = None
+    
+    # Seats Quota
+    seats_used: int
+    seats_limit: Optional[int] = None  # None = unlimited
+    seats_remaining: Optional[int] = None
+    
+    # Billing cycle
+    cycle_start: datetime
+    cycle_end: datetime
+    days_remaining_in_cycle: int
+    
+    # Allowed Features & Channels
+    allowed_channels: List[str]
+    can_use_custom_domain: bool
+    can_use_api_keys: bool
+    is_quota_exceeded: bool
+
+class AccountPlanUpdateIn(BaseModel):
+    plan: str
+    plan_expires_at: Optional[datetime] = None
+    custom_envelope_limit: Optional[int] = None
+    custom_seat_limit: Optional[int] = None
+    billing_cycle_anchor: Optional[datetime] = None

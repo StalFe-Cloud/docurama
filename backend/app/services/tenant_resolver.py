@@ -30,18 +30,28 @@ def _host_only(value: str) -> str:
 
 def parse_tenant_host(host: str, cloud_domain: str) -> Tuple[str, Optional[str], Optional[str]]:
     host = _host_only(host)
-    cloud_domain = _host_only(cloud_domain)
-    if not host or host == cloud_domain:
+    if not host or host in ("test", "testserver", "localhost", "127.0.0.1"):
         return PLATFORM, None, None
 
-    suffix = f".{cloud_domain}"
-    if host.endswith(suffix):
-        label = host[: -len(suffix)]
-        if "." in label:
-            return CUSTOM, None, host
-        if label in RESERVED_SUBDOMAINS:
+    primary = _host_only(cloud_domain)
+    # Recognized cloud root domains (primary active domain plus held docurama.eu)
+    valid_roots = [primary] if primary else []
+    for fallback in ("docurama.rvrad.com", "docurama.eu"):
+        if fallback not in valid_roots:
+            valid_roots.append(fallback)
+
+    for root in valid_roots:
+        if host == root:
             return PLATFORM, None, None
-        return SUBDOMAIN, label, None
+
+        suffix = f".{root}"
+        if host.endswith(suffix):
+            label = host[: -len(suffix)]
+            if "." in label:
+                return CUSTOM, None, host
+            if label in RESERVED_SUBDOMAINS:
+                return PLATFORM, None, None
+            return SUBDOMAIN, label, None
 
     return CUSTOM, None, host
 
