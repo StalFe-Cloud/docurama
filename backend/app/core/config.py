@@ -158,6 +158,11 @@ def _derive_host_defaults(cfg: "Settings") -> None:
 
     host = (urlparse(cfg.APP_URL).hostname or "").strip()
 
+    # A trailing dot (DNS root notation, e.g. "docurama.eu." typed by an operator)
+    # would silently break the cloud CORS regex and host parsing, so strip it here
+    # alongside the other normalized host-derived values.
+    cfg.CLOUD_DOMAIN = cfg.CLOUD_DOMAIN.strip().rstrip(".")
+
     if not cfg.CNAME_TARGET:
         cfg.CNAME_TARGET = host
     if not cfg.SIGNING_CONTACT_EMAIL:

@@ -45,6 +45,9 @@ COPY backend/certs/ /app/certs/
 COPY backend/app/ /app/app/
 COPY backend/alembic/ /app/alembic/
 COPY backend/alembic.ini backend/migrate.py backend/entrypoint.sh /app/
+# Ship the operator scripts (grant_platform_admin.py and friends) so they can be
+# run inside the container as documented.
+COPY scripts/ /app/scripts/
 # Strip CR and mark executable. Git on Windows can rewrite this file to CRLF,
 # which makes the kernel look for an interpreter named "/bin/sh" and the
 # container fails to start with a misleading "no such file or directory".

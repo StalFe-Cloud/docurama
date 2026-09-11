@@ -36,6 +36,20 @@ def test_current_capabilities_reads_live_settings(monkeypatch):
     assert current_capabilities().billing is False
 
 
+def test_cloud_domain_trailing_dot_is_stripped():
+    # Operators habitually type DNS root notation ("docurama.eu."); a trailing
+    # dot must not reach the cloud CORS regex or tenant host parsing.
+    from app.core.config import Settings, _derive_host_defaults
+
+    cfg = Settings(
+        DEPLOYMENT_MODE="cloud",
+        ENV="development",
+        CLOUD_DOMAIN="docurama.eu.",
+    )
+    _derive_host_defaults(cfg)
+    assert cfg.CLOUD_DOMAIN == "docurama.eu"
+
+
 async def test_grant_platform_admin(db_session):
     from app.core.security import get_password_hash
     from app.models import User
