@@ -153,7 +153,12 @@ export interface CompanyInviteResult {
   email: string;
   role: string;
   is_new_user: boolean;
+  // Legacy field. Invites no longer carry a password, so this is always null.
   temporary_password?: string | null;
+  // False only when the invitation email could not be sent; the fallback link is
+  // then present so the inviting admin can share it directly.
+  invite_link_delivered?: boolean;
+  fallback_invite_link?: string | null;
   message: string;
 }
 
