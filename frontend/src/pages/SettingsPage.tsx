@@ -42,7 +42,8 @@ import {
   AlertTriangle,
   Terminal,
   BookOpen,
-  Cpu
+  Cpu,
+  Palette
 } from 'lucide-react';
 import {
   api,
@@ -310,6 +311,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
   const [isSwitchingCompany, setIsSwitchingCompany] = useState(false);
 
+  // Branding. One settings section like notifications or signing: read on mount,
+  // written whole by the card's Save button.
+  const [brandingAccent, setBrandingAccent] = useState('#1D72FE');
+  const [brandingLogoUrl, setBrandingLogoUrl] = useState('');
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+
   // DNS Domain Verification & Additional Authentication State
   const [domainsList, setDomainsList] = useState<DomainItem[]>([]);
   const [isLoadingDomains, setIsLoadingDomains] = useState(false);
@@ -330,6 +337,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
     loadStamps();
     loadNotificationSettings();
     loadSigningSettings();
+    loadBrandingSettings();
     loadSmtp('account');
   }, []);
 
@@ -897,6 +905,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
     }
   };
 
+  const loadBrandingSettings = async () => {
+    try {
+      const branding = await api.getSettingSection('branding');
+      const b = branding.data || {};
+      if (typeof b.accent_color === 'string' && b.accent_color) setBrandingAccent(b.accent_color);
+      if (typeof b.logo_url === 'string') setBrandingLogoUrl(b.logo_url);
+    } catch {
+      // Leave the on-screen defaults in place when the section cannot be read.
+    }
+  };
+
   const saveSection = async (section: string, patch: Record<string, any>, message: string) => {
     try {
       setSectionError(null);
@@ -919,6 +938,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
       triggerSave('Organization profile updated.');
     } catch (e: any) {
       setSectionError(e?.message || 'Failed to update the organization profile.');
+    }
+  };
+
+  const handleSaveBranding = async () => {
+    const accent = brandingAccent.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(accent)) {
+      setSectionError('Accent color must be a hex value like #1D72FE.');
+      return;
+    }
+    try {
+      setIsSavingBranding(true);
+      setSectionError(null);
+      await api.updateSettingSection('branding', {
+        accent_color: accent,
+        logo_url: brandingLogoUrl.trim() || null,
+      });
+      triggerSave('Branding updated.');
+    } catch (e: any) {
+      setSectionError(e?.message || 'Failed to save branding settings.');
+    } finally {
+      setIsSavingBranding(false);
     }
   };
 
@@ -1087,8 +1127,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
       setNewUserFirstName('');
       setNewUserLastName('');
       setShowAddUserModal(false);
-      // A newly created account returns a one-time password that is shown once and never again.
-      if (result.is_new_user && result.temporary_password) {
+      // A newly created account receives a single-use set-password link by email.
+      // The card confirms the send, or hands the inviting admin the link when the
+      // mail could not be delivered. No password is ever returned or displayed.
+      if (result.is_new_user) {
         setInviteResult(result);
       } else {
         triggerSave(result.message);
@@ -1382,6 +1424,67 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Card 1B: Branding */}
+          <div className="bg-white rounded-lg p-6 border border-[#e5e3df] shadow-sm">
+            <div className="flex items-center space-x-3 mb-6 pb-4 border-b border-[#ede9e4]">
+              <div className="w-10 h-10 rounded-md bg-[#f3e8ff] text-[#9333ea] flex items-center justify-center font-bold">
+                <Palette className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-[#1a1a1a]">Branding</h2>
+                <p className="text-xs text-[#5d5b54]">Accent color and logo used across the workspace.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">
+                    Accent color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={brandingAccent}
+                      onChange={(e) => setBrandingAccent(e.target.value)}
+                      className="h-11 w-14 shrink-0 rounded-md border border-[#e5e3df] bg-white p-1 cursor-pointer"
+                      aria-label="Accent color"
+                    />
+                    <input
+                      type="text"
+                      value={brandingAccent}
+                      onChange={(e) => setBrandingAccent(e.target.value)}
+                      className="base-input w-full h-11 px-3.5 text-sm font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#37352f] uppercase tracking-wider mb-1.5">
+                    Logo URL
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingLogoUrl}
+                    onChange={(e) => setBrandingLogoUrl(e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                    className="base-input w-full h-11 px-3.5 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={handleSaveBranding}
+                  disabled={isSavingBranding}
+                  className="btn btn-primary px-6 h-11 font-semibold text-sm disabled:opacity-60"
+                >
+                  {isSavingBranding ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3316,7 +3419,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
       {/* MODALS */}
       {/* ========================================================================= */}
 
-      {/* 0. Invitation Result Modal: one-time credentials for a newly created account */}
+      {/* 0. Invitation Result Modal: email confirmation or fallback set-password link */}
       {inviteResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
           <div className="bg-white rounded-lg p-6 border border-[#e5e3df] shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-150">
@@ -3327,23 +3430,37 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               </button>
             </div>
             <p className="text-xs text-[#5d5b54] mb-4">{inviteResult.message}</p>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-4">
-              <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-2">
-                One-time password
-              </p>
-              <div className="flex items-center justify-between gap-2">
-                <code className="text-xs font-mono text-[#1a1a1a] break-all">{inviteResult.temporary_password}</code>
-                <button
-                  onClick={() => copyToClipboard(inviteResult.temporary_password || '', 'invite_pwd')}
-                  className="btn btn-outline btn-xs rounded-lg font-semibold shrink-0"
-                >
-                  {copiedKey === 'invite_pwd' ? 'Copied' : 'Copy'}
-                </button>
+            {inviteResult.invite_link_delivered === false && inviteResult.fallback_invite_link ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 mb-4">
+                <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-2">
+                  Email could not be sent
+                </p>
+                <p className="text-xs text-amber-800 mb-2">
+                  Share this set-password link with them directly:
+                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="text-xs font-mono text-[#1a1a1a] break-all">{inviteResult.fallback_invite_link}</code>
+                  <button
+                    onClick={() => copyToClipboard(inviteResult.fallback_invite_link || '', 'invite_link')}
+                    className="btn btn-outline btn-xs rounded-lg font-semibold shrink-0"
+                  >
+                    {copiedKey === 'invite_link' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-amber-700 mt-2">
+                  The link is single-use and lets them choose their own password at first sign-in.
+                </p>
               </div>
-              <p className="text-[11px] text-amber-700 mt-2">
-                This password is shown once. Share it with {inviteResult.email} over a secure channel and have them change it at first sign-in.
-              </p>
-            </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 mb-4">
+                <p className="text-xs text-emerald-800">
+                  Invitation emailed to {inviteResult.email}.
+                </p>
+                <p className="text-[11px] text-emerald-700 mt-1">
+                  The email carries a single-use link they follow to set their own password.
+                </p>
+              </div>
+            )}
             <div className="flex justify-end">
               <button
                 onClick={() => setInviteResult(null)}

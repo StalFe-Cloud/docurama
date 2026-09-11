@@ -7,7 +7,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.security import get_password_hash
-from app.models import Account, AccountMembership, Envelope, User
+from app.models import Account, AccountMembership, ApiKey, Envelope, User
+from app.services import api_keys as api_key_service
 
 PASSWORD = "a-long-password-1234"
 
@@ -162,3 +163,85 @@ def test_selfhost_cors_keeps_the_fixed_list():
     origins, regex = build_cors_policy(settings)
     assert regex is None
     assert "http://localhost:3000" in origins
+
+
+async def test_write_endpoints_are_tenant_bound(client, db_session, two_tenant_world,
+                                                monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    acme, globex, acme_env, globex_env = two_tenant_world
+    await _login(client, "bob@example.com")  # Globex session
+    # A write with a JSON body, on Acme's host, from a Globex session: bound and
+    # rejected before the body is ever validated.
+    resp = await client.post("/api/folders", json={"name": "Probe"},
+                             headers={"Host": "acme.docurama.eu"})
+    assert resp.status_code == 403
+
+
+async def test_unknown_tenant_rejects_authenticated_calls(client, db_session,
+                                                          two_tenant_world,
+                                                          monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    await _login(client, "bob@example.com")
+    resp = await client.get("/api/auth/me", headers={"Host": "ghost.docurama.eu"})
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Unknown workspace."
+
+
+async def test_platform_host_allows_every_authenticated_call(client, db_session,
+                                                             two_tenant_world,
+                                                             monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    await _login(client, "bob@example.com")
+    resp = await client.get("/api/auth/me", headers={"Host": "app.docurama.eu"})
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "bob@example.com"
+
+
+async def test_api_key_requests_are_tenant_bound(client, db_session, monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    account = Account(name="Keyed")
+    db_session.add(account)
+    await db_session.flush()
+    owner = User(account_id=account.id, email="keyowner@example.com",
+                 hashed_password=get_password_hash(PASSWORD), role="admin",
+                 is_active=True)
+    db_session.add(owner)
+    await db_session.flush()
+    db_session.add(AccountMembership(user_id=owner.id, account_id=account.id,
+                                     role="owner"))
+
+    plaintext, prefix, hashed = api_key_service.generate_api_key()
+    db_session.add(ApiKey(
+        account_id=account.id,
+        created_by_user_id=owner.id,
+        name="test",
+        key_prefix=prefix,
+        hashed_key=hashed,
+        scopes=["read", "write"],
+        is_active=True,
+    ))
+    await db_session.commit()
+
+    # An API key authenticates its owner, so it must hit the same tenant guard a
+    # session does: an unknown workspace host is a 404, not a quiet pass-through.
+    # /api/auth/me is the load-bearing assertion: it carries no router-level
+    # require_tenant_binding, so its only protection is the guard inside
+    # get_current_user, which the api-key branch used to return past early.
+    me = await client.get("/api/auth/me",
+                          headers={"X-Api-Key": plaintext,
+                                   "Host": "ghost.docurama.eu"})
+    assert me.status_code == 404
+    assert me.json()["detail"] == "Unknown workspace."
+    resp = await client.get("/api/envelopes",
+                            headers={"X-Api-Key": plaintext,
+                                     "Host": "ghost.docurama.eu"})
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Unknown workspace."

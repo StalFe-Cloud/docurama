@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.rate_limit import limiter
+from app.services.tenant_resolver import parse_tenant_host, PLATFORM
 from app.core.security import (
     verify_and_upgrade_password, get_password_hash,
     create_access_token, decode_access_token,
@@ -198,6 +200,15 @@ async def get_current_user(
     if api_key:
         key_user = await _user_from_api_key(api_key.strip(), request, db)
         if key_user:
+            # Cloud mode: every authenticated call must belong to the host's
+            # workspace. Late import: this module is imported by app.api.tenant
+            # at load time.
+            from app.api.tenant import binding_rejection
+
+            rejection = await binding_rejection(db, request, key_user)
+            if rejection is not None:
+                raise rejection
+
             return key_user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -232,6 +243,15 @@ async def get_current_user(
     
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or disabled")
+
+    # Cloud mode: every authenticated call must belong to the host's workspace.
+    # Late import: this module is imported by app.api.tenant at load time.
+    from app.api.tenant import binding_rejection
+
+    rejection = await binding_rejection(db, request, user)
+    if rejection is not None:
+        raise rejection
+
     return user
 
 
@@ -244,6 +264,21 @@ async def require_interactive_session(request: Request) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This endpoint requires an interactive session, not an API key.",
         )
+
+
+def _platform_signup_url() -> str:
+    """
+    The sign-up link to hand a user who landed on a tenant host: APP_URL's own
+    origin when it is a platform host under the cloud domain, otherwise the
+    conventional app.<cloud domain> host (a reserved subdomain, so it always
+    resolves to the platform) carrying APP_URL's scheme.
+    """
+    parsed = urlparse(settings.APP_URL)
+    scheme = parsed.scheme or "https"
+    host = (parsed.hostname or "").strip()
+    if parse_tenant_host(host, settings.CLOUD_DOMAIN)[0] != PLATFORM:
+        host = f"app.{settings.CLOUD_DOMAIN}"
+    return f"{scheme}://{host}/sign_up"
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -262,6 +297,23 @@ async def register(
                 "Ask an existing administrator to invite you."
             ),
         )
+
+    # Cloud mode: a signup is only meaningful on the platform host. Accepted on
+    # a tenant subdomain, the new account would not match the host's tenant, so
+    # the universal tenant guard would 403 every authenticated call and strand
+    # the user mid-onboarding. Turn them away before an account is created.
+    if settings.DEPLOYMENT_MODE.strip().lower() == "cloud":
+        kind, _, _ = parse_tenant_host(
+            request.headers.get("host") or "", settings.CLOUD_DOMAIN
+        )
+        if kind != PLATFORM:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Registration is available on the Docurama platform. "
+                    f"Sign up at {_platform_signup_url()}."
+                ),
+            )
 
     query = select(User).where(User.email == user_in.email)
     existing = (await db.execute(query)).scalar_one_or_none()

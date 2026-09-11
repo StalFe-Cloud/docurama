@@ -313,6 +313,38 @@ def password_reset(recipient_name: str, reset_link: str, ttl_minutes: int):
     return subject, html, text
 
 
+def team_invite(recipient_name: str, company_name: str, invite_link: str,
+                sender_name: str, role: str):
+    """
+    An invitation to join a company.
+
+    Carries a single-use set-password link rather than a password: the recipient
+    chooses their own credential, and the link expires like a reset link because
+    it is one.
+    """
+    subject = f"You have been invited to {company_name} on Docurama"
+    intro = f"Hi {recipient_name or 'there'},"
+    body_html = (
+        f"<p>{sender_name} has invited you to join <strong>{company_name}</strong> "
+        f"as {role}.</p>"
+        "<p>Choose your own password to activate your account. The link works once "
+        "and expires in 60 minutes.</p>"
+    )
+    html = _shell(
+        "You have been invited",
+        intro,
+        body_html,
+        invite_link,
+        "Set your password",
+    )
+    text = (
+        f"{sender_name} has invited you to join {company_name} as {role}.\n\n"
+        "Choose your own password to activate your account. The link works once "
+        f"and expires in 60 minutes.\n\n{invite_link}\n"
+    )
+    return subject, html, text
+
+
 def password_changed_notice(recipient_name: str, when_utc: str):
     """
     Tell someone their password changed, after the fact.

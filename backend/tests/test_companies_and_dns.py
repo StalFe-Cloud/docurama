@@ -95,7 +95,11 @@ def test_invite_role_normalization_matches_accepted_roles():
 
     assert "superuser" not in VALID_MEMBER_ROLES
 
-def test_company_invite_response_carries_one_time_password():
+def test_company_invite_response_never_carries_a_password():
+    # Contract change: an invite emails a single-use set-password link instead of
+    # returning a temporary password. temporary_password stays in the schema for
+    # older clients but is always None, and delivery is reported via
+    # invite_link_delivered with the link surfaced only as a fallback.
     res = CompanyInviteResponse(
         success=True,
         membership_id=str(uuid.uuid4()),
@@ -103,11 +107,15 @@ def test_company_invite_response_carries_one_time_password():
         email="new.counsel@stalfe.com",
         role="member",
         is_new_user=True,
-        temporary_password="s3cure-one-time-token",
-        message="Created account and granted member access.",
+        temporary_password=None,
+        invite_link_delivered=False,
+        fallback_invite_link="https://docurama.example.com/reset-password?token=abc",
+        message="Created account for new.counsel@stalfe.com and emailed them a set-password link.",
     )
     assert res.is_new_user is True
-    assert res.temporary_password == "s3cure-one-time-token"
+    assert res.temporary_password is None
+    assert res.invite_link_delivered is False
+    assert res.fallback_invite_link
 
 def test_company_invite_response_omits_password_for_existing_user():
     res = CompanyInviteResponse(
@@ -121,6 +129,8 @@ def test_company_invite_response_omits_password_for_existing_user():
     )
     assert res.is_new_user is False
     assert res.temporary_password is None
+    assert res.invite_link_delivered is True
+    assert res.fallback_invite_link is None
 
 def test_archived_membership_is_deactivated_not_deleted():
     # Removal sets is_active False so historical audit trails stay resolvable.

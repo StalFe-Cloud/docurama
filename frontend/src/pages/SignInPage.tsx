@@ -183,6 +183,13 @@ export const SignInPage: React.FC<SignInPageProps> = ({ onSuccess, onCancel }) =
                 <ArrowRight className="w-4 h-4 stroke-[2]" />
               </button>
             </div>
+
+            <div className="pt-1 text-center text-xs text-[#787671]">
+              Need an account?{' '}
+              <a href="/sign_up" className="text-[#0075de] hover:underline transition-colors">
+                Sign up
+              </a>
+            </div>
           </form>
         )}
 

@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 import re
 from datetime import datetime, timezone
@@ -13,9 +14,12 @@ from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, generate_secure_token
 from app.api.auth import get_current_user, require_interactive_session
 from app.services.tenancy import subdomain_available, subdomain_error
+from app.services import mailer, smtp_config
+from app.services import password_reset as password_reset_service
 from app.models import (
     User, Account, AccountMembership, DomainVerification,
     Template, TemplateFolder, Envelope, Webhook, ApiKey, AccountSetting,
+    PasswordResetToken,
 )
 from app.schemas import (
     CompanyCreate, CompanyOut, CompanyUpdate, CompanyMemberOut, CompanySwitchResponse,
@@ -374,7 +378,8 @@ async def invite_company_member(
 ):
     """
     Invite a user to the company. Creates the user account when the email is unknown,
-    then grants an active membership with the requested role.
+    then grants an active membership with the requested role. The invitee sets their
+    own password from an emailed single-use link; no temporary password is issued.
     """
     caller = await require_company_admin(company_id, current_user, db)
 
@@ -410,14 +415,16 @@ async def invite_company_member(
     user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
 
     is_new_user = False
-    temporary_password = None
     if not user:
         is_new_user = True
-        temporary_password = generate_secure_token(12)
+        # The invitee sets their own password from the emailed link. The seeded
+        # hash is of a long random value nobody is ever told, so the account is
+        # unusable until the link is redeemed.
+        seeded = generate_secure_token(32)
         user = User(
             account_id=company_id,
             email=email,
-            hashed_password=get_password_hash(temporary_password),
+            hashed_password=get_password_hash(seeded),
             first_name=invite_in.first_name or "",
             last_name=invite_in.last_name or "",
             role="admin" if role in ["owner", "admin"] else "member",
@@ -425,6 +432,17 @@ async def invite_company_member(
         )
         db.add(user)
         await db.flush()
+
+    # A single-use set-password link is staged for every invitee. For a new user it
+    # is the only way into the account; for an existing user it is an ordinary
+    # self-service reset delivered to their own address, so rejoining the company
+    # never depends on remembering an old password. Only the hash is stored.
+    plaintext_token, hashed_token = password_reset_service.generate_token()
+    db.add(PasswordResetToken(
+        user_id=user.id,
+        hashed_token=hashed_token,
+        expires_at=password_reset_service.expiry_from_now(),
+    ))
 
     existing = (await db.execute(
         select(AccountMembership).where(
@@ -453,6 +471,24 @@ async def invite_company_member(
     await db.commit()
     await db.refresh(membership)
 
+    invite_link = password_reset_service.reset_url(settings.APP_URL, plaintext_token)
+    config = await smtp_config.resolve(db, company_id)
+    sender_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+    subject, html, text = mailer.team_invite(
+        invite_in.first_name or email, account.name, invite_link,
+        sender_name, membership.role,
+    )
+    result = await asyncio.to_thread(
+        mailer.send_email, config, email, invite_in.first_name or email,
+        subject, html, text,
+    )
+    # Only a send the mail server accepted counts as delivered. A missing or
+    # malformed result counts as not delivered, so the admin is always left with
+    # a way to pass the link on rather than a silently stranded invitee.
+    invite_link_delivered = bool(getattr(result, "sent", False))
+    if not invite_link_delivered:
+        print(f"[Companies] invite mail not delivered to {email}: {getattr(result, 'error', None)}")
+
     return CompanyInviteResponse(
         success=True,
         membership_id=membership.id,
@@ -460,9 +496,11 @@ async def invite_company_member(
         email=user.email,
         role=membership.role,
         is_new_user=is_new_user,
-        temporary_password=temporary_password,
+        temporary_password=None,
+        invite_link_delivered=invite_link_delivered if is_new_user else True,
+        fallback_invite_link=(invite_link if is_new_user and not invite_link_delivered else None),
         message=(
-            f"Created account for {user.email} and granted {membership.role} access."
+            f"Created account for {user.email} and emailed them a set-password link."
             if is_new_user else
             f"Granted {user.email} {membership.role} access to this company."
         )

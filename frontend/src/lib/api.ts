@@ -153,7 +153,12 @@ export interface CompanyInviteResult {
   email: string;
   role: string;
   is_new_user: boolean;
+  // Legacy field. Invites no longer carry a password, so this is always null.
   temporary_password?: string | null;
+  // False only when the invitation email could not be sent; the fallback link is
+  // then present so the inviting admin can share it directly.
+  invite_link_delivered?: boolean;
+  fallback_invite_link?: string | null;
   message: string;
 }
 
@@ -402,6 +407,33 @@ export const api = {
     }
     return res.json();
   },
+  // Account creation. The response sets the session cookie, so the request must
+  // carry credentials for it to stick. A closed registration (403) and an existing
+  // email (400) both return a plain detail string; validation failures (422) come
+  // back as an array of field errors, which is flattened into one readable line.
+  register: async (data: { email: string; password: string; first_name: string; last_name: string }) => {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      let message = 'Could not create the account';
+      try {
+        const err = await res.json();
+        if (Array.isArray(err.detail)) {
+          message = err.detail.map((item: any) => item?.msg || String(item)).join(' ');
+        } else if (err && err.detail) {
+          message = err.detail;
+        }
+      } catch (e) {
+        // keep the fallback message when the body is not JSON
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
   // Password recovery
   requestPasswordReset: async (email: string): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE}/auth/request-password-reset`, {
@@ -535,6 +567,28 @@ export const api = {
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Failed to change password');
+    }
+    return res.json();
+  },
+  // Signup questionnaire. Submitted once when a new account finishes onboarding;
+  // the backend merges partial answers, so the payload is the full set.
+  submitOnboarding: async (answers: {
+    role?: string;
+    use_case?: string;
+    monthly_volume?: string;
+    team_size?: string;
+    vertical?: string;
+    completed?: boolean;
+  }): Promise<Record<string, any>> => {
+    const res = await fetch(`${API_BASE}/onboarding`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(answers),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Could not save your onboarding answers');
     }
     return res.json();
   },
