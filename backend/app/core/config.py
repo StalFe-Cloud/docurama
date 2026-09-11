@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # deliberately. cloud: the public multi-tenant platform, registration open.
     DEPLOYMENT_MODE: str = os.getenv("DOCURAMA_DEPLOYMENT_MODE", "selfhost")
 
+    # Cloud platform domain. Tenant subdomains live under it (acme.docurama.eu).
+    CLOUD_DOMAIN: str = os.getenv("DOCURAMA_CLOUD_DOMAIN", "docurama.eu")
+
     # Server URLs
     APP_URL: str = os.getenv("DOCURAMA_APP_URL", "https://docurama.example.com")
     ALLOWED_ORIGINS: List[str] = [
