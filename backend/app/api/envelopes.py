@@ -109,6 +109,14 @@ async def create_envelope(
     for idx, r in enumerate(recipients_data):
         client_ref_id = r.get("id", str(idx))
         signing_token = generate_secure_token(32)
+        v_channel = r.get("verification_channel", "none") or "none"
+        phone_val = r.get("phone")
+        if v_channel in ("sms_otp", "whatsapp_otp") and not phone_val:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Phone number is required for recipient '{r.get('name', 'Signer')}' with {v_channel.replace('_', ' ').title()} verification.",
+            )
+
         rec = Recipient(
             envelope_id=envelope.id,
             name=r.get("name", "Signer"),
@@ -117,11 +125,14 @@ async def create_envelope(
             routing_order=r.get("routing_order", idx + 1),
             status="sent",
             signing_token=signing_token,
+            verification_channel=v_channel,
+            phone=phone_val,
             token_expires_at=datetime.now(timezone.utc) + timedelta(days=settings.SIGNING_TOKEN_EXPIRE_DAYS),
         )
         db.add(rec)
         await db.flush()
         created_recipients[client_ref_id] = rec.id
+
 
     try:
         fields_data = json.loads(fields_json)

@@ -27,6 +27,9 @@ export interface Recipient {
   routing_order: number;
   status: string;
   signing_token: string;
+  verification_channel?: string;
+  phone?: string;
+  verified_at?: string | null;
   signed_at?: string;
   declined_reason?: string;
   delegated_to_email?: string;
@@ -741,6 +744,28 @@ export const api = {
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.detail || 'Signature submission failed');
+    }
+    return res.json();
+  },
+  sendSigningOtp: async (token: string): Promise<{ success: boolean; channel: string; target_obfuscated: string; message: string; cooldown_seconds: number }> => {
+    const res = await fetch(`${API_BASE}/signing/${token}/verification/send`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to send verification code');
+    }
+    return res.json();
+  },
+  verifySigningOtp: async (token: string, code: string): Promise<{ success: boolean; verified: boolean; message: string }> => {
+    const res = await fetch(`${API_BASE}/signing/${token}/verification/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Verification code failed');
     }
     return res.json();
   },

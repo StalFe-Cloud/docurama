@@ -41,6 +41,8 @@ htmlcov/
 data/
 uploads/
 postgres/
+docurama_storage/
+backend/docurama_storage/
 
 # OS Artifacts
 .DS_Store

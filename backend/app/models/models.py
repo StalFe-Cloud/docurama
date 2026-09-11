@@ -180,6 +180,14 @@ class Recipient(Base):
     delegated_at = Column(DateTime(timezone=True), nullable=True)
     reminders_sent_count = Column(Integer, default=0)
     last_reminded_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Signer identity verification: none, email_otp, sms_otp, whatsapp_otp, telegram_otp
+    verification_channel = Column(String(50), default="none", nullable=False)
+    phone = Column(String(50), nullable=True)
+    verification_code_hash = Column(String(255), nullable=True)
+    verification_code_expires_at = Column(DateTime(timezone=True), nullable=True)
+    verification_attempts = Column(Integer, default=0, nullable=False)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
     
     created_at = Column(DateTime(timezone=True), default=utcnow)
     

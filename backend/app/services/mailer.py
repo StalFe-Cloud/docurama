@@ -236,6 +236,39 @@ def signing_reminder(recipient_name: str, envelope_title: str, signing_url: str,
     return subject, html, text
 
 
+def signer_otp(recipient_name: str, envelope_title: str, otp_code: str):
+    subject = f"Your verification code: {otp_code} for {envelope_title}"
+    intro = (
+        f"Hello {recipient_name},<br/><br/>"
+        f"You have requested access to sign <strong>{envelope_title}</strong>. "
+        f"Use the following one-time verification code to verify your identity:"
+    )
+    code_block = (
+        f'<div style="text-align:center;margin:24px 0;">'
+        f'<span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:6px;'
+        f'color:#0f172a;background:#f1f5f9;padding:12px 24px;border-radius:8px;border:1px solid #cbd5e1;">'
+        f'{otp_code}'
+        f'</span>'
+        f'</div>'
+        f'<p style="font-size:12px;color:#64748b;text-align:center;">This code expires in 10 minutes. '
+        f'If you did not request this code, you can safely ignore this email.</p>'
+    )
+    html = _shell(
+        "Signer Identity Verification",
+        intro,
+        code_block,
+        None,
+        None,
+    )
+    text = (
+        f"Hello {recipient_name},\n\n"
+        f"Your verification code for '{envelope_title}' is: {otp_code}\n\n"
+        f"This code expires in 10 minutes. If you did not request this code, you can safely ignore this email.\n"
+    )
+    return subject, html, text
+
+
+
 def completion_notice(recipient_name: str, envelope_title: str, verify_url: str, sealed: bool):
     subject = f"Completed: {envelope_title}"
     if sealed:

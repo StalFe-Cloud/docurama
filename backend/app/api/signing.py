@@ -16,8 +16,15 @@ from app.core.config import settings
 from app.models import Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification, CorrectionRequest
 from app.schemas import (
     SigningSessionOut, SubmitSignaturesRequest, FieldOut, RecipientOut,
-    DeclineRequest, DelegateRequest, CorrectionRequestCreate, CorrectionRequestOut
+    DeclineRequest, DelegateRequest, CorrectionRequestCreate, CorrectionRequestOut,
+    SigningVerificationSendResponse, SigningVerificationVerifyRequest, SigningVerificationVerifyResponse,
 )
+from app.services.verification_channels.manager import (
+    send_recipient_otp,
+    verify_recipient_otp,
+    get_recipient_target,
+)
+from app.services.verification_channels.base import obfuscate_target
 from app.services.contract_analyzer import ContractAnalyzer
 from app.services.qr_generator import generate_qr_base64
 from app.services.pdf_service import (
@@ -61,6 +68,19 @@ def _assert_token_live(recipient: Recipient) -> None:
         raise HTTPException(
             status_code=410,
             detail="This signing link has expired. Please ask the sender to issue a new one.",
+        )
+
+def _assert_signer_verified(recipient: Recipient) -> None:
+    """
+    If the recipient has a verification channel requirement other than 'none',
+    access to the document PDF, pages, or signature submission is forbidden
+    until verified_at is stamped.
+    """
+    channel = getattr(recipient, "verification_channel", "none") or "none"
+    if channel != "none" and getattr(recipient, "verified_at", None) is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Signer identity verification required before accessing document content.",
         )
 
 
@@ -115,6 +135,11 @@ async def get_signing_session(
         
     pdf_url = f"{settings.API_V1_STR}/signing/{token}/pdf"
     
+    requires_verif = (recipient.verification_channel or "none") != "none"
+    is_verif = (not requires_verif) or (recipient.verified_at is not None)
+    target = get_recipient_target(recipient) if requires_verif else None
+    target_obf = obfuscate_target(recipient.verification_channel or "none", target) if requires_verif else None
+
     return SigningSessionOut(
         envelope_id=envelope.id,
         envelope_title=envelope.title,
@@ -122,6 +147,10 @@ async def get_signing_session(
         pdf_url=pdf_url,
         fields=[FieldOut.model_validate(f) for f in envelope.fields],
         all_recipients=[RecipientOut.model_validate(r) for r in envelope.recipients],
+        requires_verification=requires_verif,
+        verification_channel=recipient.verification_channel or "none",
+        target_obfuscated=target_obf,
+        is_verified=is_verif,
     )
 
 @router.get("/{token}/pdf")
@@ -135,6 +164,7 @@ async def get_signing_pdf(
         raise HTTPException(status_code=404, detail="Invalid signing token.")
 
     _assert_token_live(recipient)
+    _assert_signer_verified(recipient)
         
     envelope = recipient.envelope
     pdf_path = envelope.signed_pdf_path or envelope.original_pdf_path
@@ -155,6 +185,7 @@ async def get_signing_pages(
         raise HTTPException(status_code=404, detail="Invalid signing token.")
 
     _assert_token_live(recipient)
+    _assert_signer_verified(recipient)
     envelope = recipient.envelope
     pdf_path = envelope.original_pdf_path
     if not os.path.exists(pdf_path):
@@ -187,6 +218,7 @@ async def get_signing_page_image(
         raise HTTPException(status_code=404, detail="Invalid signing token.")
 
     _assert_token_live(recipient)
+    _assert_signer_verified(recipient)
     envelope = recipient.envelope
     pdf_path = envelope.original_pdf_path
     if not os.path.exists(pdf_path):
@@ -201,6 +233,7 @@ async def get_signing_page_image(
             "Content-Disposition": f"inline; filename=page_{page_number}.png"
         }
     )
+
 
 @router.get("/{token}/mobile_handshake")
 async def mobile_handshake(
@@ -237,6 +270,77 @@ async def mobile_handshake(
         "qr_base64": qr_b64
     }
 
+@router.post("/{token}/verification/send", response_model=SigningVerificationSendResponse)
+async def send_verification_code(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dispatch a one-time verification passcode to the signer via their designated channel.
+    Enforces a 30-second cooldown between requests.
+    """
+    query = select(Recipient).where(Recipient.signing_token == token).options(selectinload(Recipient.envelope))
+    recipient = (await db.execute(query)).scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
+
+    if recipient.verified_at is not None:
+        target = get_recipient_target(recipient)
+        return SigningVerificationSendResponse(
+            success=True,
+            channel=recipient.verification_channel or "none",
+            target_obfuscated=obfuscate_target(recipient.verification_channel or "none", target),
+            message="Signer identity is already verified.",
+            cooldown_seconds=0,
+        )
+
+    res = await send_recipient_otp(recipient, recipient.envelope, db)
+    if not res["success"]:
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to send verification code."))
+
+    return SigningVerificationSendResponse(
+        success=True,
+        channel=res["channel"],
+        target_obfuscated=res["target_obfuscated"],
+        message=res["message"],
+        cooldown_seconds=30,
+    )
+
+
+@router.post("/{token}/verification/verify", response_model=SigningVerificationVerifyResponse)
+async def verify_verification_code(
+    token: str,
+    payload: SigningVerificationVerifyRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verify the one-time passcode submitted by the signer.
+    On success, unlocks document access and records an evidentiary audit event.
+    """
+    query = select(Recipient).where(Recipient.signing_token == token)
+    recipient = (await db.execute(query)).scalar_one_or_none()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Invalid signing token.")
+
+    _assert_token_live(recipient)
+
+    ip = request.client.host if request.client else "127.0.0.1"
+    ua = request.headers.get("User-Agent", "Browser")
+
+    res = await verify_recipient_otp(recipient, payload.code, ip, ua, db)
+    if not res["success"]:
+        raise HTTPException(status_code=400, detail=res.get("error", "Verification failed."))
+
+    return SigningVerificationVerifyResponse(
+        success=True,
+        verified=True,
+        message=res["message"],
+    )
+
+
 @router.post("/{token}/submit")
 async def submit_signatures(
     token: str,
@@ -259,6 +363,7 @@ async def submit_signatures(
         raise HTTPException(status_code=404, detail="Invalid signing token.")
 
     _assert_token_live(recipient)
+    _assert_signer_verified(recipient)
         
     envelope = recipient.envelope
     if envelope.status in ["completed", "voided", "declined"]:
@@ -405,6 +510,9 @@ async def submit_signatures(
                 "status": r.status,
                 "signed_at": r.signed_at.strftime("%Y-%m-%d %H:%M:%S UTC") if r.signed_at else "N/A",
                 "ip_address": ip_by_recipient.get(r.id) or ("Not recorded" if r.status != "signed" else ip),
+                "verification_channel": getattr(r, "verification_channel", "none") or "none",
+                "phone": getattr(r, "phone", None),
+                "verified_at": r.verified_at.strftime("%Y-%m-%d %H:%M:%S UTC") if getattr(r, "verified_at", None) else None,
             }
             for r in envelope.recipients
         ]

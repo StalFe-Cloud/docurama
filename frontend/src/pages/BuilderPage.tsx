@@ -51,6 +51,8 @@ interface RecipientRole {
   role: string;
   routing_order: number;
   color: string;
+  verification_channel?: string;
+  phone?: string;
 }
 
 const ROLE_COLORS = [
@@ -69,9 +71,10 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
   
   // Recipients / Roles
   const [recipients, setRecipients] = useState<RecipientRole[]>([
-    { id: '1', name: '', email: '', role: 'Signer 1', routing_order: 1, color: '#1D72FE' }
+    { id: '1', name: '', email: '', role: 'Signer 1', routing_order: 1, color: '#1D72FE', verification_channel: 'none', phone: '' }
   ]);
   const [activeRecipientId, setActiveRecipientId] = useState<string>('1');
+
 
   // Fields
   const [fields, setFields] = useState<any[]>([]);
@@ -528,41 +531,70 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
                   <div
                     key={r.id}
                     onClick={() => setActiveRecipientId(r.id)}
-                    className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                    className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col gap-2 ${
                       isActive 
                         ? 'bg-[#EFF6FF] border-[#1D72FE] shadow-sm' 
                         : 'bg-[#F8FAFC] border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                      <div className="truncate">
-                        <input
-                          type="text"
-                          value={r.name || r.role}
-                          placeholder={`Signer ${i + 1} Name`}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => updateRecipient(i, 'name', e.target.value)}
-                          className="bg-transparent border-0 text-xs font-bold text-[#0F172A] w-28 truncate p-0 focus:ring-0 focus:outline-none"
-                        />
-                        <input
-                          type="email"
-                          value={r.email}
-                          placeholder="email@company.com"
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => updateRecipient(i, 'email', e.target.value)}
-                          className="bg-transparent border-0 text-[10px] text-slate-500 w-28 truncate p-0 block focus:ring-0 focus:outline-none"
-                        />
+                    <div className="flex items-center justify-between gap-2 w-full">
+                      <div className="flex items-center gap-2 truncate flex-1">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
+                        <div className="truncate flex-1">
+                          <input
+                            type="text"
+                            value={r.name || r.role}
+                            placeholder={`Signer ${i + 1} Name`}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => updateRecipient(i, 'name', e.target.value)}
+                            className="bg-transparent border-0 text-xs font-bold text-[#0F172A] w-full truncate p-0 focus:ring-0 focus:outline-none"
+                          />
+                          <input
+                            type="email"
+                            value={r.email}
+                            placeholder="email@company.com"
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => updateRecipient(i, 'email', e.target.value)}
+                            className="bg-transparent border-0 text-[10px] text-slate-500 w-full truncate p-0 block focus:ring-0 focus:outline-none"
+                          />
+                        </div>
                       </div>
+                      {recipients.length > 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeRecipient(r.id); }}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded shrink-0"
+                          title="Remove signer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
-                    {recipients.length > 1 && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); removeRecipient(r.id); }}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
+
+                    <div className="pt-1.5 border-t border-slate-200/60 flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-500 font-medium">Auth:</span>
+                        <select
+                          value={r.verification_channel || 'none'}
+                          onChange={(e) => updateRecipient(i, 'verification_channel', e.target.value)}
+                          className="text-[10px] py-0.5 px-1.5 bg-white border border-slate-200 rounded font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#1D72FE]"
+                        >
+                          <option value="none">Direct Link</option>
+                          <option value="email_otp">Email OTP</option>
+                          <option value="sms_otp">SMS OTP</option>
+                          <option value="whatsapp_otp">WhatsApp OTP</option>
+                          <option value="telegram_otp">Telegram Bot</option>
+                        </select>
+                      </div>
+                      {(r.verification_channel === 'sms_otp' || r.verification_channel === 'whatsapp_otp') && (
+                        <input
+                          type="tel"
+                          value={r.phone || ''}
+                          placeholder="Phone e.g. +33612345678"
+                          onChange={(e) => updateRecipient(i, 'phone', e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded text-[10px] px-1.5 py-0.5 text-slate-700 placeholder:text-slate-400 focus:ring-1 focus:ring-[#1D72FE] focus:outline-none"
+                        />
+                      )}
+                    </div>
                   </div>
                 );
               })}
