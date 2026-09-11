@@ -58,3 +58,26 @@ async def require_tenant_binding(
             detail="This workspace is not served here. Sign in at the platform root.",
         )
     return context
+
+
+async def binding_rejection(db: AsyncSession, request: Request, user: User):
+    """
+    The reason an authenticated request may not proceed on this host, if any.
+
+    Called from get_current_user so the guard covers every authenticated endpoint
+    (writes included), not just the routers that declare the dependency. Platform
+    hosts never reject: the platform is every tenant's front door.
+    """
+    if not _tenant_routing_enabled():
+        return None
+    context = await current_tenant(request, db)
+    if context.kind == PLATFORM:
+        return None
+    if context.kind == UNKNOWN:
+        return HTTPException(status_code=404, detail="Unknown workspace.")
+    if context.account_id and user.account_id != context.account_id:
+        return HTTPException(
+            status_code=403,
+            detail="This workspace is not served here. Sign in at the platform root.",
+        )
+    return None

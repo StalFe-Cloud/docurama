@@ -232,6 +232,15 @@ async def get_current_user(
     
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or disabled")
+
+    # Cloud mode: every authenticated call must belong to the host's workspace.
+    # Late import: this module is imported by app.api.tenant at load time.
+    from app.api.tenant import binding_rejection
+
+    rejection = await binding_rejection(db, request, user)
+    if rejection is not None:
+        raise rejection
+
     return user
 
 

@@ -162,3 +162,41 @@ def test_selfhost_cors_keeps_the_fixed_list():
     origins, regex = build_cors_policy(settings)
     assert regex is None
     assert "http://localhost:3000" in origins
+
+
+async def test_write_endpoints_are_tenant_bound(client, db_session, two_tenant_world,
+                                                monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    acme, globex, acme_env, globex_env = two_tenant_world
+    await _login(client, "bob@example.com")  # Globex session
+    # A write with a JSON body, on Acme's host, from a Globex session: bound and
+    # rejected before the body is ever validated.
+    resp = await client.post("/api/folders", json={"name": "Probe"},
+                             headers={"Host": "acme.docurama.eu"})
+    assert resp.status_code == 403
+
+
+async def test_unknown_tenant_rejects_authenticated_calls(client, db_session,
+                                                          two_tenant_world,
+                                                          monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    await _login(client, "bob@example.com")
+    resp = await client.get("/api/auth/me", headers={"Host": "ghost.docurama.eu"})
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Unknown workspace."
+
+
+async def test_platform_host_allows_every_authenticated_call(client, db_session,
+                                                             two_tenant_world,
+                                                             monkeypatch):
+    from app.core import config
+
+    monkeypatch.setattr(config.settings, "DEPLOYMENT_MODE", "cloud")
+    await _login(client, "bob@example.com")
+    resp = await client.get("/api/auth/me", headers={"Host": "app.docurama.eu"})
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "bob@example.com"
