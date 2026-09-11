@@ -38,7 +38,13 @@ class CompanyInviteResponse(BaseModel):
     email: str
     role: str
     is_new_user: bool
+    # Legacy field: invites no longer issue a temporary password. It stays in the
+    # schema so older clients keep deserialising, but it is always None now.
     temporary_password: Optional[str] = None
+    # Whether the invite mail was confirmed delivered. When it was not, the
+    # set-password link is returned here so the admin can hand it over directly.
+    invite_link_delivered: bool = True
+    fallback_invite_link: Optional[str] = None
     message: str
 
 class CompanyMemberOut(BaseModel):
