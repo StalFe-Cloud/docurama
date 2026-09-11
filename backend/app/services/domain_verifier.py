@@ -153,3 +153,30 @@ async def verify_client_domain(
         dns_details,
         f"Verification pending: No DNS TXT record or website confirmation pointing to Docurama detected yet for {clean_domain}."
     )
+
+
+def summarize_checks(domain: str, verification_token: str,
+                     dns_details: Dict[str, Any], method_matched: str) -> List[Dict[str, Any]]:
+    """
+    Found-vs-expected for each verification path, so the UI can show what was
+    looked for and what was actually there instead of a raw DNS dump.
+    """
+    expected_txt = f"docurama-verification={verification_token}"
+    found_txt = [r.get("data", "") for r in dns_details.get("txt_records", [])]
+    txt_ok = method_matched == "dns_txt"
+    pointer_ok = method_matched == "dns_subdomain_pointer"
+    web_ok = method_matched == "web_confirmation"
+    return [
+        {"method": "dns_txt",
+         "expected": expected_txt,
+         "found": found_txt or "no TXT records found",
+         "ok": txt_ok},
+        {"method": "dns_subdomain_pointer",
+         "expected": "docurama.<domain> or sign.<domain> serving the Docurama service",
+         "found": dns_details.get("subdomain_pointers", {}),
+         "ok": pointer_ok},
+        {"method": "web_confirmation",
+         "expected": "the token published under /.well-known/docurama-verification",
+         "found": dns_details.get("web_confirmation", {}),
+         "ok": web_ok},
+    ]

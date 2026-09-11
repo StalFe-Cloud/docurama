@@ -445,6 +445,7 @@ class DomainVerifyResponse(BaseModel):
     verified_at: Optional[datetime] = None
     enforce_domain_auth: Optional[bool] = False
     auth_assurance_level: Optional[str] = "enterprise_domain_verified"
+    checks: List[Dict[str, Any]] = []
 
 class DomainPublicStatus(BaseModel):
     domain: str

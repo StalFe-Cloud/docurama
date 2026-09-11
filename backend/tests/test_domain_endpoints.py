@@ -101,3 +101,55 @@ async def test_create_domain_registers_pending_domain(client, owner_with_members
     body = resp.json()
     assert body["domain"] == "acme.example"
     assert body["status"] == "pending"
+
+
+async def test_setup_returns_provider_guidance_and_records(client, member_and_admin,
+                                                           monkeypatch):
+    from app.services import dns_provider
+
+    async def fake_detect(domain):
+        return {"provider": "cloudflare", "nameservers": ["ns1.cloudflare.com"],
+                "steps": ["Step one"]}
+
+    monkeypatch.setattr(dns_provider, "detect_provider", fake_detect)
+    monkeypatch.setattr("app.api.domains.detect_provider", fake_detect)
+
+    account, admin, member, domain = member_and_admin
+    await _login(client, "member@example.com")
+    resp = await client.get(f"/api/domains/{domain.id}/setup")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider"] == "cloudflare"
+    assert body["records"][0]["host"] == "_docurama-challenge.acme.example"
+    assert body["records"][0]["value"] == "docurama-verification=dcr_vfy_abc123"
+    assert body["records"][0]["type"] == "TXT"
+
+
+async def test_it_email_draft_contains_records_and_is_not_sent(client, member_and_admin):
+    # The endpoint only returns a draft dict; it has no mailer dependency, so
+    # nothing can be sent server-side. Assertions cover the response body only.
+    account, admin, member, domain = member_and_admin
+    await _login(client, "member@example.com")
+    resp = await client.post(f"/api/domains/{domain.id}/it-email")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "Acme" in body["subject"] or "acme.example" in body["subject"]
+    assert "_docurama-challenge.acme.example" in body["body"]
+    assert "docurama-verification=dcr_vfy_abc123" in body["body"]
+
+
+async def test_verify_response_includes_checks_summary(client, member_and_admin,
+                                                       monkeypatch):
+    async def fake_verify(d, token):
+        return False, "none", {"txt_records": []}, "Verification pending."
+
+    monkeypatch.setattr("app.api.domains.verify_client_domain", fake_verify)
+    account, admin, member, domain = member_and_admin
+    await _login(client, "member@example.com")
+    resp = await client.post(f"/api/domains/{domain.id}/verify")
+    assert resp.status_code == 200
+    checks = resp.json()["checks"]
+    assert checks, "expected at least one check"
+    txt = next(c for c in checks if c["method"] == "dns_txt")
+    assert txt["expected"] == "docurama-verification=dcr_vfy_abc123"
+    assert txt["ok"] is False
