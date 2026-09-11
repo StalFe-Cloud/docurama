@@ -8,6 +8,7 @@ import { SigningStudioPage } from './pages/SigningStudioPage';
 import { VerifyPage } from './pages/VerifyPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SignInPage } from './pages/SignInPage';
+import { SignUpPage } from './pages/SignUpPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicFormPage } from './pages/PublicFormPage';
@@ -141,6 +142,27 @@ export const App: React.FC = () => {
             }}
             onCancel={() => setCurrentTab('landing')}
           />
+        </main>
+      </div>
+    );
+  }
+
+  // Direct Sign-Up Route: /sign_up, with /signup accepted as an alias.
+  // Registration hands back a session cookie, so success navigates to the
+  // onboarding wizard with a fresh page load.
+  if (path === '/sign_up' || path === '/signup') {
+    return (
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+        <Header
+          currentTab="signin"
+          onSelectTab={(tab) => setCurrentTab(tab)}
+          onNewEnvelope={() => setCurrentTab('builder')}
+          user={user}
+          onLogout={handleLogout}
+          onSignIn={() => setCurrentTab('signin')}
+        />
+        <main className="flex-1 flex items-center justify-center">
+          <SignUpPage />
         </main>
       </div>
     );

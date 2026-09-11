@@ -407,6 +407,33 @@ export const api = {
     }
     return res.json();
   },
+  // Account creation. The response sets the session cookie, so the request must
+  // carry credentials for it to stick. A closed registration (403) and an existing
+  // email (400) both return a plain detail string; validation failures (422) come
+  // back as an array of field errors, which is flattened into one readable line.
+  register: async (data: { email: string; password: string; first_name: string; last_name: string }) => {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      let message = 'Could not create the account';
+      try {
+        const err = await res.json();
+        if (Array.isArray(err.detail)) {
+          message = err.detail.map((item: any) => item?.msg || String(item)).join(' ');
+        } else if (err && err.detail) {
+          message = err.detail;
+        }
+      } catch (e) {
+        // keep the fallback message when the body is not JSON
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
   // Password recovery
   requestPasswordReset: async (email: string): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE}/auth/request-password-reset`, {
