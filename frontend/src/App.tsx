@@ -17,6 +17,7 @@ import { AdminPage } from './pages/AdminPage';
 import { CompliancePage } from './pages/CompliancePage';
 import { ActivationPage } from './pages/ActivationPage';
 import { TrustPage } from './pages/TrustPage';
+import { LegalPage } from './pages/LegalPage';
 import { PricingPage } from './pages/PricingPage';
 import { DocsPage } from './pages/DocsPage';
 import { BlogPage } from './pages/BlogPage';
@@ -82,7 +83,7 @@ const MarketingFooter: React.FC<{ navigate: (tab: string) => void }> = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
           <p className="text-xs font-semibold text-[#1a1a1a]">
-            &copy; {new Date().getFullYear()} Docurama Technologies
+            &copy; {new Date().getFullYear()} DOCURAMA — a product of STALFE · 1 Rue Marguerin, 75014 Paris, France
           </p>
           <p className="mt-1 text-[11px] leading-5 text-[#787671] max-w-md">{t('footer.trust')}</p>
         </div>
@@ -92,6 +93,9 @@ const MarketingFooter: React.FC<{ navigate: (tab: string) => void }> = () => {
           <a href="/blog" className="hover:text-[#1a1a1a] transition-colors">{t('nav.blog')}</a>
           <a href="/help" className="hover:text-[#1a1a1a] transition-colors">{t('footer.help')}</a>
           <a href="/templates-gallery" className="hover:text-[#1a1a1a] transition-colors">{t('nav.gallery')}</a>
+          <a href="/legal/terms" className="hover:text-[#1a1a1a] transition-colors">Terms</a>
+          <a href="/legal/privacy" className="hover:text-[#1a1a1a] transition-colors">Privacy</a>
+          <a href="/legal/dpa" className="hover:text-[#1a1a1a] transition-colors">DPA</a>
           <a href="/trust" className="hover:text-[#1a1a1a] transition-colors">{t('footer.trustcenter')}</a>
           <a href="/verify" className="hover:text-[#1a1a1a] transition-colors">{t('footer.verify')}</a>
           <a href="/api-docs" className="hover:text-[#1a1a1a] transition-colors">API</a>
@@ -392,6 +396,14 @@ const AppShell: React.FC = () => {
     return <TrustPage />;
   }
 
+  // 6e. Public legal pages: /legal, /legal/terms, /legal/privacy, /legal/dpa,
+  // /legal/imprint — Terms, Privacy Notice, DPA and publisher information.
+  if (path === '/legal' || path.startsWith('/legal/')) {
+    const seg = path.split('/')[2];
+    const initialDoc = (['terms', 'privacy', 'dpa', 'imprint'] as const).find((d) => d === seg);
+    return <LegalPage initialDoc={initialDoc} />;
+  }
+
   // 5. Direct API Documentation Route: /api-docs, /docs/api, or /api/docs
   if (path.startsWith('/api-docs') || path.startsWith('/docs/api') || path.startsWith('/api/docs')) {
     return (
@@ -544,7 +556,7 @@ const AppShell: React.FC = () => {
           <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div>
               <p className="text-xs font-semibold text-[#1a1a1a]">
-                &copy; {new Date().getFullYear()} Docurama Technologies
+                &copy; {new Date().getFullYear()} DOCURAMA — a product of STALFE · 1 Rue Marguerin, 75014 Paris, France
               </p>
               <p className="mt-1 text-[11px] leading-5 text-[#787671] max-w-md">
                 PAdES signatures with X.509 seals, RFC 3161 timestamping, and a
@@ -552,6 +564,9 @@ const AppShell: React.FC = () => {
               </p>
             </div>
             <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-medium text-[#5d5b54]">
+              <a href="/legal/terms" className="hover:text-[#1a1a1a] transition-colors">Terms</a>
+              <a href="/legal/privacy" className="hover:text-[#1a1a1a] transition-colors">Privacy</a>
+              <a href="/legal/dpa" className="hover:text-[#1a1a1a] transition-colors">DPA</a>
               <a href="/trust" className="hover:text-[#1a1a1a] transition-colors">Trust center</a>
               <a href="/verify" className="hover:text-[#1a1a1a] transition-colors">Verify a PDF</a>
               <a href="/api-docs" className="hover:text-[#1a1a1a] transition-colors">API docs</a>

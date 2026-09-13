@@ -2,8 +2,13 @@
 Docurama Quota, Metering & Plan Service
 
 Enforces envelope volume quotas, active seat limits, trial lifecycle,
-and feature availability across Plus (7-Day Trial), Business Team,
-Enterprise, and Self-Host Unlimited deployments.
+and feature availability across Plus, Business Team, and Enterprise,
+plus the self-host Unlimited deployment (self-host is an Enterprise
+deployment mode - it is never a Cloud plan).
+
+Trial (final model): 14 days, no credit card, full Plus experience. After
+expiry the account is READ-ONLY - nothing is ever deleted, but writes that
+consume paid entitlements are refused with 402 and an upgrade path.
 """
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, List, Dict, Any
@@ -51,7 +56,7 @@ PLAN_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "can_use_api_keys": True,
     },
     PlanTier.UNLIMITED: {
-        "display_name": "Self-Host Unlimited",
+        "display_name": "Self-Host (Enterprise deployment)",
         "envelopes_per_month": None,
         "seats": None,
         "allowed_channels": ["none", "email_otp", "sms_otp", "whatsapp_otp", "telegram_otp"],
@@ -82,9 +87,18 @@ def get_effective_plan(account: Account) -> str:
     return plan
 
 
+def _as_aware(value: datetime) -> datetime:
+    """SQLite round-trips can return naive datetimes; comparing them with
+    aware clock reads raises TypeError and would turn an expired trial into
+    a 500 instead of a clean 402. Normalize before comparing."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 def is_trial_active(account: Account, ref_date: Optional[datetime] = None) -> bool:
     """
-    Check if the account is currently within its 7-day trial window.
+    Check if the account is currently within its 14-day trial window.
     """
     if not getattr(account, "is_trial", False):
         return False
@@ -92,7 +106,7 @@ def is_trial_active(account: Account, ref_date: Optional[datetime] = None) -> bo
     if not trial_ends:
         return False
     now = ref_date or datetime.now(timezone.utc)
-    return now < trial_ends
+    return now < _as_aware(trial_ends)
 
 
 def is_account_write_allowed(account: Account, ref_date: Optional[datetime] = None) -> Tuple[bool, str]:
@@ -111,12 +125,12 @@ def is_account_write_allowed(account: Account, ref_date: Optional[datetime] = No
     now = ref_date or datetime.now(timezone.utc)
     if getattr(account, "is_trial", False):
         trial_ends = getattr(account, "trial_ends_at", None)
-        if trial_ends and now >= trial_ends:
+        if trial_ends and now >= _as_aware(trial_ends):
             return False, "TRIAL_EXPIRED"
         return True, "TRIAL_ACTIVE"
 
     expires_at = getattr(account, "plan_expires_at", None)
-    if expires_at and now >= expires_at:
+    if expires_at and now >= _as_aware(expires_at):
         return False, "PLAN_EXPIRED"
 
     return True, "ACTIVE"
@@ -280,6 +294,7 @@ async def get_usage_summary(account: Account, db: AsyncSession) -> Dict[str, Any
 
     is_trial = getattr(account, "is_trial", False)
     trial_ends = getattr(account, "trial_ends_at", None)
+    trial_ends = _as_aware(trial_ends) if trial_ends else None
     is_trial_expired = is_trial and bool(trial_ends and now >= trial_ends)
     trial_days_remaining = (
         max(0, (trial_ends - now).days) if is_trial and trial_ends and not is_trial_expired else 0

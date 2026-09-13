@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.api.auth import get_current_user
 from app.api.tenant import require_tenant_binding
+from app.api.quotas import require_paid_write
 from app.models import User, Template, Envelope, Recipient, Field, AuditEvent
 from app.schemas import TemplateOut, AutoDetectResponse, DetectedField
 from app.services.field_detector import FieldDetector
@@ -56,7 +57,7 @@ async def create_template(
     fields_json: Optional[str] = Form("[]"),
     roles_json: Optional[str] = Form("[]"),
     file: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_paid_write),
     db: AsyncSession = Depends(get_db)
 ):
     storage_dir = settings.STORAGE_DIR

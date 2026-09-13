@@ -17,6 +17,10 @@ from app.models import Account
 RESERVED_SUBDOMAINS = frozenset({
     "www", "app", "api", "mail", "sign", "verify", "trust", "notify",
     "staging", "admin",
+    # The ten public hosts of the launch domain architecture (deploy/
+    # DOMAIN_SPLIT.md): a workspace must never be able to claim a hostname
+    # that the edge routes to the marketing site or a public service.
+    "signup", "docs", "help", "status", "sandbox",
 })
 
 # A DNS label: 2-40 chars, lowercase letters/digits/hyphens, no lead/trail hyphen.

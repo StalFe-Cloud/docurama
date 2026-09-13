@@ -30,24 +30,24 @@ export const BLOG_POSTS: BlogPost[] = [
         p: 'Free-month promotions are one-off sugar hits — they reset every year for new customers and reward churn. The 35-day cycle is structural: it benefits every cycle you stay, and it cannot be quietly withdrawn because it is how billing works, not how a campaign works. Innovation in pricing should live in the mechanics, not the confetti.',
       },
       {
-        callout: 'The pricing page includes a live calculator: every tier, every commitment, and the coverage in days — the same numbers the billing engine runs. No hidden arithmetic.',
+        callout: 'The pricing page includes a live calculator: every tier, monthly or annual, and the coverage in days — the same numbers the billing engine runs. No hidden arithmetic.',
       },
     ],
   },
   {
     slug: 'fair-exit-guarantee',
     tag: 'Pricing',
-    title: 'The Fair Exit Guarantee: commitments without the trap',
-    description: 'Annual contracts lock customers in with cancellation mazes. We priced the exit instead — here is how pro-rata refunds work.',
+    title: 'The Fair Exit Guarantee: prepaid without the trap',
+    description: 'Annual billing locks customers in with cancellation mazes. We priced the exit instead — here is how pro-rata refunds work.',
     date: '2026-09-08',
     minutes: 5,
     blocks: [
       {
-        p: 'The industry uses commitments one-way: customers get a discount for promising 12 months, and vendors get a cancellation process designed like an obstacle course — phone calls, retention scripts, "credits" instead of money. The discount was never free; you paid for it with your exit.',
+        p: 'The industry uses prepayment one-way: customers get a discount for promising 12 months, and vendors get a cancellation process designed like an obstacle course — phone calls, retention scripts, "credits" instead of money. The discount was never free; you paid for it with your exit.',
       },
       { h2: 'Priced exits, both directions' },
       {
-        p: 'The Fair Exit Guarantee reverses the polarity. Take a 6- or 12-month commitment and the discount is real — 10% or 15% off every cycle. Leave early and every <strong>unused full cycle</strong> refunds to your payment method, pro-rata at your committed rate, self-serve, one click. No call, no script, no "account credit" sleight of hand on the cash tiers.',
+        p: 'The Fair Exit Guarantee reverses the polarity. Choose annual billing and the discount is real — about 20% off, every cycle. Leave early and every <strong>unused full cycle</strong> refunds to your payment method, pro-rata at your committed rate, self-serve, one click. No call, no script, no "account credit" sleight of hand.',
       },
       { h2: 'Why it is safe to offer' },
       {
@@ -55,7 +55,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       { h2: 'The small print, in large print' },
       {
-        p: 'The cycle you are inside always runs its course: you keep full access for days already paid for. Three-month commitments refund as account credit rather than cash — that is the one trade-off, stated plainly. Rolling plans have nothing to refund because nothing was billed ahead.',
+        p: 'The cycle you are inside always runs its course: you keep full access for days already paid for. Monthly plans have nothing to refund because nothing was billed ahead — the discount is the reward for the annual commitment, and the cash refund is the way out of it.'
       },
     ],
   },

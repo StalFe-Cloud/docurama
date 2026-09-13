@@ -296,30 +296,28 @@ export const DOCS: Article[] = [
   {
     slug: 'billing-35-day-cycle',
     category: 'Billing',
-    title: 'Billing: the 35-day cycle, commitments, and Fair Exit',
-    description: 'Why every cycle is 35 days, how commitment discounts apply, and exactly how the Fair Exit Guarantee refunds you.',
+    title: 'Billing: the 35-day cycle, monthly and annual, and Fair Exit',
+    description: 'Why every cycle is 35 days, how monthly and annual billing work, and exactly how the Fair Exit Guarantee refunds you.',
     minutes: 6,
     updated: '2026-09-10',
     blocks: [
       {
         p: 'Docurama bills in <strong>35-day cycles</strong> instead of the industry\u2019s 30. Ten days in an average month are weekends; a 30-day cycle quietly charges you for days you cannot work. Stretching the cycle to 35 days puts that time back: twelve cycles cover <strong>420 days of service — 55 days more than a calendar year</strong> — at the same twelve payments.',
       },
-      { h2: 'The commitment ladder' },
+      { h2: 'Monthly or annual' },
       {
         list: [
-          '<strong>Rolling</strong> — billed every 35 days, cancel anytime, 0% discount.',
-          '<strong>3 months</strong> — three cycles (105 days of coverage), 5% off the cycle price.',
-          '<strong>6 months</strong> — six cycles (210 days), 10% off.',
-          '<strong>12 months</strong> — twelve cycles (420 days), 15% off.',
+          '<strong>Monthly</strong> — billed every 35 days, cancel anytime, coverage runs to the end of the paid cycle.',
+          '<strong>Annual</strong> — twelve 35-day cycles (420 days of coverage, 55 days more than a calendar year) billed once a year: Plus at EUR 15 per cycle-equivalent (EUR 180 total, EUR 48 saved) and Business Team at EUR 39 per cycle-equivalent (EUR 468 total, EUR 120 saved). Business Team additional seats are EUR 15 per cycle on either interval.',
         ],
       },
       { h2: 'The Fair Exit Guarantee' },
       {
-        p: 'Commitments should not feel like traps. On 6- and 12-month plans, every <strong>unused full cycle</strong> refunds to your payment method pro-rata, self-serve, one click — that is the Fair Exit Guarantee. On 3-month plans, unused cycles become account credit. On rolling plans there is nothing to refund: you were never billed ahead, so coverage simply runs to the end of the paid cycle. The cycle you are inside always runs its course — you keep full access for days already paid for.',
+        p: 'Annual prepayments should not feel like traps. On annual billing, every <strong>unused full cycle</strong> refunds to your payment method pro-rata, self-serve, one click — that is the Fair Exit Guarantee. On monthly billing there is nothing to refund: you were never billed ahead, so cancelling simply runs coverage to the end of the paid cycle. The cycle you are inside always runs its course — you keep full access for days already paid for.',
       },
       { h2: 'Worked example' },
       {
-        p: 'Team at the 6-month commitment: the list price is EUR 29 per cycle; the commitment prices it at EUR 27.55 per cycle (10% off wait — see the pricing page calculator for live math). Cancel after two completed cycles and four unused cycles refund at the committed rate. The pricing page lets you preview any cancellation before it happens — the same arithmetic the billing engine runs.',
+        p: 'Plus on annual billing: the monthly price is EUR 19 per cycle; the annual interval prices it at EUR 15 per cycle-equivalent (EUR 180 billed for the year). Cancel after five completed cycles and seven unused cycles refund at EUR 15 each — EUR 105 back. The pricing page lets you preview any cancellation before it happens — the same arithmetic the billing engine runs.',
       },
       { h2: 'Checkout status' },
       {

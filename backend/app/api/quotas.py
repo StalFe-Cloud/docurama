@@ -1,5 +1,11 @@
 """
 Quotas, Metering & Subscription Plan Endpoints
+
+Also hosts the shared `require_paid_write` dependency: the single server-side
+read-only gate for expired 14-day trials and expired paid plans. Routes that
+create billable entitlements (envelopes, templates, invites, webhooks, API
+keys, signing certificates) hang it on their mutating endpoints so a
+read-only account stays read-only no matter what the frontend hides.
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,9 +21,58 @@ from app.services.quotas import (
     PlanTier,
     PLAN_DEFINITIONS,
     get_usage_summary,
+    is_account_write_allowed,
 )
 
 router = APIRouter(prefix="/quotas", tags=["quotas"])
+
+
+# ---------------------------------------------------------------------------
+# Read-only enforcement (final commercial model)
+#
+# After the 14-day no-card trial ends - or when a paid plan lapses - the
+# account becomes READ-ONLY. Nothing is ever deleted: documents, envelopes,
+# templates, audit trails and signing history all stay viewable and
+# exportable. What is refused, with 402 Payment Required, is any write that
+# would consume a paid entitlement. The check is server-side by design;
+# hiding buttons in the frontend is not enforcement.
+# ---------------------------------------------------------------------------
+
+TRIAL_EXPIRED_MESSAGE = (
+    "Your 14-day Plus trial has ended. "
+    "Your documents remain safe and accessible. Upgrade to continue sending."
+)
+PLAN_EXPIRED_MESSAGE = (
+    "Your plan has expired. "
+    "Your documents remain safe and accessible. Upgrade to continue sending."
+)
+
+
+def _payment_required(reason: str) -> HTTPException:
+    detail = TRIAL_EXPIRED_MESSAGE if reason == "TRIAL_EXPIRED" else PLAN_EXPIRED_MESSAGE
+    return HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail={"code": reason, "message": detail, "cta": "Upgrade to Plus"},
+    )
+
+
+async def require_paid_write(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Dependency: refuse entitlement-consuming writes for expired accounts.
+
+    Reads, downloads, verification, exports and account settings stay open on
+    purpose - read-only means exactly that, not data withholding."""
+    if not current_user.account_id:
+        return current_user  # no workspace: route's own 400/404 handling governs
+    account = await db.get(Account, current_user.account_id)
+    if account is None:
+        return current_user
+    allowed, reason = is_account_write_allowed(account)
+    if not allowed:
+        raise _payment_required(reason)
+    return current_user
 
 
 @router.get("/usage", response_model=AccountUsageOut)
@@ -71,6 +126,16 @@ async def update_account_plan(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid plan '{payload.plan}'. Must be one of: {valid_plans}.",
+        )
+    # Self-host is Enterprise only (final commercial model). The "unlimited"
+    # plan belongs to self-hosted deployments; on a cloud deployment it must
+    # never be grantable - not even by a platform admin - because that would
+    # be a free self-host workaround around Cloud billing.
+    is_cloud = (settings.DEPLOYMENT_MODE or "").strip().lower() == "cloud"
+    if is_cloud and plan_norm == PlanTier.UNLIMITED:
+        raise HTTPException(
+            status_code=400,
+            detail="Self-host is an Enterprise deployment mode and cannot be granted on a cloud deployment.",
         )
 
     account.plan = plan_norm

@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, generate_secure_token
 from app.api.auth import get_current_user, require_interactive_session
+from app.api.quotas import require_paid_write
 from app.services.tenancy import subdomain_available, subdomain_error
 from app.services import mailer, smtp_config
 from app.services import password_reset as password_reset_service
@@ -391,7 +392,7 @@ async def list_company_members(
 async def invite_company_member(
     company_id: str,
     invite_in: CompanyInviteRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_paid_write),
     db: AsyncSession = Depends(get_db)
 ):
     """

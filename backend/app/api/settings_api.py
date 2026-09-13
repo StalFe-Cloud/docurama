@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.api.auth import get_current_user
+from app.api.quotas import require_paid_write
 from app.core.database import get_db
 from app.models import AccountSetting, ApiKey, PlatformSetting, SigningCertificate, User
 from app.services import audit_chain
@@ -173,7 +174,7 @@ async def list_api_keys(
 @router.post("/api-keys", response_model=ApiKeyCreatedOut, status_code=status.HTTP_201_CREATED)
 async def create_api_key(
     payload: ApiKeyCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_paid_write),
     db: AsyncSession = Depends(get_db),
 ):
     """Mint a key. The plaintext is returned here and cannot be retrieved again."""
@@ -262,7 +263,7 @@ async def list_signing_certificates(
 @router.post("/signing-certificates", response_model=SigningCertificateOut, status_code=status.HTTP_201_CREATED)
 async def register_signing_certificate(
     payload: SigningCertificateCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_paid_write),
     db: AsyncSession = Depends(get_db),
 ):
     """

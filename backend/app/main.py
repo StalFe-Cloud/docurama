@@ -44,7 +44,7 @@ def build_cors_policy(cfg):
         + "|".join(d.replace(".", r"\.") for d in domains)
         + r")$"
     )
-    # APP_URL's host (e.g. app.docurama.rvrad.com) already matches the pattern.
+    # APP_URL's host (e.g. app.docurama.eu) already matches the pattern.
     return [], re.compile(pattern)
 
 @asynccontextmanager

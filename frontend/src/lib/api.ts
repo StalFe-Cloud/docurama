@@ -1262,11 +1262,11 @@ export const billingApi = {
     }
     return res.json();
   },
-  startCheckout: async (plan: string): Promise<any> => {
+  startCheckout: async (plan: string, interval: string = 'monthly', extraSeats: number = 0): Promise<any> => {
     const res = await fetch(`${API_BASE}/billing/checkout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan }),
+      body: JSON.stringify({ plan, interval, extra_seats: extraSeats }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1556,10 +1556,12 @@ export const trustApi = {
   },
 };
 
-// Sprint 8: public pricing engine — tiers, 35-day cycle, commitments, Fair Exit.
+// Launch commercial model: premium tiers on the 35-day cycle engine, monthly
+// or annual billing, 14-day no-card Plus trial, Fair Exit on annual.
 export interface PricingConfig {
   cycle_days: number;
   standard_month_days: number;
+  trial_days: number;
   bonus_days_per_year: number;
   covered_days_per_year: number;
   billing_enabled: boolean;
@@ -1568,14 +1570,19 @@ export interface PricingConfig {
     internal_plan: string | null;
     display_name: string;
     list_price_eur: number | null;
+    annual_total_eur: number | null;
+    extra_seat_price_eur: number | null;
     envelopes_per_cycle: number | null;
     seats: number | null;
     purchasable: boolean;
     contact_sales: boolean;
+    trial_eligible: boolean;
+    reference_price?: string;
+    deployment_options?: string[];
     tagline: string;
     features: string[];
   }>;
-  commitments: Array<{
+  intervals: Array<{
     id: string;
     display_name: string;
     cycles: number;
@@ -1585,9 +1592,9 @@ export interface PricingConfig {
   }>;
   fair_exit: {
     name: string;
-    cash_refund_commitments: string[];
-    credit_commitments: string[];
-    rolling: string;
+    cash_refund_intervals: string[];
+    monthly: string;
+    annual: string;
   };
 }
 
@@ -1600,20 +1607,20 @@ export const pricingApi = {
     }
     return res.json();
   },
-  quote: async (tier: string, commitment: string): Promise<any> => {
+  quote: async (tier: string, interval: string, extraSeats: number = 0): Promise<any> => {
     const res = await fetch(`${API_BASE}/pricing/quote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier, commitment }),
+      body: JSON.stringify({ tier, interval, extra_seats: extraSeats }),
     });
     if (!res.ok) throw new Error('Failed to quote');
     return res.json();
   },
-  refundQuote: async (tier: string, commitment: string, cyclesCompleted: number): Promise<any> => {
+  refundQuote: async (tier: string, interval: string, cyclesCompleted: number): Promise<any> => {
     const res = await fetch(`${API_BASE}/pricing/refund-quote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier, commitment, cycles_completed: cyclesCompleted }),
+      body: JSON.stringify({ tier, interval, cycles_completed: cyclesCompleted }),
     });
     if (!res.ok) throw new Error('Failed to quote refund');
     return res.json();

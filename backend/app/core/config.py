@@ -28,16 +28,13 @@ class Settings(BaseSettings):
     # deliberately. cloud: the public multi-tenant platform, registration open.
     DEPLOYMENT_MODE: str = os.getenv("DOCURAMA_DEPLOYMENT_MODE", "selfhost")
 
-    # Cloud platform domain. Tenant subdomains live under it (acme.docurama.rvrad.com).
-    CLOUD_DOMAIN: str = os.getenv("DOCURAMA_CLOUD_DOMAIN", "docurama.rvrad.com")
+    # Cloud platform domain. Tenant subdomains live under it (acme.docurama.eu).
+    CLOUD_DOMAIN: str = os.getenv("DOCURAMA_CLOUD_DOMAIN", "docurama.eu")
 
     # Server URLs
     APP_URL: str = os.getenv("DOCURAMA_APP_URL", "https://docurama.example.com")
     ALLOWED_ORIGINS: List[str] = [
         "https://docurama.example.com",
-        "https://docurama.stalfe.com",
-        "https://docurama.rvrad.com",
-        "https://app.docurama.rvrad.com",
         "https://docurama.eu",
         "https://app.docurama.eu",
         "http://localhost:3000",
@@ -112,9 +109,17 @@ class Settings(BaseSettings):
     BILLING_ENABLED: bool = os.getenv("DOCURAMA_BILLING_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-    STRIPE_PRICE_STARTER: str = os.getenv("STRIPE_PRICE_STARTER", "")
-    STRIPE_PRICE_BUSINESS: str = os.getenv("STRIPE_PRICE_BUSINESS", "")
-    STRIPE_PRICE_ENTERPRISE: str = os.getenv("STRIPE_PRICE_ENTERPRISE", "")
+    # Launch catalog (final commercial model). One monthly and one annual
+    # price per self-serve plan; the seat price bills Business Team
+    # additional seats (€15/cycle). Enterprise is sales-led and deliberately
+    # has no self-serve price. The retired STRIPE_PRICE_STARTER / _BUSINESS /
+    # _ENTERPRISE names are gone: their price objects embodied the retired
+    # €9/€29/€79 catalog and must not silently charge against launch plans.
+    STRIPE_PRICE_PLUS_MONTHLY: str = os.getenv("STRIPE_PRICE_PLUS_MONTHLY", "")
+    STRIPE_PRICE_PLUS_ANNUAL: str = os.getenv("STRIPE_PRICE_PLUS_ANNUAL", "")
+    STRIPE_PRICE_BUSINESS_TEAM_MONTHLY: str = os.getenv("STRIPE_PRICE_BUSINESS_TEAM_MONTHLY", "")
+    STRIPE_PRICE_BUSINESS_TEAM_ANNUAL: str = os.getenv("STRIPE_PRICE_BUSINESS_TEAM_ANNUAL", "")
+    STRIPE_PRICE_BUSINESS_TEAM_SEAT: str = os.getenv("STRIPE_PRICE_BUSINESS_TEAM_SEAT", "")
 
     # Cross-replica WebSocket fan-out. Empty = in-memory bus (single replica).
     REDIS_URL: str = os.getenv("DOCURAMA_REDIS_URL", "")

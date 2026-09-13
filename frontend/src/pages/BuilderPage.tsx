@@ -293,7 +293,7 @@ export const BuilderPage: React.FC<BuilderPageProps> = ({ onSuccess, onCancel })
     }
 
     if (usage?.is_trial_expired) {
-      setError('Your 7-day Plus trial has expired. Upgrade your plan to send new documents.');
+      setError('Your 14-day Plus trial has ended. Your documents remain safe and accessible. Upgrade to continue sending.');
       setShowPricingModal(true);
       return;
     }

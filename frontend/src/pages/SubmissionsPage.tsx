@@ -225,7 +225,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({ onNavigate }) 
                   Trial expired
                 </span>
                 <span className="text-xs font-semibold text-[#a02525]">
-                  Your 7-day Plus trial has ended
+                  Your 14-day Plus trial has ended
                 </span>
               </div>
               <p className="text-xs text-[#5d5b54] font-medium">
@@ -250,7 +250,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({ onNavigate }) 
                 {usage.is_trial ? (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-[#f9e79f] text-[#6b4e00] flex items-center gap-1">
                     <Zap className="w-3 h-3" />
-                    Trial: {usage.trial_days_remaining ?? 7} days left (no card required)
+                    Plus Trial — {usage.trial_days_remaining ?? 14} days left · No credit card required
                   </span>
                 ) : (
                   <span className="text-xs text-[#787671] tabular-nums">

@@ -103,7 +103,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               onClick={onGetStarted}
               className="btn btn-primary px-6 h-11 text-sm font-medium rounded-md shadow-md flex items-center space-x-2 bg-[#5645d4] hover:bg-[#4534b3] text-white transition-colors"
             >
-              <span>Start Signing Free</span>
+              <span>Start Free Trial</span>
               <ArrowRight className="w-4 h-4 ml-1 stroke-[2]" />
             </button>
             <button

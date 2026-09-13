@@ -37,52 +37,54 @@ class PlanDefinition:
     display_name: str
     envelopes_per_month: int
     seats: int
-    price_setting: str
+    price_setting: str           # monthly Stripe price env (annual appends _ANNUAL)
     description: str
+    extra_seat_setting: Optional[str] = None   # Stripe price env for additional seats
+    self_serve: bool = True      # False = sales-led (no checkout, by design)
 
 
 PLAN_CATALOG: Dict[str, PlanDefinition] = {
     "plus": PlanDefinition(
         id="plus",
-        display_name="Solo",
+        display_name="Plus",
         envelopes_per_month=30,
         seats=1,
-        price_setting="STRIPE_PRICE_STARTER",
-        description="Individual signing: 30 envelopes per 35-day cycle, full PAdES sealing.",
+        price_setting="STRIPE_PRICE_PLUS_MONTHLY",
+        description="Professional signing: 30 envelopes per 35-day cycle, unlimited templates, email + SMS OTP, custom branding, webhooks.",
     ),
     "business": PlanDefinition(
         id="business",
-        display_name="Team",
+        display_name="Business Team",
         envelopes_per_month=250,
         seats=3,
-        price_setting="STRIPE_PRICE_BUSINESS",
-        description="Small teams: 250 envelopes per 35-day cycle across 3 seats, templates and API access.",
+        price_setting="STRIPE_PRICE_BUSINESS_TEAM_MONTHLY",
+        extra_seat_setting="STRIPE_PRICE_BUSINESS_TEAM_SEAT",
+        description="Teams: 250 pooled envelopes per 35-day cycle across 3 seats (+€15/cycle per extra seat), WhatsApp/Telegram OTP, custom domains, REST API.",
     ),
     "enterprise": PlanDefinition(
         id="enterprise",
-        display_name="Business",
+        display_name="Enterprise",
         envelopes_per_month=10000,
         seats=100,
-        price_setting="STRIPE_PRICE_ENTERPRISE",
-        description="Organisations: 10,000 envelopes per 35-day cycle, 100 seats, domain-verified workspaces, priority support.",
+        price_setting="",
+        description="Sales-led. Custom pricing (reference from €1,500/year), deployment choice: Managed Public Cloud, Managed Private Cloud, On-Premises, Air-Gapped where appropriate.",
+        self_serve=False,
     ),
 }
 
-# Sprint 8 marketing ladder: the public site prices solo/team/business
-# (plus enterprise-custom, contact sales). Checkout accepts those ids and
-# resolves them onto the stable internal plan ids above, so account rows,
-# quota enforcement, and Stripe webhook mappings never change meaning.
-MARKETING_PLAN_ALIASES = {"solo": "plus", "team": "business", "business": "enterprise"}
+# Launch marketing ids -> stable internal plan ids. Retired marketing ids
+# (solo/team/business) resolve onto the launch tier owning the same internal
+# plan so a stale client cannot resurrect the retired €9/€29/€79 catalog.
+MARKETING_PLAN_ALIASES = {"plus": "plus", "business_team": "business", "solo": "plus", "team": "business"}
 
 
 def resolve_plan_id(plan_id: str) -> Optional[str]:
     """
     Map a marketing or legacy plan id onto the internal catalog id.
 
-    Marketing aliases resolve FIRST so that a customer picking the public
-    "Business" tier (EUR 79) lands on the internal enterprise plan, not the
-    internal business plan that happens to share the id. Legacy internal ids
-    that are not aliased (plus, enterprise) fall through to the catalog.
+    Marketing aliases resolve FIRST. Legacy internal ids that are not
+    aliased (enterprise) fall through to the catalog; enterprise is
+    sales-led and never self-serve purchasable.
     """
     if not plan_id:
         return None
@@ -95,6 +97,8 @@ def resolve_plan_id(plan_id: str) -> Optional[str]:
     return None
 
 # Free/self-host plan names that must never be reachable through checkout.
+# "unlimited" is the self-host deployment's plan: self-host is Enterprise
+# only, so it is not a Cloud purchase under any circumstances.
 NON_PURCHASABLE_PLANS = {"unlimited", "free", "trial"}
 
 
@@ -103,24 +107,30 @@ def billing_enabled() -> bool:
     return bool(getattr(settings, "BILLING_ENABLED", False))
 
 
-def _price_id(plan: PlanDefinition) -> str:
-    return (getattr(settings, plan.price_setting, "") or "").strip()
+def _price_id(plan: PlanDefinition, interval: str = "monthly") -> str:
+    if not plan.price_setting:
+        return ""  # sales-led plan: no self-serve price exists
+    setting = plan.price_setting
+    if interval == "annual":
+        setting = plan.price_setting.replace("_MONTHLY", "_ANNUAL")
+    return (getattr(settings, setting, "") or "").strip()
 
 
 def plan_catalog_public() -> Dict[str, Any]:
     """
     The public catalog. Honesty rules: billing_enabled says what it means, and
-    configured_price_id is empty when the operator has not set the price - the
+    configured price ids are empty when the operator has not set them - the
     UI must render that as "coming soon", not as a purchasable plan.
-    Sprint 8: carries the 35-day cycle constant and the marketing tier id.
+    Enterprise is sales-led and reports no self-serve price by design.
     """
-    from app.services.pricing import CYCLE_DAYS, MARKETING_TO_INTERNAL
+    from app.services.pricing import CYCLE_DAYS, MARKETING_TO_INTERNAL, TRIAL_DAYS
 
     enabled = billing_enabled()
     internal_to_marketing = {v: k for k, v in MARKETING_TO_INTERNAL.items()}
     return {
         "billing_enabled": enabled,
         "cycle_days": CYCLE_DAYS,
+        "trial_days": TRIAL_DAYS,
         "plans": [
             {
                 "id": plan.id,
@@ -129,24 +139,37 @@ def plan_catalog_public() -> Dict[str, Any]:
                 "envelopes_per_month": plan.envelopes_per_month,
                 "seats": plan.seats,
                 "description": plan.description,
+                "self_serve": plan.self_serve,
+                "extra_seat_setting": plan.extra_seat_setting,
                 "configured_price_id": _price_id(plan) if enabled else "",
+                "configured_price_id_annual": _price_id(plan, "annual") if enabled else "",
             }
             for plan in PLAN_CATALOG.values()
         ],
     }
 
 
-def require_configured_price(plan_id: str) -> tuple:
-    """Resolve a plan (marketing or internal id) and its configured price."""
+def require_configured_price(plan_id: str, interval: str = "monthly") -> tuple:
+    """
+    Resolve a plan (marketing or internal id) and its configured price for
+    the billing interval. Enterprise raises a distinct error: it is sales-led
+    and must never present a self-serve checkout.
+    """
     resolved = resolve_plan_id(plan_id)
     plan = PLAN_CATALOG.get(resolved) if resolved else None
     if plan is None:
         raise ValueError("unknown plan")
-    price_id = _price_id(plan)
+    if not plan.self_serve:
+        raise BillingNotConfigured(
+            "Enterprise is provisioned by our sales team. Contact sales@docurama.eu."
+        )
+    if interval not in ("monthly", "annual"):
+        raise ValueError("unknown interval")
+    price_id = _price_id(plan, interval)
     if not billing_enabled() or not price_id:
         raise BillingNotConfigured(
             "Billing is not configured on this deployment. "
-            f"Missing: {'STRIPE keys' if not billing_enabled() else plan.price_setting}."
+            f"Missing: {'STRIPE keys' if not billing_enabled() else (plan.price_setting.replace('_MONTHLY', '_ANNUAL') if interval == 'annual' else plan.price_setting)}."
         )
     return plan, price_id
 
@@ -287,12 +310,26 @@ def map_stripe_event(event: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def price_to_plan(price_id: str) -> Optional[str]:
-    """Reverse lookup: which catalog plan does a configured price belong to."""
+    """Reverse lookup: which catalog plan does a configured price belong to.
+    Checks both the monthly and the annual price of every plan so a renewal
+    webhook on the annual price still attributes correctly."""
     if not price_id:
         return None
     for plan in PLAN_CATALOG.values():
-        if price_id and price_id == _price_id(plan):
+        if price_id and price_id in (_price_id(plan, "monthly"), _price_id(plan, "annual")):
             return plan.id
+    return None
+
+
+def price_to_interval(price_id: str) -> Optional[str]:
+    """Reverse lookup: which billing interval a configured price belongs to."""
+    if not price_id:
+        return None
+    for plan in PLAN_CATALOG.values():
+        if price_id and price_id == _price_id(plan, "monthly"):
+            return "monthly"
+        if price_id and price_id == _price_id(plan, "annual"):
+            return "annual"
     return None
 
 

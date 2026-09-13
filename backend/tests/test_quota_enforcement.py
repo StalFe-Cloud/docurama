@@ -212,7 +212,11 @@ async def test_envelope_creation_blocked_when_trial_expired(client: AsyncClient,
     }
     res = await client.post("/api/envelopes", data=data, files=files)
     assert res.status_code == 402
-    assert "trial has expired" in res.json()["detail"].lower()
+    # Launch model message: 14-day trial ended, documents stay accessible.
+    detail = str(res.json()["detail"])
+    assert "trial has ended" in detail.lower()
+    assert "14-day" in detail
+    assert "remain safe" in detail
 
 
 @pytest.mark.asyncio

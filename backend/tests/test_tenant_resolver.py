@@ -6,22 +6,23 @@ from app.services.tenant_resolver import parse_tenant_host
 
 
 def test_cloud_domain_itself_is_platform():
-    assert parse_tenant_host("docurama.rvrad.com", "docurama.rvrad.com") == ("platform", None, None)
-    assert parse_tenant_host("docurama.eu", "docurama.rvrad.com") == ("platform", None, None)
+    assert parse_tenant_host("docurama.eu", "docurama.eu") == ("platform", None, None)
+    assert parse_tenant_host("app.docurama.eu", "docurama.eu") == ("platform", None, None)
 
 
 def test_reserved_and_app_hosts_are_platform():
-    for host in ("www.docurama.rvrad.com", "app.docurama.rvrad.com", "api.docurama.rvrad.com",
-                 "verify.docurama.rvrad.com", "trust.docurama.rvrad.com",
-                 "www.docurama.eu", "app.docurama.eu"):
-        assert parse_tenant_host(host, "docurama.rvrad.com")[0] == "platform", host
+    for host in ("www.docurama.eu", "app.docurama.eu", "api.docurama.eu",
+                 "verify.docurama.eu", "trust.docurama.eu", "signup.docurama.eu",
+                 "docs.docurama.eu", "help.docurama.eu", "status.docurama.eu",
+                 "sandbox.docurama.eu", "sign.docurama.eu"):
+        assert parse_tenant_host(host, "docurama.eu")[0] == "platform", host
 
 
 def test_free_subdomain_is_a_tenant_label():
-    assert parse_tenant_host("acme.docurama.rvrad.com", "docurama.rvrad.com") == (
+    assert parse_tenant_host("acme.docurama.eu", "docurama.eu") == (
         "subdomain", "acme", None
     )
-    assert parse_tenant_host("acme.docurama.eu", "docurama.rvrad.com") == (
+    assert parse_tenant_host("acme.docurama.eu", "docurama.eu") == (
         "subdomain", "acme", None
     )
 

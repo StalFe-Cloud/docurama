@@ -657,15 +657,18 @@ async def register(
             ),
         })
 
-    # Create default Account (7-Day Plus Trial in Cloud mode, Unlimited in Self-host mode)
+    # Create default Account (14-day Plus Trial, no card, in Cloud mode;
+    # Unlimited in self-host mode, which is an Enterprise deployment).
     is_cloud = (settings.DEPLOYMENT_MODE or "").strip().lower() == "cloud"
     now = datetime.now(timezone.utc)
     if is_cloud:
+        from app.services.pricing import TRIAL_DAYS
+
         account = Account(
             name=f"{user_in.first_name or 'User'}'s Organization",
             plan="plus",
             is_trial=True,
-            trial_ends_at=now + timedelta(days=7),
+            trial_ends_at=now + timedelta(days=TRIAL_DAYS),
             billing_interval="monthly",
         )
     else:

@@ -1076,3 +1076,40 @@ PRODUCTION-READY FOR CONTROLLED EU LAUNCH. All remaining blockers are
 operator-side (secrets, qualified TSA, Stripe live, DNS/TLS, SMTP,
 legal publication, PAT rotation) with acceptance checks and rollback
 paths defined in the readiness report and runbook.
+
+## §21 — Launch alignment: final commercial model (implemented)
+
+ZCODE final alignment: the premium launch catalog replaces the Sprint 8
+self-serve ladder while the 35-day cycle engine is retained (12 billed
+cycles still cover 420 days, 55 more than a calendar year).
+
+CURRENT: Sprint 8 priced Solo EUR 9 / Team EUR 29 / Business EUR 79 per
+35-day cycle with a rolling/3m/6m/12m commitment ladder (0/5/10/15%).
+PROBLEM: launch model is Plus EUR 19 / Business Team EUR 49 / Enterprise
+custom, billed monthly or annually (EUR 15 / EUR 39 cycle-equivalent),
+7-day trial copy, and self-host surfaced as an unlimited default.
+PROPOSED: pricing.py re-catalogued on the same engine (annual totals 180 /
+468 derive the per-cycle equivalents exactly); intervals reduce to
+monthly/annual; Fair Exit adapts (annual cash pro-rata, monthly period-end,
+3m credit path removed); trial is 14 days no-card at signup with server-side
+read-only expiry (402 + upgrade CTA via require_paid_write on entitlement-
+consuming writes); self-host "unlimited" is not grantable in cloud mode even
+by platform admin; Stripe prices renamed to STRIPE_PRICE_PLUS_MONTHLY/
+_ANNUAL, STRIPE_PRICE_BUSINESS_TEAM_MONTHLY/_ANNUAL/_SEAT (retired names
+removed - their price objects embodied the retired catalog); checkout takes
+interval + extra_seats; webhook sync follows the billed price to set
+billing_interval; pricing page rebuilt (3 cards, interval toggle, seat
+stepper, Fair Exit preview, enterprise deployment models); /legal publishes
+Terms, Privacy Notice, DPA, Imprint (STALFE, Paris; registration identifiers
+render only when set); ten public hosts reserved from tenant subdomain
+claiming; stale domains removed.
+WHY: single commercial truth across pricing page, checkout, quotas, and
+webhooks; premium positioning; no free tier or free self-host path.
+RISK: retired marketing ids still resolve (solo/team/business -> launch
+tiers) so stale clients cannot resurrect old prices; 3m/6m intervals
+resolve to None by design; SQLite naive datetimes now normalized on all
+trial comparisons (expired trials answer 402, never 500).
+MIGRATION: none - account.plan values unchanged (plus/business/enterprise).
+TEST: 602 passed (new: test_launch_pricing_model.py, test_final_commercial_
+model.py - 14-day signup trial, read-only expiry, self-host denial, Stripe
+mappings, interval checkout, sales-led enterprise).

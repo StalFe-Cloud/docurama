@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
 from app.api.auth import get_current_user
+from app.api.quotas import require_paid_write
 from app.models.models import User, Webhook, WebhookDelivery
 from app.schemas.schemas import WebhookCreate, WebhookOut, WebhookTestRequest, WebhookDeliveryOut
 from app.services.webhook_dispatcher import WebhookDispatcher, validate_webhook_url
@@ -34,7 +35,7 @@ async def list_webhooks(
 @router.post("", response_model=WebhookOut, status_code=status.HTTP_201_CREATED)
 async def create_webhook(
     req: WebhookCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_paid_write),
     db: AsyncSession = Depends(get_db)
 ):
     # Reject private, loopback and link-local destinations at creation time so an

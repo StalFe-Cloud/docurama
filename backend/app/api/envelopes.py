@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.api.auth import get_current_user
 from app.api.tenant import require_tenant_binding
+from app.api.quotas import require_paid_write
 from app.models import User, Account, Envelope, Recipient, Field, AuditEvent, Template
 from app.schemas import EnvelopeOut, EnvelopeDetailOut
 from app.services.crypto_engine import calculate_file_sha256
@@ -83,10 +84,16 @@ async def create_envelope(
             cloud_domain = settings.CLOUD_DOMAIN
             if getattr(account, "is_trial", False) and getattr(account, "trial_ends_at", None):
                 now = datetime.now(timezone.utc)
-                if now >= account.trial_ends_at:
+                trial_ends = account.trial_ends_at
+                # SQLite round-trips can hand back a naive datetime; normalize
+                # so an expired trial is a clean 402, never a 500.
+                if trial_ends.tzinfo is None:
+                    from datetime import timezone as _tz
+                    trial_ends = trial_ends.replace(tzinfo=_tz.utc)
+                if now >= trial_ends:
                     raise HTTPException(
                         status_code=402,
-                        detail=f"Your 7-day Plus trial has expired. Please upgrade your plan at https://{cloud_domain} to send more documents.",
+                        detail="Your 14-day Plus trial has ended. Your documents remain safe and accessible. Upgrade to continue sending.",
                     )
             raise HTTPException(
                 status_code=402,
@@ -414,7 +421,7 @@ async def export_envelope_csv(
 async def bulk_send_envelopes(
     template_id: str = Form(...),
     csv_file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_paid_write),
     db: AsyncSession = Depends(get_db)
 ):
     """

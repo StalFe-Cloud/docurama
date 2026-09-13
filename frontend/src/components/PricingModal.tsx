@@ -43,7 +43,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
       const body = encodeURIComponent(
         `Hello Docurama Enterprise Team,\n\nI am interested in learning more about Docurama Enterprise options (Dedicated Private Cloud / On-Premises / Managed Public Cloud).\n\nWorkspace: ${usage?.account_name || 'N/A'}\nAccount ID: ${usage?.account_id || 'N/A'}\nEstimated Monthly Volume: 500+ envelopes\nDeployment Target: [Dedicated EU Private Cloud / On-Premises Air-Gapped / Managed Cloud]\n\nPlease contact me with technical documentation and pricing details.`
       );
-      window.open(`mailto:sales@docurama.rvrad.com?subject=${subject}&body=${body}`, '_blank');
+      window.open(`mailto:sales@docurama.eu?subject=${subject}&body=${body}`, '_blank');
       return;
     }
 
@@ -54,7 +54,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
       const body = encodeURIComponent(
         `Hello,\n\nI would like to activate the ${planKey.toUpperCase()} subscription (${billingInterval} billing) for workspace:\nAccount ID: ${usage?.account_id || 'N/A'}\nAccount Name: ${usage?.account_name || 'N/A'}\n\nPlease send checkout and invoice details.`
       );
-      window.open(`mailto:sales@docurama.rvrad.com?subject=${subject}&body=${body}`, '_blank');
+      window.open(`mailto:sales@docurama.eu?subject=${subject}&body=${body}`, '_blank');
     }
   };
 
@@ -124,7 +124,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
             <div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Solo &amp; Founders
+                  Professionals
                 </span>
                 {currentPlan === 'plus' && isTrial && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
@@ -155,7 +155,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                 </div>
                 <div className="mt-2 text-[11px] font-medium text-slate-600 flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  <span>7-day free trial, no credit card required</span>
+                  <span>14-day free trial, no credit card required</span>
                 </div>
               </div>
 
@@ -175,7 +175,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>RFC 3161 qualified timestamping</span>
+                  <span>RFC 3161 trusted timestamping</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -201,7 +201,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                     : 'bg-slate-900 hover:bg-slate-800 text-white'
                 }`}
               >
-                <span>{currentPlan === 'plus' && !isTrial ? 'Current Plan' : isTrial ? 'Extend Plus Plan' : 'Start 7-Day Trial'}</span>
+                <span>{currentPlan === 'plus' && !isTrial ? 'Current Plan' : isTrial ? 'Extend Plus Plan' : 'Start 14-Day Trial'}</span>
                 {!(currentPlan === 'plus' && !isTrial) && <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -256,7 +256,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
               <ul className="mt-5 space-y-2.5 text-xs text-slate-600">
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span><strong>250 envelopes</strong> per month (+€0.20/extra)</span>
+                  <span><strong>250 pooled envelopes</strong> per month</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -268,7 +268,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Custom workspace subdomain (e.g. yourco.docurama.rvrad.com)</span>
+                  <span>Custom workspace subdomain (e.g. yourco.docurama.eu)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -332,7 +332,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                 </div>
                 <div className="mt-2 text-[11px] font-medium text-slate-600 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                  <span>EU data residency, GDPR program, eIDAS-aligned PAdES</span>
+                  <span>EU data residency, GDPR program, PAdES cryptographic evidence</span>
                 </div>
               </div>
 
@@ -340,16 +340,19 @@ export const PricingModal: React.FC<PricingModalProps> = ({
               <div className="mt-4 p-3 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1.5 text-[11px] text-purple-900">
                 <div className="font-bold flex items-center gap-1.5">
                   <Server className="w-3.5 h-3.5 text-purple-600" />
-                  Three Flexible Architectures:
+                  Four Deployment Models:
                 </div>
                 <div className="text-slate-600">
-                  1. <strong>Dedicated Private Cloud</strong> (OVH / Scaleway France)
+                  1. <strong>Managed Public Cloud</strong>
                 </div>
                 <div className="text-slate-600">
-                  2. <strong>On-Premises / Air-Gapped</strong> (Docker / Kubernetes)
+                  2. <strong>Managed Private Cloud</strong>
                 </div>
                 <div className="text-slate-600">
-                  3. <strong>Managed Sovereign Cloud</strong> (Dedicated tenant)
+                  3. <strong>On-Premises</strong> (customer-controlled)
+                </div>
+                <div className="text-slate-600">
+                  4. <strong>Air-Gapped</strong> (where technically appropriate)
                 </div>
               </div>
 
@@ -357,19 +360,19 @@ export const PricingModal: React.FC<PricingModalProps> = ({
               <ul className="mt-4 space-y-2.5 text-xs text-slate-600">
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                  <span><strong>10,000+ to unlimited</strong> monthly envelopes</span>
+                  <span><strong>10,000+ envelopes</strong> per month, per contract</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                  <span><strong>100+ seats</strong> with SSO (SAML 2.0, Okta, Azure AD)</span>
+                  <span><strong>Seats per contract</strong> with SSO (SAML 2.0, OIDC)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                  <span>Custom PKI &amp; Hardware Security Module (HSM)</span>
+                  <span>Custom PKI &amp; Hardware Security Module (HSM) integration</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                  <span>99.99% SLA guarantee &amp; 24/7 dedicated engineer</span>
+                  <span>Dedicated support with contractual SLA options</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
@@ -391,7 +394,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
 
         </div>
 
-        {/* Competitor Benchmark & Trust Footnote */}
+        {/* Trust Footnote */}
         <div className="px-6 py-4 bg-slate-100 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-[#1D72FE]" />
@@ -400,7 +403,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
             </span>
           </div>
           <div className="text-[11px] text-slate-500 text-center sm:text-right">
-            Compare: DocuSign Personal caps at only 5 envelopes/mo ($15/mo). Yousign Pro costs €48/user/mo.
+            14-day Plus trial · No credit card required · Fair Exit on annual billing
           </div>
         </div>
 

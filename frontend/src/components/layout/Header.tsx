@@ -364,7 +364,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={onSignIn}
               className="btn btn-primary px-3.5 py-1.5 text-xs font-medium text-white rounded-md"
             >
-              Start Signing Free
+              Start Free Trial
             </button>
           </div>
         )}

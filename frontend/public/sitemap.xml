@@ -7,6 +7,10 @@
   <url><loc>https://docurama.eu/help</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://docurama.eu/templates-gallery</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc>https://docurama.eu/trust</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/legal/terms</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://docurama.eu/legal/privacy</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://docurama.eu/legal/dpa</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://docurama.eu/legal/imprint</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://docurama.eu/verify</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://docurama.eu/docs/getting-started</loc><priority>0.6</priority></url>
   <url><loc>https://docurama.eu/docs/signing-fields</loc><priority>0.6</priority></url>

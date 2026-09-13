@@ -36,7 +36,7 @@ def parse_tenant_host(host: str, cloud_domain: str) -> Tuple[str, Optional[str],
     primary = _host_only(cloud_domain)
     # Recognized cloud root domains (primary active domain plus held docurama.eu)
     valid_roots = [primary] if primary else []
-    for fallback in ("docurama.rvrad.com", "docurama.eu"):
+    for fallback in ("docurama.eu",):
         if fallback not in valid_roots:
             valid_roots.append(fallback)
 

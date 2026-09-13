@@ -71,7 +71,7 @@ async def get_subscription(
     return {
         "plan": plan,
         "plan_display_name": billing.PLAN_CATALOG[plan].display_name if known else (
-            "Trial" if getattr(account, "is_trial", False) else plan
+            "Plus Trial" if getattr(account, "is_trial", False) else plan
         ),
         "is_trial": bool(getattr(account, "is_trial", False)),
         "trial_ends_at": getattr(account, "trial_ends_at", None),
@@ -103,22 +103,33 @@ async def create_checkout(
     plan_id = str(payload.get("plan") or "").strip()
     if not plan_id:
         raise HTTPException(status_code=422, detail="Choose a plan.")
-    # Sprint 8: commitment rides along in checkout metadata so the operator's
-    # Stripe records which commitment ladder the customer chose. The pricing
-    # engine validated the id space; unknown values fall back to rolling.
-    commitment_raw = str(payload.get("commitment") or "").strip().lower() or "rolling"
-    from app.services.pricing import resolve_commitment
+    # Launch model: the billing interval is monthly or annual. The retired
+    # commitment ids (rolling/3m/6m/12m) resolve where unambiguous - rolling
+    # and monthly mean monthly; 12m means annual; 3m/6m are gone and unknown
+    # values fall back to monthly rather than resurrecting the old ladder.
+    interval_raw = str(payload.get("interval") or payload.get("commitment") or "monthly").strip().lower()
+    from app.services.pricing import resolve_interval
 
-    commitment = resolve_commitment(commitment_raw)
-    commitment_id = commitment["id"] if commitment else "rolling"
+    interval = resolve_interval(interval_raw)
+    interval_id = interval["id"] if interval else "monthly"
+    # Business Team additional seats (€15/cycle each). Clamped and ignored
+    # for plans that do not sell seats; the Stripe seat price is configured
+    # separately by the operator (STRIPE_PRICE_BUSINESS_TEAM_SEAT).
+    try:
+        extra_seats = max(0, min(int(payload.get("extra_seats") or 0), 500))
+    except (TypeError, ValueError):
+        extra_seats = 0
     if plan_id in billing.NON_PURCHASABLE_PLANS:
         raise HTTPException(status_code=400, detail="That plan is not purchasable.")
     try:
-        plan, price_id = billing.require_configured_price(plan_id)
+        plan, price_id = billing.require_configured_price(plan_id, interval_id)
     except BillingNotConfigured as exc:
+        # Enterprise lands here by design: it is sales-led and must never
+        # present a self-serve checkout.
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     except ValueError:
         raise HTTPException(status_code=404, detail="Unknown plan.")
+    extra_seats = extra_seats if (plan.extra_seat_setting and extra_seats) else 0
 
     adapter = billing.get_adapter()
     base = str(settings.APP_URL).rstrip("/")
@@ -131,7 +142,8 @@ async def create_checkout(
             metadata={
                 "account_id": current_user.account_id,
                 "plan": plan.id,
-                "commitment": commitment_id,
+                "interval": interval_id,
+                "extra_seats": str(extra_seats),
             },
         )
     except BillingNotConfigured as exc:
@@ -318,6 +330,12 @@ async def stripe_webhook(
         if plan_id:
             account.plan = plan_id
             account.is_trial = False
+        # The interval follows the price the subscription actually bills on,
+        # so a switch between monthly and annual is reflected without any
+        # client-side state.
+        interval_id = billing.price_to_interval(instruction.get("price_id", ""))
+        if interval_id:
+            account.billing_interval = interval_id
         if instruction.get("current_period_end") is not None:
             account.current_period_end = instruction["current_period_end"]
         account.cancel_at_period_end = bool(instruction.get("cancel_at_period_end"))
