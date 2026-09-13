@@ -60,3 +60,7 @@ cookies.txt
 # Agent review scratch state
 .superpowers/
 frontend/tsconfig.tsbuildinfo
+
+# Nested local clones & external agent skills
+/docurama/
+/skills-external/
