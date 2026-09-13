@@ -978,88 +978,101 @@ enterprise onboarding alert that closes the domain-join loop.
   + app.docurama.eu (product) + signup.docurama.eu as a vanity 301 — one
   origin for accounts, zero extra deploys, one wildcard certificate.
 
-## §19 — Sprint 8: marketing site, pricing innovation, i18n, enterprise alerts
 
-The platform could sign, seal, prove, and govern — but it could not sell
-itself. Sprint 8 adds the public marketing surface, an innovative pricing
-model implemented as server-side math, full four-language i18n, and the
-enterprise onboarding alert that closes the domain-join loop.
+## §20 — Sprint 9: production readiness audit and hardening (implemented)
 
-### Pricing engine (services/pricing.py, api/pricing.py)
+Sprint 9 changed the mission: no new features, only evidence. The audit
+covered all 24 critical areas — authentication, authorization, tenant
+isolation, cookies, CSRF/CORS, headers, document integrity, signing,
+TSA, verification, audit trail, billing, Stripe, email, DNS, GDPR, legal
+language, backups, observability, secrets, i18n, build, and the browser
+golden paths — and made only evidence-based changes. The suite grew
+561 -> 585 (+24), every addition pinning a security or billing
+guarantee rather than a cosmetic behavior.
 
-- **35-day cycles for everyone** ("weekends on us"): 12 billed cycles cover
-  420 days — 55 more than a calendar year. The cycle length is a product
-  constant, exposed in every public payload.
-- **Commitment ladder**: rolling 0%, 3 months −5%, 6 months −10%, 12 months
-  −15% off the per-cycle price, priced in cents half-up.
-- **Fair Exit Guarantee**: 6/12-month commitments refund unused full cycles
-  pro-rata as cash (self-serve, one click); 3-month converts to account
-  credit; rolling simply runs to the end of the paid cycle. The pricing
-  page previews any cancellation via the same endpoints the billing engine
-  exposes — no invented client-side math.
-- **Public calculators**: GET /api/pricing/config, POST /api/pricing/quote,
-  POST /api/pricing/refund-quote — read-only, rate-limited, honest.
-- **Stable internal ids**: marketing tiers (solo/team/business) map onto the
-  internal plan ids quotas.py enforces (plus/business/enterprise); marketing
-  "business" resolves FIRST so the EUR 79 tier lands on the internal
-  enterprise plan. No account row, quota table, or webhook mapping changed
-  meaning. Enterprise-custom is contact-sales and never purchasable.
-- Checkout carries the chosen commitment into Stripe metadata.
-- 22 new tests pin the math, the ladder, the refunds, the aliases, and the
-  honesty of the public config (including the no-certification vocabulary).
+### Findings fixed in code
 
-### Marketing site + content hub (public SPA routes)
+- **P1 billing — webhook replay had no ledger.** Stripe delivers
+  at-least-once and events can be redelivered from the dashboard; the
+  handler was only coincidentally idempotent. A `stripe_events` table
+  (migration 0017, dual-dialect) now records processing state per event
+  id in the same transaction as the effect; replays are absorbed with a
+  200 and concurrent duplicate deliveries are race-absorbed. Tests
+  mutate the account to a marker value between deliveries and prove the
+  replay changed nothing.
+- **P1 billing — lifecycle events could not be attributed.**
+  `customer.subscription.updated/deleted` read the subscription's
+  metadata, which checkout never populated, so real renewals and
+  cancellations would have been logged and dropped. Checkout now copies
+  metadata onto the subscription (`subscription_data`), and the handler
+  resolves the account by subscription id or customer id recorded at
+  attach time. Both fallback paths are covered by tests.
+- **P2 authorization — billing actions lacked a workspace-admin gate.**
+  Any member could start checkout, open the customer portal, or cancel
+  the workspace subscription. Checkout, portal, and cancel now require
+  the same owner/admin role as SMTP changes.
+- **P2 authorization — API key minting lacked a role gate.** A member
+  could turn a browser session into a persistent machine credential.
+  Listing and minting now require workspace admin.
+- **P2 security headers — dead CSP surface.** The CSP still allowed the
+  Google Fonts hosts although fonts have been self-hosted since Sprint
+  7; both hosts were removed so the policy exactly describes what loads.
+- **P2 observability — bare print() in production paths.** The crypto
+  engine, mailer, field detector, PDF service, reminder sweeper, and two
+  API modules emitted unstructured stdout at exactly the moments an
+  operator needs to grep (dead TSA, refused attachment, failed reset
+  mail). All converted to structured logger warnings; the secret-logging
+  audit found no passwords, tokens, keys, or cookies in any statement.
+- **Cosmetic contract fix — unsealed failure shape.** The `_unsealed`
+  result now carries `timestamp_utc` like the success shape, so callers
+  and the envelope row read one schema.
 
-- **/pricing**: tier cards, commitment tabs with live server quotes, Fair
-  Exit refund preview slider, pricing FAQ — all fed by /api/pricing.
-- **/docs**: 10 authored articles (getting started, fields, lifecycle,
-  PAdES, verification, templates, domain workspaces, audit API, compliance
-  program, billing) with search and category filters.
-- **/blog**: 6 posts (35-day cycle math, Fair Exit, PAdES vs click-to-sign,
-  EU residency, domain workspaces, building in the open).
-- **/help**: 20-answer knowledge center with search; **/templates-gallery**:
-  12 ready-made templates with roles and field counts.
-- **Animated hero**: a self-playing signing sequence on the landing mockup
-  (cursor glide, SVG signature draw, signer status flip, PAdES seal pop) on
-  one shared 9s CSS timeline, collapsing to a static completed state under
-  prefers-reduced-motion.
-- Marketing shell + footer in the app's own design language; header gains
-  public nav (Pricing/Docs/Blog/Help/Gallery) for visitors.
-- SEO: robots.txt (workspace/API excluded) + sitemap.xml bundled into dist.
-- SPA fallback fix: /docs no longer reserved-404s at the server — the
-  documentation hub is public, while /api/docs (OpenAPI UI) keeps working.
+### New regression suites
 
-### Full i18n day one (EN/FR/DE/ES)
+- `test_sprint9_adversarial_isolation.py` (16 cases): two seeded rival
+  workspaces attacked in every direction — cross-tenant fetch/void/
+  download/export/certificate on envelopes (404), folders, webhooks,
+  templates, bulk-send template resolution, unauthenticated probes over
+  eight endpoints (401), member-vs-owner on SMTP (redacted read,
+  403 write), API keys (403), billing actions (403/503), signing-token
+  rejection as a session credential (401), platform-admin isolation
+  (403), and API-key header isolation.
+- `test_sprint9_webhook_tsa_resilience.py` (8 cases): replay absorption,
+  ledger persistence per event (including ignored ones), cancel-state
+  replay protection, customer-id attribution fallback, dead-TSA
+  degradation without a fabricated timestamp, unsigned-PDF fail-closed
+  verification, missing-file fail-closed verification, and the complete
+  failure-result shape.
 
-- Tiny i18n runtime: React context, localStorage persistence, `<html lang>`
-  sync, English fallback per string — never a blank UI, never a leaked key.
-- Marketing chrome translated by hand in all four locales.
-- Content corpus translated field-by-field via an LLM pipeline
-  (scripts/translate_content.ts, 277 strings × 3 locales) with a
-  vocabulary guard that blocks certification-claim phrasing; the three
-  negation sentences ("we do NOT claim certifications") translated by hand
-  so the guard can stay blunt. Artifact nouns ("certificat d'audit",
-  "certificado X.509", "Zertifikat") correctly allowed.
-- Categories/tags localized from chrome dictionaries; unknown future
-  categories fall back to the English label, not a key.
+### Documentation added or extended
 
-### Enterprise onboarding: admin alerts
+- `deploy/DOMAIN_SPLIT.md`: full map of all ten public hosts onto the
+  two-origin design (signup/sign/api/docs/help as 301s, status outside
+  the app origins, sandbox as a separate deployment), plus the restated
+  email link policy.
+- `docs/data-flow-inventory.md`: the GDPR data flow inventory — every
+  processor the code can engage, what each receives, residency claim
+  discipline, and the deliberate absences (no analytics, no ad tech, no
+  external font CDN, no default error-tracking SaaS).
+- `download/Docurama_Sprint9_Production_Readiness_Report.pdf`: the 14
+  page readiness matrix, findings, Day-0 sequence, rollback sequence,
+  and the release gate with the final verdict.
 
-- Domain-join activation now emails the workspace admins: approval-mode
-  joins alert them to review the queue, auto-joins announce the new member.
-- Alerts are best-effort (SMTP outage never blocks activation) and
-  accountable — one email_send_logs row per admin per attempt with honest
-  sent/failed status, committed atomically with the join event.
-- 3 new tests pin: approval alert, auto-join alert, and the
-  failure-never-blocks-activation contract.
+### Verified
 
-### Verification
+- 585/585 pytest (env -u DATABASE_URL); tsc clean; vite build green
+- Migration 0017 applied to the live database (stripe_events present)
+- Live probes: healthz/readyz 200, CSP without third-party hosts
+- Browser sweep: landing, pricing (commitment toggle re-quotes, Fair
+  Exit preview), signup (age gate, duplicate-account error state),
+  login (wrong-password error state, success path), dashboard,
+  templates, submissions, verify, docs, blog, help, gallery, trust —
+  zero console errors
+- Git history scan: no credentials committed; gitleaks runs in CI
 
-- 561/561 pytest (env -u DATABASE_URL); tsc clean; vite build green.
-- Browser-verified: pricing toggle re-quotes from the server, language
-  switch re-renders the full pricing page in French with <html lang="fr">,
-  hero demo elements all present, docs/blog/help/gallery render, console
-  clean.
-- Domain split documented in deploy/DOMAIN_SPLIT.md: docurama.eu (marketing)
-  + app.docurama.eu (product) + signup.docurama.eu as a vanity 301 — one
-  origin for accounts, zero extra deploys, one wildcard certificate.
+### Verdict
+
+PRODUCTION-READY FOR CONTROLLED EU LAUNCH. All remaining blockers are
+operator-side (secrets, qualified TSA, Stripe live, DNS/TLS, SMTP,
+legal publication, PAT rotation) with acceptance checks and rollback
+paths defined in the readiness report and runbook.

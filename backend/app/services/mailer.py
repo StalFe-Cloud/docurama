@@ -19,12 +19,15 @@ import os
 import re
 import smtplib
 import ssl
+import logging
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from typing import Dict, List, Optional
 
 from app.services.smtp_config import SmtpConfig
+
+logger = logging.getLogger("docurama.mailer")
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -115,7 +118,7 @@ def _attach_files(msg: EmailMessage, attachments: Optional[List[str]]) -> None:
                 filename=os.path.basename(path),
             )
         except Exception as e:
-            print(f"[Mailer] Could not attach {path}: {e}")
+            logger.warning("could not attach %s to outgoing email: %s", path, e)
 
 
 def _connect(config: SmtpConfig):

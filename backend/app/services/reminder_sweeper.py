@@ -10,6 +10,7 @@ the holder does the work. As with manual reminders, a recipient's counter advanc
 when a message is actually delivered.
 """
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
@@ -20,6 +21,8 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models import AuditEvent, Envelope, Recipient
 from app.services import mailer, smtp_config
+
+logger = logging.getLogger("docurama.reminders")
 
 # Arbitrary but stable identifier for the sweep's advisory lock.
 _ADVISORY_LOCK_KEY = 0x0D0C0A17
@@ -147,8 +150,8 @@ async def reminder_loop() -> None:
             await asyncio.sleep(interval_seconds)
             sent = await sweep_once()
             if sent:
-                print(f"[Reminders] delivered {sent} reminder(s)")
+                logger.info("reminder sweep delivered %d reminder(s)", sent)
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001 - a sweep failure must not kill the loop
-            print(f"[Reminders] sweep failed: {e}")
+            logger.warning("reminder sweep failed: %s", e)

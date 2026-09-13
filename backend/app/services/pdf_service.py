@@ -1,11 +1,14 @@
 import os
 import io
 import base64
+import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 from app.core.config import settings
 from app.services.qr_generator import generate_qr_image
+
+logger = logging.getLogger("docurama.pdf")
 
 def overlay_fields_on_pdf(
     input_pdf_path: str,
@@ -61,7 +64,7 @@ def overlay_fields_on_pdf(
                         img_data = base64.b64decode(val.split(",")[1])
                         page.insert_image(rect, stream=img_data)
                     except Exception as ie:
-                        print(f"[PDFService] Error inserting signature image: {ie}")
+                        logger.warning("signature image insert failed: %s", ie)
                 else:
                     # Text, Date, Name, Initials
                     page.insert_textbox(

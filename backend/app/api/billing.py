@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.api.auth import get_current_user
-from app.models import Account, User
+from app.models import Account, User, StripeEvent
 from app.services import billing
 from app.services.billing import BillingNotConfigured
 
@@ -31,6 +31,19 @@ def _require_account(user: User) -> User:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This account has no workspace to bill. Sign up normally or contact support.",
+        )
+    return user
+
+
+def _require_workspace_admin(user: User) -> User:
+    """Checkout, the portal and cancellation are workspace commitments, not
+    personal ones: they change what every seat pays and what service the whole
+    team keeps. Same role gate as the settings API - a plain member must not
+    be able to commit the company to a paid plan or cut its service off."""
+    if (user.role or "").strip().lower() not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a workspace administrator can manage billing.",
         )
     return user
 
@@ -86,6 +99,7 @@ async def create_checkout(
     than a mysterious failure at Stripe.
     """
     _require_account(current_user)
+    _require_workspace_admin(current_user)
     plan_id = str(payload.get("plan") or "").strip()
     if not plan_id:
         raise HTTPException(status_code=422, detail="Choose a plan.")
@@ -138,6 +152,7 @@ async def create_portal(
 ) -> Dict[str, Any]:
     """Stripe customer portal link; 503 until the operator configures billing."""
     _require_account(current_user)
+    _require_workspace_admin(current_user)
     account = (await db.execute(
         select(Account).where(Account.id == current_user.account_id)
     )).scalar_one_or_none()
@@ -175,6 +190,7 @@ async def cancel_subscription(
     plan features until then, which is recorded on the account row.
     """
     _require_account(current_user)
+    _require_workspace_admin(current_user)
     account = (await db.execute(
         select(Account).where(Account.id == current_user.account_id)
     )).scalar_one_or_none()
@@ -220,23 +236,74 @@ async def stripe_webhook(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid webhook signature.")
 
+    # Idempotency (Sprint 9): Stripe delivers at-least-once and a replay of a
+    # delivered event must never re-apply. The ledger row's primary key is the
+    # Stripe event id, so the insert below is the gate: if it conflicts, the
+    # event was already processed and we ack without touching plan state.
+    # Failure of the whole ledger write rolls back with the sync, so a crash
+    # between mutate and record cannot strand an unrecorded change.
+    event_id = str(event.get("id") or "")
+    if event_id:
+        seen = (await db.execute(
+            select(StripeEvent).where(StripeEvent.id == event_id)
+        )).scalar_one_or_none()
+        if seen is not None:
+            logger.info("stripe webhook replay ignored: event_id=%s", event_id)
+            return Response(status_code=200)
+
     instruction = billing.map_stripe_event(event)
     action = instruction.get("action")
+    event_type = str(event.get("type") or "")
+
+    async def _record_ledger(claimed_account_id: str | None) -> None:
+        """Persist processing state in the same transaction as the effect."""
+        if not event_id:
+            return
+        db.add(StripeEvent(
+            id=event_id,
+            event_type=event_type,
+            action=str(action),
+            account_id=claimed_account_id,
+        ))
+
     if action == "ignore":
+        # Unmodelled events are acked and recorded so a redelivery skips the
+        # mapping work too, not just the mutation.
+        await _record_ledger(None)
+        await db.commit()
         return Response(status_code=200)
 
     metadata = instruction.get("metadata") or {}
     account_id = metadata.get("account_id")
-    if not account_id:
-        # Events without our account metadata cannot be attributed; ack and log.
-        logger.warning("stripe webhook without account metadata: action=%s", action)
-        return Response(status_code=200)
 
-    account = (await db.execute(
-        select(Account).where(Account.id == str(account_id))
-    )).scalar_one_or_none()
+    account = None
+    if account_id:
+        account = (await db.execute(
+            select(Account).where(Account.id == str(account_id))
+        )).scalar_one_or_none()
+
     if account is None:
-        logger.warning("stripe webhook for unknown account %s", account_id)
+        # Sprint 9 attribution fallback: subscription lifecycle events
+        # (updated on renewal, deleted on cancellation) do not always carry
+        # our checkout metadata. Resolve the account by the subscription or
+        # customer id recorded on the account row at attach time - a
+        # verified Stripe event about subscription X must reach the account
+        # that owns subscription X.
+        sub_handle = str(instruction.get("subscription_id") or "").strip()
+        customer_handle = str(instruction.get("customer_id") or "").strip()
+        if sub_handle:
+            account = (await db.execute(
+                select(Account).where(Account.stripe_subscription_id == sub_handle)
+            )).scalar_one_or_none()
+        if account is None and customer_handle:
+            account = (await db.execute(
+                select(Account).where(Account.stripe_customer_id == customer_handle)
+            )).scalar_one_or_none()
+
+    if account is None:
+        logger.warning("stripe webhook could not be attributed: action=%s event=%s", action, event_id)
+        await _record_ledger(None)
+        await db.commit()
         return Response(status_code=200)
 
     if action == "attach_customer":
@@ -257,5 +324,13 @@ async def stripe_webhook(
     elif action == "mark_cancelled":
         account.cancel_at_period_end = True
 
-    await db.commit()
+    await _record_ledger(account.id)
+    try:
+        await db.commit()
+    except Exception:
+        # A concurrent delivery of the same event won the insert race. The
+        # writes are field assignments, so the winner applied identical
+        # state; ack instead of erroring into a Stripe retry loop.
+        await db.rollback()
+        logger.info("stripe webhook concurrent replay absorbed: event_id=%s", event_id)
     return Response(status_code=200)

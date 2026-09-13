@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from urllib.parse import urlparse
@@ -34,6 +35,8 @@ from app.services import totp as totp_service
 from app.services import audit_chain
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.services.qr_generator import generate_qr_base64
+
+logger = logging.getLogger("docurama.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -1127,7 +1130,7 @@ async def request_password_reset(
     )
     if not result.sent:
         # Visible to the operator in the logs, invisible to the caller.
-        print(f"[Auth] password reset mail not delivered to {user.email}: {result.error}")
+        logger.warning("password reset mail not delivered to %s: %s", user.email, result.error)
 
     return acknowledgement
 

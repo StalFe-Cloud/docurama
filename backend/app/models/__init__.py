@@ -9,6 +9,7 @@ from app.models.models import (
     AccessReview, AuditChainSeal,
     RiskRegisterEntry, RestoreDrill,
     ChangeRequest, VendorReview,
+    StripeEvent,
 )
 
 __all__ = [
@@ -51,4 +52,5 @@ __all__ = [
     "RestoreDrill",
     "ChangeRequest",
     "VendorReview",
+    "StripeEvent",
 ]

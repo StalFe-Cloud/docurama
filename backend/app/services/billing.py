@@ -193,6 +193,12 @@ class StripeAdapter:
             success_url=success_url,
             cancel_url=cancel_url,
             metadata=metadata or {},
+            # Lifecycle attribution (Sprint 9): session metadata lives and dies
+            # with the checkout session. Every later webhook that matters -
+            # subscription.updated on renewal, subscription.deleted on
+            # cancellation - reads the SUBSCRIPTION's metadata, which is empty
+            # unless we explicitly copy ours onto it at creation time.
+            subscription_data={"metadata": metadata or {}},
         )
         return {"id": session["id"], "url": session["url"]}
 
@@ -264,9 +270,19 @@ def map_stripe_event(event: Dict[str, Any]) -> Dict[str, Any]:
                 if isinstance(period_end, (int, float))
                 else None
             ),
+            # Attribution handles (Sprint 9): lifecycle events must be
+            # resolvable even when the subscription carries no metadata.
+            "subscription_id": obj.get("id") or "",
+            "customer_id": obj.get("customer") or "",
+            "metadata": obj.get("metadata") or {},
         }
     if etype == "customer.subscription.deleted":
-        return {"action": "mark_cancelled"}
+        return {
+            "action": "mark_cancelled",
+            "subscription_id": obj.get("id") or "",
+            "customer_id": obj.get("customer") or "",
+            "metadata": obj.get("metadata") or {},
+        }
     return {"action": "ignore"}
 
 

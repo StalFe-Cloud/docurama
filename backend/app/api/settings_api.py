@@ -158,6 +158,9 @@ async def list_api_keys(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Keys are workspace credentials: visibility follows the same admin gate
+    # as minting, so a member cannot enumerate live machine credentials.
+    _require_workspace_admin(current_user)
     account_id = _require_account(current_user)
     rows = (await db.execute(
         select(ApiKey)
@@ -174,6 +177,10 @@ async def create_api_key(
     db: AsyncSession = Depends(get_db),
 ):
     """Mint a key. The plaintext is returned here and cannot be retrieved again."""
+    # A minted key is a persistent, session-independent credential over the
+    # whole workspace. Same boundary as SMTP and billing: admins only. A
+    # member could otherwise turn a browser session into a durable token.
+    _require_workspace_admin(current_user)
     account_id = _require_account(current_user)
 
     plaintext, prefix, hashed = api_key_service.generate_api_key()

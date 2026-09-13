@@ -9,12 +9,15 @@ returned here, so an optimistic default here becomes a false certification downs
 """
 import os
 import hashlib
+import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from cryptography.hazmat.primitives.serialization import pkcs12
 
 from app.core.config import settings
+
+logger = logging.getLogger("docurama.crypto")
 
 # PAdES conformance levels, weakest to strongest.
 PADES_B_B = "PAdES-B-B"    # basic signature
@@ -54,7 +57,7 @@ def load_docurama_p12():
             p12_data = f.read()
         return pkcs12.load_key_and_certificates(p12_data, p12_password)
     except Exception as e:
-        print(f"[CryptoEngine] Failed to load P12 at {p12_path}: {e}")
+        logger.error("failed to load signing P12 at %s: %s", p12_path, e)
         return None, None, []
 
 
@@ -208,7 +211,7 @@ def _build_validation_context():
             return None
         return ValidationContext(extra_trust_roots=roots, allow_fetching=True)
     except Exception as e:
-        print(f"[CryptoEngine] Validation context unavailable: {e}")
+        logger.warning("TSA validation context unavailable: %s", e)
         return None
 
 
@@ -248,6 +251,9 @@ def sign_pdf_with_pades(
             "issuer": issuer_str,
             "pades_level": None,
             "timestamp_server": None,
+            # Same key set as the success result, None where no assertion is
+            # possible: callers and the envelope row read one shape.
+            "timestamp_utc": None,
             "error": error,
         }
 
@@ -287,7 +293,7 @@ def sign_pdf_with_pades(
                 # lock (and the signer's request) open indefinitely.
                 timestamper = timestamps.HTTPTimeStamper(tsa_url, timeout=8)
             except Exception as te:
-                print(f"[CryptoEngine] TSA unavailable at {tsa_url}: {te}")
+                logger.warning("TSA unavailable at %s: %s", tsa_url, te)
                 timestamper = None
 
         validation_context = _build_validation_context() if timestamper else None
@@ -494,7 +500,7 @@ def _dss_carries_revocation_info(reader) -> bool:
     try:
         from pyhanko.sign.validation.dss import DocumentSecurityStore, NoDSSFoundError
     except Exception as e:
-        print(f"[CryptoEngine] DSS inspection unavailable: {e}")
+        logger.warning("DSS inspection unavailable: %s", e)
         return False
 
     try:
@@ -502,7 +508,7 @@ def _dss_carries_revocation_info(reader) -> bool:
     except NoDSSFoundError:
         return False
     except Exception as e:
-        print(f"[CryptoEngine] DSS could not be read: {e}")
+        logger.warning("DSS could not be read: %s", e)
         return False
 
     # A DSS that holds no validation material of any kind does not confer LT.

@@ -3,14 +3,20 @@ Security response headers (Sprint 3, finding S-1).
 
 The dynamic testing pass found all six hardening headers absent from every
 response. A SPA needs a deliberate CSP - inline styles are how the app is
-styled, fonts come from Google Fonts, and the WebSocket hand-off needs ws/wss -
-so the policy here is explicit about exactly those allowances and forbids
-everything else. HSTS is only meaningful over TLS, so it is emitted only when
-the request arrived over https (directly or via a trusted proxy header).
+styled and the WebSocket hand-off needs ws/wss - so the policy here is
+explicit about exactly those allowances and forbids everything else. HSTS
+is only meaningful over TLS, so it is emitted only when the request arrived
+over https (directly or via a trusted proxy header).
 
 Nonce-free by design: the frontend bundle contains no inline scripts, so
 script-src 'self' holds without per-response nonces, which keeps the policy
 cacheable and simple to verify.
+
+Sprint 9: the Google Fonts hosts were dropped from style-src/font-src. The
+bundle has self-hosted fonts (Geist, installed in Sprint 7) and no code
+path references the CDN any more, so allowing it was dead surface: removing
+the hosts keeps the policy an exact description of what the app loads and
+keeps every byte on the origin (EU data-sovereignty consistency).
 """
 from typing import Awaitable, Callable
 
@@ -21,8 +27,8 @@ from starlette.responses import Response
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src 'self' data: https://fonts.gstatic.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; "
     "img-src 'self' data: blob:; "
     "connect-src 'self' ws: wss:; "
     "object-src 'none'; "

@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 import re
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
@@ -28,6 +29,8 @@ from app.schemas import (
     CompanyInviteRequest, CompanyInviteResponse,
     WorkspaceDeleteRequest, WorkspaceDeleteResult
 )
+
+logger = logging.getLogger("docurama.companies")
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -512,7 +515,7 @@ async def invite_company_member(
     # a way to pass the link on rather than a silently stranded invitee.
     invite_link_delivered = bool(getattr(result, "sent", False))
     if not invite_link_delivered:
-        print(f"[Companies] invite mail not delivered to {email}: {getattr(result, 'error', None)}")
+        logger.warning("invite mail not delivered to %s: %s", email, getattr(result, "error", None))
 
     return CompanyInviteResponse(
         success=True,

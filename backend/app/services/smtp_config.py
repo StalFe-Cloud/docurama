@@ -25,6 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.models import AccountSetting, PlatformSetting
 
+import logging
+
+logger = logging.getLogger("docurama.api")
+
 SECTION = "smtp"
 
 # The stored shape. The password is held separately and encrypted; it never appears here.
@@ -126,9 +130,9 @@ def to_config(data: Dict[str, Any], source: str) -> Optional[SmtpConfig]:
     stored_password = data.get("password_encrypted") or ""
     password = decrypt_secret(stored_password) if stored_password else ""
     if stored_password and password is None:
-        print(
-            "[SMTP] Stored password could not be decrypted; DOCURAMA_SECRET_KEY has "
-            f"probably been rotated. Re-enter the password for {host}."
+        logger.warning(
+            "Stored SMTP password for %s could not be decrypted; DOCURAMA_SECRET_KEY "
+            "has probably been rotated. Re-enter the password.", host
         )
         return None
 

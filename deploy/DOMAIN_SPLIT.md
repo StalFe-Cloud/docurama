@@ -78,3 +78,61 @@ emails and redirects (activation links, checkout success). Recommended:
 emails need docurama.eu links, use absolute marketing URLs in email copy
 rather than changing APP_URL — activation and auth links must always land
 on the app host.
+
+## Sprint 9: full public subdomain map
+
+The public architecture stays two real origins. Every requested public host
+maps onto one of them (or onto an edge-level concern), so no extra
+application origin, cookie scope, or deploy exists:
+
+| Host | Serves | Implementation |
+|------|--------|----------------|
+| `docurama.eu` | Marketing + content + public surfaces | Real origin. Landing, `/pricing`, `/docs`, `/blog`, `/help`, `/templates-gallery`, `/trust`, `/verify`, `/legal`. |
+| `app.docurama.eu` | The product (single canonical session origin) | Real origin. `/sign_up`, `/sign_in`, `/templates`, `/submissions`, `/builder`, `/settings`, `/admin`, `/sign`, `/verify` (authenticated use). |
+| `signup.docurama.eu` | Vanity address for signup | Edge 301 → `https://app.docurama.eu/sign_up` (Caddy `redir` above). Never a third origin. |
+| `sign.docurama.eu` | Recipient signing convenience address | Edge 301 → `https://app.docurama.eu/sign`. Signing sessions are cookie-scoped to the app origin; a separate origin would break that. |
+| `verify.docurama.eu` | Third-party verification convenience address | Edge 301 → `https://docurama.eu/verify`. Verification is public and touches no tenant data, so it belongs to the marketing origin. |
+| `api.docurama.eu` | API convenience address | Edge 301 → `https://app.docurama.eu/api/…` (path-preserving), or a Caddy `handle` that proxies to the same upstream. The API is same-origin with the app; CORS stays single-origin. |
+| `docs.docurama.eu` | Documentation convenience address | Edge 301 → `https://docurama.eu/docs`. |
+| `help.docurama.eu` | Help center convenience address | Edge 301 → `https://docurama.eu/help`. |
+| `status.docurama.eu` | Uptime/status page | Operator-managed edge service (e.g. a hosted status page or a static page on the edge). It must stay OUTSIDE the application origins so an incident page stays up when the app is down. |
+| `sandbox.docurama.eu` | Test/evaluation environment | A separate DEPLOYMENT (own database, own storage, test Stripe keys, test TSA), reached via its own host. If operated, point it at a second backend instance - never at the production one. Optional at launch. |
+
+Why 301s rather than real origins: each additional real origin multiplies
+cookie scopes, HSTS coverage, CORS entries, certificate surface and
+deployment cost, for zero product benefit when the underlying app is one
+SPA + one API. Convenience hosts keep the addresses marketable while the
+canonical URL - and therefore the session, the CSP and the audit trail -
+stays single-origin.
+
+### Edge config additions (Caddy)
+
+```caddyfile
+sign.docurama.eu {
+    redir https://app.docurama.eu/sign{uri} permanent
+}
+verify.docurama.eu {
+    redir https://docurama.eu/verify{uri} permanent
+}
+api.docurama.eu {
+    redir https://app.docurama.eu/api{uri} permanent
+}
+docs.docurama.eu {
+    redir https://docurama.eu/docs{uri} permanent
+}
+help.docurama.eu {
+    redir https://docurama.eu/help{uri} permanent
+}
+```
+
+All convenience hosts are covered by the same `*.docurama.eu` wildcard
+certificate that `deploy/tls_wildcard.sh` provisions.
+
+### Email link policy (restated)
+
+Activation, password reset, invitation, signing and completion links are
+built from `settings.APP_URL` only - which must be the app origin in the
+product deployment. Marketing-site links in email copy use absolute
+`https://docurama.eu/...` URLs. There is no code path that emits a
+relative, localhost or staging URL in mail, and the production config
+guard refuses a placeholder APP_URL at boot.

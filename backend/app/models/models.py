@@ -949,3 +949,28 @@ class VendorReview(Base):
     control_refs = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class StripeEvent(Base):
+    """
+    Sprint 9: persisted webhook processing state (billing P1).
+
+    Stripe retries webhook deliveries and redelivers events on demand. The
+    subscription-sync handler mutates plan state, so every accepted event id
+    is recorded here exactly once; a replay meets a primary-key conflict and
+    is acked without re-applying. This is what makes entitlement grants
+    idempotent under Stripe's at-least-once delivery semantics - without the
+    ledger, a duplicated checkout.session.completed is only idempotent by
+    coincidence of the field writes, and any future non-assignment action
+    (an invoice record, a refund row) would silently double-apply.
+    """
+    __tablename__ = "stripe_events"
+
+    # Stripe event ids are provably unique strings (evt_...).
+    id = Column(String(64), primary_key=True)
+    event_type = Column(String(120), nullable=False, index=True)
+    # Recorded action vocabulary (attach_customer / sync_subscription /
+    # mark_cancelled / ignore) so replay audits can compare what was done.
+    action = Column(String(40), nullable=False, default="ignore")
+    account_id = Column(String(36), nullable=True, index=True)
+    received_at = Column(DateTime(timezone=True), default=utcnow)

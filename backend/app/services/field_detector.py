@@ -4,7 +4,11 @@ except ImportError:
     fitz = None
 
 import re
+import logging
 from typing import List, Dict, Any
+
+logger = logging.getLogger("docurama.service")
+
 
 class FieldDetector:
     """
@@ -44,7 +48,7 @@ class FieldDetector:
             # A missing, corrupt or non-PDF file. Detection is a convenience feature,
             # so it degrades to the same suggested placements rather than propagating
             # a PyMuPDF exception out of the request handler as a 500.
-            print(f"[FieldDetector] Could not open {pdf_path}: {e}")
+            logger.warning("could not open PDF for field detection %s: %s", pdf_path, e)
             return [dict(f) for f in cls.FALLBACK_FIELDS]
 
         try:
