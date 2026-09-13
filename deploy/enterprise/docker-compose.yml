@@ -1,0 +1,75 @@
+services:
+  docurama-enterprise-db:
+    image: postgres:16-alpine
+    container_name: docurama-enterprise-postgres
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-docurama}
+      POSTGRES_USER: ${POSTGRES_USER:-docurama}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - docurama_enterprise_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docurama} -d ${POSTGRES_DB:-docurama}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      docurama_enterprise_net:
+        aliases:
+          - docurama-db
+
+  docurama-enterprise-api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: docurama-enterprise-api
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DOCURAMA_STORAGE_DIR: "/app/storage"
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+    volumes:
+      - docurama_enterprise_storage:/app/storage
+      - ./backend/certs:/app/certs:ro
+    depends_on:
+      docurama-enterprise-db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      docurama_enterprise_net:
+        aliases:
+          - docurama-api
+
+  docurama-enterprise:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: docurama-enterprise
+    restart: always
+    ports:
+      - "0.0.0.0:3003:3000"
+    depends_on:
+      - docurama-enterprise-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - docurama_enterprise_net
+
+volumes:
+  docurama_enterprise_db_data:
+  docurama_enterprise_storage:
+
+networks:
+  docurama_enterprise_net:
+    driver: bridge
