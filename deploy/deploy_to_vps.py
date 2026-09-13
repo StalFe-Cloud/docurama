@@ -8,15 +8,31 @@ import subprocess
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-NEXA_HOST = "212.47.79.52"
-NEXA_USER = "root"
-NEXA_KEY = os.path.expanduser(r"~/.ssh/nexa_vps")
+# Deployment target: ALWAYS provided by the environment, never committed.
+# Production infrastructure details (hosts, users, key paths) do not belong in
+# a public repository — commit history is effectively a disclosure.
+NEXA_HOST = os.getenv("DOCURAMA_VPS_HOST", "")
+NEXA_USER = os.getenv("DOCURAMA_VPS_USER", "")
+NEXA_KEY = os.path.expanduser(os.getenv("DOCURAMA_VPS_KEY", "~/.ssh/id_ed25519"))
+
+
+def _require_target():
+    """Fail fast with a clear message before any SSH activity starts."""
+    if not NEXA_HOST or not NEXA_USER:
+        print(
+            "Refusing to deploy: set DOCURAMA_VPS_HOST and DOCURAMA_VPS_USER "
+            "(and optionally DOCURAMA_VPS_KEY) in your environment.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 def run_ssh(cmd, check=True):
     ssh_cmd = [
         "ssh",
         "-i", NEXA_KEY,
-        "-o", "StrictHostKeyChecking=no",
+        # accept-new trusts first-seen host keys but rejects changed ones, unlike
+        # StrictHostKeyChecking=no which silently accepts MITM.
+        "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ConnectTimeout=15",
         f"{NEXA_USER}@{NEXA_HOST}",
         cmd
@@ -35,7 +51,7 @@ def run_scp(local_path, remote_path):
     scp_cmd = [
         "scp",
         "-i", NEXA_KEY,
-        "-o", "StrictHostKeyChecking=no",
+        "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ConnectTimeout=15",
         local_path,
         f"{NEXA_USER}@{NEXA_HOST}:{remote_path}"
@@ -192,10 +208,18 @@ def deploy():
     run_scp(archive_path, remote_tar)
 
     run_ssh("cd /opt/docurama && docker compose down 2>/dev/null || true", check=False)
-    # Clean stale alembic versions before extracting to prevent multiple heads
-    run_ssh("rm -rf /opt/docurama/backend/alembic/versions/* 2>/dev/null || true", check=False)
-    # Extracting over the deployment now leaves the server's own secrets untouched.
+    # Extract first; the archive ships the full alembic/versions directory, so a
+    # successful extraction replaces its contents. The old `rm -rf` ran BEFORE
+    # extraction and deleted the server's migration history outright: any extract
+    # failure would strand the database against code that no longer matches
+    # alembic_version, with no way to migrate forward. Instead of destroying
+    # first, verify after.
     run_ssh(f"tar -xzf {remote_tar} -C /opt/docurama && rm -f {remote_tar}")
+    run_ssh(
+        "test -d /opt/docurama/backend/alembic/versions && "
+        "test -n \"$(ls /opt/docurama/backend/alembic/versions/*.py 2>/dev/null)\" || "
+        "{ echo 'FATAL: alembic/versions missing after extract; refusing to start' >&2; exit 1; }"
+    )
     run_ssh("mkdir -p /opt/docurama/backend/certs")
 
     # Report what the server actually holds, rather than assuming the deploy provided it.
@@ -244,4 +268,5 @@ def deploy():
     print("\nDocurama Isolated Clean-Room Deployment to Nexa-VPS Complete!")
 
 if __name__ == "__main__":
+    _require_target()
     deploy()

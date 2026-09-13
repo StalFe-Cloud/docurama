@@ -4,7 +4,9 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install
+# npm ci: reproduce the committed lockfile exactly instead of letting
+# npm install drift onto untested dependency versions.
+RUN npm ci
 
 COPY . .
 RUN npm run build

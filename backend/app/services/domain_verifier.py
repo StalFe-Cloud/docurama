@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Tuple, Optional, List
 import httpx
 
+from app.services.webhook_dispatcher import _is_blocked_ip
+
 logger = logging.getLogger("docurama.domain_verifier")
 
 def utcnow():
@@ -35,6 +37,36 @@ async def doh_query(name: str, record_type: str) -> List[Dict[str, Any]]:
                 logger.debug(f"[DoH] Query {ep} error: {e}")
                 continue
     return []
+
+async def _host_is_publicly_routable(host: str) -> bool:
+    """
+    Resolve a host over DoH and refuse it when any answer is private or reserved.
+
+    A verification probe follows attacker-influenced DNS (the claimant controls
+    the domain), so before an HTTP fetch is made the addresses must be checked:
+    otherwise 'verify my domain' doubles as a port scanner for the deployment's
+    own network. Resolution happens through DoH here and the fetch pins nothing,
+    so a rebinding attacker can still race it - but the trivial redirect and
+    literal-IP vectors are closed, matching the webhook guard's posture.
+    """
+    for record_type in ("A", "AAAA"):
+        for answer in await doh_query(host, record_type):
+            if _is_blocked_ip(str(answer.get("data", ""))):
+                return False
+    return True
+
+
+def _verification_http_client() -> httpx.AsyncClient:
+    """
+    Hardened client for all outbound verification fetches.
+
+    TLS verification stays ON: a domain claim proven over a connection an
+    on-path attacker can forge is worth nothing. Redirects are refused: a 30x
+    to an internal address would otherwise relay our request (and reflect the
+    status) into the private network.
+    """
+    return httpx.AsyncClient(timeout=5.0, follow_redirects=False)
+
 
 async def verify_client_domain(
     domain: str,
@@ -79,7 +111,7 @@ async def verify_client_domain(
             "data": val,
             "ttl": ans.get("TTL")
         })
-        if expected_txt_val in val or verification_token in val:
+        if expected_txt_val in val:
             return (
                 True,
                 "dns_txt",
@@ -103,8 +135,11 @@ async def verify_client_domain(
         
         # If subdomain resolves, test live confirmation pointing to Docurama
         if a_records or cname_records:
+            if not await _host_is_publicly_routable(sub):
+                dns_details["subdomain_pointers"][sub]["healthcheck"] = "BLOCKED_PRIVATE_ADDRESS"
+                continue
             try:
-                async with httpx.AsyncClient(timeout=5.0, verify=False, follow_redirects=True) as client:
+                async with _verification_http_client() as client:
                     health_url = f"https://{sub}/api/health"
                     resp = await client.get(health_url)
                     if resp.status_code == 200:
@@ -129,22 +164,28 @@ async def verify_client_domain(
         f"https://{clean_domain}/docurama-verification.txt"
     ]
     
-    async with httpx.AsyncClient(timeout=5.0, verify=False, follow_redirects=True) as client:
-        for url in candidate_urls:
-            try:
+    for url in candidate_urls:
+        try:
+            host = url.split("/")[2]
+            if not await _host_is_publicly_routable(host):
+                dns_details["web_confirmation"][url] = {"error": "blocked: private or reserved address"}
+                continue
+            async with _verification_http_client() as client:
                 resp = await client.get(url)
                 dns_details["web_confirmation"][url] = {"status_code": resp.status_code}
-                if resp.status_code == 200:
-                    text = resp.text
-                    if verification_token in text or "docurama-verification" in text:
-                        return (
-                            True,
-                            "web_confirmation",
-                            dns_details,
-                            f"Website confirmation file verified successfully at {url}."
-                        )
-            except Exception as e:
-                dns_details["web_confirmation"][url] = {"error": str(e)}
+                # The page must carry THIS domain's token. Merely mentioning the
+                # marker 'docurama-verification' proved nothing: any 200 page that
+                # linked to Docurama's docs would have passed, and the marker is
+                # also what the redirect-based takeover probes relied on.
+                if resp.status_code == 200 and verification_token in resp.text:
+                    return (
+                        True,
+                        "web_confirmation",
+                        dns_details,
+                        f"Website confirmation file verified successfully at {url}."
+                    )
+        except Exception as e:
+            dns_details["web_confirmation"][url] = {"error": str(e)}
 
     # If none succeeded, return pending with guidance
     return (

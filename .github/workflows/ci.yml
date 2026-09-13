@@ -37,3 +37,21 @@ jobs:
           node-version: "22"
       - name: Build frontend
         run: cd frontend && npm ci && npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f backend/Dockerfile -t docurama-api:ci .
+      - name: Build unified image
+        run: docker build -t docurama:ci .
+      # The unit suite stubs pyHanko, so it cannot catch the library relocating
+      # its API. This end-to-end check seals and verifies a real document with a
+      # throwaway CA inside the image that will actually be deployed.
+      - name: End-to-end signing verification (API image)
+        run: |
+          docker run --rm \
+            -v "$PWD/scripts/verify_signing.py:/tmp/verify_signing.py:ro" \
+            -e DOCURAMA_ENV=development \
+            --entrypoint python docurama-api:ci /tmp/verify_signing.py

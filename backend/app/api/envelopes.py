@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import uuid
@@ -220,7 +221,7 @@ async def create_envelope(
             rec.name, envelope.title, signing_url, sender_name
         )
         invite_batch.results.append(
-            mailer.send_email(smtp, rec.email, rec.name, subject, html, text)
+            await asyncio.to_thread(mailer.send_email, smtp, rec.email, rec.name, subject, html, text)
         )
 
     event_sent = AuditEvent(
@@ -275,6 +276,13 @@ async def get_envelope(
     envelope = result.scalar_one_or_none()
     if not envelope:
         raise HTTPException(status_code=404, detail="Envelope not found.")
+
+    # Signing links are bearer credentials. Owner/admin views need them to send
+    # invitations, but a plain member session must not be able to harvest every
+    # signer's link from the envelope detail response.
+    if current_user.role not in ("owner", "admin"):
+        for r in envelope.recipients:
+            r.signing_token = ""
     return envelope
 
 @router.post("/{id}/remind")
@@ -311,7 +319,7 @@ async def remind_envelope(
         subject, html, text = mailer.signing_reminder(
             r.name, envelope.title, signing_url, reminder_number
         )
-        result = mailer.send_email(smtp, r.email, r.name, subject, html, text)
+        result = await asyncio.to_thread(mailer.send_email, smtp, r.email, r.name, subject, html, text)
         batch.results.append(result)
         # The counter tracks delivered reminders. Incrementing on a failed send would
         # silently exhaust a recipient's reminder budget without them hearing anything.

@@ -15,7 +15,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models import Envelope, Recipient, Field, Signature, AuditEvent, DomainVerification, CorrectionRequest
 from app.schemas import (
-    SigningSessionOut, SubmitSignaturesRequest, FieldOut, RecipientOut,
+    SigningSessionOut, SubmitSignaturesRequest, FieldOut, RecipientOut, RecipientPublicOut,
     DeclineRequest, DelegateRequest, CorrectionRequestCreate, CorrectionRequestOut,
     SigningVerificationSendResponse, SigningVerificationVerifyRequest, SigningVerificationVerifyResponse,
 )
@@ -146,7 +146,8 @@ async def get_signing_session(
         recipient=RecipientOut.model_validate(recipient),
         pdf_url=pdf_url,
         fields=[FieldOut.model_validate(f) for f in envelope.fields],
-        all_recipients=[RecipientOut.model_validate(r) for r in envelope.recipients],
+        # Public projection: co-signer progress without their signing tokens.
+        all_recipients=[RecipientPublicOut.model_validate(r) for r in envelope.recipients],
         requires_verification=requires_verif,
         verification_channel=recipient.verification_channel or "none",
         target_obfuscated=target_obf,
@@ -191,7 +192,8 @@ async def get_signing_pages(
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF document not found.")
 
-    pages_info = get_pdf_pages_info(pdf_path)
+    # fitz parse of the whole document; off the event loop.
+    pages_info = await asyncio.to_thread(get_pdf_pages_info, pdf_path)
     pages = []
     for p in pages_info:
         p_num = p["page_number"]
@@ -224,7 +226,9 @@ async def get_signing_page_image(
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF document not found.")
 
-    png_bytes = render_pdf_page_png(pdf_path, page_number, dpi=dpi)
+    # Bound the render cost; dpi is caller-supplied on a signed-in route.
+    dpi = max(72, min(dpi, 300))
+    png_bytes = await asyncio.to_thread(render_pdf_page_png, pdf_path, page_number, dpi=dpi)
     return Response(
         content=png_bytes,
         media_type="image/png",
@@ -364,7 +368,15 @@ async def submit_signatures(
 
     _assert_token_live(recipient)
     _assert_signer_verified(recipient)
-        
+
+    # Bound the signature image payload before doing any work. It is stored in
+    # the database verbatim, so an unbounded base64 blob is a memory/DB DoS.
+    if req.signature_data_url and len(req.signature_data_url) > 2_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Signature image is too large. Please use a smaller signature."
+        )
+
     envelope = recipient.envelope
     if envelope.status in ["completed", "voided", "declined"]:
         raise HTTPException(status_code=400, detail=f"Document is already {envelope.status}.")
@@ -397,14 +409,38 @@ async def submit_signatures(
         select(Envelope.id).where(Envelope.id == envelope.id).with_for_update()
     )
 
+    # The lock serialises concurrent submitters, but the recipient/field rows
+    # were loaded before it was acquired. After waiting on the lock, this
+    # request would otherwise evaluate completion against the stale snapshot it
+    # started with (expire_on_commit=False), never see the first submitter's
+    # commit, conclude "not all signed", and leave the envelope stuck in
+    # "delivered" forever. Re-read the collections under the lock.
+    envelope = (
+        await db.execute(
+            select(Envelope)
+            .where(Envelope.id == envelope.id)
+            .options(
+                selectinload(Envelope.recipients),
+                selectinload(Envelope.fields),
+                selectinload(Envelope.audit_events),
+            )
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    recipient = next(r for r in envelope.recipients if r.id == recipient.id)
+
     ip = request.client.host if request.client else "127.0.0.1"
     ua = request.headers.get("User-Agent", "Browser")
 
-    # 1. Update field values
+    # 1. Update field values. A signer may only write fields assigned to them
+    # (or unassigned fields): submission values are flattened into the sealed
+    # PDF and attributed to the field's owner, so writing another signer's
+    # field would alter their executed document.
     for sig_sub in req.signatures:
         f = next((field for field in envelope.fields if field.id == sig_sub.field_id), None)
-        if f:
-            f.value = sig_sub.value
+        if f is None or (f.recipient_id and f.recipient_id != recipient.id):
+            continue
+        f.value = sig_sub.value
 
     # 2. Record Signature record
     if req.signature_data_url:
@@ -488,7 +524,10 @@ async def submit_signatures(
             }
             for f in envelope.fields
         ]
-        overlay_fields_on_pdf(envelope.original_pdf_path, flattened_pdf_path, fields_list)
+        # Flattening rewrites the full PDF with fitz; off the event loop.
+        await asyncio.to_thread(
+            overlay_fields_on_pdf, envelope.original_pdf_path, flattened_pdf_path, fields_list
+        )
 
         # Generate Certificate of Completion PDF
         cert_pdf_path = _envelope_artifact_path(envelope, f"{envelope.id}_certificate.pdf")
@@ -554,10 +593,12 @@ async def submit_signatures(
             }
             for a in (envelope.audit_events or [])
         ]
-        generate_certificate_of_completion_pdf(envelope_dict, recipients_summary, audit_list, cert_pdf_path)
+        await asyncio.to_thread(
+            generate_certificate_of_completion_pdf, envelope_dict, recipients_summary, audit_list, cert_pdf_path
+        )
 
         combined_pdf_path = _envelope_artifact_path(envelope, f"{envelope.id}_combined.pdf")
-        append_certificate_page(flattened_pdf_path, cert_pdf_path, combined_pdf_path)
+        await asyncio.to_thread(append_certificate_page, flattened_pdf_path, cert_pdf_path, combined_pdf_path)
 
         final_sealed_path = _envelope_artifact_path(envelope, f"{envelope.id}_sealed.pdf")
         # Off the event loop, deliberately. pyHanko's sign_pdf() calls asyncio.run()
@@ -661,7 +702,7 @@ async def submit_signatures(
                 r.name, envelope.title, verify_url, sealed
             )
             completion_batch.results.append(
-                mailer.send_email(smtp, r.email, r.name, subject, html, text, attachments=attachments)
+                await asyncio.to_thread(mailer.send_email, smtp, r.email, r.name, subject, html, text, attachments=attachments)
             )
         db.add(AuditEvent(
             envelope_id=envelope.id,
@@ -684,7 +725,9 @@ async def submit_signatures(
                 next_signer.name, envelope.title, signing_url, recipient.name
             )
             smtp = await smtp_config.resolve(db, envelope.account_id)
-            notify = mailer.send_email(smtp, next_signer.email, next_signer.name, subject, html, text)
+            notify = await asyncio.to_thread(
+                mailer.send_email, smtp, next_signer.email, next_signer.name, subject, html, text
+            )
             db.add(AuditEvent(
                 envelope_id=envelope.id,
                 event_type="sent" if notify.sent else "send_failed",

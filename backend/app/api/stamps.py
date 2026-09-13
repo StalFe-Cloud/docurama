@@ -68,8 +68,13 @@ async def save_stamp(
     if data_url:
         raw, error = stamp_store.decode_data_url(data_url)
     elif file is not None:
-        raw = await file.read()
-        error = None
+        # Read one byte past the cap so an oversized upload is detected here
+        # instead of being read into memory in full first.
+        raw = await file.read(stamp_store.MAX_STAMP_BYTES + 1)
+        error = (
+            f"The image exceeds the {stamp_store.MAX_STAMP_BYTES // (1024 * 1024)} MB limit."
+            if len(raw) > stamp_store.MAX_STAMP_BYTES else None
+        )
     else:
         raise HTTPException(status_code=400, detail="Provide a drawn signature or an image file.")
 

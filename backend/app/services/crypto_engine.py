@@ -283,7 +283,9 @@ def sign_pdf_with_pades(
         tsa_url = settings.TSA_URL
         if tsa_url:
             try:
-                timestamper = timestamps.HTTPTimeStamper(tsa_url)
+                # Explicit timeout: a hanging TSA must not hold the envelope row
+                # lock (and the signer's request) open indefinitely.
+                timestamper = timestamps.HTTPTimeStamper(tsa_url, timeout=8)
             except Exception as te:
                 print(f"[CryptoEngine] TSA unavailable at {tsa_url}: {te}")
                 timestamper = None

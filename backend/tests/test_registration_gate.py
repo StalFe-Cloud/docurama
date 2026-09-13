@@ -27,6 +27,9 @@ async def test_registration_open_flag_allows_signup(client, registration_env, mo
         "email": "newuser@example.com",
         "password": "a-long-enough-password-123",
         "first_name": "New",
+        # Sprint 3: registration carries the age statement; consent fields are
+        # optional and default to a truthful "no".
+        "age_gate_confirmed": True,
     })
     assert resp.status_code == 200
 
@@ -67,5 +70,44 @@ async def test_cloud_mode_allows_registration_on_platform_hosts(client, registra
     resp = await client.post("/api/auth/register", json={
         "email": "legit@example.com",
         "password": "a-long-enough-password-123",
+        "age_gate_confirmed": True,
     }, headers={"Host": f"app.{config.settings.CLOUD_DOMAIN}"})
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Sprint 3 — neutral age gate (P1-7). The gate records a statement; the
+# operator can switch it off where even the statement is wrong to ask.
+# ---------------------------------------------------------------------------
+
+async def test_age_gate_blocks_unconfirmed_signup(client, registration_env, monkeypatch):
+    monkeypatch.setenv("DOCURAMA_PUBLIC_REGISTRATION", "true")
+    resp = await client.post("/api/auth/register", json={
+        "email": "gateblock@example.com",
+        "password": "a-long-enough-password-123",
+        # age_gate_confirmed omitted -> the statement was never made
+    })
+    assert resp.status_code == 400
+    assert "age statement" in resp.json()["detail"]
+
+
+async def test_age_gate_is_operator_disableable(client, registration_env, monkeypatch):
+    monkeypatch.setenv("DOCURAMA_PUBLIC_REGISTRATION", "true")
+    monkeypatch.setattr(config.settings, "AGE_GATE_REQUIRED", False)
+    resp = await client.post("/api/auth/register", json={
+        "email": "gateoff@example.com",
+        "password": "a-long-enough-password-123",
+        # no age_gate_confirmed, but the gate is off
+    })
+    assert resp.status_code == 200
+
+
+async def test_age_gate_false_confirmed_is_not_accepted(client, registration_env, monkeypatch):
+    """A false confirmation is not a confirmation: the statement must be true."""
+    monkeypatch.setenv("DOCURAMA_PUBLIC_REGISTRATION", "true")
+    resp = await client.post("/api/auth/register", json={
+        "email": "gatefalse@example.com",
+        "password": "a-long-enough-password-123",
+        "age_gate_confirmed": False,
+    })
+    assert resp.status_code == 400

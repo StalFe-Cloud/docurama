@@ -36,9 +36,20 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
     volumes:
       - docurama_storage:/app/storage
+      # Signing keys stay on the host, out of image layers and build cache.
+      - ./backend/certs:/app/certs:ro
     depends_on:
       docurama-db:
         condition: service_healthy
+    # Readiness is enforced by the image HEALTHCHECK (backend/Dockerfile), which
+    # gates on /readyz: 503 while the signing certificate is missing, unreadable
+    # or expired, so a deployment that would complete every envelope unsealed is
+    # never declared healthy.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - docurama_net
 
@@ -52,6 +63,11 @@ services:
       - "0.0.0.0:3002:3000"
     depends_on:
       - docurama-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - docurama_net
 

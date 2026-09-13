@@ -19,9 +19,12 @@ import secrets
 import subprocess
 import sys
 
-NEXA_HOST = os.getenv("DOCURAMA_VPS_HOST", "212.47.79.52")
-NEXA_USER = os.getenv("DOCURAMA_VPS_USER", "root")
-NEXA_KEY = os.path.expanduser(os.getenv("DOCURAMA_VPS_KEY", r"~/.ssh/nexa_vps"))
+# Deployment target: provided by the environment, never committed.
+# Production infrastructure details (hosts, users, key paths) do not belong in
+# a repository — commit history is effectively a disclosure.
+NEXA_HOST = os.getenv("DOCURAMA_VPS_HOST", "")
+NEXA_USER = os.getenv("DOCURAMA_VPS_USER", "")
+NEXA_KEY = os.path.expanduser(os.getenv("DOCURAMA_VPS_KEY", "~/.ssh/id_ed25519"))
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"))
 os.environ.setdefault("DOCURAMA_ENV", "development")
@@ -40,7 +43,7 @@ def run_remote_sql(sql: str):
     )
     cmd = [
         "ssh", "-i", NEXA_KEY,
-        "-o", "StrictHostKeyChecking=no",
+        "-o", "StrictHostKeyChecking=accept-new",
         f"{NEXA_USER}@{NEXA_HOST}",
         remote,
     ]

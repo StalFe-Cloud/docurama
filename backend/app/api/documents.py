@@ -6,6 +6,7 @@ write PDFs into the storage volume and render pages back out. They now require a
 session, validate the upload by content rather than filename, cap its size, and
 expire orphaned previews. The storage rules themselves live in services/preview_store.
 """
+import asyncio
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
@@ -85,7 +86,7 @@ async def create_document_preview(
         raise HTTPException(status_code=400, detail="The document could not be stored.")
 
     try:
-        pages_info = get_pdf_pages_info(pdf_path)
+        pages_info = await asyncio.to_thread(get_pdf_pages_info, pdf_path)
     except Exception:
         os.remove(pdf_path)
         raise HTTPException(status_code=400, detail="The document could not be read as a PDF.")
@@ -126,7 +127,7 @@ async def get_document_page_image(
     # Bound the render cost; the parameter is caller-supplied.
     dpi = max(72, min(dpi, 300))
 
-    png_bytes = render_pdf_page_png(pdf_path, page_number, dpi=dpi)
+    png_bytes = await asyncio.to_thread(render_pdf_page_png, pdf_path, page_number, dpi=dpi)
     return Response(
         content=png_bytes,
         media_type="image/png",

@@ -168,9 +168,14 @@ def _reconcile_baseline_columns(engine, existing_tables):
             added.append((table, column))
 
     if blocked:
-        print(
-            "[migrate] WARNING: cannot auto-add non-nullable baseline column(s) "
-            f"without a default: {', '.join(sorted(blocked))}"
+        # Fail fast. Stamping a database that is missing NOT NULL baseline columns
+        # records the schema as complete when it is not; the application then boots
+        # and crashes on the first query that touches the absent column. An
+        # operator must fix this database explicitly, not adopt it blindly.
+        raise RuntimeError(
+            "Cannot adopt this database: non-nullable baseline column(s) are missing "
+            f"and cannot be filled safely: {', '.join(sorted(blocked))}. "
+            "Restore from a backup or add the columns manually, then retry."
         )
 
     if not added:
@@ -205,25 +210,47 @@ def main() -> int:
     url = _sync_url()
     engine = _wait_for_database(url)
 
+    # Only one container may run Alembic at a time: two replicas racing the
+    # upgrade (or the adoption path) stamp and alter concurrently, and the
+    # loser either duplicates DDL or corrupts alembic_version. A Postgres
+    # advisory lock serialises them: the connection holding it migrates while
+    # a second replica blocks, then finds the schema already at head. SQLite
+    # is single-writer by construction, so there is nothing to lock.
+    is_postgres = engine.dialect.name == "postgresql"
+
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
 
     cfg = Config(os.path.join(here, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(here, "alembic"))
 
-    if "alembic_version" not in tables and SENTINEL_TABLE in tables:
-        print("[migrate] existing schema detected without version tracking")
-        _reconcile_to_baseline(engine, tables)
-        _reconcile_baseline_columns(engine, tables)
-        print(f"[migrate] stamping {BASELINE_REVISION}")
-        command.stamp(cfg, BASELINE_REVISION)
-    elif "alembic_version" not in tables:
-        print("[migrate] fresh database detected; applying all migrations")
+    def _run_upgrade():
+        if "alembic_version" not in tables and SENTINEL_TABLE in tables:
+            print("migrate] existing schema detected without version tracking")
+            _reconcile_to_baseline(engine, tables)
+            _reconcile_baseline_columns(engine, tables)
+            print(f"migrate] stamping {BASELINE_REVISION}")
+            command.stamp(cfg, BASELINE_REVISION)
+        elif "alembic_version" not in tables:
+            print("migrate] fresh database detected; applying all migrations")
 
-    engine.dispose()
+        engine.dispose()
+        command.upgrade(cfg, "head")
+        print("migrate] database is at head")
 
-    command.upgrade(cfg, "head")
-    print("[migrate] database is at head")
+    if is_postgres:
+        from sqlalchemy import text
+
+        MIGRATION_LOCK_KEY = 7218334521334554
+        with engine.connect() as conn:
+            conn.execute(text("SELECT pg_advisory_lock(:key)"), {"key": MIGRATION_LOCK_KEY})
+            try:
+                _run_upgrade()
+            finally:
+                conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY})
+    else:
+        _run_upgrade()
+
     return 0
 
 

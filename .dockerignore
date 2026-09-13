@@ -1,0 +1,30 @@
+# Never ship secrets or signing material into the build context or image layers.
+.env
+.env.*
+*.p12
+*.pem
+*.key
+backend/certs/*.p12
+backend/certs/*.pem
+backend/certs/*.crt
+!backend/certs/README.md
+
+# VCS and tooling noise
+.git
+.github
+.gitignore
+node_modules
+frontend/node_modules
+**/node_modules
+frontend/dist
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+*.log
+
+# Local data and docs that don't belong in images
+data/
+backups/
+*.md
+docs/

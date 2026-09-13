@@ -7,10 +7,9 @@ if a check did not run, or ran and failed, the response says so.
 """
 import asyncio
 import os
-import shutil
 import tempfile
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, Request, UploadFile, File, Query
+from fastapi import APIRouter, Depends, Request, Response, UploadFile, File, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -18,10 +17,15 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.rate_limit import limiter
 from app.models import Envelope, DomainVerification
-from app.schemas import VerificationResponse, AuditEventOut
+from app.schemas import VerificationResponse, PublicAuditEventOut
 from app.services.crypto_engine import calculate_file_sha256, verify_document_integrity
 
 router = APIRouter(prefix="/verify", tags=["verify"])
+
+# Upload ceiling for the public verify-by-upload path. Without it anyone can
+# stream an unbounded body into a temp file until the disk fills; the cap keeps
+# the endpoint usable for real sealed PDFs while bounding the abuse case.
+MAX_VERIFY_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 def _timestamp_label(crypto_check: Dict[str, Any]) -> Optional[str]:
@@ -60,16 +64,24 @@ def _crypto_fields(crypto_check: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("", response_model=VerificationResponse)
+@limiter.limit("20/minute")
 async def verify_by_code(
-    code: str = Query(..., description="Envelope verification code or UUID"),
+    request: Request,
+    response: Response,
+    code: str = Query(..., description="Envelope verification code"),
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Look a document up by its verification code.
+
+    Rate limited and code-only: the envelope's UUID used to be accepted here as
+    a lookup key too, which let anyone who saw a URL enumerate the full audit
+    trail of a document they were never given the code for. Each call also
+    parses a PDF with pyHanko, so an unthrottled endpoint is a CPU amplifier.
+    """
     query = (
         select(Envelope)
-        .where(
-            (Envelope.verification_code == code.strip().upper())
-            | (Envelope.id == code.strip())
-        )
+        .where(Envelope.verification_code == code.strip().upper())
         .options(selectinload(Envelope.audit_events))
     )
     envelope = (await db.execute(query)).scalar_one_or_none()
@@ -112,7 +124,7 @@ async def verify_by_code(
         completed_at=envelope.completed_at,
         sha256=envelope.sha256_signed or envelope.sha256_original,
         seal_status=seal_status,
-        audit_trail=[AuditEventOut.model_validate(a) for a in (envelope.audit_events or [])],
+        audit_trail=[PublicAuditEventOut.model_validate(a) for a in (envelope.audit_events or [])],
         issuer_domain_verified=issuer_domain_verified,
         verified_domain=verified_domain_name,
         message=message,
@@ -127,9 +139,32 @@ async def verify_by_upload(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
+    # Copy with a hard byte ceiling: shutil.copyfileobj has no limit and the
+    # body comes from an unauthenticated caller.
+    tmp_path = None
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
+        remaining = MAX_VERIFY_UPLOAD_BYTES
+        too_large = False
+        while True:
+            chunk = file.file.read(1024 * 1024)
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            if remaining < 0:
+                too_large = True
+                break
+            tmp.write(chunk)
+
+    if too_large:
+        os.remove(tmp_path)
+        return VerificationResponse(
+            is_valid=False,
+            message=(
+                f"This file is too large to verify. The limit is "
+                f"{MAX_VERIFY_UPLOAD_BYTES // (1024 * 1024)} MB."
+            ),
+        )
 
     try:
         uploaded_sha = calculate_file_sha256(tmp_path)
@@ -141,9 +176,12 @@ async def verify_by_upload(
                 (Envelope.sha256_signed == uploaded_sha)
                 | (Envelope.sha256_original == uploaded_sha)
             )
+            .order_by(Envelope.created_at)
             .options(selectinload(Envelope.audit_events))
         )
-        envelope = (await db.execute(query)).scalar_one_or_none()
+        # first(), not scalar_one_or_none(): bulk-send documents legitimately
+        # share one digest across envelopes, and MultipleResultsFound is a 500.
+        envelope = (await db.execute(query)).scalars().first()
 
         is_valid = bool(crypto_check.get("is_valid", False))
         base_message = crypto_check.get("message") or "The document could not be verified."
@@ -178,12 +216,12 @@ async def verify_by_upload(
             completed_at=envelope.completed_at,
             sha256=uploaded_sha,
             seal_status=seal_status,
-            audit_trail=[AuditEventOut.model_validate(a) for a in (envelope.audit_events or [])],
+            audit_trail=[PublicAuditEventOut.model_validate(a) for a in (envelope.audit_events or [])],
             issuer_domain_verified=issuer_domain_verified,
             verified_domain=verified_domain_name,
             message=message,
             **_crypto_fields(crypto_check),
         )
     finally:
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)

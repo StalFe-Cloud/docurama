@@ -464,6 +464,27 @@ export const api = {
     }
     return res.json();
   },
+  // Domain-join account activation (§18): consumes the single-use token from
+  // the activation email. The backend owns the semantics; the result reports
+  // either an active membership or the approval-pending state.
+  activateDomainJoin: async (token: string): Promise<{ status: string; join_mode: string; membership: string }> => {
+    const res = await fetch(`${API_BASE}/auth/domain-join/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      let message = 'Activation failed';
+      try {
+        const err = await res.json();
+        if (err && err.detail) message = typeof err.detail === 'string' ? err.detail : message;
+      } catch (e) {
+        // keep the fallback message when the body is not JSON
+      }
+      throw new Error(message);
+    }
+    return res.json();
+  },
   // Password recovery
   requestPasswordReset: async (email: string): Promise<{ success: boolean; message: string }> => {
     const res = await fetch(`${API_BASE}/auth/request-password-reset`, {
@@ -1174,4 +1195,91 @@ export const api = {
     }
     return res.json();
   }
+};
+
+// Sprint 3 — Cloud launch surfaces (admin console, billing, domain activation)
+export const adminApi = {
+  tenants: async (q: string = ''): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/admin/tenants?q=${encodeURIComponent(q)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load tenants');
+    }
+    return res.json();
+  },
+  legalQueue: async (status?: string): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/admin/dsr/dmca${status ? `?ticket_status=${status}` : ''}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load legal queue');
+    }
+    return res.json();
+  },
+  resolveNotice: async (ticketId: string, resolution: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/dsr/dmca/${ticketId}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolution, new_status: 'resolved' }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to resolve notice');
+    }
+    return res.json();
+  },
+  pendingJoins: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/domains/joins/pending`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load join requests');
+    }
+    return res.json();
+  },
+  approveJoin: async (joinId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/domains/joins/${joinId}/approve`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to approve join request');
+    }
+    return res.json();
+  },
+};
+
+export const billingApi = {
+  plans: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/billing/plans`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load plans');
+    }
+    return res.json();
+  },
+  subscription: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/billing/subscription`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load subscription');
+    }
+    return res.json();
+  },
+  startCheckout: async (plan: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/billing/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Checkout is not available');
+    }
+    return res.json();
+  },
+  cancelSubscription: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/billing/cancel`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Cancellation is not available');
+    }
+    return res.json();
+  },
 };

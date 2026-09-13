@@ -23,11 +23,26 @@ DEFAULT_TTL_DAYS = 90
 def upgrade() -> None:
     op.add_column("recipients", sa.Column("token_expires_at", sa.DateTime(timezone=True), nullable=True))
     # Backfill from creation date so links already in circulation acquire an expiry
-    # rather than remaining valid forever.
-    op.execute(
-        f"UPDATE recipients SET token_expires_at = created_at + INTERVAL '{DEFAULT_TTL_DAYS} days' "
-        "WHERE token_expires_at IS NULL AND created_at IS NOT NULL"
-    )
+    # rather than remaining valid forever. Date arithmetic is dialect-specific:
+    # Postgres has INTERVAL, SQLite uses datetime()/julianday modifiers.
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        backfill = (
+            f"UPDATE recipients SET token_expires_at = created_at + INTERVAL '{DEFAULT_TTL_DAYS} days' "
+            "WHERE token_expires_at IS NULL AND created_at IS NOT NULL"
+        )
+    elif bind.dialect.name == "sqlite":
+        backfill = (
+            f"UPDATE recipients SET token_expires_at = datetime(created_at, '+{DEFAULT_TTL_DAYS} days') "
+            "WHERE token_expires_at IS NULL AND created_at IS NOT NULL"
+        )
+    else:
+        # MySQL and derivatives
+        backfill = (
+            f"UPDATE recipients SET token_expires_at = DATE_ADD(created_at, INTERVAL {DEFAULT_TTL_DAYS} DAY) "
+            "WHERE token_expires_at IS NULL AND created_at IS NOT NULL"
+        )
+    op.execute(backfill)
 
 
 def downgrade() -> None:

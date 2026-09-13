@@ -126,7 +126,7 @@ container entrypoint.
 drift is unknown. The local one was missing two baseline tables.
 
 ```bash
-ssh root@212.47.79.52 "docker logs docurama-api 2>&1 | grep '\[migrate\]'"
+ssh "${DOCURAMA_VPS_USER:?set DOCURAMA_VPS_USER}"@"${DOCURAMA_VPS_HOST:?set DOCURAMA_VPS_HOST}" "docker logs docurama-api 2>&1 | grep '\[migrate\]'"
 ```
 
 Expect either `fresh database` or:
@@ -238,11 +238,41 @@ Not blockers, but track them:
 
 ## Rollback
 
+Two failure classes, two procedures:
+
+**Code regression** — redeploy the previous tag. `deploy/upgrade.sh` records the
+tag it replaced in `.previous-tag` before every deploy, so:
+
 ```bash
-ssh root@212.47.79.52 "cd /opt/docurama && docker compose down"
-gunzip -c docurama-pre-alembic.sql.gz | docker exec -i docurama-postgres psql -U docurama -d docurama
-git checkout <previous-tag> && python deploy/deploy_to_vps.py
+./deploy/rollback.sh              # redeploys the recorded previous tag
+./deploy/rollback.sh <git-tag>    # or name it explicitly
 ```
+
+`upgrade.sh` itself gates on `/readyz` and refuses to declare success when the
+readiness probe fails, printing the exact rollback command.
+
+**Data damage** — restore a backup. Do NOT hand-pipe a dump into psql: on a
+populated database it fails immediately on the first CREATE of an existing
+object, and without `ON_ERROR_STOP` it reports success on a partial load. The
+supported procedure is:
+
+```bash
+/opt/docurama/deploy/restore.sh <stamp>     # e.g. 20260912T031500Z
+```
+
+`restore.sh` stops the API, drops and recreates the schema, replays the dump
+with `ON_ERROR_STOP=1`, restores the storage volume (and certificates, if the
+backup set carried them), restarts, and gates on `/readyz`.
+
+### Restore drill (run once after setup, repeat quarterly)
+
+1. `DOCURAMA_BACKUP_DIR=/tmp/drill /opt/docurama/deploy/backup.sh` — confirm it
+   reports three artifacts (db, storage, certs) and their sizes.
+2. On a scratch host or a stopped stack: `deploy/restore.sh <stamp>` against a
+   COPY of the production backup directory.
+3. Sign in, open an envelope, download a sealed PDF, verify it on the portal —
+   a backup that restores but cannot re-verify a signature is not a backup.
+4. Record the date and the stamp in the operations log.
 
 Migrations `0002` to `0004` are additive and have `downgrade()`, so `alembic downgrade` is
 available without a restore. The baseline reconciliation is not reversible: tables it

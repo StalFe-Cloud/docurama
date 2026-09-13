@@ -9,6 +9,13 @@ class UserCreate(BaseModel):
     password: str = PydanticField(min_length=12)
     first_name: Optional[str] = ""
     last_name: Optional[str] = ""
+    # Neutral age-gate confirmation (Sprint 3, P1-7). The platform does not
+    # verify identity documents; it records the statement, and the operator can
+    # switch the gate off where even the statement is wrong to ask.
+    age_gate_confirmed: bool = False
+    # Explicit marketing consent (GDPR Art. 7): opt-in, timestamped server-side.
+    # Absence means no consent - never the inverse.
+    marketing_consent: bool = False
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -245,6 +252,28 @@ class RecipientOut(RecipientBase):
     class Config:
         from_attributes = True
 
+class RecipientPublicOut(RecipientBase):
+    """
+    Recipient projection safe to expose alongside other parties.
+
+    The signing session endpoint is authenticated only by the caller's own
+    token, so this projection must never carry another signer's bearer
+    credential (signing_token) or verification material. Serialising full
+    RecipientOut rows here handed every signer every other signer's signing
+    link, letting any party sign, decline, or read the document as any other.
+    """
+    id: str
+    status: str
+    signed_at: Optional[datetime] = None
+    declined_reason: Optional[str] = None
+    delegated_to_email: Optional[str] = None
+    delegated_to_name: Optional[str] = None
+    delegated_at: Optional[datetime] = None
+    verified_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Audit Event Schemas
 class AuditEventOut(BaseModel):
     id: str
@@ -255,6 +284,23 @@ class AuditEventOut(BaseModel):
     description: str
     created_at: datetime
     
+    class Config:
+        from_attributes = True
+
+
+class PublicAuditEventOut(BaseModel):
+    """
+    The audit event as the public verification portal may show it.
+
+    Actor emails, IP addresses and user agents are account-side evidence: they
+    belong to the issuer and the platform, not to whoever holds the document.
+    The portal needs the event, who did it (name only), what happened, and when.
+    """
+    event_type: str
+    actor_name: str
+    description: str
+    created_at: datetime
+
     class Config:
         from_attributes = True
 
@@ -306,7 +352,8 @@ class SigningSessionOut(BaseModel):
     recipient: RecipientOut
     pdf_url: str
     fields: List[FieldOut]
-    all_recipients: List[RecipientOut]
+    # Public projection: co-signer progress without their signing tokens.
+    all_recipients: List[RecipientPublicOut]
     requires_verification: bool = False
     verification_channel: Optional[str] = "none"
     target_obfuscated: Optional[str] = None
@@ -365,7 +412,7 @@ class VerificationResponse(BaseModel):
     timestamp_utc: Optional[str] = None
     pades_level: Optional[str] = None
     seal_status: Optional[str] = None
-    audit_trail: List[AuditEventOut] = []
+    audit_trail: List[PublicAuditEventOut] = []
     issuer_domain_verified: bool = False
     verified_domain: Optional[str] = None
     message: str = ""

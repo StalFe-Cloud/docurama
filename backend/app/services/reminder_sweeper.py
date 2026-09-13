@@ -112,7 +112,11 @@ async def sweep_once() -> int:
                     subject, html, body = mailer.signing_reminder(
                         recipient.name, envelope.title, signing_url, reminder_number
                     )
-                    result = mailer.send_email(smtp, recipient.email, recipient.name, subject, html, body)
+                    # Sync smtplib inside the sweep loop: a slow relay must not
+                    # stall the worker for every other tenant.
+                    result = await asyncio.to_thread(
+                        mailer.send_email, smtp, recipient.email, recipient.name, subject, html, body
+                    )
                     batch.results.append(result)
                     if result.sent:
                         recipient.reminders_sent_count = reminder_number

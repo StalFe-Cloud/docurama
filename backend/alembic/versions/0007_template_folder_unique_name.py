@@ -22,8 +22,9 @@ def upgrade() -> None:
     # Keep the oldest folder per (account_id, name); reassign nothing - later
     # duplicates are deleted, which is safe because folders only group templates.
     # a.id > b.id breaks ties when created_at is identical.
-    op.execute(
-        """
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        dedupe = """
         DELETE FROM template_folders a
         USING template_folders b
         WHERE a.account_id = b.account_id
@@ -31,13 +32,38 @@ def upgrade() -> None:
           AND (a.created_at > b.created_at
                OR (a.created_at = b.created_at AND a.id > b.id))
         """
-    )
-    op.create_unique_constraint(
-        "uq_template_folder_account_name", "template_folders",
-        ["account_id", "name"],
-    )
+    else:
+        # Portable self-join form (SQLite, MySQL): subquery selects the
+        # duplicates, the outer DELETE removes them.
+        dedupe = """
+        DELETE FROM template_folders WHERE id IN (
+            SELECT a.id FROM template_folders a
+            JOIN template_folders b
+              ON a.account_id = b.account_id
+             AND a.name = b.name
+             AND (a.created_at > b.created_at
+                  OR (a.created_at = b.created_at AND a.id > b.id))
+        )
+        """
+    op.execute(dedupe)
+    if bind.dialect.name == "sqlite":
+        # SQLite cannot ALTER TABLE ... ADD CONSTRAINT; batch mode recreates
+        # the table with the constraint declared inline.
+        with op.batch_alter_table("template_folders") as batch_op:
+            batch_op.create_unique_constraint(
+                "uq_template_folder_account_name", ["account_id", "name"],
+            )
+    else:
+        op.create_unique_constraint(
+            "uq_template_folder_account_name", "template_folders",
+            ["account_id", "name"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_template_folder_account_name", "template_folders",
-                       type_="unique")
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("template_folders") as batch_op:
+            batch_op.drop_constraint("uq_template_folder_account_name")
+    else:
+        op.drop_constraint("uq_template_folder_account_name", "template_folders",
+                           type_="unique")

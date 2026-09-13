@@ -31,6 +31,11 @@ class Account(Base):
     custom_envelope_limit = Column(Integer, nullable=True)
     custom_seat_limit = Column(Integer, nullable=True)
     billing_cycle_anchor = Column(DateTime(timezone=True), nullable=True)
+    # Subscription sync (Sprint 3): the webhook is the only writer, and only
+    # after signature verification. cancel_at_period_end records click parity -
+    # the customer keeps the paid plan until current_period_end.
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+    cancel_at_period_end = Column(Boolean, default=False, nullable=False)
 
     # Set when a workspace is removed. The row survives because envelopes reference it
     # and their verification codes must keep resolving.
@@ -72,6 +77,15 @@ class User(Base):
     # Hashed, single-use. Without these a lost device is a lost account, because a
     # password reset alone does not clear a second factor.
     totp_recovery_codes = Column(JSON, default=list)
+    # Stateless-session revocation. Session JWTs carry the value at mint time and
+    # get_current_user refuses any token whose version no longer matches, so a
+    # password change, a TOTP disable or an explicit sign-out kills every token
+    # issued before it without needing a server-side denylist.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
+    # Marketing consent (GDPR Art. 7): recorded with its timestamp at
+    # registration, never assumed. Absence of a row value means no consent.
+    marketing_consent = Column(Boolean, default=False, nullable=False)
+    marketing_consent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     
@@ -272,6 +286,10 @@ class DomainVerification(Base):
     status = Column(String(50), default="pending", index=True)
     verification_token = Column(String(128), unique=True, nullable=False)
     verification_method = Column(String(50), default="dns_txt")
+    # Enterprise domain activation (§18): how signups on this domain join the
+    # workspace. 'none' (default) means registration is untouched; only a
+    # verified domain may carry a join mode.
+    join_mode = Column(String(20), default="none", nullable=False)
     
     txt_record_host = Column(String(255), nullable=False)
     txt_record_value = Column(String(255), nullable=False)
@@ -475,3 +493,87 @@ class UserStamp(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     user = relationship("User", backref="stamps")
+
+
+class LegalNotice(Base):
+    """
+    Public legal intake: DMCA notices and TAKE IT DOWN requests.
+
+    The sworn statements are stored verbatim because they are the legal
+    instrument. reporter_ip is stored for abuse-pattern detection and is
+    surfaced only through the platform-admin queue.
+    """
+    __tablename__ = "legal_notices"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    kind = Column(String(20), nullable=False, default="dmca")  # dmca | take_it_down
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    sla = Column(String(40), nullable=False, default="")
+    reporter_name = Column(String(255), nullable=False)
+    reporter_email = Column(String(255), nullable=False)
+    reporter_company = Column(String(255), nullable=True, default="")
+    content_location = Column(String(1000), nullable=False)
+    original_work_reference = Column(String(2000), nullable=False)
+    description = Column(Text, nullable=False)
+    reporter_ip = Column(String(100), nullable=True)
+    resolution = Column(Text, nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class MarketingUnsubscribe(Base):
+    """
+    Suppression list for outbound marketing email (§17).
+
+    A marketing send that is not checked against this table is a CAN-SPAM
+    violation waiting to happen; transactional mail (signing links, security
+    notices) is deliberately out of scope here and must never be suppressed.
+    """
+    __tablename__ = "marketing_unsubscribes"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    reason = Column(String(50), nullable=False, default="user_request")
+    source = Column(String(100), nullable=True, default="")
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class EmailSendLog(Base):
+    """
+    Accountability record for outbound email (§17).
+
+    Stores metadata only - never bodies or secrets - so a deliverability
+    question ('did the invitation actually go out?') has a factual answer.
+    """
+    __tablename__ = "email_send_logs"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    kind = Column(String(50), nullable=False)
+    recipient = Column(String(255), nullable=False)
+    subject = Column(String(500), nullable=True, default="")
+    status = Column(String(20), nullable=False, default="sent")  # sent | failed | suppressed
+    error = Column(String(500), nullable=True, default="")
+    related_id = Column(String(36), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class DomainJoinRequest(Base):
+    """
+    Enterprise domain-activation approval queue (§18).
+
+    In approval mode, an activated signup waits here until a workspace admin
+    approves; only then do they become a member. The row is the audit trail of
+    who joined the tenant through the domain and who decided what.
+    """
+    __tablename__ = "domain_join_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False, index=True)
+    domain_id = Column(String(36), ForeignKey("domain_verifications.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_email = Column(String(255), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending | approved | rejected
+    decided_by = Column(String(255), nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)

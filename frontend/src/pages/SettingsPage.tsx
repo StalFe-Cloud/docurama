@@ -555,7 +555,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
 
   const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
   const [twoFactorConfigured, setTwoFactorConfigured] = useState(false);
-  const [totpInputCode, setTotpInputCode] = useState('');
 
   // Signature canvas ref
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -3860,9 +3859,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
 
               {/* QR Code Mockup */}
               <div className="flex justify-center p-4 bg-[#fafaf9] rounded-md border border-[#e5e3df]">
-                <div className="w-36 h-36 bg-white p-2 border border-[#c8c4be] rounded-lg shadow-xs flex flex-col items-center justify-center text-[#1a1a1a]">
-                  <QrCode className="w-24 h-24" />
-                  <span className="text-[9px] font-mono mt-1 text-[#5d5b54] font-bold">DOCURAMA 2FA</span>
+                <div className="w-36 h-36 bg-white p-2 border border-[#c8c4be] rounded-lg shadow-xs flex items-center justify-center text-[#1a1a1a] overflow-hidden">
+                  {totpEnrol?.qr_base64 ? (
+                    <img src={totpEnrol.qr_base64} alt="Two-factor authentication QR code" className="w-full h-full object-contain" />
+                  ) : (
+                    <QrCode className="w-24 h-24 text-[#c8c4be]" />
+                  )}
                 </div>
               </div>
 
@@ -3871,12 +3873,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value="JBSWY3DPEHPK3PXP"
+                    value={totpEnrol?.secret || ''}
                     readOnly
                     className="base-input font-mono text-xs w-full h-9 px-3 bg-[#fafaf9]"
                   />
                   <button
-                    onClick={() => copyToClipboard('JBSWY3DPEHPK3PXP', 'totp-key')}
+                    onClick={() => copyToClipboard(totpEnrol?.secret || '', 'totp-key')}
                     className="btn btn-white h-9 px-3 text-xs"
                   >
                     {copiedKey === 'totp-key' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -3889,12 +3891,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 <input
                   type="text"
                   maxLength={6}
-                  value={totpInputCode}
-                  onChange={(e) => setTotpInputCode(e.target.value.replace(/\D/g, ''))}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
                   placeholder="123456"
                   className="base-input font-mono text-center tracking-widest text-lg w-full h-11"
                 />
               </div>
+
+              {totpError && (
+                <p className="text-xs text-red-600">{totpError}</p>
+              )}
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
@@ -3906,17 +3912,39 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setTwoFactorConfigured(true);
-                    setShowTwoFactorModal(false);
-                    setTotpInputCode('');
-                    handleConfirmTotp();
-                  }}
-                  className="btn btn-primary text-xs px-5 h-10 font-semibold"
+                  disabled={totpBusy || totpCode.trim().length !== 6}
+                  onClick={handleConfirmTotp}
+                  className="btn btn-primary text-xs px-5 h-10 font-semibold disabled:opacity-50"
                 >
-                  Verify &amp; Activate 2FA
+                  {totpBusy ? 'Verifying…' : 'Verify & Activate 2FA'}
                 </button>
               </div>
+
+              {recoveryCodes.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-[#ede9e4]">
+                  <p className="text-xs font-bold text-[#1a1a1a]">
+                    Two-factor authentication is active. Save these recovery codes somewhere safe — each one works exactly once.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 p-3 bg-[#fafaf9] rounded-md border border-[#e5e3df]">
+                    {recoveryCodes.map((code) => (
+                      <span key={code} className="font-mono text-xs text-[#37352f]">{code}</span>
+                    ))}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTwoFactorModal(false);
+                        setTotpCode('');
+                        setTotpError(null);
+                      }}
+                      className="btn btn-primary text-xs px-5 h-10 font-semibold"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

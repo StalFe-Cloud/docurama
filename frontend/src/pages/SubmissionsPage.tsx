@@ -492,8 +492,8 @@ export const SubmissionsPage: React.FC = () => {
                       <span className={`badge ${r.status === 'signed' ? 'badge-success' : 'badge-warning'}`}>
                         {r.status === 'signed' ? 'Signed' : r.status}
                       </span>
-                      {r.status !== 'signed' && (
-                        <a 
+                      {r.status !== 'signed' && r.signing_token && (
+                        <a
                           href={`/s/${r.signing_token}`}
                           target="_blank"
                           rel="noreferrer"

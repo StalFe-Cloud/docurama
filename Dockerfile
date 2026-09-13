@@ -8,7 +8,9 @@ FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install
+# npm ci: reproduce the committed lockfile exactly instead of letting
+# npm install drift onto untested dependency versions.
+RUN npm ci
 
 COPY frontend/ ./
 RUN npm run build
@@ -41,7 +43,9 @@ COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r ./backend/requirements.txt
 
 # Copy backend application source
-COPY backend/certs/ /app/certs/
+# Signing certificates are NEVER baked into the image: the build context and
+# layer cache would carry the production P12 and root CA. Mount them at runtime
+# (docker-compose.engine.yml mounts ./backend/certs to /app/certs read-only).
 COPY backend/app/ /app/app/
 COPY backend/alembic/ /app/alembic/
 COPY backend/alembic.ini backend/migrate.py backend/entrypoint.sh /app/
@@ -49,7 +53,8 @@ COPY backend/alembic.ini backend/migrate.py backend/entrypoint.sh /app/
 # run inside the container as documented.
 COPY scripts/ /app/scripts/
 # Strip CR and mark executable. Git on Windows can rewrite this file to CRLF,
-# which makes the kernel look for an interpreter named "/bin/sh" and the
+# which makes the kernel look for an interpreter named "/bin/sh
+" and the
 # container fails to start with a misleading "no such file or directory".
 RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
@@ -60,10 +65,14 @@ EXPOSE 8000 3000
 
 # start-period covers database readiness plus migrations before the first probe.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
-  CMD curl -f http://localhost:8000/healthz || exit 1
+  CMD curl -f http://localhost:8000/readyz || exit 1
 
 # --proxy-headers makes uvicorn honour X-Forwarded-For from the reverse proxy so that
 # audit events and certificates record the real signer IP rather than the proxy address.
 # The trusted proxy range comes from FORWARDED_ALLOW_IPS (uvicorn defaults to 127.0.0.1).
+#
+# ONE worker, deliberately. The in-process WebSocket connection manager and the
+# in-memory rate limiter are per-process; with multiple workers the desktop<->mobile
+# signing hand-off silently breaks whenever two devices land on different workers.
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--proxy-headers"]

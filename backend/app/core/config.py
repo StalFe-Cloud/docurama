@@ -102,6 +102,34 @@ class Settings(BaseSettings):
     REMINDER_INTERVAL_DAYS: int = int(os.getenv("DOCURAMA_REMINDER_INTERVAL_DAYS", "3"))
     REMINDER_MAX_COUNT: int = int(os.getenv("DOCURAMA_REMINDER_MAX_COUNT", "3"))
 
+    # ------------------------------------------------------------------
+    # Sprint 3 — Cloud launch (operator-managed values ship empty on purpose:
+    # until they are supplied the related surfaces answer honest 503s rather
+    # than pretending to work).
+    # ------------------------------------------------------------------
+    # Billing (Stripe). Billing stays inert until BILLING_ENABLED is true AND
+    # the secret key is present; the plan catalog reports configuration honestly.
+    BILLING_ENABLED: bool = os.getenv("DOCURAMA_BILLING_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_PRICE_STARTER: str = os.getenv("STRIPE_PRICE_STARTER", "")
+    STRIPE_PRICE_BUSINESS: str = os.getenv("STRIPE_PRICE_BUSINESS", "")
+    STRIPE_PRICE_ENTERPRISE: str = os.getenv("STRIPE_PRICE_ENTERPRISE", "")
+
+    # Cross-replica WebSocket fan-out. Empty = in-memory bus (single replica).
+    REDIS_URL: str = os.getenv("DOCURAMA_REDIS_URL", "")
+
+    # Document storage backend: 'local' (default, self-host compatible) or 's3'
+    # (private bucket + short-lived presigned URLs; needs DOCURAMA_S3_BUCKET).
+    STORAGE_BACKEND: str = os.getenv("DOCURAMA_STORAGE_BACKEND", "local")
+
+    # RFC 9116 security.txt contact; derived from APP_URL when empty.
+    SECURITY_CONTACT: str = os.getenv("DOCURAMA_SECURITY_CONTACT", "")
+
+    # Neutral age gate at registration (operator-off-able for regulated contexts
+    # where an age statement is itself problematic).
+    AGE_GATE_REQUIRED: bool = os.getenv("DOCURAMA_AGE_GATE_REQUIRED", "true").strip().lower() in ("1", "true", "yes", "on")
+
     model_config = SettingsConfigDict(case_sensitive=True, extra="ignore")
 
     @property

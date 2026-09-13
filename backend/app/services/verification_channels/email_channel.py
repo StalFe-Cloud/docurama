@@ -1,4 +1,5 @@
 """Email OTP signer verification channel."""
+import asyncio
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +36,7 @@ class EmailVerificationChannel(VerificationChannel):
 
         smtp = await smtp_config.resolve(db, account_id)
         subject, html, text = mailer.signer_otp(recipient_name, envelope_title, code)
-        result = mailer.send_email(smtp, target, recipient_name, subject, html, text)
+        result = await asyncio.to_thread(mailer.send_email, smtp, target, recipient_name, subject, html, text)
 
         if not result.sent:
             return ChannelSendResult(

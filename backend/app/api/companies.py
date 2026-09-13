@@ -224,7 +224,7 @@ async def create_company(
     # Refresh session cookie with new account_id
     token = create_access_token(
         subject=current_user.id,
-        claims={"role": current_user.role, "email": current_user.email, "account_id": new_account.id}
+        claims={"purpose": "session", "role": current_user.role, "email": current_user.email, "account_id": new_account.id, "ver": current_user.token_version or 0}
     )
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,
@@ -271,7 +271,7 @@ async def switch_company(
     # Create new JWT
     token = create_access_token(
         subject=current_user.id,
-        claims={"role": current_user.role, "email": current_user.email, "account_id": company_id}
+        claims={"purpose": "session", "role": current_user.role, "email": current_user.email, "account_id": company_id, "ver": current_user.token_version or 0}
     )
     response.set_cookie(
         key=settings.SESSION_COOKIE_NAME,

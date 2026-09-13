@@ -13,6 +13,8 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicFormPage } from './pages/PublicFormPage';
 import { ApiDocsPage } from './pages/ApiDocsPage';
+import { AdminPage } from './pages/AdminPage';
+import { ActivationPage } from './pages/ActivationPage';
 import { api } from './lib/api';
 
 export const App: React.FC = () => {
@@ -166,6 +168,57 @@ export const App: React.FC = () => {
         </main>
       </div>
     );
+  }
+
+  // 6b. Platform admin console: /admin. The API enforces the platform-admin
+  // gate on every route it serves; the UI renders a sign-in prompt for
+  // everyone else rather than pretending the page exists for them.
+  if (path === '/admin' || path.startsWith('/admin/')) {
+    if (!user || !user.is_platform_admin) {
+      return (
+        <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+          <Header
+            currentTab="signin"
+            onSelectTab={(tab) => setCurrentTab(tab)}
+            onNewEnvelope={() => setCurrentTab('builder')}
+            user={user}
+            onLogout={handleLogout}
+            onSignIn={() => setCurrentTab('signin')}
+          />
+          <main className="flex-1 flex items-center justify-center">
+            <SignInPage
+              onSuccess={(u) => setUser(u)}
+              onCancel={() => { window.location.href = '/'; }}
+            />
+          </main>
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+        <Header
+          currentTab="settings"
+          onSelectTab={(tab) => {
+            if (tab === 'landing') window.location.href = '/';
+            else setCurrentTab(tab);
+          }}
+          onNewEnvelope={() => setCurrentTab('builder')}
+          user={user}
+          onLogout={handleLogout}
+          onSignIn={() => setCurrentTab('signin')}
+          onUserUpdate={(u) => setUser(u)}
+        />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
+          <AdminPage />
+        </main>
+      </div>
+    );
+  }
+
+  // 6c. Domain-join account activation: /activate?token=… (§18). Public by
+  // design - the holder of the single-use email link lands here.
+  if (path === '/activate') {
+    return <ActivationPage />;
   }
 
   // 5. Direct API Documentation Route: /api-docs, /docs/api, or /api/docs

@@ -21,6 +21,8 @@ services:
       - "0.0.0.0:3002:8000"
     volumes:
       - ./data/storage:/app/storage
+      # Signing keys stay on the host, out of image layers and build cache.
+      - ./backend/certs:/app/certs:ro
     networks:
       - docurama_net
 

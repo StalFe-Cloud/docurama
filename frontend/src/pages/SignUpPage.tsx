@@ -11,6 +11,11 @@ export const SignUpPage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Sprint 3 registration hardening: the age statement is recorded, not
+  // verified; marketing consent is a genuine opt-in that is timestamped
+  // server-side and never pre-ticked.
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,7 +29,9 @@ export const SignUpPage: React.FC = () => {
         password,
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-      });
+        age_gate_confirmed: ageConfirmed,
+        marketing_consent: marketingConsent,
+      } as any);
       window.location.href = '/onboarding';
     } catch (err: any) {
       setError(err.message || 'Could not create the account. Please try again.');
@@ -108,6 +115,28 @@ export const SignUpPage: React.FC = () => {
               placeholder="••••••••"
             />
             <p className="text-xs text-[#787671] mt-1.5">At least 12 characters.</p>
+          </div>
+
+          <div className="pt-2 space-y-2 text-xs text-[#787671]">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                required
+                checked={ageConfirmed}
+                onChange={(e) => setAgeConfirmed(e.target.checked)}
+                className="mt-0.5 accent-[#5645d4]"
+              />
+              <span>I confirm I am of legal age to form a binding contract in my jurisdiction.</span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+                className="mt-0.5 accent-[#5645d4]"
+              />
+              <span>Send me occasional product updates by email (optional; unsubscribe anytime).</span>
+            </label>
           </div>
 
           <div className="pt-2">

@@ -1,0 +1,17 @@
+[Unit]
+Description=Docurama nightly backup (database, storage, certificates)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Environment for the run lives in /etc/default/docurama-backup (or set the
+# DOCURAMA_* variables here directly). At minimum configure the offsite copy
+# and, for encrypted artifacts, the age identity used to restore:
+#   DOCURAMA_BACKUP_RSYNC_TARGET=user@backup-host:/backups/docurama
+#   DOCURAMA_BACKUP_AGE_RECIPIENTS=age1...   (encrypt)
+#   DOCURAMA_BACKUP_AGE_IDENTITY_FILE=/root/backup.agekey  (restore-side)
+EnvironmentFile=-/etc/default/docurama-backup
+ExecStart=/opt/docurama/deploy/backup.sh
+# A backup that fails must be visible, not silently retried into oblivion.
+# The timer's Persistent=true catches missed nightly runs after downtime.

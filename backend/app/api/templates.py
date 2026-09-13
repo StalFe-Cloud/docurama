@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import uuid
@@ -131,7 +132,8 @@ async def auto_detect_fields(
         if written == 0:
             raise HTTPException(status_code=400, detail="The uploaded file is empty.")
 
-        detected = FieldDetector.detect_fields(temp_path)
+        # Runs fitz over the upload; off the event loop.
+        detected = await asyncio.to_thread(FieldDetector.detect_fields, temp_path)
         return AutoDetectResponse(
             total_detected=len(detected),
             fields=[DetectedField(**f) for f in detected]

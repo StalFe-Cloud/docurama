@@ -41,3 +41,7 @@ aiosqlite>=0.20
 # In-process rate limiting for the authentication and public upload endpoints,
 # so credential stuffing and upload flooding are throttled per client address.
 slowapi>=0.1.9
+
+# Optional cross-replica pub/sub for the signing-session WebSocket relay
+# (DOCURAMA_REDIS_URL). Pinned to the 5.x line for the asyncio client.
+redis>=5.0,<6

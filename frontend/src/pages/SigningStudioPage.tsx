@@ -31,7 +31,6 @@ import {
   FileText,
   Sparkles,
   Shield,
-  Fingerprint,
   MessageSquareText,
   ShieldAlert,
   Scale,
@@ -60,7 +59,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
   const [loading, setLoading] = useState(true);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [activeModalField, setActiveModalField] = useState<string | null>(null);
-  const [sigMode, setSigMode] = useState<'draw' | 'type' | 'phone' | 'passkey'>('draw');
+  const [sigMode, setSigMode] = useState<'draw' | 'type' | 'phone'>('draw');
   const [inkColor, setInkColor] = useState<'#0f172a' | '#1d4ed8'>('#0f172a');
   const [typedName, setTypedName] = useState('');
   const [selectedFont, setSelectedFont] = useState(HANDWRITING_FONTS[0].fontFamily);
@@ -78,10 +77,6 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
   const [otpError, setOtpError] = useState<string>('');
   const [otpSuccessMsg, setOtpSuccessMsg] = useState<string>('');
   const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-
-  // Passkey Biometrics
-  const [biometricStatus, setBiometricStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
-
 
   // Contract Intelligence State
   const [analysisReport, setAnalysisReport] = useState<ContractAnalysisReport | null>(null);
@@ -346,52 +341,6 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
       const data = await api.getMobileHandshake(token);
       setMobileQr(data.qr_code_base64);
     } catch (e) {}
-  };
-
-  // Biometric Passkey / WebAuthn Signing Simulator
-  const handleBiometricSign = async () => {
-    setBiometricStatus('verifying');
-    try {
-      await new Promise(r => setTimeout(r, 650));
-      const c = document.createElement('canvas');
-      c.width = 540;
-      c.height = 150;
-      const ctx = c.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, 540, 150);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#059669';
-        ctx.strokeRect(4, 4, 532, 142);
-        
-        ctx.fillStyle = '#065F46';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('WEBAUTHN / BIOMETRIC PASSKEY CERTIFIED SIGNATURE', 20, 30);
-        
-        ctx.font = `italic 32px ${selectedFont}`;
-        ctx.fillStyle = inkColor;
-        ctx.fillText(typedName || session?.recipient?.name || 'Verified Signer', 20, 75);
-        
-        ctx.font = '10px monospace';
-        ctx.fillStyle = '#64748B';
-        const stamp = `PASSKEY AUTH • FIDO2-L2 HW-ASSERTION • ID: ${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
-        ctx.fillText(stamp, 20, 110);
-        ctx.fillText(`TIMESTAMP: ${new Date().toISOString()} • SHA-256 ENCLAVE LOCKED`, 20, 128);
-
-        const sigData = c.toDataURL('image/png');
-        setPrimarySignature(sigData);
-        if (activeModalField) {
-          setFieldValues(prev => ({ ...prev, [activeModalField]: sigData }));
-        }
-        setBiometricStatus('success');
-        setTimeout(() => {
-          setActiveModalField(null);
-          setBiometricStatus('idle');
-        }, 500);
-      }
-    } catch (err) {
-      setBiometricStatus('error');
-    }
   };
 
   const applySignature = () => {
@@ -1224,15 +1173,6 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                 <Smartphone className="w-3.5 h-3.5" />
                 Phone
               </button>
-              <button
-                onClick={() => setSigMode('passkey')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  sigMode === 'passkey' ? 'bg-[#1D72FE] text-white shadow-sm' : 'text-slate-600 hover:text-[#0F172A]'
-                }`}
-              >
-                <Fingerprint className="w-3.5 h-3.5" />
-                Passkey
-              </button>
             </div>
 
             {/* Ink Color Selector (Draw & Type modes) */}
@@ -1349,52 +1289,6 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
               </div>
             )}
 
-            {/* Passkey Biometrics Mode */}
-            {sigMode === 'passkey' && (
-              <div className="p-5 rounded-2xl bg-[#F8FAFC] border border-slate-200 text-center space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 mx-auto flex items-center justify-center shadow-sm">
-                  <Fingerprint className="w-8 h-8" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-[#0F172A]">Hardware Biometric Authentication</h4>
-                  <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                    Authenticate via FIDO2 / WebAuthn using Touch ID, Face ID, or Windows Hello. Your signature will be bound to your cryptographic secure enclave.
-                  </p>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    disabled={biometricStatus === 'verifying'}
-                    onClick={handleBiometricSign}
-                    className="btn btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold shadow-md"
-                  >
-                    {biometricStatus === 'verifying' ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Verifying Biometric Sensor...</span>
-                      </>
-                    ) : biometricStatus === 'success' ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-white" />
-                        <span>Biometric Assertion Verified!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Fingerprint className="w-4 h-4" />
-                        <span>Authenticate with Biometrics</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="text-[10px] text-slate-400 flex items-center justify-center gap-1.5 pt-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                  <span>eIDAS Qualified Advanced Electronic Signature Equivalent</span>
-                </div>
-              </div>
-            )}
-
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button
@@ -1403,7 +1297,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
               >
                 Cancel
               </button>
-              {sigMode !== 'phone' && sigMode !== 'passkey' && (
+              {sigMode !== 'phone' && (
                 <button
                   onClick={applySignature}
                   className="btn btn-primary px-6 py-2 text-xs font-bold shadow-md"

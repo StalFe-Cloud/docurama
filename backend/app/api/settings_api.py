@@ -36,6 +36,48 @@ from app.services.account_settings import defaults_for, is_valid_section, merge_
 
 router = APIRouter(tags=["settings"])
 
+# Credential fields stored inside a settings section that must never be handed
+# back to a reader. They are write-only: GET replaces each with a *_set boolean,
+# and PUT treats an omitted or empty value as "keep what is stored", so saving
+# a form that never received the secret cannot wipe it (mirroring smtp_config).
+CHANNEL_SECRET_SECTION = "sms"
+CHANNEL_SECRET_FIELDS = {"auth_token", "bot_token", "access_token"}
+
+
+def _require_workspace_admin(current_user: User) -> None:
+    """Gateway/mailer credentials redirect outbound signing mail and OTP codes.
+    A plain member must not be able to repoint them."""
+    if (current_user.role or "").strip().lower() not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a workspace administrator can change these settings.",
+        )
+
+
+def _redact_section(section: str, data: dict) -> dict:
+    """Project a stored section for display, swapping secrets for *_set flags."""
+    if section != CHANNEL_SECRET_SECTION or not isinstance(data, dict):
+        return data
+    out = dict(data)
+    for field in CHANNEL_SECRET_FIELDS:
+        if field in out:
+            out[f"{field}_set"] = bool(out.get(field))
+            out[field] = ""
+    return out
+
+
+def _apply_secret_write_only(section: str, stored: dict, incoming: dict) -> dict:
+    """Drop empty secret values from an update so they cannot clear stored ones."""
+    if section != CHANNEL_SECRET_SECTION:
+        return incoming
+    incoming = dict(incoming or {})
+    for field in CHANNEL_SECRET_FIELDS:
+        value = incoming.get(field)
+        if field in incoming and (value is None or str(value).strip() == ""):
+            del incoming[field]
+    return incoming
+
+
 
 def _require_account(current_user: User) -> str:
     if not current_user.account_id:
@@ -67,9 +109,9 @@ async def get_setting_section(
     if not row:
         # Report the documented defaults rather than an empty object, so the UI
         # renders the same state it would after the first save.
-        return AccountSettingOut(section=section, data=defaults_for(section))
+        return AccountSettingOut(section=section, data=_redact_section(section, defaults_for(section)))
 
-    return AccountSettingOut(section=row.section, data=row.data or {}, updated_at=row.updated_at)
+    return AccountSettingOut(section=row.section, data=_redact_section(section, row.data or {}), updated_at=row.updated_at)
 
 
 @router.put("/settings/{section}", response_model=AccountSettingOut)
@@ -82,6 +124,8 @@ async def update_setting_section(
     account_id = _require_account(current_user)
     if not is_valid_section(section):
         raise HTTPException(status_code=404, detail=f"Unknown settings section '{section}'.")
+    if section == CHANNEL_SECRET_SECTION:
+        _require_workspace_admin(current_user)
 
     row = (await db.execute(
         select(AccountSetting).where(
@@ -90,7 +134,7 @@ async def update_setting_section(
         )
     )).scalar_one_or_none()
 
-    merged = merge_section(section, row.data if row else {}, payload.data or {})
+    merged = merge_section(section, row.data if row else {}, _apply_secret_write_only(section, row.data if row else {}, payload.data or {}))
 
     if row:
         row.data = merged
@@ -101,7 +145,7 @@ async def update_setting_section(
 
     await db.commit()
     await db.refresh(row)
-    return AccountSettingOut(section=row.section, data=row.data or {}, updated_at=row.updated_at)
+    return AccountSettingOut(section=row.section, data=_redact_section(section, row.data or {}), updated_at=row.updated_at)
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +372,9 @@ async def update_account_smtp(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # The account SMTP server receives every signing-link mail; a member able to
+    # repoint it would receive other people's documents.
+    _require_workspace_admin(current_user)
     account_id = _require_account(current_user)
 
     row = (await db.execute(

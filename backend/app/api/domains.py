@@ -403,3 +403,153 @@ async def get_public_domain_status(
         return DomainPublicStatus(domain=clean, is_verified=False)
 
     return DomainPublicStatus(domain=rec.domain, is_verified=(rec.status == "verified"))
+
+
+# ---------------------------------------------------------------------------
+# Enterprise domain activation (§18) — join modes and the approval queue.
+# Only a VERIFIED domain may carry a join mode: an unverified domain record is
+# a claim about ownership, and enabling auto-join on an unproven claim would
+# let anyone sign up as that organisation.
+# ---------------------------------------------------------------------------
+
+VALID_JOIN_MODES = ("none", "auto_join", "approval")
+
+
+async def _require_workspace_admin(current_user: User, db: AsyncSession) -> AccountMembership:
+    membership = (await db.execute(
+        select(AccountMembership).where(
+            AccountMembership.user_id == current_user.id,
+            AccountMembership.account_id == current_user.account_id,
+            AccountMembership.is_active == True,  # noqa: E712
+        )
+    )).scalar_one_or_none()
+    if not membership or membership.role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only workspace owners and admins can manage domain join settings.",
+        )
+    return membership
+
+
+@router.post("/{domain_id}/join-mode")
+async def set_join_mode(
+    domain_id: str,
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Set how signups with an email on this verified domain join the workspace:
+    'none' (default, registration untouched), 'auto_join' (membership at
+    activation) or 'approval' (workspace admin approves each join).
+    """
+    await _require_workspace_admin(current_user, db)
+    mode = str((payload or {}).get("mode", "")).strip()
+    if mode not in VALID_JOIN_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"mode must be one of: {', '.join(VALID_JOIN_MODES)}.",
+        )
+
+    domain_rec = (await db.execute(
+        select(DomainVerification).where(
+            DomainVerification.id == domain_id,
+            DomainVerification.account_id == current_user.account_id,
+        )
+    )).scalar_one_or_none()
+    if not domain_rec:
+        raise HTTPException(status_code=404, detail="Domain record not found.")
+    if domain_rec.status != "verified":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Domain join modes can only be enabled on a verified domain.",
+        )
+
+    domain_rec.join_mode = mode
+    await db.commit()
+    return {
+        "success": True,
+        "domain": domain_rec.domain,
+        "join_mode": mode,
+        "message": {
+            "none": f"Signups with @{domain_rec.domain} addresses create their own workspaces.",
+            "auto_join": f"New @{domain_rec.domain} signups join this workspace after confirming their email.",
+            "approval": f"New @{domain_rec.domain} signups join after an admin approves them.",
+        }[mode],
+    }
+
+
+@router.get("/joins/pending")
+async def pending_domain_joins(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The workspace's activation queue: confirmed users awaiting approval."""
+    await _require_workspace_admin(current_user, db)
+    from app.models import DomainJoinRequest
+
+    joins = (await db.execute(
+        select(DomainJoinRequest)
+        .where(
+            DomainJoinRequest.account_id == current_user.account_id,
+            DomainJoinRequest.status == "pending",
+        )
+        .order_by(DomainJoinRequest.created_at.asc())
+        .limit(200)
+    )).scalars().all()
+    return [
+        {
+            "id": j.id,
+            "user_id": j.user_id,
+            "user_email": j.user_email,
+            "domain_id": j.domain_id,
+            "status": j.status,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+        }
+        for j in joins
+    ]
+
+
+@router.post("/joins/{join_id}/approve")
+async def approve_domain_join(
+    join_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Grant membership to an approved requester; the decision is on the record."""
+    await _require_workspace_admin(current_user, db)
+    from app.models import DomainJoinRequest
+
+    join_req = (await db.execute(
+        select(DomainJoinRequest).where(
+            DomainJoinRequest.id == join_id,
+            DomainJoinRequest.account_id == current_user.account_id,
+        )
+    )).scalar_one_or_none()
+    if not join_req:
+        raise HTTPException(status_code=404, detail="Join request not found.")
+    if join_req.status != "pending":
+        raise HTTPException(status_code=400, detail="This request has already been decided.")
+
+    join_req.status = "approved"
+    join_req.decided_by = current_user.email
+    join_req.decided_at = utcnow()
+
+    existing_membership = (await db.execute(
+        select(AccountMembership).where(
+            AccountMembership.user_id == join_req.user_id,
+            AccountMembership.account_id == join_req.account_id,
+        )
+    )).scalar_one_or_none()
+    if existing_membership is None:
+        db.add(AccountMembership(
+            user_id=join_req.user_id,
+            account_id=join_req.account_id,
+            role="member",
+            is_active=True,
+        ))
+    else:
+        existing_membership.is_active = True
+
+    await db.commit()
+    return {"success": True, "join_id": join_req.id, "status": join_req.status}
