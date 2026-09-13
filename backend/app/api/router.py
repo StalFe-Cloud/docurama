@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api import (
     auth, envelopes, templates, signing, verify, ws, domains, folders, webhooks,
     documents, companies, settings_api, stamps, onboarding, quotas,
-    billing, admin, legal, compliance,
+    billing, admin, legal, compliance, pricing,
 )
 
 api_router = APIRouter()
@@ -23,6 +23,8 @@ api_router.include_router(quotas.router)
 # Sprint 3 cloud-launch surfaces: billing (inert until operator keys), the
 # platform admin console, and the public legal intake.
 api_router.include_router(billing.router)
+# Sprint 8: public pricing engine (35-day cycles, commitment ladder, Fair Exit).
+api_router.include_router(pricing.router)
 api_router.include_router(admin.router)
 api_router.include_router(legal.router)
 # Compliance & Trust Foundation: admin surface (audit chains, DSAR, retention,

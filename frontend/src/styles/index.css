@@ -539,3 +539,84 @@ td.font-mono,
 ::-webkit-scrollbar-thumb:hover {
   background: #a4a097;
 }
+
+/* ---------------------------------------------------------------------------
+   Sprint 8: hero demo animation — a self-playing signing sequence layered on
+   the landing mockup card. One master 9s timeline; every element animates on
+   the same clock via percentage keyframes so the loop stays perfectly in
+   phase. Reduced-motion users get the static completed state instead.
+   --------------------------------------------------------------------------- */
+
+@keyframes hero-cursor-path {
+  0% { opacity: 0; left: 12%; top: 8%; }
+  6% { opacity: 1; left: 12%; top: 8%; }
+  26% { left: 58%; top: 62%; }
+  40% { left: 60%; top: 60%; }
+  58% { left: 44%; top: 38%; }
+  64% { opacity: 1; left: 44%; top: 38%; }
+  78% { opacity: 0; left: 46%; top: 36%; }
+  100% { opacity: 0; left: 12%; top: 8%; }
+}
+
+@keyframes hero-sign-draw {
+  0%, 24% { stroke-dashoffset: 100; }
+  54% { stroke-dashoffset: 0; }
+  92%, 100% { stroke-dashoffset: 0; }
+}
+
+@keyframes hero-signer-flip {
+  0%, 56% { opacity: 0; }
+  62%, 90% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+
+@keyframes hero-signer-pending {
+  0%, 56% { opacity: 1; }
+  62%, 90% { opacity: 0; }
+  96%, 100% { opacity: 1; }
+}
+
+@keyframes hero-seal-pop {
+  0%, 66% { opacity: 0; transform: scale(0.6); }
+  72% { opacity: 1; transform: scale(1.06); }
+  76% { transform: scale(1); }
+  92% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+.hero-demo-cursor {
+  animation: hero-cursor-path 9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.hero-demo-signature {
+  stroke-dasharray: 100;
+  animation: hero-sign-draw 9s ease-in-out infinite;
+}
+.hero-demo-signed {
+  animation: hero-signer-flip 9s linear infinite;
+}
+.hero-demo-pending {
+  animation: hero-signer-pending 9s linear infinite;
+}
+.hero-demo-seal {
+  animation: hero-seal-pop 9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-demo-cursor,
+  .hero-demo-seal {
+    animation: none;
+    opacity: 0 !important;
+  }
+  .hero-demo-signature {
+    animation: none;
+    stroke-dashoffset: 0 !important;
+  }
+  .hero-demo-signed {
+    animation: none;
+    opacity: 1 !important;
+  }
+  .hero-demo-pending {
+    animation: none;
+    opacity: 0 !important;
+  }
+}

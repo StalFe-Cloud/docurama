@@ -1555,3 +1555,67 @@ export const trustApi = {
     return res.json();
   },
 };
+
+// Sprint 8: public pricing engine — tiers, 35-day cycle, commitments, Fair Exit.
+export interface PricingConfig {
+  cycle_days: number;
+  standard_month_days: number;
+  bonus_days_per_year: number;
+  covered_days_per_year: number;
+  billing_enabled: boolean;
+  tiers: Array<{
+    id: string;
+    internal_plan: string | null;
+    display_name: string;
+    list_price_eur: number | null;
+    envelopes_per_cycle: number | null;
+    seats: number | null;
+    purchasable: boolean;
+    contact_sales: boolean;
+    tagline: string;
+    features: string[];
+  }>;
+  commitments: Array<{
+    id: string;
+    display_name: string;
+    cycles: number;
+    discount: number;
+    refund_type: string;
+    description: string;
+  }>;
+  fair_exit: {
+    name: string;
+    cash_refund_commitments: string[];
+    credit_commitments: string[];
+    rolling: string;
+  };
+}
+
+export const pricingApi = {
+  config: async (): Promise<PricingConfig> => {
+    const res = await fetch(`${API_BASE}/pricing/config`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load pricing');
+    }
+    return res.json();
+  },
+  quote: async (tier: string, commitment: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/pricing/quote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier, commitment }),
+    });
+    if (!res.ok) throw new Error('Failed to quote');
+    return res.json();
+  },
+  refundQuote: async (tier: string, commitment: string, cyclesCompleted: number): Promise<any> => {
+    const res = await fetch(`${API_BASE}/pricing/refund-quote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier, commitment, cycles_completed: cyclesCompleted }),
+    });
+    if (!res.ok) throw new Error('Failed to quote refund');
+    return res.json();
+  },
+};

@@ -44,29 +44,55 @@ class PlanDefinition:
 PLAN_CATALOG: Dict[str, PlanDefinition] = {
     "plus": PlanDefinition(
         id="plus",
-        display_name="Plus",
+        display_name="Solo",
         envelopes_per_month=30,
         seats=1,
         price_setting="STRIPE_PRICE_STARTER",
-        description="Individual signing: 30 envelopes per month, full PAdES sealing.",
+        description="Individual signing: 30 envelopes per 35-day cycle, full PAdES sealing.",
     ),
     "business": PlanDefinition(
         id="business",
-        display_name="Business Team",
+        display_name="Team",
         envelopes_per_month=250,
         seats=3,
         price_setting="STRIPE_PRICE_BUSINESS",
-        description="Small teams: 250 envelopes per month across 3 seats, templates and API access.",
+        description="Small teams: 250 envelopes per 35-day cycle across 3 seats, templates and API access.",
     ),
     "enterprise": PlanDefinition(
         id="enterprise",
-        display_name="Enterprise",
-        envelopes_per_month=1000,
-        seats=10,
+        display_name="Business",
+        envelopes_per_month=10000,
+        seats=100,
         price_setting="STRIPE_PRICE_ENTERPRISE",
-        description="Organisations: 1000 envelopes per month, domain-verified workspaces, priority support.",
+        description="Organisations: 10,000 envelopes per 35-day cycle, 100 seats, domain-verified workspaces, priority support.",
     ),
 }
+
+# Sprint 8 marketing ladder: the public site prices solo/team/business
+# (plus enterprise-custom, contact sales). Checkout accepts those ids and
+# resolves them onto the stable internal plan ids above, so account rows,
+# quota enforcement, and Stripe webhook mappings never change meaning.
+MARKETING_PLAN_ALIASES = {"solo": "plus", "team": "business", "business": "enterprise"}
+
+
+def resolve_plan_id(plan_id: str) -> Optional[str]:
+    """
+    Map a marketing or legacy plan id onto the internal catalog id.
+
+    Marketing aliases resolve FIRST so that a customer picking the public
+    "Business" tier (EUR 79) lands on the internal enterprise plan, not the
+    internal business plan that happens to share the id. Legacy internal ids
+    that are not aliased (plus, enterprise) fall through to the catalog.
+    """
+    if not plan_id:
+        return None
+    key = plan_id.strip().lower()
+    mapped = MARKETING_PLAN_ALIASES.get(key)
+    if mapped:
+        return mapped
+    if key in PLAN_CATALOG:
+        return key
+    return None
 
 # Free/self-host plan names that must never be reachable through checkout.
 NON_PURCHASABLE_PLANS = {"unlimited", "free", "trial"}
@@ -86,13 +112,19 @@ def plan_catalog_public() -> Dict[str, Any]:
     The public catalog. Honesty rules: billing_enabled says what it means, and
     configured_price_id is empty when the operator has not set the price - the
     UI must render that as "coming soon", not as a purchasable plan.
+    Sprint 8: carries the 35-day cycle constant and the marketing tier id.
     """
+    from app.services.pricing import CYCLE_DAYS, MARKETING_TO_INTERNAL
+
     enabled = billing_enabled()
+    internal_to_marketing = {v: k for k, v in MARKETING_TO_INTERNAL.items()}
     return {
         "billing_enabled": enabled,
+        "cycle_days": CYCLE_DAYS,
         "plans": [
             {
                 "id": plan.id,
+                "marketing_id": internal_to_marketing.get(plan.id),
                 "display_name": plan.display_name,
                 "envelopes_per_month": plan.envelopes_per_month,
                 "seats": plan.seats,
@@ -105,8 +137,9 @@ def plan_catalog_public() -> Dict[str, Any]:
 
 
 def require_configured_price(plan_id: str) -> tuple:
-    """Resolve a plan and its configured price; raises when unusable."""
-    plan = PLAN_CATALOG.get(plan_id)
+    """Resolve a plan (marketing or internal id) and its configured price."""
+    resolved = resolve_plan_id(plan_id)
+    plan = PLAN_CATALOG.get(resolved) if resolved else None
     if plan is None:
         raise ValueError("unknown plan")
     price_id = _price_id(plan)

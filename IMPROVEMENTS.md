@@ -891,3 +891,175 @@ questionnaires expandable), and the overview aggregate carries
 - Live probe battery: healthz/readyz/trust/SPA 200; new endpoints 401
   unauthenticated and 403 for the demo account; local security gates ALL
   GREEN; frontend tsc + vite build green.
+
+## §19 — Sprint 8: marketing site, pricing innovation, i18n, enterprise alerts
+
+The platform could sign, seal, prove, and govern — but it could not sell
+itself. Sprint 8 adds the public marketing surface, an innovative pricing
+model implemented as server-side math, full four-language i18n, and the
+enterprise onboarding alert that closes the domain-join loop.
+
+### Pricing engine (services/pricing.py, api/pricing.py)
+
+- **35-day cycles for everyone** ("weekends on us"): 12 billed cycles cover
+  420 days — 55 more than a calendar year. The cycle length is a product
+  constant, exposed in every public payload.
+- **Commitment ladder**: rolling 0%, 3 months −5%, 6 months −10%, 12 months
+  −15% off the per-cycle price, priced in cents half-up.
+- **Fair Exit Guarantee**: 6/12-month commitments refund unused full cycles
+  pro-rata as cash (self-serve, one click); 3-month converts to account
+  credit; rolling simply runs to the end of the paid cycle. The pricing
+  page previews any cancellation via the same endpoints the billing engine
+  exposes — no invented client-side math.
+- **Public calculators**: GET /api/pricing/config, POST /api/pricing/quote,
+  POST /api/pricing/refund-quote — read-only, rate-limited, honest.
+- **Stable internal ids**: marketing tiers (solo/team/business) map onto the
+  internal plan ids quotas.py enforces (plus/business/enterprise); marketing
+  "business" resolves FIRST so the EUR 79 tier lands on the internal
+  enterprise plan. No account row, quota table, or webhook mapping changed
+  meaning. Enterprise-custom is contact-sales and never purchasable.
+- Checkout carries the chosen commitment into Stripe metadata.
+- 22 new tests pin the math, the ladder, the refunds, the aliases, and the
+  honesty of the public config (including the no-certification vocabulary).
+
+### Marketing site + content hub (public SPA routes)
+
+- **/pricing**: tier cards, commitment tabs with live server quotes, Fair
+  Exit refund preview slider, pricing FAQ — all fed by /api/pricing.
+- **/docs**: 10 authored articles (getting started, fields, lifecycle,
+  PAdES, verification, templates, domain workspaces, audit API, compliance
+  program, billing) with search and category filters.
+- **/blog**: 6 posts (35-day cycle math, Fair Exit, PAdES vs click-to-sign,
+  EU residency, domain workspaces, building in the open).
+- **/help**: 20-answer knowledge center with search; **/templates-gallery**:
+  12 ready-made templates with roles and field counts.
+- **Animated hero**: a self-playing signing sequence on the landing mockup
+  (cursor glide, SVG signature draw, signer status flip, PAdES seal pop) on
+  one shared 9s CSS timeline, collapsing to a static completed state under
+  prefers-reduced-motion.
+- Marketing shell + footer in the app's own design language; header gains
+  public nav (Pricing/Docs/Blog/Help/Gallery) for visitors.
+- SEO: robots.txt (workspace/API excluded) + sitemap.xml bundled into dist.
+- SPA fallback fix: /docs no longer reserved-404s at the server — the
+  documentation hub is public, while /api/docs (OpenAPI UI) keeps working.
+
+### Full i18n day one (EN/FR/DE/ES)
+
+- Tiny i18n runtime: React context, localStorage persistence, `<html lang>`
+  sync, English fallback per string — never a blank UI, never a leaked key.
+- Marketing chrome translated by hand in all four locales.
+- Content corpus translated field-by-field via an LLM pipeline
+  (scripts/translate_content.ts, 277 strings × 3 locales) with a
+  vocabulary guard that blocks certification-claim phrasing; the three
+  negation sentences ("we do NOT claim certifications") translated by hand
+  so the guard can stay blunt. Artifact nouns ("certificat d'audit",
+  "certificado X.509", "Zertifikat") correctly allowed.
+- Categories/tags localized from chrome dictionaries; unknown future
+  categories fall back to the English label, not a key.
+
+### Enterprise onboarding: admin alerts
+
+- Domain-join activation now emails the workspace admins: approval-mode
+  joins alert them to review the queue, auto-joins announce the new member.
+- Alerts are best-effort (SMTP outage never blocks activation) and
+  accountable — one email_send_logs row per admin per attempt with honest
+  sent/failed status, committed atomically with the join event.
+- 3 new tests pin: approval alert, auto-join alert, and the
+  failure-never-blocks-activation contract.
+
+### Verification
+
+- 561/561 pytest (env -u DATABASE_URL); tsc clean; vite build green.
+- Browser-verified: pricing toggle re-quotes from the server, language
+  switch re-renders the full pricing page in French with <html lang="fr">,
+  hero demo elements all present, docs/blog/help/gallery render, console
+  clean.
+- Domain split documented in deploy/DOMAIN_SPLIT.md: docurama.eu (marketing)
+  + app.docurama.eu (product) + signup.docurama.eu as a vanity 301 — one
+  origin for accounts, zero extra deploys, one wildcard certificate.
+
+## §19 — Sprint 8: marketing site, pricing innovation, i18n, enterprise alerts
+
+The platform could sign, seal, prove, and govern — but it could not sell
+itself. Sprint 8 adds the public marketing surface, an innovative pricing
+model implemented as server-side math, full four-language i18n, and the
+enterprise onboarding alert that closes the domain-join loop.
+
+### Pricing engine (services/pricing.py, api/pricing.py)
+
+- **35-day cycles for everyone** ("weekends on us"): 12 billed cycles cover
+  420 days — 55 more than a calendar year. The cycle length is a product
+  constant, exposed in every public payload.
+- **Commitment ladder**: rolling 0%, 3 months −5%, 6 months −10%, 12 months
+  −15% off the per-cycle price, priced in cents half-up.
+- **Fair Exit Guarantee**: 6/12-month commitments refund unused full cycles
+  pro-rata as cash (self-serve, one click); 3-month converts to account
+  credit; rolling simply runs to the end of the paid cycle. The pricing
+  page previews any cancellation via the same endpoints the billing engine
+  exposes — no invented client-side math.
+- **Public calculators**: GET /api/pricing/config, POST /api/pricing/quote,
+  POST /api/pricing/refund-quote — read-only, rate-limited, honest.
+- **Stable internal ids**: marketing tiers (solo/team/business) map onto the
+  internal plan ids quotas.py enforces (plus/business/enterprise); marketing
+  "business" resolves FIRST so the EUR 79 tier lands on the internal
+  enterprise plan. No account row, quota table, or webhook mapping changed
+  meaning. Enterprise-custom is contact-sales and never purchasable.
+- Checkout carries the chosen commitment into Stripe metadata.
+- 22 new tests pin the math, the ladder, the refunds, the aliases, and the
+  honesty of the public config (including the no-certification vocabulary).
+
+### Marketing site + content hub (public SPA routes)
+
+- **/pricing**: tier cards, commitment tabs with live server quotes, Fair
+  Exit refund preview slider, pricing FAQ — all fed by /api/pricing.
+- **/docs**: 10 authored articles (getting started, fields, lifecycle,
+  PAdES, verification, templates, domain workspaces, audit API, compliance
+  program, billing) with search and category filters.
+- **/blog**: 6 posts (35-day cycle math, Fair Exit, PAdES vs click-to-sign,
+  EU residency, domain workspaces, building in the open).
+- **/help**: 20-answer knowledge center with search; **/templates-gallery**:
+  12 ready-made templates with roles and field counts.
+- **Animated hero**: a self-playing signing sequence on the landing mockup
+  (cursor glide, SVG signature draw, signer status flip, PAdES seal pop) on
+  one shared 9s CSS timeline, collapsing to a static completed state under
+  prefers-reduced-motion.
+- Marketing shell + footer in the app's own design language; header gains
+  public nav (Pricing/Docs/Blog/Help/Gallery) for visitors.
+- SEO: robots.txt (workspace/API excluded) + sitemap.xml bundled into dist.
+- SPA fallback fix: /docs no longer reserved-404s at the server — the
+  documentation hub is public, while /api/docs (OpenAPI UI) keeps working.
+
+### Full i18n day one (EN/FR/DE/ES)
+
+- Tiny i18n runtime: React context, localStorage persistence, `<html lang>`
+  sync, English fallback per string — never a blank UI, never a leaked key.
+- Marketing chrome translated by hand in all four locales.
+- Content corpus translated field-by-field via an LLM pipeline
+  (scripts/translate_content.ts, 277 strings × 3 locales) with a
+  vocabulary guard that blocks certification-claim phrasing; the three
+  negation sentences ("we do NOT claim certifications") translated by hand
+  so the guard can stay blunt. Artifact nouns ("certificat d'audit",
+  "certificado X.509", "Zertifikat") correctly allowed.
+- Categories/tags localized from chrome dictionaries; unknown future
+  categories fall back to the English label, not a key.
+
+### Enterprise onboarding: admin alerts
+
+- Domain-join activation now emails the workspace admins: approval-mode
+  joins alert them to review the queue, auto-joins announce the new member.
+- Alerts are best-effort (SMTP outage never blocks activation) and
+  accountable — one email_send_logs row per admin per attempt with honest
+  sent/failed status, committed atomically with the join event.
+- 3 new tests pin: approval alert, auto-join alert, and the
+  failure-never-blocks-activation contract.
+
+### Verification
+
+- 561/561 pytest (env -u DATABASE_URL); tsc clean; vite build green.
+- Browser-verified: pricing toggle re-quotes from the server, language
+  switch re-renders the full pricing page in French with <html lang="fr">,
+  hero demo elements all present, docs/blog/help/gallery render, console
+  clean.
+- Domain split documented in deploy/DOMAIN_SPLIT.md: docurama.eu (marketing)
+  + app.docurama.eu (product) + signup.docurama.eu as a vanity 301 — one
+  origin for accounts, zero extra deploys, one wildcard certificate.

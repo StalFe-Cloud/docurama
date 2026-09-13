@@ -1,0 +1,17 @@
+# Docurama is a European e-signature SaaS.
+# Public marketing + product surfaces are crawlable; the app workspace,
+# signing links, and API are not.
+User-agent: *
+Allow: /
+Disallow: /templates
+Disallow: /submissions
+Disallow: /builder
+Disallow: /settings
+Disallow: /admin
+Disallow: /sign/
+Disallow: /sign
+Disallow: /d/
+Disallow: /api/
+Disallow: /ws
+
+Sitemap: https://docurama.eu/sitemap.xml

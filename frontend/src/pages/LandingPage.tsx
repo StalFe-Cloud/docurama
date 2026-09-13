@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { HeroDemoOverlay, HeroSignerStatusFlip, HeroSignaturePath } from '../components/HeroDemo';
 import { 
   ShieldCheck, 
   PenTool, 
@@ -131,8 +132,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg)`,
                 transition: 'transform 0.15s ease-out'
               }}
-              className="bg-white rounded-xl p-6 sm:p-8 border border-[#e5e3df] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.08),0_0_1px_1px_rgba(0,0,0,0.04)] select-none text-[#37352f]"
+              className="bg-white rounded-xl p-6 sm:p-8 border border-[#e5e3df] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.08),0_0_1px_1px_rgba(0,0,0,0.04)] select-none text-[#37352f] relative"
             >
+              {/* Self-playing signing sequence (Sprint 8): cursor, signature draw,
+                  signer flip, seal pop — one shared 9s CSS timeline. */}
+              <HeroDemoOverlay />
               {/* Envelope Header Bar */}
               <div className="flex items-center justify-between border-b border-[#e5e3df] pb-4 mb-6">
                 <div className="flex items-center space-x-3">
@@ -167,8 +171,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 <div className="p-3 bg-[#fafaf9] rounded-lg border border-[#ede9e4]">
                   <div className="text-[11px] font-semibold text-[#787671] uppercase mb-1">Second Signer</div>
                   <div className="text-xs font-semibold text-[#1a1a1a]">Legal Counsel</div>
-                  <div className="text-[11px] text-[#dd5b00] mt-1 flex items-center gap-1 font-medium">
-                    <Clock className="w-3.5 h-3.5" /> Pending Signature
+                  <div className="mt-1">
+                    <HeroSignerStatusFlip />
                   </div>
                   <div className="text-[10px] text-[#787671] mt-0.5 font-mono">Dispatched via Email</div>
                 </div>
@@ -189,15 +193,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   <div className="text-[11px] font-semibold text-[#787671] uppercase tracking-wider mb-1">
                     Authorized Digital Seal (X.509 Certificate)
                   </div>
-                  <svg className="w-36 sm:w-44 h-9" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M10 40C30 15 50 48 70 30C90 12 110 50 135 25C150 10 160 45 190 28"
-                      stroke="#5645d4"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <HeroSignaturePath />
                 </div>
                 <div className="text-left sm:text-right">
                   <div className="text-xs text-[#787671]">Offline Verification in Adobe Reader</div>

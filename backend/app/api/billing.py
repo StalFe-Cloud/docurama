@@ -89,6 +89,14 @@ async def create_checkout(
     plan_id = str(payload.get("plan") or "").strip()
     if not plan_id:
         raise HTTPException(status_code=422, detail="Choose a plan.")
+    # Sprint 8: commitment rides along in checkout metadata so the operator's
+    # Stripe records which commitment ladder the customer chose. The pricing
+    # engine validated the id space; unknown values fall back to rolling.
+    commitment_raw = str(payload.get("commitment") or "").strip().lower() or "rolling"
+    from app.services.pricing import resolve_commitment
+
+    commitment = resolve_commitment(commitment_raw)
+    commitment_id = commitment["id"] if commitment else "rolling"
     if plan_id in billing.NON_PURCHASABLE_PLANS:
         raise HTTPException(status_code=400, detail="That plan is not purchasable.")
     try:
@@ -106,7 +114,11 @@ async def create_checkout(
             customer_email=current_user.email,
             success_url=f"{base}/settings?billing=success",
             cancel_url=f"{base}/settings?billing=cancelled",
-            metadata={"account_id": current_user.account_id, "plan": plan.id},
+            metadata={
+                "account_id": current_user.account_id,
+                "plan": plan.id,
+                "commitment": commitment_id,
+            },
         )
     except BillingNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))

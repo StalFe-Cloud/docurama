@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api, CompanyItem } from '../../lib/api';
 import { useToast } from '../ui/Toast';
+import { LangSwitcher } from './LangSwitcher';
 
 interface HeaderProps {
   currentTab: string;
@@ -261,6 +262,17 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </nav>
           )}
+          {/* Marketing navigation for visitors: the public site, not the app.
+              Plain anchors: public pages accept a full load (SEO + shareability). */}
+          {!user && (
+            <nav className="hidden md:flex items-center space-x-1" aria-label="Marketing">
+              <a href="/pricing" className={`nav-link-pill ${currentTab === 'pricing' ? 'active' : ''}`}>Pricing</a>
+              <a href="/docs" className="nav-link-pill">Docs</a>
+              <a href="/blog" className="nav-link-pill">Blog</a>
+              <a href="/help" className="nav-link-pill">Help</a>
+              <a href="/templates-gallery" className="nav-link-pill">Gallery</a>
+            </nav>
+          )}
         </div>
 
         {/* Right Actions */}
@@ -335,6 +347,7 @@ export const Header: React.FC<HeaderProps> = ({
         ) : (
           /* Unauthenticated Right Menu */
           <div className="flex items-center space-x-2">
+            <LangSwitcher />
             <button
               onClick={() => onSelectTab('verify')}
               className="hidden md:inline-flex btn btn-ghost px-2.5 py-1.5 text-xs text-[#5d5b54] hover:text-[#1a1a1a]"

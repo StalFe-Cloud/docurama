@@ -360,6 +360,65 @@ async def _send_domain_join_activation(user: User, join_token: str) -> str:
     return status_label
 
 
+async def _notify_workspace_admins(
+    db,
+    account_id: str,
+    subject: str,
+    html: str,
+    text: str,
+    kind: str,
+    related_id: str,
+) -> str:
+    """
+    Sprint 8: alert every admin of a workspace about a domain-join event.
+
+    Best-effort by the same contract as the activation mail: an SMTP outage
+    must never strand the join itself, and every attempt is accountable in
+    email_send_logs with per-recipient status. Unlike the activation mail,
+    the log rows are written on the REQUEST session and commit with the join
+    event itself: the alert is part of the join's story, and if the join
+    rolls back there is no event to have alerted about.
+    """
+    from app.services import smtp_config, mailer
+
+    admins = (await db.execute(
+        select(User).where(
+            User.account_id == account_id,
+            User.role == "admin",
+            User.is_active == True,  # noqa: E712 - deliberate SQLAlchemy style
+        )
+    )).scalars().all()
+    if not admins:
+        return "no_admins"
+
+    overall = "sent"
+    for admin in admins:
+        status_label = "sent"
+        error_detail = ""
+        try:
+            smtp = await smtp_config.resolve(db, account_id)
+            result = await asyncio.to_thread(
+                mailer.send_email, smtp, admin.email, "", subject, html, text
+            )
+            if not getattr(result, "sent", True):
+                status_label = "failed"
+                error_detail = str(getattr(result, "error", ""))[:490]
+        except Exception as exc:
+            status_label = "failed"
+            error_detail = repr(exc)[:490]
+        if status_label != "sent":
+            overall = "failed"
+        db.add(EmailSendLog(
+            kind=kind,
+            recipient=admin.email,
+            subject=subject,
+            status=status_label,
+            error=error_detail,
+            related_id=related_id,
+        ))
+    return overall
+
+
 @router.post("/domain-join/activate")
 @limiter.limit("10/minute")
 async def domain_join_activate(
@@ -433,13 +492,27 @@ async def domain_join_activate(
             )
         )).scalar_one_or_none()
         if pending is None:
-            db.add(DomainJoinRequest(
+            new_request = DomainJoinRequest(
                 account_id=user.account_id,
                 domain_id=domain_row.id if domain_row is not None else "",
                 user_id=user.id,
                 user_email=user.email,
                 status="pending",
-            ))
+            )
+            db.add(new_request)
+            await db.flush()
+            # Sprint 8: admins learn about the pending join by email —
+            # the queue is only useful if someone knows it has entries.
+            await _notify_workspace_admins(
+                db,
+                user.account_id,
+                "Docurama: a new member is waiting for your approval",
+                f"<p>{user.email} activated their account via your verified domain and is waiting in the join queue.</p>"
+                f"<p><a href=\"{str(settings.APP_URL).rstrip('/')}/admin\">Review the pending join</a></p>",
+                f"{user.email} activated via your verified domain and is waiting in the join queue. Review it in the admin console.",
+                "domain_join_admin_alert",
+                new_request.id,
+            )
         membership_state = "pending_approval"
     else:
         if existing_membership is None:
@@ -449,6 +522,15 @@ async def domain_join_activate(
                 role="member",
                 is_active=True,
             ))
+            await _notify_workspace_admins(
+                db,
+                user.account_id,
+                "Docurama: a new member joined your workspace",
+                f"<p>{user.email} joined your workspace through your verified domain (auto-join).</p>",
+                f"{user.email} joined your workspace through your verified domain (auto-join).",
+                "domain_join_admin_alert",
+                user.id,
+            )
         elif not existing_membership.is_active:
             existing_membership.is_active = True
 

@@ -17,6 +17,12 @@ import { AdminPage } from './pages/AdminPage';
 import { CompliancePage } from './pages/CompliancePage';
 import { ActivationPage } from './pages/ActivationPage';
 import { TrustPage } from './pages/TrustPage';
+import { PricingPage } from './pages/PricingPage';
+import { DocsPage } from './pages/DocsPage';
+import { BlogPage } from './pages/BlogPage';
+import { HelpPage } from './pages/HelpPage';
+import { GalleryPage } from './pages/GalleryPage';
+import { I18nProvider, useI18n } from './i18n';
 import { ToastProvider } from './components/ui/Toast';
 import { api } from './lib/api';
 
@@ -38,9 +44,70 @@ const resolveTabFromPath = (pathname: string): string => {
 
 export const App: React.FC = () => (
   <ToastProvider>
-    <AppShell />
+    <I18nProvider>
+      <AppShell />
+    </I18nProvider>
   </ToastProvider>
 );
+
+/** Shared public marketing shell: header + centered content + footer. */
+const MarketingShell: React.FC<{
+  user: any;
+  navigate: (tab: string) => void;
+  handleLogout: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}> = ({ user, navigate, handleLogout, children, wide }) => (
+  <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+    <Header
+      currentTab="landing"
+      onSelectTab={navigate}
+      onNewEnvelope={() => navigate('builder')}
+      user={user}
+      onLogout={handleLogout}
+      onSignIn={() => navigate('signin')}
+      onUserUpdate={undefined}
+    />
+    <main className={`flex-1 w-full mx-auto px-4 pt-6 pb-14 ${wide ? 'max-w-7xl' : 'max-w-6xl'}`}>
+      {children}
+    </main>
+    <MarketingFooter navigate={navigate} />
+  </div>
+);
+
+const MarketingFooter: React.FC<{ navigate: (tab: string) => void }> = () => {
+  const { t } = useI18n();
+  return (
+    <footer className="w-full border-t border-[#e5e3df] bg-white">
+      <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div>
+          <p className="text-xs font-semibold text-[#1a1a1a]">
+            &copy; {new Date().getFullYear()} Docurama Technologies
+          </p>
+          <p className="mt-1 text-[11px] leading-5 text-[#787671] max-w-md">{t('footer.trust')}</p>
+        </div>
+        <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-medium text-[#5d5b54]">
+          <a href="/pricing" className="hover:text-[#1a1a1a] transition-colors">{t('nav.pricing')}</a>
+          <a href="/docs" className="hover:text-[#1a1a1a] transition-colors">{t('footer.docs')}</a>
+          <a href="/blog" className="hover:text-[#1a1a1a] transition-colors">{t('nav.blog')}</a>
+          <a href="/help" className="hover:text-[#1a1a1a] transition-colors">{t('footer.help')}</a>
+          <a href="/templates-gallery" className="hover:text-[#1a1a1a] transition-colors">{t('nav.gallery')}</a>
+          <a href="/trust" className="hover:text-[#1a1a1a] transition-colors">{t('footer.trustcenter')}</a>
+          <a href="/verify" className="hover:text-[#1a1a1a] transition-colors">{t('footer.verify')}</a>
+          <a href="/api-docs" className="hover:text-[#1a1a1a] transition-colors">API</a>
+          <a
+            href="https://github.com/StalFe-Cloud/docurama"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="hover:text-[#1a1a1a] transition-colors"
+          >
+            {t('footer.source')}
+          </a>
+        </nav>
+      </div>
+    </footer>
+  );
+};
 
 const AppShell: React.FC = () => {
   const [user, setUser] = useState<any>(null);
@@ -225,6 +292,49 @@ const AppShell: React.FC = () => {
           <SignUpPage />
         </main>
       </div>
+    );
+  }
+
+  // Sprint 8: public marketing & content routes. All public, all translated.
+  if (path === '/pricing') {
+    return (
+      <MarketingShell user={user} navigate={navigate} handleLogout={handleLogout}>
+        <PricingPage onNavigate={navigate} />
+      </MarketingShell>
+    );
+  }
+
+  if (path === '/docs' || (path.startsWith('/docs/') && !path.startsWith('/docs/api'))) {
+    const sub = path.replace('/docs', '').replace(/^\//, '').split('?')[0];
+    return (
+      <MarketingShell user={user} navigate={navigate} handleLogout={handleLogout}>
+        <DocsPage slug={sub || undefined} onNavigate={navigate} />
+      </MarketingShell>
+    );
+  }
+
+  if (path === '/blog' || path.startsWith('/blog/')) {
+    const sub = path.replace('/blog', '').replace(/^\//, '').split('?')[0];
+    return (
+      <MarketingShell user={user} navigate={navigate} handleLogout={handleLogout}>
+        <BlogPage slug={sub || undefined} onNavigate={navigate} />
+      </MarketingShell>
+    );
+  }
+
+  if (path === '/help' || path.startsWith('/help/')) {
+    return (
+      <MarketingShell user={user} navigate={navigate} handleLogout={handleLogout}>
+        <HelpPage />
+      </MarketingShell>
+    );
+  }
+
+  if (path === '/templates-gallery' || path === '/gallery') {
+    return (
+      <MarketingShell user={user} navigate={navigate} handleLogout={handleLogout} wide>
+        <GalleryPage onNavigate={navigate} />
+      </MarketingShell>
     );
   }
 

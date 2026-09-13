@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docurama.eu/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://docurama.eu/pricing</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://docurama.eu/docs</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://docurama.eu/blog</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://docurama.eu/help</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://docurama.eu/templates-gallery</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://docurama.eu/trust</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/verify</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/getting-started</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/signing-fields</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/envelope-lifecycle</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/pades-explained</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/verify-a-document</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/templates-and-gallery</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/domain-join-workspaces</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/audit-trail-api</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/compliance-program</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/docs/billing-35-day-cycle</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/blog/why-35-day-cycles</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/blog/fair-exit-guarantee</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/blog/pades-vs-click-to-sign</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/blog/eu-data-residency-by-default</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/blog/domain-verified-workspaces</loc><priority>0.6</priority></url>
+  <url><loc>https://docurama.eu/blog/building-docurama-in-the-open</loc><priority>0.6</priority></url>
+</urlset>

@@ -1,0 +1,37 @@
+import type { FaqItem } from './types';
+
+/**
+ * Knowledge center / FAQ corpus (Sprint 8) — 20 answers, 5 categories.
+ * English source; localized through the pipeline.
+ */
+export const KB_ITEMS: FaqItem[] = [
+  // Signing
+  { id: 'kb-001', category: 'Signing', q: 'Are Docurama signatures legally binding in the EU?', a: 'Docurama implements PAdES under the eIDAS regulation, which gives electronic signatures legal effect across EU member states; ESIGN coverage applies for US use. Whether a specific signature meets your process\u2019s required assurance level (simple, advanced, or qualified) depends on the certificate and identity process configured — your Trust Center shows exactly what your deployment uses.' },
+  { id: 'kb-002', category: 'Signing', q: 'Can signers sign on a phone?', a: 'Yes. The signing studio is mobile-first: fields are sized for touch, drawing a signature with a finger works out of the box, and the layout reflows per device. Signers never need an account or an app install — the secure link opens directly in the browser.' },
+  { id: 'kb-003', category: 'Signing', q: 'What happens if a signer refuses or never signs?', a: 'A signer can decline with a reason, which ends their participation and is recorded on the audit trail. For non-response you control reminder cadence and can set an expiry; you can also withdraw the envelope yourself. Either way the attempt history stays inspectable on the Submissions page.' },
+  { id: 'kb-004', category: 'Signing', q: 'Can several people sign the same document in a set order?', a: 'Yes. Define signer roles and their order in the builder — routing follows the order you set, and each completed stage is recorded before the next signer is notified. Parallel signing is also supported when order does not matter.' },
+  { id: 'kb-005', category: 'Signing', q: 'Do signers need a Docurama account?', a: 'No. Signers open a secure link (or verify via OTP channel on higher tiers), complete their fields, and download the final document. Only senders and workspace members need accounts.' },
+
+  // Documents & security
+  { id: 'kb-006', category: 'Security', q: 'Where are my documents stored?', a: 'In EU infrastructure by default, encrypted at rest with AES-GCM envelope encryption. Self-hosted and enterprise deployments can pin storage endpoints to regions or infrastructure the operator controls — the platform is explicit about where bytes live.' },
+  { id: 'kb-007', category: 'Security', q: 'How do I know a signed PDF has not been altered?', a: 'The completed envelope is sealed as a PAdES document: signatures, X.509 certificate, and an RFC 3161 timestamp are embedded in the file, and every document state is hash-anchored in the audit chain. Verify in Adobe Acrobat, on the public verify page, or via the API — any post-sealing change breaks verification.' },
+  { id: 'kb-008', category: 'Security', q: 'Can I export everything out of Docurama?', a: 'Yes. Sealed PDFs and their audit certificates download individually or via the API; workspaces have data-export tooling, and GDPR data-subject requests are handled through built-in DSAR workflows in the admin surface.' },
+  { id: 'kb-009', category: 'Security', q: 'What is the audit trail, technically?', a: 'An append-only, hash-chained event log: each lifecycle event records the document hash at that moment and links to the previous entry. The chain is re-verifiable at any time from the Trust Center — if any entry were edited, every later link would stop matching.' },
+  { id: 'kb-010', category: 'Security', q: 'Do you support two-factor / OTP verification for signers?', a: 'Yes. Beyond email links, higher tiers support OTP channels including email OTP, SMS OTP, and WhatsApp/Telegram OTP, letting you raise signer-assurance per envelope. The channels used are recorded on the audit trail.' },
+
+  // Teams
+  { id: 'kb-011', category: 'Teams', q: 'How do colleagues join my workspace?', a: 'Claim and verify your company domain in workspace settings (a DNS TXT record proves ownership). Then choose a join mode: auto-join activates matching signups immediately through a single-use email link, or approval-required holds them in the admin queue for review. Both modes are auditable.' },
+  { id: 'kb-012', category: 'Teams', q: 'What is the difference between a workspace and a company?', a: 'A company (organization) is the billing and membership boundary; workspaces organize the signing work — templates, folders, envelopes, stamps. The company switcher in the header moves between organizations you belong to; verified domains attach at company level.' },
+  { id: 'kb-013', category: 'Teams', q: 'Can I control who sees which templates and envelopes?', a: 'Templates have sharing scope (private or workspace-wide), folders organize envelopes, and role-based permissions govern admin actions. Domain-verified workspaces additionally gate membership itself through the join modes.' },
+  { id: 'kb-014', category: 'Teams', q: 'Is there an API?', a: 'Yes — API keys are created in workspace settings and scoped to the workspace. Create envelopes from templates, receive completion webhooks, download sealed documents and audit certificates, and verify documents programmatically. The API docs route has the full reference.' },
+
+  // Billing
+  { id: 'kb-015', category: 'Billing', q: 'Why is a billing cycle 35 days?', a: 'Because about ten days a month are weekends and a 30-day cycle charges you for time you cannot work. At 35 days, twelve cycles cover 420 days of service — 55 days more than a calendar year — at the same twelve payments. The cycle length is a product constant, not a promotion.' },
+  { id: 'kb-016', category: 'Billing', q: 'How does the Fair Exit Guarantee refund work?', a: 'On 6- and 12-month commitments, every unused full cycle refunds to your payment method pro-rata at your committed per-cycle rate — self-serve, one click. On 3-month commitments unused cycles become account credit. On rolling plans coverage simply runs to the end of the paid cycle. The pricing page previews any cancellation with the same math the billing engine runs.' },
+  { id: 'kb-017', category: 'Billing', q: 'Can I change tiers or commitments mid-plan?', a: 'Upgrades apply immediately with the new features available right away. Downgrades and commitment changes schedule for the end of the current cycle. Fair Exit applies if you step down from a cash-refund commitment early — unused full cycles refund automatically.' },
+  { id: 'kb-018', category: 'Billing', q: 'Is checkout live?', a: 'While the operator has not connected Stripe price IDs, the pricing page marks checkout "coming soon" and the plans API reports exactly what is configured. The platform never fakes a purchase — this is the same honesty model the rest of the Trust Center uses.' },
+
+  // Getting started
+  { id: 'kb-019', category: 'Getting started', q: 'Is there a free trial?', a: 'Yes — new workspaces start with a trial that exercises the full signing flow, no credit card required. When it ends you pick a tier; your documents, templates, and audit trails carry over untouched.' },
+  { id: 'kb-020', category: 'Getting started', q: 'Can I self-host Docurama?', a: 'Yes. The platform ships with a self-host mode where the operator controls storage, keys, database, and the timestamp authority configuration. Self-host workspaces run unlimited internally; the Trust Center reflects which controls are operator-owned in that deployment.' },
+];
