@@ -2,8 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main, quality, Quality]
+    branches: [main]
   pull_request:
+    branches: [main]
   # ISO-07: the gates are not just a merge-time check - they re-run weekly so
   # newly-published CVEs against already-merged dependencies surface without
   # waiting for the next push. Trivy container scanning rides the same trigger.
