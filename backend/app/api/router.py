@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api import (
     auth, envelopes, templates, signing, verify, ws, domains, folders, webhooks,
     documents, companies, settings_api, stamps, onboarding, quotas,
-    billing, admin, legal,
+    billing, admin, legal, compliance,
 )
 
 api_router = APIRouter()
@@ -25,4 +25,8 @@ api_router.include_router(quotas.router)
 api_router.include_router(billing.router)
 api_router.include_router(admin.router)
 api_router.include_router(legal.router)
+# Compliance & Trust Foundation: admin surface (audit chains, DSAR, retention,
+# incidents, controls) plus the public trust-center payload.
+api_router.include_router(compliance.router)
+api_router.include_router(compliance.public_router)
 

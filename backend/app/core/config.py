@@ -130,6 +130,17 @@ class Settings(BaseSettings):
     # where an age statement is itself problematic).
     AGE_GATE_REQUIRED: bool = os.getenv("DOCURAMA_AGE_GATE_REQUIRED", "true").strip().lower() in ("1", "true", "yes", "on")
 
+    # --- Compliance & Trust Foundation -----------------------------------
+    # Background compliance workers (DSAR processing, retention sweeps). Off by
+    # default so single-worker local runs stay quiet; operators opt in, and the
+    # admin API exposes the same operations synchronously.
+    COMPLIANCE_JOBS_ENABLED: bool = os.getenv("DOCURAMA_COMPLIANCE_JOBS_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+    DSAR_POLL_SECONDS: int = int(os.getenv("DOCURAMA_DSAR_POLL_SECONDS", "60"))
+    RETENTION_SWEEP_SECONDS: int = int(os.getenv("DOCURAMA_RETENTION_SWEEP_SECONDS", "900"))
+    # Tamper-evident chaining for envelope audit events. Disabling it is a
+    # downgrade of the audit trail and shows up as such in the docs.
+    AUDIT_CHAIN_ENABLED: bool = os.getenv("DOCURAMA_AUDIT_CHAIN_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+
     model_config = SettingsConfigDict(case_sensitive=True, extra="ignore")
 
     @property

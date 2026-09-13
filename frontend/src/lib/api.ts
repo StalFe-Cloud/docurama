@@ -1283,3 +1283,179 @@ export const billingApi = {
     return res.json();
   },
 };
+
+// ---------------------------------------------------------------------------
+// Compliance & Trust Foundation (Sprint 5)
+// ---------------------------------------------------------------------------
+
+export interface ComplianceControl {
+  id: string;
+  control_id: string;
+  name: string;
+  framework: string;
+  description: string;
+  owner_role: string;
+  readiness: 'Implemented' | 'Partial' | 'Missing' | 'Needs Review';
+  review_frequency: string;
+  last_reviewed_at: string | null;
+  evidence: { id: string; kind: string; reference: string; note: string | null }[];
+}
+
+export const complianceApi = {
+  overview: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/overview`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load compliance overview');
+    }
+    return res.json();
+  },
+  controls: async (framework?: string): Promise<ComplianceControl[]> => {
+    const res = await fetch(
+      `${API_BASE}/admin/compliance/controls${framework ? `?framework=${framework}` : ''}`,
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load controls');
+    }
+    return res.json();
+  },
+  setReadiness: async (controlId: string, readiness: string, note?: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/controls/${controlId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readiness, note }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update readiness');
+    }
+    return res.json();
+  },
+  verifyChains: async (scope: string = 'security', envelopeId?: string): Promise<any> => {
+    const q = envelopeId ? `&envelope_id=${encodeURIComponent(envelopeId)}` : '';
+    const res = await fetch(`${API_BASE}/admin/audit/verify?scope=${scope}${q}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to verify chains');
+    }
+    return res.json();
+  },
+  sealChain: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/audit/seal`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to seal chain');
+    }
+    return res.json();
+  },
+  securityEvents: async (limit: number = 50): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/admin/audit/security-events?limit=${limit}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load security events');
+    }
+    return res.json();
+  },
+  listDsar: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/admin/dsar`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load DSAR requests');
+    }
+    return res.json();
+  },
+  createDsar: async (subjectEmail: string, kind: string, accountId?: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/dsar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject_email: subjectEmail,
+        kind,
+        ...(accountId ? { account_id: accountId } : {}),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to create DSAR request');
+    }
+    return res.json();
+  },
+  runDsar: async (id: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/dsar/${id}/run`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to run DSAR request');
+    }
+    return res.json();
+  },
+  cancelDsar: async (id: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/dsar/${id}/cancel`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to cancel DSAR request');
+    }
+    return res.json();
+  },
+  incidents: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/admin/incidents`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load incidents');
+    }
+    return res.json();
+  },
+  createIncident: async (payload: {
+    title: string;
+    description: string;
+    severity: string;
+  }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/incidents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to record incident');
+    }
+    return res.json();
+  },
+  subprocessors: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/admin/subprocessors`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load subprocessors');
+    }
+    return res.json();
+  },
+  addSubprocessor: async (payload: {
+    name: string;
+    purpose: string;
+    data_location?: string;
+    status?: string;
+  }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/subprocessors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to add subprocessor');
+    }
+    return res.json();
+  },
+};
+
+// Public trust center — no authentication, factual content only.
+export const trustApi = {
+  get: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/trust`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load trust center');
+    }
+    return res.json();
+  },
+};

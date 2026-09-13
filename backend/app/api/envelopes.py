@@ -26,6 +26,7 @@ from app.services.tenant_resolver import TenantContext
 from app.services.webhook_dispatcher import WebhookDispatcher
 from app.services.quotas import check_envelope_quota, get_effective_plan, PLAN_DEFINITIONS, PlanTier
 from app.services import mailer, smtp_config
+from app.services.upload_validation import validate_pdf_upload
 
 router = APIRouter(prefix="/envelopes", tags=["envelopes"])
 
@@ -91,6 +92,14 @@ async def create_envelope(
                 status_code=402,
                 detail=f"Monthly envelope quota reached ({used}/{limit}). Please upgrade your plan at https://{cloud_domain} to send more documents.",
             )
+
+    # Content sniffing, not trust-the-client: the payload must declare itself a
+    # PDF by its magic bytes before it is stored, or it is rejected with a 415
+    # at the door instead of failing opaquely at signing time.
+    try:
+        validate_pdf_upload(file.file)
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc))
 
     storage_dir = settings.STORAGE_DIR
     os.makedirs(storage_dir, exist_ok=True)

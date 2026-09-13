@@ -16,6 +16,7 @@ from sqlalchemy.future import select
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models import AccountSetting, ApiKey, PlatformSetting, SigningCertificate, User
+from app.services import audit_chain
 from app.schemas import (
     AccountSettingOut,
     AccountSettingUpdate,
@@ -187,6 +188,13 @@ async def create_api_key(
         is_active=True,
     )
     db.add(row)
+    await audit_chain.safe_append(
+        db, event_type="api_key_created", severity="warning",
+        account_id=account_id, actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        description=f"API key '{row.name}' created (prefix {prefix})",
+        detail={"key_id": row.id, "scopes": row.scopes},
+    )
     await db.commit()
     await db.refresh(row)
 
@@ -215,6 +223,13 @@ async def revoke_api_key(
     # Revoked rather than deleted, so delivery logs referencing it stay resolvable.
     row.is_active = False
     row.revoked_at = datetime.now(timezone.utc)
+    await audit_chain.safe_append(
+        db, event_type="api_key_revoked", severity="warning",
+        account_id=account_id, actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        description=f"API key '{row.name}' revoked",
+        detail={"key_id": row.id},
+    )
     await db.commit()
     return {"success": True, "id": key_id, "message": f"Revoked API key '{row.name}'."}
 

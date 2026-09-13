@@ -3,7 +3,10 @@ from app.models.models import (
     ApiKey, SigningCertificate, AccountSetting,
     PasswordResetToken, UserStamp,
     TemplateFolder, Webhook, WebhookDelivery, PlatformSetting,
-    LegalNotice, MarketingUnsubscribe, EmailSendLog, DomainJoinRequest
+    LegalNotice, MarketingUnsubscribe, EmailSendLog, DomainJoinRequest,
+    SecurityEvent, DsarRequest, ConsentRecord, LegalHold, RetentionPolicy,
+    SecurityIncident, Subprocessor, ComplianceControl, ControlEvidence,
+    AccessReview, AuditChainSeal,
 )
 
 __all__ = [
@@ -31,4 +34,15 @@ __all__ = [
     "MarketingUnsubscribe",
     "EmailSendLog",
     "DomainJoinRequest",
+    "SecurityEvent",
+    "DsarRequest",
+    "ConsentRecord",
+    "LegalHold",
+    "RetentionPolicy",
+    "SecurityIncident",
+    "Subprocessor",
+    "ComplianceControl",
+    "ControlEvidence",
+    "AccessReview",
+    "AuditChainSeal",
 ]

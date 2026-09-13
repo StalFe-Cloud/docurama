@@ -273,6 +273,12 @@ class AuditEvent(Base):
     user_agent = Column(String(500), nullable=True)
     description = Column(Text, nullable=False)
     hash_state = Column(String(64), nullable=True)
+    # Tamper-evident chaining (Sprint 5): each event commits to its predecessor
+    # within the same envelope. Nullable so historical rows stay valid; the
+    # flush listener chains every new row. See app/services/audit_chain.py.
+    seq = Column(Integer, nullable=True)
+    prev_hash = Column(String(64), nullable=True)
+    event_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     
     envelope = relationship("Envelope", back_populates="audit_events")
@@ -577,3 +583,234 @@ class DomainJoinRequest(Base):
     decided_by = Column(String(255), nullable=True)
     decided_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Compliance & Trust Foundation (Sprint 5)
+#
+# These tables implement the controls of the enterprise compliance program:
+# a hash-chained security event ledger, DSAR request tracking with the five
+# honest states, consent records, configurable retention with legal holds,
+# security incident response with the 72-hour GDPR clock, a subprocessor
+# registry, a control/evidence catalog, and access reviews. Every readiness
+# statement made anywhere about these controls uses the vocabulary
+# Implemented / Partial / Missing / Needs Review — never "certified".
+# ---------------------------------------------------------------------------
+
+class SecurityEvent(Base):
+    """Platform-level, hash-chained audit ledger.
+
+    Unlike envelope-scoped AuditEvents, this ledger records authentication,
+    administrative, privacy and operational events. Each row commits to its
+    predecessor via prev_hash/event_hash, so deletion or mutation of any row
+    is detectable by POST-free verification (GET /api/admin/audit/verify).
+    """
+    __tablename__ = "security_events"
+
+    seq = Column(Integer, nullable=False, unique=True, index=True)
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), nullable=True, index=True)
+    actor_user_id = Column(String(36), nullable=True)
+    actor_email = Column(String(255), nullable=True)
+    # Types: login_success, login_failed, logout, password_changed,
+    # password_reset_requested, totp_enabled, totp_disabled, api_key_created,
+    # api_key_revoked, dsar_created, dsar_completed, dsar_failed,
+    # consent_recorded, consent_revoked, retention_deleted, legal_hold_added,
+    # legal_hold_released, incident_recorded, incident_updated,
+    # subprocessor_recorded, access_review_recorded, control_reviewed
+    event_type = Column(String(50), nullable=False, index=True)
+    # info | warning | critical
+    severity = Column(String(20), nullable=False, default="info")
+    ip_address = Column(String(100), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    description = Column(Text, nullable=False)
+    detail = Column(JSON, default=dict)
+    prev_hash = Column(String(64), nullable=False)
+    event_hash = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class DsarRequest(Base):
+    """A data-subject request (export or erasure) with an honest lifecycle.
+
+    States: queued -> processing -> completed | failed, with queued ->
+    cancelled also allowed. Nothing may jump to completed without the work
+    actually having been done; failures carry a machine-readable reason.
+    """
+    __tablename__ = "dsar_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False, index=True)
+    subject_email = Column(String(255), nullable=False, index=True)
+    # export | delete
+    kind = Column(String(20), nullable=False)
+    # queued | processing | completed | failed | cancelled
+    state = Column(String(20), nullable=False, default="queued", index=True)
+    requested_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    failure_reason = Column(Text, nullable=True)
+    result_ref = Column(String(500), nullable=True)
+    result_summary = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ConsentRecord(Base):
+    """A ledger row for a data subject's consent to a named purpose."""
+    __tablename__ = "consent_records"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False, index=True)
+    subject_email = Column(String(255), nullable=False, index=True)
+    purpose = Column(String(100), nullable=False)
+    granted = Column(Boolean, nullable=False, default=True)
+    granted_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    evidence_ref = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class LegalHold(Base):
+    """A hold that suspends retention-driven deletion for a scope."""
+    __tablename__ = "legal_holds"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    reason = Column(Text, nullable=False)
+    # NULL scope means the whole workspace; otherwise only this envelope.
+    scope_envelope_id = Column(String(36), nullable=True, index=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    released_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class RetentionPolicy(Base):
+    """Configurable retention for a resource type.
+
+    An account_id of NULL is the platform default that every workspace
+    inherits until it defines its own override.
+    """
+    __tablename__ = "retention_policies"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True, index=True)
+    # envelopes | security_events
+    resource_type = Column(String(50), nullable=False)
+    retention_days = Column(Integer, nullable=False)
+    # delete | anonymize
+    action = Column(String(20), nullable=False, default="delete")
+    enabled = Column(Boolean, nullable=False, default=True)
+    updated_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class SecurityIncident(Base):
+    """A security incident with the GDPR 72-hour authority-notification clock."""
+    __tablename__ = "security_incidents"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    # low | medium | high | critical
+    severity = Column(String(20), nullable=False, default="medium", index=True)
+    # detected | contained | resolved
+    status = Column(String(20), nullable=False, default="detected", index=True)
+    account_id = Column(String(36), ForeignKey("accounts.id"), nullable=True, index=True)
+    detected_at = Column(DateTime(timezone=True), nullable=False)
+    contained_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    # detected_at + 72h, computed at insert; never extended.
+    gdpr_notification_deadline = Column(DateTime(timezone=True), nullable=False)
+    authority_notified_at = Column(DateTime(timezone=True), nullable=True)
+    subjects_notified_at = Column(DateTime(timezone=True), nullable=True)
+    reported_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class Subprocessor(Base):
+    """Registry of processors that handle platform data."""
+    __tablename__ = "subprocessors"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    name = Column(String(255), nullable=False)
+    purpose = Column(String(500), nullable=False)
+    data_location = Column(String(255), nullable=False, default="Operator-configured")
+    # active | planned | retired
+    status = Column(String(20), nullable=False, default="active", index=True)
+    url = Column(String(500), nullable=True)
+    added_at = Column(DateTime(timezone=True), default=utcnow)
+    removed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class ComplianceControl(Base):
+    """One control of the compliance program with its honest readiness state."""
+    __tablename__ = "compliance_controls"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    control_id = Column(String(50), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=False)
+    # GDPR | ISO27001 | SOC2 | eIDAS
+    framework = Column(String(50), nullable=False, index=True)
+    description = Column(Text, nullable=False)
+    owner_role = Column(String(100), nullable=False, default="Platform operator")
+    # Implemented | Partial | Missing | Needs Review — the only legal values.
+    readiness = Column(String(20), nullable=False, default="Missing")
+    # quarterly | annual | continuous
+    review_frequency = Column(String(20), nullable=False, default="annual")
+    last_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    evidence = relationship("ControlEvidence", back_populates="control", cascade="all, delete-orphan")
+
+
+class ControlEvidence(Base):
+    """A pointer to real evidence for a control: code, tests, config or logs."""
+    __tablename__ = "control_evidence"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    control_id_fk = Column(String(36), ForeignKey("compliance_controls.id"), nullable=False, index=True)
+    # test | code | config | runbook | endpoint
+    kind = Column(String(30), nullable=False, default="test")
+    reference = Column(String(500), nullable=False)
+    note = Column(Text, nullable=True)
+    collected_at = Column(DateTime(timezone=True), default=utcnow)
+    control = relationship("ComplianceControl", back_populates="evidence")
+
+
+class AccessReview(Base):
+    """A recorded periodic review of who has access to what."""
+    __tablename__ = "access_reviews"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    period_start = Column(DateTime(timezone=True), nullable=False)
+    period_end = Column(DateTime(timezone=True), nullable=False)
+    reviewer_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewer_email = Column(String(255), nullable=False)
+    scope = Column(String(255), nullable=False, default="platform admin + workspace owners")
+    findings = Column(Text, nullable=True)
+    accounts_reviewed = Column(Integer, nullable=False, default=0)
+    changes_required = Column(Integer, nullable=False, default=0)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class AuditChainSeal(Base):
+    """A point-in-time snapshot binding of a hash chain.
+
+    A seal records the expected tip (last seq + hash) and row count of a
+    ledger at sealing time. If a later verification walks to a different tip
+    or count, rows were added, removed or rewritten after the seal.
+    """
+    __tablename__ = "audit_chain_seals"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    # security_events | audit_events:{envelope_id}
+    scope = Column(String(100), nullable=False, index=True)
+    last_seq = Column(Integer, nullable=False)
+    last_event_hash = Column(String(64), nullable=False)
+    event_count = Column(Integer, nullable=False)
+    sealed_by = Column(String(255), nullable=False, default="system")
+    sealed_at = Column(DateTime(timezone=True), default=utcnow)

@@ -1,7 +1,13 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Dict
-from jose import jwt, JWTError
+import jwt
+# PyJWT replaces python-jose: the jose dependency tree pins ecdsa, which carries
+# an unfixed advisory (PYSEC-2026-1325) reachable only through EC-key algorithms
+# this platform never uses. PyJWT relies on cryptography alone. The alias keeps
+# every call site unchanged: PyJWTError is the base of all decode failures,
+# matching the breadth of jose's JWTError.
+from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
 from app.core.config import settings
 

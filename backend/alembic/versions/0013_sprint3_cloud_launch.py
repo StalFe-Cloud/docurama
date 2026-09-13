@@ -41,7 +41,12 @@ def _existing_columns(table: str) -> set:
     bind = op.get_bind()
     from sqlalchemy import inspect
 
-    inspector = inspect(bind)
+    try:
+        inspector = inspect(bind)
+    except Exception:
+        # Offline mode renders against a MockConnection with no inspector;
+        # assume absent so the fresh-install path is emitted.
+        return set()
     try:
         return {col["name"] for col in inspector.get_columns(table)}
     except Exception:
@@ -61,7 +66,10 @@ def _add_column_if_missing(table: str, column: sa.Column) -> None:
 def _table_exists(name: str) -> bool:
     from sqlalchemy import inspect
 
-    inspector = inspect(op.get_bind())
+    try:
+        inspector = inspect(op.get_bind())
+    except Exception:
+        return False
     return name in inspector.get_table_names()
 
 

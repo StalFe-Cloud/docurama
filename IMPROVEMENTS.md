@@ -689,3 +689,60 @@ DMCA intake 201 with SLA; subscription state honest; SPA rebuilt (AdminPage + Ac
 | `DOCURAMA_TLS_DOMAIN` + DNS provider token | `deploy/tls_wildcard.sh issue` → wildcard TLS |
 | DMCA agent registration + legal/privacy documents | Safe harbor + §15.4 paperwork items |
 | `STRIX_API_KEY` (+ Docker) | `scripts/run_strix.sh` agent pentest |
+
+---
+
+## §16 — Compliance & Trust Foundation (Sprint 5, implemented)
+
+§15 catalogued the gaps; this sprint implemented the controls in source code.
+Every claim below maps to code, tests, or endpoints in the tree — the
+terminology guardrail (§15.3) is enforced in code: the readiness vocabulary
+is a validation set (`app/services/compliance_catalog.READINESS_STATES`) and
+certification-like values are rejected with 422.
+
+### 16.1 What landed
+
+| # | Control | Where | Tests |
+|---|---------|-------|-------|
+| 1 | Tamper-evident audit hash chains (security ledger global, envelope trail per-envelope), flush-listener enforced for every write path, seal snapshots, verify endpoints | `app/services/audit_chain.py`, `GET /api/admin/audit/verify`, `POST /api/admin/audit/seal` | `tests/test_compliance_foundation.py` (tamper detection, batch chaining, seal-vs-deletion) |
+| 2 | DSAR engine: export bundle + erasure with five honest states; fails while signing obligations pending | `app/services/dsar.py`, `/api/admin/dsar*` | lifecycle, pending-failure, cancel, admin-gate tests |
+| 3 | Retention engine: platform-default + per-workspace policies, legal holds (workspace/envelope scope), bounded sweep, ledger-logged deletions, in-flight envelopes exempt | `app/services/retention.py`, `/api/admin/retention-policies`, `/legal-holds` | delete/anonymize/hold/in-flight tests |
+| 4 | Consent ledger (purpose-scoped, revocable) | `consent_records`, `/api/admin/consents` | record+revoke test |
+| 5 | Security-event logging: login success/failure, logout, password change/reset, TOTP enable/disable, API key create/revoke → hash-chained ledger | `app/api/auth.py`, `app/api/settings_api.py` | ledger-writes tests |
+| 6 | Incident response: severity/status lifecycle, server-computed non-extendable 72h GDPR clock, honest overdue flags, notification timestamps | `security_incidents`, `/api/admin/incidents*` | 72h-clock + overdue tests |
+| 7 | Subprocessor registry + public factual publication | `subprocessors`, `/api/admin/subprocessors`, `GET /api/trust`, `/trust` page | registry→trust test |
+| 8 | Control/evidence catalog: 24 controls across GDPR/ISO27001/SOC2/eIDAS with honest baseline states and real evidence references; four-state vocabulary enforced | `app/services/compliance_catalog.py`, `compliance_controls` + `control_evidence`, `/api/admin/compliance/*` | vocabulary + certification-language rejection tests |
+| 9 | Compliance dashboard (admin) + public trust center (frontend) | `/admin/compliance`, `/trust` pages | build green; live probes |
+| 10 | Access reviews | `access_reviews`, `/api/admin/compliance/access-reviews` | recording test |
+| 11 | Upload magic-byte gate (PDF sniffing at ingest) | `app/services/upload_validation.py`, envelopes ingest | impostor-rejection + real-PDF tests |
+| 12 | Compliance background workers (opt-in `DOCURAMA_COMPLIANCE_JOBS_ENABLED`), same operations available synchronously via API | `app/services/compliance_jobs.py`, `app/main.py` lifespan | — |
+| 13 | CI security gates: pip-audit, npm audit (critical), bandit (high), gitleaks — fail-on-critical; local parity via `scripts/security_gates.sh` | `.github/workflows/ci.yml` job `security-gates` | run locally: ALL GATES GREEN |
+| 14 | Policies mapping every claim to a real control ID | `docs/policies/*.md` (5 documents) | — |
+| 15 | Dependency hardening: python-jose → PyJWT (drops unfixed-advisory ecdsa tree) | `backend/requirements.txt`, `app/core/security.py` | 490/490 |
+
+### 16.2 Honest baseline (shipped readiness states)
+
+The catalog seeds with these states and no others — see §15.3 for the
+vocabulary rules. Highlights: GDPR family 8/8 Implemented; ISO-04 (encryption
+at rest for stored PDFs) Partial — integrity is anchored, files are plaintext
+on the operator's volume; ISO-06 (backup restore drills) Partial; ISO-07
+(vulnerability management) Partial — CI gates done, runtime scanning absent;
+SOC2-01 (risk assessment) Missing; EIDAS-02 (qualified TSA) Partial — support
+exists, qualification is the operator's TSA choice.
+
+### 16.3 Migration
+
+`0014_compliance_foundation` adds eleven tables + chain columns on
+`audit_events` (nullable; historical rows stay valid). Verified both
+dialects: offline PostgreSQL SQL renders the full chain (959 lines, 24
+catalog INSERTs); a real SQLite upgrade applies cleanly with all tables and
+seeds. Idempotent and offline-tolerant inspection guards were also backported
+to `0013`.
+
+### 16.4 Operator responsibilities (unchanged, now enumerated)
+
+Stripe keys/prices, DNS/TLS tokens, Redis/S3 credentials, DMCA agent + legal
+paperwork, STRIX pentest key, TSA choice (qualified or not), storage volume
+encryption, restore drills, vendor contracts + registry entries for actually
+engaged processors. The trust center publishes exactly what the registry
+contains — nothing is invented on the operator's behalf.

@@ -14,7 +14,9 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicFormPage } from './pages/PublicFormPage';
 import { ApiDocsPage } from './pages/ApiDocsPage';
 import { AdminPage } from './pages/AdminPage';
+import { CompliancePage } from './pages/CompliancePage';
 import { ActivationPage } from './pages/ActivationPage';
+import { TrustPage } from './pages/TrustPage';
 import { api } from './lib/api';
 
 export const App: React.FC = () => {
@@ -209,7 +211,7 @@ export const App: React.FC = () => {
           onUserUpdate={(u) => setUser(u)}
         />
         <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-2 pt-4 pb-12">
-          <AdminPage />
+          {path.startsWith('/admin/compliance') ? <CompliancePage /> : <AdminPage />}
         </main>
       </div>
     );
@@ -219,6 +221,12 @@ export const App: React.FC = () => {
   // design - the holder of the single-use email link lands here.
   if (path === '/activate') {
     return <ActivationPage />;
+  }
+
+  // 6d. Public trust center: /trust. No auth, no badges — the facts and the
+  // readiness vocabulary, served from GET /api/trust.
+  if (path === '/trust') {
+    return <TrustPage />;
   }
 
   // 5. Direct API Documentation Route: /api-docs, /docs/api, or /api/docs

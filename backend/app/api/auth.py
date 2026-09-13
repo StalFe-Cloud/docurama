@@ -31,6 +31,7 @@ from app.services import api_keys as api_key_service
 from app.services import password_reset as reset_service
 from app.services import mailer, smtp_config
 from app.services import totp as totp_service
+from app.services import audit_chain
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.services.qr_generator import generate_qr_base64
 
@@ -642,6 +643,16 @@ async def login(
     user = (await db.execute(query)).scalar_one_or_none()
 
     if not user:
+        # Unknown identity: record the attempt against the presented address so
+        # the ledger shows password guessing even when it misses.
+        await audit_chain.safe_append(
+            db, event_type="login_failed", severity="warning",
+            actor_email=credentials.email,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("User-Agent"),
+            description="Sign-in failed: unknown identity",
+        )
+        await db.commit()
         raise HTTPException(status_code=400, detail="Incorrect email or password.")
 
     # Passwords hashed under the superseded bcrypt scheme are migrated to argon2 on
@@ -650,6 +661,14 @@ async def login(
         credentials.password, user.hashed_password
     )
     if not password_ok:
+        await audit_chain.safe_append(
+            db, event_type="login_failed", severity="warning",
+            account_id=user.account_id, actor_user_id=user.id, actor_email=user.email,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("User-Agent"),
+            description="Sign-in failed: incorrect password",
+        )
+        await db.commit()
         raise HTTPException(status_code=400, detail="Incorrect email or password.")
 
     # An administratively pending (domain-join awaiting activation) or disabled
@@ -687,6 +706,14 @@ async def login(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     enriched_user = await build_user_out(user, db)
+    await audit_chain.safe_append(
+        db, event_type="login_success",
+        account_id=user.account_id, actor_user_id=user.id, actor_email=user.email,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("User-Agent"),
+        description="Sign-in succeeded (password factor)",
+    )
+    await db.commit()
     return TokenResponse(access_token=token, user=enriched_user)
 
 @router.get("/me", response_model=UserOut)
@@ -853,6 +880,12 @@ async def confirm_totp_enrolment(
     current_user.totp_enabled = True
     current_user.totp_confirmed_at = datetime.now(timezone.utc)
     current_user.totp_recovery_codes = hashed_codes
+    await audit_chain.safe_append(
+        db, event_type="totp_enabled", severity="warning",
+        account_id=current_user.account_id, actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        description="TOTP second factor enrolled and confirmed",
+    )
     await db.commit()
 
     return TotpEnrolResult(
@@ -892,6 +925,12 @@ async def disable_totp(
     # Dropping the second factor is a credential event: any session minted while
     # the factor was on must not survive it.
     current_user.token_version = (current_user.token_version or 0) + 1
+    await audit_chain.safe_append(
+        db, event_type="totp_disabled", severity="critical",
+        account_id=current_user.account_id, actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        description="TOTP second factor disabled after password re-authentication",
+    )
     await db.commit()
 
     return GenericAckResponse(success=True, message="Two-factor authentication is off.")
@@ -957,7 +996,6 @@ async def verify_totp_login(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     return TokenResponse(access_token=token, user=await build_user_out(user, db))
-
 
 @router.post("/request-password-reset", response_model=GenericAckResponse)
 @limiter.limit("5/minute")
@@ -1066,6 +1104,11 @@ async def reset_password(
     for other in others:
         other.used_at = now
 
+    await audit_chain.safe_append(
+        db, event_type="password_changed", severity="warning",
+        account_id=user.account_id, actor_user_id=user.id, actor_email=user.email,
+        description="Password reset via emailed link; sessions revoked",
+    )
     await db.commit()
 
     config = await smtp_config.resolve(db, user.account_id)
@@ -1112,6 +1155,12 @@ async def logout(
         )).scalar_one_or_none()
         if user is not None:
             user.token_version = (user.token_version or 0) + 1
+            await audit_chain.safe_append(
+                db, event_type="logout",
+                account_id=user.account_id, actor_user_id=user.id,
+                actor_email=user.email,
+                description="Sign-out; token version bumped",
+            )
             await db.commit()
 
     return {"message": "Logged out successfully"}

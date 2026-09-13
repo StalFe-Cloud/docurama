@@ -60,12 +60,30 @@ async def lifespan(app: FastAPI):
         # one of them actually sends.
         reminder_task = asyncio.create_task(reminder_loop())
 
+    compliance_tasks = []
+    if settings.COMPLIANCE_JOBS_ENABLED:
+        # DSAR processing and retention sweeps. Bounded batches, ledger-logged
+        # state changes; see app/services/compliance_jobs.py.
+        from app.services.compliance_jobs import dsar_loop, retention_loop
+        compliance_tasks = [
+            asyncio.create_task(dsar_loop()),
+            asyncio.create_task(retention_loop()),
+        ]
+
     yield
 
     if reminder_task is not None:
         reminder_task.cancel()
         try:
             await reminder_task
+        except asyncio.CancelledError:
+            pass
+
+    for task in compliance_tasks:
+        task.cancel()
+    for task in compliance_tasks:
+        try:
+            await task
         except asyncio.CancelledError:
             pass
 

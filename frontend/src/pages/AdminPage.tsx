@@ -116,7 +116,8 @@ export const AdminPage: React.FC = () => {
         <div>
           <h1 className="text-xl font-semibold text-[#37352f]">Platform Administration</h1>
           <p className="text-sm text-[#64748B]">
-            Deployment-wide view. Every action is enforced server-side and logged.
+            Deployment-wide view. Every action is enforced server-side and logged.{' '}
+            <a className="text-blue-700 hover:underline" href="/admin/compliance">Compliance dashboard →</a>
           </p>
         </div>
         <div className="flex gap-2">
