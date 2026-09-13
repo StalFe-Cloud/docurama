@@ -5,10 +5,14 @@
 useDefault = true
 
 [allowlist]
-description = "Global allowlist for API documentation examples and dummy tokens"
+description = "Global allowlist for documentation examples, test fixtures, and plan docs"
 paths = [
     '''frontend/src/pages/ApiDocsPage\.tsx''',
+    '''backend/tests/.*''',
+    '''docs/.*''',
 ]
 stopwords = [
     "YOUR_API_KEY",
+    "dcr_vfy_abc123",
+    "dcr_wh_sec_12345",
 ]
