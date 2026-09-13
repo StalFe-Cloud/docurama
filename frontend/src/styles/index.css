@@ -1,3 +1,6 @@
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,7 +10,44 @@
    The all-in-one workspace for documents and digital signatures.
    Deep navy hero band (#0a1530), signature purple CTA (#5645d4),
    sober 8px rectangular buttons, 12px cards, and pastel database property tints.
+   Self-hosted Geist Variable / Geist Mono Variable (no third-party font CDN —
+   EU data sovereignty: no font requests leave the origin).
    ========================================================================== */
+
+/*
+ * Semantic token layer (shadcn-style).
+ * Pages should prefer these over raw hex. Legacy hex classes still resolve
+ * through the palette in tailwind.config.js during the migration window.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --surface: #f6f5f4;
+  --surface-soft: #fafaf9;
+  --muted: #f6f5f4;
+  --muted-foreground: #787671;
+  --border: #e5e3df;
+  --border-strong: #c8c4be;
+  --input: #c8c4be;
+  --primary: #5645d4;
+  --primary-hover: #4534b3;
+  --primary-foreground: #ffffff;
+  --ring: #5645d4;
+  --secondary: #f6f5f4;
+  --secondary-foreground: #1a1a1a;
+  --accent: #f6f5f4;
+  --accent-foreground: #1a1a1a;
+  --success: #1a7f37;
+  --success-soft: #d9f3e1;
+  --warning: #9a5b00;
+  --warning-soft: #f9e79f;
+  --destructive: #c92a2a;
+  --destructive-soft: #ffe3e3;
+  --info: #0075de;
+  --info-soft: #dcecfa;
+}
 
 :root,
 [data-theme="docurama"],
@@ -46,18 +86,20 @@ body {
 
   background-color: #ffffff;
   color: #37352f;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Variable', 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Headings in Notion Sans / Inter */
+/* Headings share the UI family, tightened for display sizes */
 h1, h2, h3, h4, .font-heading {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Variable', 'Inter', system-ui, -apple-system, sans-serif;
   font-weight: 600;
   color: #1a1a1a;
   letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 /* Typography Hierarchy */
@@ -106,7 +148,7 @@ h1, h2, h3, h4, .font-heading {
 
 /* Buttons: Sober 8px Rectangles (NOT pills!) */
 .btn {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Variable', 'Inter', system-ui, -apple-system, sans-serif;
   font-weight: 500;
   font-size: 14px;
   line-height: 1.30;
@@ -292,7 +334,7 @@ input[type='url'],
 select,
 textarea,
 .base-input {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Variable', 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   font-weight: 400;
   border-radius: 8px !important;
@@ -443,6 +485,43 @@ textarea:focus,
 .docurama-dropzone:hover {
   border-color: #5645d4;
   background: #f6f5f4;
+}
+
+/* ==========================================================================
+   GLOBAL INTERACTION & QUALITY LAYER
+   Focus visibility (a11y), tabular data numerals, and motion safety.
+   ========================================================================== */
+
+/* Visible keyboard focus everywhere: WCAG 2.4.7. Mouse clicks stay clean. */
+.btn:focus-visible,
+.base-input:focus-visible,
+.nav-link-pill:focus-visible,
+.pill-tab:focus-visible,
+.toggle:focus-visible,
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Numerals in data tables, stats, and IDs align in columns. */
+.tabular-nums,
+td.font-mono,
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Respect reduced-motion preferences for every transition and animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Clean Scrollbar */

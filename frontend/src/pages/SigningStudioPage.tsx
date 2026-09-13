@@ -857,7 +857,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
                   <div className="absolute -top-6 left-0 text-[10px] font-mono text-slate-400 font-bold flex items-center gap-2">
                     <span>Page {page.page_number} of {pages.length}</span>
                     <span className="text-slate-600">•</span>
-                    <span className="text-slate-500 font-sans">Docurama Certified Rendering</span>
+                    <span className="text-slate-500 font-sans">Docurama Rendering</span>
                   </div>
 
                   {/* PyMuPDF High-Res Page Image */}
@@ -1021,7 +1021,7 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
               <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">{session?.envelope_title}</h2>
-                  <p className="text-xs text-slate-500">Docurama Certified Document</p>
+                  <p className="text-xs text-slate-500">Docurama Sealed Document</p>
                 </div>
                 <span className="text-[10px] font-mono text-slate-400 font-bold">SECURE-PADES</span>
               </div>
@@ -1341,9 +1341,9 @@ export const SigningStudioPage: React.FC<SigningStudioPageProps> = ({ token, onD
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                <span className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">RFC 3161 Certified Timestamping</span>
+                <span className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">RFC 3161 Timestamping</span>
                 <p className="text-[11px] text-slate-600">
-                  Every signature record captures hardware telemetry, IP address, and high-entropy timestamping issued by certified Trust Service Providers.
+                  Every signature record captures hardware telemetry, IP address, and high-entropy timestamping issued by Trust Service Providers.
                 </p>
               </div>
             </div>

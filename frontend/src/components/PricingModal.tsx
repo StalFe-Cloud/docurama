@@ -332,7 +332,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                 </div>
                 <div className="mt-2 text-[11px] font-medium text-slate-600 flex items-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                  <span>SecNumCloud, HDS, ISO 27001, eIDAS Qualified</span>
+                  <span>EU data residency, GDPR program, eIDAS-aligned PAdES</span>
                 </div>
               </div>
 
@@ -396,7 +396,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-[#1D72FE]" />
             <span>
-              100% GDPR compliant with data residency in European data centres.
+              GDPR compliance program with data residency in European data centres.
             </span>
           </div>
           <div className="text-[11px] text-slate-500 text-center sm:text-right">

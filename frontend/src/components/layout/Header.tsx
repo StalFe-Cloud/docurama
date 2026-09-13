@@ -13,6 +13,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { api, CompanyItem } from '../../lib/api';
+import { useToast } from '../ui/Toast';
 
 interface HeaderProps {
   currentTab: string;
@@ -40,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [newCompanyDomain, setNewCompanyDomain] = useState('');
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
   const [isSwitchingCompany, setIsSwitchingCompany] = useState(false);
+  const { toast } = useToast();
 
   const companies: CompanyItem[] = user?.companies || [];
   const activeCompany = companies.find(c => c.is_active_company || c.id === user?.account_id);
@@ -64,7 +66,8 @@ export const Header: React.FC<HeaderProps> = ({
         }
       }
     } catch (e: any) {
-      alert(e.message || 'Failed to switch company context');
+      console.error('Failed to switch company:', e?.message);
+      toast(e.message || 'Failed to switch company context', 'error');
     } finally {
       setIsSwitchingCompany(false);
       setCompanyDropdownOpen(false);
@@ -91,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({
         window.location.reload();
       }
     } catch (e: any) {
-      alert(e.message || 'Failed to create new company');
+      toast(e.message || 'Failed to create new company', 'error');
     } finally {
       setIsCreatingCompany(false);
     }
@@ -222,33 +225,40 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* Center Navigation Links for Authenticated Users */}
+          {/* Center Navigation Links for Authenticated Users.
+              Order follows the work: shape documents, track what was sent,
+              then prove authenticity. Settings lives in the account menu. */}
           {user && (
-            <nav className="hidden md:flex items-center space-x-1">
+            <nav className="hidden md:flex items-center space-x-1" aria-label="Primary">
               <button 
                 onClick={() => onSelectTab('templates')}
                 className={`nav-link-pill ${currentTab === 'templates' || currentTab === 'builder' ? 'active' : ''}`}
+                aria-current={currentTab === 'templates' || currentTab === 'builder' ? 'page' : undefined}
               >
                 Templates
               </button>
               <button 
                 onClick={() => onSelectTab('submissions')}
                 className={`nav-link-pill ${currentTab === 'submissions' ? 'active' : ''}`}
+                aria-current={currentTab === 'submissions' ? 'page' : undefined}
               >
                 Submissions
               </button>
               <button 
-                onClick={() => onSelectTab('settings')}
-                className={`nav-link-pill ${currentTab === 'settings' ? 'active' : ''}`}
-              >
-                Settings
-              </button>
-              <button 
                 onClick={() => onSelectTab('verify')}
                 className={`nav-link-pill ${currentTab === 'verify' ? 'active' : ''}`}
+                aria-current={currentTab === 'verify' ? 'page' : undefined}
               >
-                Verify Portal
+                Verify
               </button>
+              {user.is_platform_admin && (
+                <button
+                  onClick={() => { window.location.href = '/admin'; }}
+                  className={`nav-link-pill ${currentTab === 'admin' ? 'active' : ''}`}
+                >
+                  Admin
+                </button>
+              )}
             </nav>
           )}
         </div>

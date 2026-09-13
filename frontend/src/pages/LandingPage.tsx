@@ -80,11 +80,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         <div className="max-w-4xl mx-auto text-center relative z-10">
           
           {/* Top Announcement Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#e5e3df] shadow-xs text-xs font-medium text-[#37352f] mb-6 hover:border-[#5645d4]/40 transition-colors">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-[#e5e3df] shadow-sm text-xs font-medium text-[#37352f] mb-6 hover:border-[#5645d4]/40 transition-colors">
             <span className="flex h-2 w-2 rounded-full bg-[#1aae39]" />
             <span className="font-semibold text-[#5645d4]">X.509 PKI &bull; RFC 3161 Qualified</span>
             <span className="text-[#787671]">&bull;</span>
-            <span>eIDAS &amp; ESIGN Compliant</span>
+            <span>PAdES under eIDAS &amp; ESIGN</span>
           </div>
 
           {/* High-Impact Display Headline in Notion 600 weight */}

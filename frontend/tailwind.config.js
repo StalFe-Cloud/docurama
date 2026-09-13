@@ -71,9 +71,9 @@ export default {
         muted: '#bbb8b1',
       },
       fontFamily: {
-        sans: ['"Notion Sans"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['"Notion Sans"', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
+        sans: ['"Geist Variable"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['"Geist Variable"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"Geist Mono Variable"', '"Geist Mono"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         xs: '4px',
@@ -93,5 +93,5 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [require('tailwindcss-animate')],
 }
