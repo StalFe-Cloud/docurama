@@ -14,6 +14,7 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { PublicFormPage } from './pages/PublicFormPage';
 import { ApiDocsPage } from './pages/ApiDocsPage';
 import { AdminPage } from './pages/AdminPage';
+import { AdminSetupPage } from './pages/AdminSetupPage';
 import { CompliancePage } from './pages/CompliancePage';
 import { ActivationPage } from './pages/ActivationPage';
 import { TrustPage } from './pages/TrustPage';
@@ -339,6 +340,31 @@ const AppShell: React.FC = () => {
       <MarketingShell user={user} navigate={navigate} handleLogout={handleLogout} wide>
         <GalleryPage onNavigate={navigate} />
       </MarketingShell>
+    );
+  }
+
+  // Platform Administrator Setup: /admin/setup, with /setup and /admin/signup as aliases.
+  if (path === '/admin/setup' || path === '/setup' || path === '/admin/signup') {
+    return (
+      <div className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col font-sans">
+        <Header
+          currentTab="signin"
+          onSelectTab={navigate}
+          onNewEnvelope={() => navigate('builder')}
+          user={user}
+          onLogout={handleLogout}
+          onSignIn={() => navigate('signin')}
+        />
+        <main className="flex-1 flex items-center justify-center p-4">
+          <AdminSetupPage
+            onSetupComplete={(u) => {
+              setUser(u);
+              window.location.href = '/admin';
+            }}
+          />
+        </main>
+        <MarketingFooter navigate={navigate} />
+      </div>
     );
   }
 

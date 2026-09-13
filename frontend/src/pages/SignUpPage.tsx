@@ -151,11 +151,18 @@ export const SignUpPage: React.FC = () => {
           </div>
         </form>
 
-        <div className="mt-4 text-center text-xs text-[#787671]">
-          Already have an account?{' '}
-          <a href="/sign_in" className="text-[#0075de] hover:underline transition-colors">
-            Sign in
-          </a>
+        <div className="mt-4 text-center text-xs text-[#787671] space-y-1">
+          <div>
+            Already have an account?{' '}
+            <a href="/sign_in" className="text-[#0075de] hover:underline transition-colors">
+              Sign in
+            </a>
+          </div>
+          <div>
+            <a href="/admin/setup" className="text-[#787671] hover:text-[#5645d4] hover:underline transition-colors text-[11px]">
+              Platform administrator setup &rarr;
+            </a>
+          </div>
         </div>
 
         <div className="mt-6 text-center text-xs text-[#787671]">

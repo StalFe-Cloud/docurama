@@ -11,14 +11,18 @@ does not become the N+1 engine that slows production down as tenancy grows.
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.api.auth import get_current_user
 from app.api.legal import _require_platform_admin
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import limiter
+from app.core.security import get_password_hash, create_access_token
 from app.models import Account, AccountMembership, User, Envelope, LegalNotice
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -158,3 +162,160 @@ async def resolve_legal_queue_item(
     return await _resolve(
         notice_id=notice_id, payload=body, current_user=current_user, db=db
     )
+
+
+class AdminSetupInput(BaseModel):
+    first_name: str
+    last_name: Optional[str] = ""
+    email: EmailStr
+    password: str
+    organization_name: Optional[str] = None
+
+
+@router.get("/setup/status")
+async def get_admin_setup_status(db: AsyncSession = Depends(get_db)):
+    """Check whether initial platform administrator setup is required."""
+    admin_count = (await db.execute(
+        select(func.count(User.id)).where(User.is_platform_admin == True, User.is_active == True)  # noqa: E712
+    )).scalar() or 0
+    return {
+        "needs_setup": admin_count == 0,
+        "admin_count": admin_count,
+        "deployment_mode": settings.DEPLOYMENT_MODE,
+        "platform_domain": settings.CLOUD_DOMAIN or "docurama",
+    }
+
+
+@router.post("/setup")
+@limiter.limit("5/minute")
+async def setup_platform_admin(
+    request: Request,
+    payload: AdminSetupInput,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Initial platform administrator setup.
+    Only permitted when no active platform administrator exists in the system.
+    """
+    admin_count = (await db.execute(
+        select(func.count(User.id)).where(User.is_platform_admin == True, User.is_active == True)  # noqa: E712
+    )).scalar() or 0
+
+    if admin_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Initial platform administrator has already been configured for this deployment.",
+        )
+
+    password = payload.password or ""
+    if len(password) < 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrator password must be at least 12 characters long.",
+        )
+
+    clean_email = str(payload.email).strip().lower()
+    first_name = payload.first_name.strip()
+    if not first_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="First name is required.",
+        )
+
+    is_cloud = (settings.DEPLOYMENT_MODE or "").strip().lower() == "cloud"
+
+    existing = (await db.execute(select(User).where(User.email == clean_email))).scalar_one_or_none()
+    if existing:
+        existing.is_platform_admin = True
+        existing.is_active = True
+        existing.role = "admin"
+        existing.hashed_password = get_password_hash(password)
+        user = existing
+        account = (await db.execute(select(Account).where(Account.id == user.account_id))).scalar_one_or_none()
+        if not account:
+            account = Account(
+                name=payload.organization_name or f"{first_name}'s Administration",
+                plan="unlimited" if not is_cloud else "enterprise",
+                is_trial=False,
+            )
+            db.add(account)
+            await db.flush()
+            user.account_id = account.id
+    else:
+        account = Account(
+            name=payload.organization_name or f"{first_name}'s Administration",
+            plan="unlimited" if not is_cloud else "enterprise",
+            is_trial=False,
+        )
+        db.add(account)
+        await db.flush()
+
+        user = User(
+            account_id=account.id,
+            email=clean_email,
+            hashed_password=get_password_hash(password),
+            first_name=first_name,
+            last_name=(payload.last_name or "").strip(),
+            role="admin",
+            is_platform_admin=True,
+            is_active=True,
+        )
+        db.add(user)
+        await db.flush()
+
+        membership = AccountMembership(
+            user_id=user.id,
+            account_id=account.id,
+            role="owner",
+            is_active=True,
+        )
+        db.add(membership)
+
+    await db.commit()
+    await db.refresh(user)
+
+    try:
+        from app.services.audit_chain import append_security_event
+        await append_security_event(
+            db,
+            user_id=user.id,
+            account_id=user.account_id,
+            event_type="initial_platform_admin_setup",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            details={"email": user.email},
+        )
+        await db.commit()
+    except Exception:
+        pass
+
+    token = create_access_token(
+        subject=user.id,
+        claims={
+            "purpose": "session",
+            "role": user.role,
+            "email": user.email,
+            "account_id": user.account_id,
+            "is_platform_admin": True,
+            "ver": user.token_version or 0,
+        },
+    )
+
+    response.set_cookie(
+        key=settings.SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+    from app.api.auth import build_user_out
+    enriched_user = await build_user_out(user, db)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": enriched_user,
+    }
+

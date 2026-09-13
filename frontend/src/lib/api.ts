@@ -464,6 +464,38 @@ export const api = {
     }
     return res.json();
   },
+  getAdminSetupStatus: async (): Promise<{ needs_setup: boolean; admin_count: number; deployment_mode: string; platform_domain: string }> => {
+    const res = await fetch(`${API_BASE}/admin/setup/status`);
+    if (!res.ok) throw new Error('Failed to fetch admin setup status');
+    return res.json();
+  },
+  setupAdmin: async (data: {
+    first_name: string;
+    last_name?: string;
+    email: string;
+    password: string;
+    organization_name?: string;
+  }) => {
+    const res = await fetch(`${API_BASE}/admin/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      let message = 'Could not initialize platform administrator';
+      try {
+        const err = await res.json();
+        if (Array.isArray(err.detail)) {
+          message = err.detail.map((item: any) => item?.msg || String(item)).join(' ');
+        } else if (err && err.detail) {
+          message = err.detail;
+        }
+      } catch (e) {}
+      throw new Error(message);
+    }
+    return res.json();
+  },
   // Domain-join account activation (§18): consumes the single-use token from
   // the activation email. The backend owns the semantics; the result reports
   // either an active membership or the approval-pending state.
