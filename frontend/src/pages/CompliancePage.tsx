@@ -310,7 +310,7 @@ export const CompliancePage: React.FC = () => {
 
       {/* Incidents */}
       <div className="mt-4">
-        <Card title="Incident register — GDPR 72-hour clock">
+        <Card title="Incident register - GDPR 72-hour clock">
           <div className="divide-y divide-[#f1f0ee]">
             {incidents.map((i) => (
               <div key={i.id} className="py-2.5 flex items-start justify-between gap-4">
@@ -353,7 +353,7 @@ export const CompliancePage: React.FC = () => {
             ))}
             {subprocessors.length === 0 && (
               <p className="py-2 text-sm text-[#91918e]">
-                Registry empty — subprocessors appear on /trust as they are added.
+                Registry empty - subprocessors appear on /trust as they are added.
               </p>
             )}
           </div>
@@ -362,7 +362,7 @@ export const CompliancePage: React.FC = () => {
 
       {/* Change control (ISO-09) */}
       <div className="mt-4">
-        <Card title="Change control — four-eyes (ISO-09)">
+        <Card title="Change control - four-eyes (ISO-09)">
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               className="flex-1 rounded-md border border-[#e0dedb] px-3 py-1.5 text-sm"
@@ -472,7 +472,7 @@ export const CompliancePage: React.FC = () => {
 
       {/* Vendor security reviews (SOC2-03) */}
       <div className="mt-4">
-        <Card title={`Vendor security reviews (SOC2-03) — ${vendors?.summary?.review_overdue ?? 0} overdue`}>
+        <Card title={`Vendor security reviews (SOC2-03) - ${vendors?.summary?.review_overdue ?? 0} overdue`}>
           <div className="divide-y divide-[#f1f0ee]">
             {(vendors?.vendors ?? []).map((v: any) => (
               <details key={v.id} className="group py-2.5">

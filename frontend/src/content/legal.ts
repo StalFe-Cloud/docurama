@@ -1,15 +1,15 @@
 /**
- * Legal content — final launch (PART L).
+ * Legal content - final launch (PART L).
  *
  * Single source of truth for the legal entity presentation and the four
  * published legal documents. When Docurama SAS is formally registered, only
- * LEGAL_ENTITY below needs to change — no architectural changes, no page
+ * LEGAL_ENTITY below needs to change - no architectural changes, no page
  * rewrites. Until then, registration fields stay empty and the pages say so
  * honestly instead of inventing identifiers.
  *
  * Every claim here describes actual platform behaviour (trial, Fair Exit,
  * subprocessors, self-host restriction). Nothing claims certification,
- * qualified status, or legal guarantee — see the vocabulary guard.
+ * qualified status, or legal guarantee - see the vocabulary guard.
  */
 
 export const LEGAL_ENTITY = {
@@ -26,7 +26,7 @@ export const LEGAL_ENTITY = {
   rcs: '',
   registration_note:
     'Company registration identifiers (SIREN, SIRET, RCS, VAT) will be published on this page once Docurama SAS is formally registered. No identifier is claimed before it exists.',
-  publishing_director: 'STALFE — Docurama',
+  publishing_director: 'STALFE - Docurama',
   dmca_agent:
     'DMCA and TAKE IT DOWN notices are accepted through the public intake endpoints (POST /api/legal/dmca and POST /api/legal/take-it-down) and are routed to the platform administrators. The designated agent contact is the address above; registration details are published here as they are completed.',
 };
@@ -64,14 +64,14 @@ export const LEGAL_DOCS: LegalDoc[] = [
         h: '3. Plans and billing',
         ps: [
           'Cloud plans: Plus at €19 per month (or €15 per month when billed annually at €180), and Business Team at €49 per month (or €39 per month when billed annually at €468), which includes 3 seats; additional seats cost €15 per month each. Enterprise pricing is custom, sales-led, with a reference starting point of €1,500 per year.',
-          'Billing cycles run 35 days: twelve billed cycles cover 420 days of service — 55 days more than a calendar year. Annual billing charges twelve such cycles in advance.',
-          'Enterprise customers choose a deployment model — Managed Public Cloud, Managed Private Cloud, On-Premises, or Air-Gapped where technically appropriate — as part of their contract. Self-hosted deployment is available exclusively under an Enterprise agreement and is never a free alternative to a cloud plan.',
+          'Billing cycles run 35 days: twelve billed cycles cover 420 days of service - 55 days more than a calendar year. Annual billing charges twelve such cycles in advance.',
+          'Enterprise customers choose a deployment model - Managed Public Cloud, Managed Private Cloud, On-Premises, or Air-Gapped where technically appropriate - as part of their contract. Self-hosted deployment is available exclusively under an Enterprise agreement and is never a free alternative to a cloud plan.',
         ],
       },
       {
         h: '4. The Fair Exit Guarantee',
         ps: [
-          'On annual billing, if you end your subscription early, every unused full 35-day cycle refunds to your original payment method, pro-rata at your committed per-cycle rate — self-serve, in one click. The cycle in progress always runs its course: you keep full access for the days you have already paid for.',
+          'On annual billing, if you end your subscription early, every unused full 35-day cycle refunds to your original payment method, pro-rata at your committed per-cycle rate - self-serve, in one click. The cycle in progress always runs its course: you keep full access for the days you have already paid for.',
           'On monthly billing, nothing beyond the current cycle is pre-paid, so cancelling simply runs coverage to the end of the paid cycle. There are no retention phone calls and no exit penalties.',
         ],
       },
@@ -125,17 +125,17 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         h: '2. What we process and why',
         ps: [
-          'Account data (name, email, password hash, role, workspace settings) to provide and secure the service — performance of the contract.',
-          'Document and envelope data (uploaded PDFs, recipient names and emails, signing status, audit events, IP addresses captured for signature evidence) to deliver the signing workflow and produce verifiable evidence — performance of the contract.',
-          'Billing data (subscription state through our payment processor; we do not store card numbers) to manage subscriptions — performance of the contract.',
-          'Email delivery logs (whether service messages were accepted, and why not) to operate notifications and diagnose delivery — legitimate interest.',
-          'Marketing consent (recorded only when explicitly given, with its timestamp) — consent, withdrawable at any time.',
+          'Account data (name, email, password hash, role, workspace settings) to provide and secure the service - performance of the contract.',
+          'Document and envelope data (uploaded PDFs, recipient names and emails, signing status, audit events, IP addresses captured for signature evidence) to deliver the signing workflow and produce verifiable evidence - performance of the contract.',
+          'Billing data (subscription state through our payment processor; we do not store card numbers) to manage subscriptions - performance of the contract.',
+          'Email delivery logs (whether service messages were accepted, and why not) to operate notifications and diagnose delivery - legitimate interest.',
+          'Marketing consent (recorded only when explicitly given, with its timestamp) - consent, withdrawable at any time.',
         ],
       },
       {
         h: '3. Processors and subprocessors',
         ps: [
-          'We engage processors to operate the service: EU hosting for application and storage, a payment processor for subscription billing, transactional email delivery, and a timestamp authority that receives only a document hash for RFC 3161 timestamping — never the document itself.',
+          'We engage processors to operate the service: EU hosting for application and storage, a payment processor for subscription billing, transactional email delivery, and a timestamp authority that receives only a document hash for RFC 3161 timestamping - never the document itself.',
           'The authoritative, current list of subprocessors with their roles and data locations is published in the Trust Center. Where a processor stores or accesses data outside the European Economic Area, transfers rely on the European Commission\'s Standard Contractual Clauses and additional safeguards where required.',
         ],
       },
@@ -229,7 +229,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         h: '9. Documentation and audit',
         ps: [
-          'We make available the documentation reasonably required to demonstrate compliance — the Trust Center publication, this DPA, and the security contact for further requests. Enterprise agreements can add audit rights by contract.',
+          'We make available the documentation reasonably required to demonstrate compliance - the Trust Center publication, this DPA, and the security contact for further requests. Enterprise agreements can add audit rights by contract.',
         ],
       },
     ],
@@ -242,7 +242,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         h: 'Publisher',
         ps: [
-          `${LEGAL_ENTITY.brand} — a product of ${LEGAL_ENTITY.product_of}.`,
+          `${LEGAL_ENTITY.brand} - a product of ${LEGAL_ENTITY.product_of}.`,
           LEGAL_ENTITY.address_lines.join(', ') + '.',
           `Contact: ${LEGAL_ENTITY.contact_email}`,
           `Publishing director: ${LEGAL_ENTITY.publishing_director}.`,
@@ -265,7 +265,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         h: 'Platform descriptions on this site',
         ps: [
-          'Docurama describes its technical implementation — PAdES signatures, X.509 certificates, RFC 3161 timestamping, cryptographic verification, tamper-evident evidence. We do not claim certification, qualified status for the platform, or legal effect beyond what the underlying technology and law actually provide.',
+          'Docurama describes its technical implementation - PAdES signatures, X.509 certificates, RFC 3161 timestamping, cryptographic verification, tamper-evident evidence. We do not claim certification, qualified status for the platform, or legal effect beyond what the underlying technology and law actually provide.',
         ],
       },
     ],

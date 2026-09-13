@@ -32,7 +32,7 @@ async def dsar_loop():
                 if processed is not None:
                     logger.info("DSAR request %s reached state=%s", processed.id, processed.state)
                     continue  # more may be queued; poll immediately
-        except Exception:  # noqa: BLE001 — the worker must survive transient DB errors
+        except Exception:  # noqa: BLE001 - the worker must survive transient DB errors
             logger.exception("DSAR loop iteration failed")
         await asyncio.sleep(settings.DSAR_POLL_SECONDS)
 

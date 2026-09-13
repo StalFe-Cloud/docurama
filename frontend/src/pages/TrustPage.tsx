@@ -6,7 +6,7 @@ import { trustApi } from '../lib/api';
  *
  * Renders exactly what GET /api/trust reports: factual security features, the
  * subprocessor registry, readiness states per framework, and the security
- * contact. There are no badges, no seals, no certification logos — the page
+ * contact. There are no badges, no seals, no certification logos - the page
  * has none to show and does not invent any. The certifications array is
  * rendered as an honest empty state.
  */
@@ -78,7 +78,7 @@ export const TrustPage: React.FC = () => {
           <p className="mt-2 text-sm text-[#5f5e5b] leading-6">
             None. Docurama holds no certifications and claims none. Readiness for each
             control is published below using four states: Implemented, Partial, Missing,
-            Needs Review — with evidence drawn from the product's own source code,
+            Needs Review - with evidence drawn from the product's own source code,
             tests and configuration.
           </p>
         </section>

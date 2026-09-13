@@ -1,8 +1,8 @@
 """
 DSAR processing engine: data-subject export and erasure requests.
 
-Lifecycle is a five-state machine — queued, processing, completed, failed,
-cancelled — and every transition is honest:
+Lifecycle is a five-state machine - queued, processing, completed, failed,
+cancelled - and every transition is honest:
 
 - A request may only enter ``processing`` from ``queued``.
 - ``completed`` requires the work product (an export bundle or an erasure
@@ -329,7 +329,7 @@ async def process_request(db: AsyncSession, request: DsarRequest) -> DsarRequest
         )
         await db.commit()
         return refreshed
-    except Exception as exc:  # noqa: BLE001 — any failure must be recorded, not lost
+    except Exception as exc:  # noqa: BLE001 - any failure must be recorded, not lost
         await db.rollback()
         refreshed = await db.get(DsarRequest, request_id)
         refreshed.state = STATE_FAILED

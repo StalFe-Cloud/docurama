@@ -111,7 +111,7 @@ const ArticleView: React.FC<{ slug: string; onBack: () => void }> = ({ slug, onB
   const catLabel = useCategoryLabel();
 
   useEffect(() => {
-    document.title = `${article.title} — Docurama Docs`;
+    document.title = `${article.title} - Docurama Docs`;
     return () => {
       document.title = 'Docurama: Secure Electronic Signatures';
     };

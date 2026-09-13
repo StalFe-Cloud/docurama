@@ -8,7 +8,7 @@
  *
  * Long-form content translations live in `src/content/i18n/<locale>.json`
  * (generated pipeline, vocabulary-guarded) and are looked up through
- * `ct()` — content-key lookups with the same English fallback.
+ * `ct()` - content-key lookups with the same English fallback.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { DICTIONARIES, LOCALES, type Locale } from './locales';

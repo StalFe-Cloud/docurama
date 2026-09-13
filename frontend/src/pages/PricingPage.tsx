@@ -7,17 +7,17 @@ import { Badge } from '../components/ui/Badge';
 import { Check, Clock, ShieldCheck, Sparkles, ChevronDown, Globe, Lock, Server, FileCheck2 } from 'lucide-react';
 
 const fmtEUR = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '—';
+  if (v === null || v === undefined) return '-';
   return '€' + v.toFixed(2).replace(/\.00$/, '');
 };
 
 /**
- * Public pricing page — final commercial model.
+ * Public pricing page - final commercial model.
  *
  * Exactly three commercial choices: Plus, Business Team, Enterprise. No free
  * tier and no free self-host plan exist anywhere. Renders the server's
- * pricing config verbatim — tier list, cycle constants, monthly/annual
- * intervals — and previews Fair Exit refunds by calling the same endpoints
+ * pricing config verbatim - tier list, cycle constants, monthly/annual
+ * intervals - and previews Fair Exit refunds by calling the same endpoints
  * the billing engine uses. No price math is invented client-side: totals
  * come from the /api/pricing calculators so the page can never drift from
  * what would actually be charged.

@@ -20,7 +20,7 @@ S3, anything added later) inherits it without code changes:
   activation; they are re-encrypted on their next save.
 
 The key material comes from configuration (DOCURAMA_STORAGE_ENCRYPTION_KEY,
-hex/base64/32 raw bytes). No key configured means encryption is off — that
+hex/base64/32 raw bytes). No key configured means encryption is off - that
 state is visible in the catalog, not hidden behind a fake claim.
 """
 import base64
@@ -158,7 +158,7 @@ def decrypt(ring: KeyRing, blob: bytes) -> bytes:
         return AESGCM(key).decrypt(nonce, ciphertext, None)
     except InvalidTag:
         raise EncryptionError(
-            "authentication tag check failed — the stored bytes were modified "
+            "authentication tag check failed - the stored bytes were modified "
             "or corrupted after write"
         )
 

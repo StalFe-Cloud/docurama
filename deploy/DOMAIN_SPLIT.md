@@ -4,7 +4,7 @@
 
 | Host | Serves | Notes |
 |------|--------|-------|
-| `docurama.eu` | Marketing + content: landing, `/pricing`, `/docs`, `/blog`, `/help`, `/templates-gallery`, `/trust`, `/verify` | The public site. Same SPA, same origin — one deploy. |
+| `docurama.eu` | Marketing + content: landing, `/pricing`, `/docs`, `/blog`, `/help`, `/templates-gallery`, `/trust`, `/verify` | The public site. Same SPA, same origin - one deploy. |
 | `app.docurama.eu` | The product: `/templates`, `/submissions`, `/builder`, `/settings`, `/admin`, `/sign_up`, `/sign_in` | Session cookie scoped here; workspace traffic isolated from marketing. |
 | `signup.docurama.eu` | **Vanity 301** → `https://app.docurama.eu/sign_up` | Deliberately NOT a third origin: signup shares the app origin so session cookies, CSRF, and future SSO flows stay single-origin. The vanity record keeps the address marketable. |
 
@@ -15,7 +15,7 @@ actual account creation happens on the app origin.
 
 The application is a single SPA and API: both real hosts serve the same
 build. Host-level split is a routing/branding/cookie concern, not a
-code-split — which is why it costs zero extra deploys.
+code-split - which is why it costs zero extra deploys.
 
 ## Cookie scoping
 
@@ -57,7 +57,7 @@ signup.docurama.eu {
 }
 ```
 
-`deploy/tls_wildcard.sh` already provisions `*.docurama.eu` — run it once
+`deploy/tls_wildcard.sh` already provisions `*.docurama.eu` - run it once
 after DNS delegation and all three hosts are covered by one certificate.
 
 ## DNS records
@@ -76,7 +76,7 @@ _docurama-challenge    TXT     -> per-provider verification (see tls_wildcard.sh
 emails and redirects (activation links, checkout success). Recommended:
 `APP_URL=https://app.docurama.eu` for the product deployment. If marketing
 emails need docurama.eu links, use absolute marketing URLs in email copy
-rather than changing APP_URL — activation and auth links must always land
+rather than changing APP_URL - activation and auth links must always land
 on the app host.
 
 ## Sprint 9: full public subdomain map

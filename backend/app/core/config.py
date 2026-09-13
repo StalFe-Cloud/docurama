@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     REMINDER_MAX_COUNT: int = int(os.getenv("DOCURAMA_REMINDER_MAX_COUNT", "3"))
 
     # ------------------------------------------------------------------
-    # Sprint 3 — Cloud launch (operator-managed values ship empty on purpose:
+    # Sprint 3 - Cloud launch (operator-managed values ship empty on purpose:
     # until they are supplied the related surfaces answer honest 503s rather
     # than pretending to work).
     # ------------------------------------------------------------------

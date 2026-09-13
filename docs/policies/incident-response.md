@@ -1,27 +1,27 @@
 # Incident Response Policy
 
-**Owner:** Platform operator · **Review frequency:** quarterly · **Frameworks mapped:** GDPR (Art. 33, 34), SOC 2 (CC7.3–7.5), ISO 27001 (A.5.24–5.28)
+**Owner:** Platform operator · **Review frequency:** quarterly · **Frameworks mapped:** GDPR (Art. 33, 34), SOC 2 (CC7.3-7.5), ISO 27001 (A.5.24-5.28)
 
 ## Implemented controls
 
-- **IR-01 / GDPR-05 — The 72-hour clock.** Every recorded incident computes
+- **IR-01 / GDPR-05 - The 72-hour clock.** Every recorded incident computes
   its GDPR authority-notification deadline as `detected_at + 72 hours` at
   insert time, server-side. The deadline cannot be extended after the fact;
   only an actual notification timestamp closes it out
   (`app/models/models.py SecurityIncident`,
   `POST /api/admin/incidents`, pinned by
   `tests/test_compliance_foundation.py::test_incident_deadline_is_detection_plus_72h`).
-- **IR-02 — Honest overdue state.** An open, un-notified incident past its
-  deadline is flagged `notification_overdue` everywhere it appears — the
-  register, the dashboard aggregate — never hidden
+- **IR-02 - Honest overdue state.** An open, un-notified incident past its
+  deadline is flagged `notification_overdue` everywhere it appears - the
+  register, the dashboard aggregate - never hidden
   (`test_overdue_incident_is_flagged_not_hidden`).
-- **IR-03 — Lifecycle states.** `detected → contained → resolved`, with
+- **IR-03 - Lifecycle states.** `detected → contained → resolved`, with
   containment and resolution timestamps recorded by the endpoints that set
   them (`.../contain`, `.../resolve?authority_notified=&subjects_notified=`).
-- **IR-04 / ISO-05 — Ledger integration.** Recording, containing and
+- **IR-04 / ISO-05 - Ledger integration.** Recording, containing and
   resolving an incident each write a hash-chained security-ledger event, so
   incident handling is itself tamper-evidently auditable.
-- **IR-05 — Severity taxonomy.** `low | medium | high | critical`, chosen at
+- **IR-05 - Severity taxonomy.** `low | medium | high | critical`, chosen at
   creation; high and critical incidents enter the ledger at critical
   severity.
 

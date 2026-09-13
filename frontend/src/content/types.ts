@@ -9,7 +9,7 @@
 export interface Block {
   /** Section heading. */
   h2?: string;
-  /** Paragraph — may contain basic <strong>/<code> inline markup. */
+  /** Paragraph - may contain basic <strong>/<code> inline markup. */
   p?: string;
   /** Bullet list. */
   list?: string[];

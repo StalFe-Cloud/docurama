@@ -1,5 +1,5 @@
 """
-Sprint 3 — Cloud launch surfaces.
+Sprint 3 - Cloud launch surfaces.
 
 Covers the security headers (S-1), the API 404 correctness fix (S-2),
 security.txt (RFC 9116), the storage backend seam, the pub/sub bus, the honest

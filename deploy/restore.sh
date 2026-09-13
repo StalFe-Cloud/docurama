@@ -67,7 +67,7 @@ echo "[restore] verifying readiness"
 sleep 10
 # The published entrypoint is the frontend proxy on host port 3002; the API's own
 # port 8000 is internal to the compose network. Gated on /readyz, which answers
-# 503 while the signing certificate is missing or expired — a restore that
+# 503 while the signing certificate is missing or expired - a restore that
 # brought back a broken certificate must not be declared a success.
 HEALTH_URL="${DOCURAMA_HEALTH_URL:-http://127.0.0.1:3002/readyz}"
 for i in $(seq 1 30); do

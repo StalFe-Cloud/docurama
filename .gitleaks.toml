@@ -1,0 +1,14 @@
+# Gitleaks configuration for Docurama
+# Extends default gitleaks rules and configures project allowlists.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for API documentation examples and dummy tokens"
+paths = [
+    '''frontend/src/pages/ApiDocsPage\.tsx''',
+]
+stopwords = [
+    "YOUR_API_KEY",
+]

@@ -3,8 +3,8 @@ The compliance control catalog.
 
 This is the single source of truth for the control inventory shown on the
 compliance dashboard and the public trust center. Every entry's readiness
-value uses exactly one of the four legal states — Implemented, Partial,
-Missing, Needs Review — and every evidence reference points at something real
+value uses exactly one of the four legal states - Implemented, Partial,
+Missing, Needs Review - and every evidence reference points at something real
 in this repository (a code path, a test, a deployable, an endpoint).
 
 Nothing here claims certification. A control is "Implemented" only when the
@@ -133,7 +133,7 @@ _CATALOG = [
      [("endpoint", "POST /api/admin/incidents", "record and progress incidents"),
       ("config", "docs/policies/incident-response.md", "procedure mapping control IDs")]),
     ("SOC2-03", "Vendor & subprocessor management", "SOC2",
-     "Subprocessors are registered and published, and each vendor relationship is reviewed through a structured security questionnaire (vendor_reviews): data-access level, personal-data involvement, hosting region, questionnaire answers, outcome (approved/conditional/rejected/pending), findings and a next-review date — required server-side for approved or conditional outcomes, with overdue entries flagged. Ships seeded with the platform's initial vendor assessment.",
+     "Subprocessors are registered and published, and each vendor relationship is reviewed through a structured security questionnaire (vendor_reviews): data-access level, personal-data involvement, hosting region, questionnaire answers, outcome (approved/conditional/rejected/pending), findings and a next-review date - required server-side for approved or conditional outcomes, with overdue entries flagged. Ships seeded with the platform's initial vendor assessment.",
      "Implemented", "annual",
      [("endpoint", "GET /api/admin/subprocessors", "registry"),
       ("code", "app/models/models.py VendorReview", "questionnaire register with outcome vocabulary and review cadence"),
@@ -320,7 +320,7 @@ async def ensure_risks_seeded(db) -> int:
 # ---------------------------------------------------------------------------
 # The platform's initial vendor assessment, derived from the same analysis as
 # the risk register: these are the vendor touchpoints the shipped code can
-# actually reach. Outcomes are deliberately conservative — vendors that only
+# actually reach. Outcomes are deliberately conservative - vendors that only
 # activate under operator configuration are "conditional", not "approved",
 # because the review cannot judge a configuration that does not exist yet.
 
@@ -339,11 +339,11 @@ _VENDOR_REVIEWS = [
      "SOC2-03"),
     ("VND-002", "RFC 3161 TSA (operator-chosen)", "Trusted timestamps for PAdES signatures",
      "limited", False, "Operator's TSA choice", "conditional",
-     "The TSA receives the document hash and nothing else — no document content, no signer identity. Trust in timestamps equals the operator's TSA choice; a qualified TSA is required for QES-adjacent claims (EIDAS-02 stays Partial until then).",
+     "The TSA receives the document hash and nothing else - no document content, no signer identity. Trust in timestamps equals the operator's TSA choice; a qualified TSA is required for QES-adjacent claims (EIDAS-02 stays Partial until then).",
      {
          "data_processed": "Document sha256 digest and timestamp request; no personal data, no document content.",
          "security_controls": "RFC 3161 response validation happens locally in pyHanko; invalid responses fail signing.",
-         "dpa_status": "Not applicable — no personal data crosses the boundary; operator validates the TSA policy statement.",
+         "dpa_status": "Not applicable - no personal data crosses the boundary; operator validates the TSA policy statement.",
          "breach_notification": "TSA compromise manifests as verification failures, which the platform reports honestly per verification.",
      },
      "EIDAS-02,SOC2-03"),
@@ -410,7 +410,7 @@ async def ensure_vendor_reviews_seeded(db) -> int:
         row = VendorReview(**attrs)
         row.reviewed_at = now
         row.reviewer = "Platform operator"
-        # approved/conditional rows always carry a next-review date — the same
+        # approved/conditional rows always carry a next-review date - the same
         # rule the API enforces at write time, applied to the seeds.
         row.next_review_due = now + timedelta(days=_VENDOR_NEXT_REVIEW_DAYS)
         db.add(row)

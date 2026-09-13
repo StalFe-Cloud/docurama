@@ -1,9 +1,9 @@
 """
-Docurama pricing engine — FINAL commercial model (launch alignment).
+Docurama pricing engine - FINAL commercial model (launch alignment).
 
 Single authoritative source for everything commercial. The 35-day billing
 cycle engine is retained deliberately: twelve billed cycles still cover 420
-days — 55 days more service than a calendar year — which remains the product
+days - 55 days more service than a calendar year - which remains the product
 differentiator ("weekends on us"). What changed is the catalog riding on it:
 
 - PLUS             €19 per cycle (monthly billing) or €15/cycle-equivalent

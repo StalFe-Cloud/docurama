@@ -10,7 +10,7 @@
    The all-in-one workspace for documents and digital signatures.
    Deep navy hero band (#0a1530), signature purple CTA (#5645d4),
    sober 8px rectangular buttons, 12px cards, and pastel database property tints.
-   Self-hosted Geist Variable / Geist Mono Variable (no third-party font CDN —
+   Self-hosted Geist Variable / Geist Mono Variable (no third-party font CDN -
    EU data sovereignty: no font requests leave the origin).
    ========================================================================== */
 
@@ -541,7 +541,7 @@ td.font-mono,
 }
 
 /* ---------------------------------------------------------------------------
-   Sprint 8: hero demo animation — a self-playing signing sequence layered on
+   Sprint 8: hero demo animation - a self-playing signing sequence layered on
    the landing mockup card. One master 9s timeline; every element animates on
    the same clock via percentage keyframes so the loop stays perfectly in
    phase. Reduced-motion users get the static completed state instead.

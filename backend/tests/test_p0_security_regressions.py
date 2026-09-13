@@ -38,7 +38,7 @@ async def _make_user(db_session: AsyncSession, email: str, role: str = "admin") 
 
 
 # ---------------------------------------------------------------------------
-# P0-1 — token purpose enforcement
+# P0-1 - token purpose enforcement
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_session_and_legacy_tokens_still_authenticate(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# P0-5 — SPA path resolution containment
+# P0-5 - SPA path resolution containment
 # ---------------------------------------------------------------------------
 
 def test_spa_path_resolution_blocks_traversal(tmp_path):
@@ -94,7 +94,7 @@ def test_spa_path_resolution_blocks_traversal(tmp_path):
     assert _resolve_spa_path(str(tmp_path), "assets/app.js") == os.path.realpath(
         sub / "app.js"
     )
-    # Absolute path discards the base in os.path.join — must be refused.
+    # Absolute path discards the base in os.path.join - must be refused.
     assert _resolve_spa_path(str(tmp_path), "/etc/passwd") is None
     # Parent traversal must be refused.
     assert _resolve_spa_path(str(tmp_path), "../outside.txt") is None
@@ -105,7 +105,7 @@ def test_spa_path_resolution_blocks_traversal(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# P0-2 — co-signer token disclosure
+# P0-2 - co-signer token disclosure
 # ---------------------------------------------------------------------------
 
 async def _two_signer_envelope(db_session: AsyncSession, tmp_path):
@@ -186,7 +186,7 @@ async def test_envelope_detail_hides_tokens_from_members(client, db_session, tmp
 
 
 # ---------------------------------------------------------------------------
-# P0-10 — cross-recipient field writes and payload cap
+# P0-10 - cross-recipient field writes and payload cap
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -224,7 +224,7 @@ async def test_signature_data_url_size_cap(client, db_session, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# P0-8 — completion flow end-to-end
+# P0-8 - completion flow end-to-end
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio

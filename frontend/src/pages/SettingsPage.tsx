@@ -3923,7 +3923,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user, initialSubtab 
               {recoveryCodes.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-[#ede9e4]">
                   <p className="text-xs font-bold text-[#1a1a1a]">
-                    Two-factor authentication is active. Save these recovery codes somewhere safe — each one works exactly once.
+                    Two-factor authentication is active. Save these recovery codes somewhere safe - each one works exactly once.
                   </p>
                   <div className="grid grid-cols-2 gap-2 p-3 bg-[#fafaf9] rounded-md border border-[#e5e3df]">
                     {recoveryCodes.map((code) => (

@@ -19,7 +19,8 @@ def audit_directory(root_dir):
     # third-party material inside briefs and diffs must not flip the gate.
     exclude_dirs = [
         ".git", "node_modules", "dist", ".pytest_cache", "__pycache__",
-        "data", "storage", ".zcode", ".superpowers",
+        "data", "storage", ".zcode", ".superpowers", "skills-external", ".agents",
+        "docurama", "venv", ".venv", "env",
     ]
 
     term_findings = []

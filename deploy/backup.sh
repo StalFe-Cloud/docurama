@@ -2,7 +2,7 @@
 # Timestamped backup: Postgres dump + storage archive + signing certificates.
 #
 # Hardening added after the pre-launch audit (P0-11):
-#   * the storage volume is resolved by label/family, not a hardcoded name —
+#   * the storage volume is resolved by label/family, not a hardcoded name -
 #     a wrong name used to produce a silent-empty tar that restore would trust;
 #   * every artifact is content-verified (line count / member count) before it
 #     is allowed to replace anything;
@@ -10,9 +10,9 @@
 #     set: without them the restored documents cannot be re-sealed or re-verified
 #     against the same trust anchor;
 #   * artifacts are encrypted with age when DOCURAMA_BACKUP_AGE_RECIPIENTS is
-#     set — a signing platform's backups are themselves sensitive documents;
+#     set - a signing platform's backups are themselves sensitive documents;
 #   * an offsite copy is pushed with rsync when DOCURAMA_BACKUP_RSYNC_TARGET
-#     is set — same-host backups die with the host.
+#     is set - same-host backups die with the host.
 #
 # Artifacts are written to .tmp and moved into place only after success, so a
 # failed run can never leave a partial file that restore would later trust.

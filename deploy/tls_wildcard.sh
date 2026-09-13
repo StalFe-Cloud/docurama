@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sprint 3 — TLS wildcard automation (operator DNS token required).
+# Sprint 3 - TLS wildcard automation (operator DNS token required).
 #
 # Issues and renews a wildcard certificate for <domain> + *.<domain> via lego
 # DNS-01, then prints the reload step. DNS-01 is the only challenge that can

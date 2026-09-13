@@ -6,7 +6,7 @@ import { FileStack, ArrowRight } from 'lucide-react';
 
 /**
  * Public template gallery (Sprint 8). Route: /templates-gallery (and /gallery).
- * Duplicating into the workspace requires sign-in — the CTA hands off to it.
+ * Duplicating into the workspace requires sign-in - the CTA hands off to it.
  */
 export const GalleryPage: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
   const { t } = useI18n();

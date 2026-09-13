@@ -240,7 +240,7 @@ Not blockers, but track them:
 
 Two failure classes, two procedures:
 
-**Code regression** — redeploy the previous tag. `deploy/upgrade.sh` records the
+**Code regression** - redeploy the previous tag. `deploy/upgrade.sh` records the
 tag it replaced in `.previous-tag` before every deploy, so:
 
 ```bash
@@ -251,7 +251,7 @@ tag it replaced in `.previous-tag` before every deploy, so:
 `upgrade.sh` itself gates on `/readyz` and refuses to declare success when the
 readiness probe fails, printing the exact rollback command.
 
-**Data damage** — restore a backup. Do NOT hand-pipe a dump into psql: on a
+**Data damage** - restore a backup. Do NOT hand-pipe a dump into psql: on a
 populated database it fails immediately on the first CREATE of an existing
 object, and without `ON_ERROR_STOP` it reports success on a partial load. The
 supported procedure is:
@@ -266,11 +266,11 @@ backup set carried them), restarts, and gates on `/readyz`.
 
 ### Restore drill (run once after setup, repeat quarterly)
 
-1. `DOCURAMA_BACKUP_DIR=/tmp/drill /opt/docurama/deploy/backup.sh` — confirm it
+1. `DOCURAMA_BACKUP_DIR=/tmp/drill /opt/docurama/deploy/backup.sh` - confirm it
    reports three artifacts (db, storage, certs) and their sizes.
 2. On a scratch host or a stopped stack: `deploy/restore.sh <stamp>` against a
    COPY of the production backup directory.
-3. Sign in, open an envelope, download a sealed PDF, verify it on the portal —
+3. Sign in, open an envelope, download a sealed PDF, verify it on the portal -
    a backup that restores but cannot re-verify a signature is not a backup.
 4. Record the date and the stamp in the operations log.
 

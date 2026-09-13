@@ -17,7 +17,7 @@ export const HeroDemoOverlay: React.FC = () => (
       <span className="absolute -top-3.5 -left-3.5 w-5 h-5 rounded-full bg-[#5645d4]/20" />
     </div>
 
-    {/* 2. PAdES seal chip — pops after the signature lands */}
+    {/* 2. PAdES seal chip - pops after the signature lands */}
     <div className="hero-demo-seal absolute top-3 right-3" style={{ opacity: 0 }}>
       <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-white bg-[#1aae39] rounded-full px-2.5 py-1 shadow-md">
         <ShieldCheck className="w-3 h-3" />
@@ -25,7 +25,7 @@ export const HeroDemoOverlay: React.FC = () => (
       </span>
     </div>
 
-    {/* 3. PAdES seal chip — pops after the signature lands */}
+    {/* 3. PAdES seal chip - pops after the signature lands */}
     <div className="hero-demo-seal absolute top-3 right-3" style={{ opacity: 0 }}>
       <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-white bg-[#1aae39] rounded-full px-2.5 py-1 shadow-md">
         <ShieldCheck className="w-3 h-3" />

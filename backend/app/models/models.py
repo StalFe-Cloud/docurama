@@ -594,7 +594,7 @@ class DomainJoinRequest(Base):
 # security incident response with the 72-hour GDPR clock, a subprocessor
 # registry, a control/evidence catalog, and access reviews. Every readiness
 # statement made anywhere about these controls uses the vocabulary
-# Implemented / Partial / Missing / Needs Review — never "certified".
+# Implemented / Partial / Missing / Needs Review - never "certified".
 # ---------------------------------------------------------------------------
 
 class SecurityEvent(Base):
@@ -756,7 +756,7 @@ class ComplianceControl(Base):
     framework = Column(String(50), nullable=False, index=True)
     description = Column(Text, nullable=False)
     owner_role = Column(String(100), nullable=False, default="Platform operator")
-    # Implemented | Partial | Missing | Needs Review — the only legal values.
+    # Implemented | Partial | Missing | Needs Review - the only legal values.
     readiness = Column(String(20), nullable=False, default="Missing")
     # quarterly | annual | continuous
     review_frequency = Column(String(20), nullable=False, default="annual")
@@ -862,7 +862,7 @@ class RestoreDrill(Base):
     database, runs SQLite integrity checks, reconciles per-table row counts
     and re-verifies the audit hash chains on the restored copy; the resulting
     JSON report is what this row preserves as evidence. The API records the
-    evidence; it cannot re-run the verification itself — that is what makes
+    evidence; it cannot re-run the verification itself - that is what makes
     recording honest: the harness output travels with the record.
     """
     __tablename__ = "restore_drills"
@@ -890,7 +890,7 @@ class ChangeRequest(Base):
     platform's security-relevant surface travels proposed -> approved (or
     rejected) -> implemented, and the approver must differ from the requester
     (four-eyes). Emergency changes are allowed to be implemented first but
-    stay visibly overdue for retroactive review until a reviewer signs off —
+    stay visibly overdue for retroactive review until a reviewer signs off -
     the list endpoint ages them honestly instead of hiding the gap.
     """
     __tablename__ = "change_requests"
@@ -925,7 +925,7 @@ class VendorReview(Base):
     (approved / conditional / rejected / pending), findings, and the next
     review due date. An approved or conditional outcome requires a
     next-review date server-side, so the register ages visibly instead of
-    silently — overdue entries are flagged in the list output.
+    silently - overdue entries are flagged in the list output.
     """
     __tablename__ = "vendor_reviews"
 

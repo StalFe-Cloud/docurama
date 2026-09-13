@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 
 /**
  * Public legal pages: Terms of Service, Privacy Notice, DPA, Imprint.
- * One route, four documents, honest about what exists — registration
+ * One route, four documents, honest about what exists - registration
  * identifiers appear only once they are real (see content/legal.ts).
  */
 export const LegalPage: React.FC<{ initialDoc?: LegalDoc['id'] }> = ({ initialDoc }) => {
@@ -17,7 +17,7 @@ export const LegalPage: React.FC<{ initialDoc?: LegalDoc['id'] }> = ({ initialDo
       <header className="text-center">
         <h1 className="text-3xl font-bold text-[#1a1a1a]">Legal</h1>
         <p className="mt-2 text-sm text-[#5d5b54]">
-          {LEGAL_ENTITY.brand} — a product of {LEGAL_ENTITY.product_of} ·{' '}
+          {LEGAL_ENTITY.brand} - a product of {LEGAL_ENTITY.product_of} ·{' '}
           {LEGAL_ENTITY.address_lines.join(', ')}
         </p>
       </header>

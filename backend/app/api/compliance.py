@@ -13,7 +13,7 @@ Admin surface (platform-admin gated):
 - Access reviews: record completed reviews.
 - Overview: one aggregate for the dashboard.
 
-Public surface (no auth): GET /api/trust — factual feature and subprocessor
+Public surface (no auth): GET /api/trust - factual feature and subprocessor
 publication. It publishes readiness vocabulary, never certification claims;
 the certifications array is always empty because no certification exists to
 claim, and the response says so.
@@ -1099,7 +1099,7 @@ async def update_risk(
 
 
 # ---------------------------------------------------------------------------
-# Change control (ISO-09) — four-eyes workflow
+# Change control (ISO-09) - four-eyes workflow
 # ---------------------------------------------------------------------------
 
 # Emergency changes may be implemented before review (that is what makes them
@@ -1277,7 +1277,7 @@ async def implement_change(
 
 
 # ---------------------------------------------------------------------------
-# Vendor security reviews (SOC2-03) — questionnaire register
+# Vendor security reviews (SOC2-03) - questionnaire register
 # ---------------------------------------------------------------------------
 
 _VENDOR_OUTCOMES_REQUIRING_REVIEW = ("approved", "conditional")
@@ -1319,7 +1319,7 @@ def _vendor_out(v: VendorReview, now: Optional[datetime] = None) -> dict:
 
 
 def _vendor_review_date_ok(outcome: str, next_review_due: Optional[datetime]) -> bool:
-    """Approved/conditional outcomes must carry a next-review date — the
+    """Approved/conditional outcomes must carry a next-review date - the
     register ages visibly instead of silently."""
     if outcome in _VENDOR_OUTCOMES_REQUIRING_REVIEW:
         return next_review_due is not None
@@ -1680,7 +1680,7 @@ async def trust_center(db: AsyncSession = Depends(get_db)):
     return {
         "statement": (
             "Docurama's compliance program publishes readiness states for each "
-            "control — Implemented, Partial, Missing or Needs Review — with "
+            "control - Implemented, Partial, Missing or Needs Review - with "
             "evidence drawn from the product's own source code and tests. "
             "Docurama holds no certifications and claims none."
         ),

@@ -1,6 +1,6 @@
 # Privacy & GDPR Compliance Policy
 
-**Owner:** Platform operator · **Review frequency:** annual · **Frameworks mapped:** GDPR (Art. 5–24, 32–35), eIDAS
+**Owner:** Platform operator · **Review frequency:** annual · **Frameworks mapped:** GDPR (Art. 5-24, 32-35), eIDAS
 
 ## Position
 
@@ -12,44 +12,44 @@ no adequacy argument beyond what the code does.
 
 ## Implemented controls
 
-- **PRV-01 / GDPR-01 — Lawful basis & consent.** Consent to named purposes is
+- **PRV-01 / GDPR-01 - Lawful basis & consent.** Consent to named purposes is
   recorded with timestamps and evidence references, and revocable
   (`app/models/models.py ConsentRecord`, `POST /api/admin/consents`).
   Registration-time marketing consent is stored on the user record with its
   timestamp (`users.marketing_consent(_at)`).
-- **PRV-02 / GDPR-02 — Access (export).** Data-subject export requests
-  produce a structured JSON bundle of the subject's personal data — profile,
-  memberships, consents, envelopes and signatures — with third-party
+- **PRV-02 / GDPR-02 - Access (export).** Data-subject export requests
+  produce a structured JSON bundle of the subject's personal data - profile,
+  memberships, consents, envelopes and signatures - with third-party
   identifiers excluded from audit projections
   (`app/services/dsar.py::_build_export`).
-- **PRV-03 / GDPR-03 — Erasure.** Erasure anonymises the subject's user and
+- **PRV-03 / GDPR-03 - Erasure.** Erasure anonymises the subject's user and
   recipient rows, invalidates outstanding signing links, and refuses to
   complete while signing obligations are pending
   (`app/services/dsar.py::_perform_erasure`).
-- **PRV-04 / GDPR-04 — Storage limitation.** Configurable retention with
+- **PRV-04 / GDPR-04 - Storage limitation.** Configurable retention with
   legal holds and ledger-logged actions (see `data-retention.md`).
-- **PRV-05 / GDPR-05 — Breach notification.** The 72-hour notification clock
+- **PRV-05 / GDPR-05 - Breach notification.** The 72-hour notification clock
   computed at incident insert, non-extendable, with honest overdue flags
   (see `incident-response.md`).
-- **PRV-06 / GDPR-06 — Integrity & confidentiality.** Tamper-evident
+- **PRV-06 / GDPR-06 - Integrity & confidentiality.** Tamper-evident
   hash-chained audit ledgers; PAdES cryptographic sealing of signed
   documents; SHA-256 anchoring at ingest
   (`app/services/audit_chain.py`, `app/services/crypto_engine.py`).
-- **PRV-07 / GDPR-07 — Subprocessor transparency.** Registry and public
+- **PRV-07 / GDPR-07 - Subprocessor transparency.** Registry and public
   publication (see `subprocessors.md`).
-- **PRV-08 — Data minimisation in evidence.** DSAR exports carry
+- **PRV-08 - Data minimisation in evidence.** DSAR exports carry
   event-type-only audit context; the platform does not export other people's
   personal data to the subject bundle.
-- **PRV-09 — Lawful access to audit.** Verification endpoints are
+- **PRV-09 - Lawful access to audit.** Verification endpoints are
   platform-admin gated; the chain recompute reports what it found, not what
   it was asked to find.
 
 ## eIDAS positioning
 
-- **EIDAS-01 — Advanced electronic signatures.** PAdES sealing (B-B through
+- **EIDAS-01 - Advanced electronic signatures.** PAdES sealing (B-B through
   B-LTA) via pyHanko, with verification that never asserts more than it
   recomputed (`tests/test_trust_integrity.py`).
-- **EIDAS-02 — Trusted timestamps: Partial.** RFC 3161 timestamping is
+- **EIDAS-02 - Trusted timestamps: Partial.** RFC 3161 timestamping is
   supported and operator-configured (`DOCURAMA_TSA_URL`). Whether the chosen
   TSA is a qualified trust service provider is the operator's decision; no
   qualified-TSA claim is made by the platform.

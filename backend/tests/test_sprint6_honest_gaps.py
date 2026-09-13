@@ -3,14 +3,14 @@ Sprint 6: closing the honest gaps.
 
 Pins the four controls that moved to Implemented this sprint:
 
-- ISO-04 — at-rest encryption: AES-256-GCM envelope format at the storage
+- ISO-04 - at-rest encryption: AES-256-GCM envelope format at the storage
   layer (roundtrip, tamper rejection, wrong key, legacy-row tolerance, key
   rotation, S3 integration, presign disabled, get_backend wiring);
-- SOC2-01 — the risk register: server-computed scores, vocabulary, seed
+- SOC2-01 - the risk register: server-computed scores, vocabulary, seed
   assessment, admin gating, audit-ledger writes;
-- ISO-06 — the restore-drill harness: integrity + chain verification on a
+- ISO-06 - the restore-drill harness: integrity + chain verification on a
   restored copy, tamper detection, drill evidence recording;
-- ISO-07 — scheduled scanning surface: weekly CI trigger, container-scan
+- ISO-07 - scheduled scanning surface: weekly CI trigger, container-scan
   job, SBOM generator output.
 
 Where a behaviour cannot honestly be claimed, the test pins the refusal.
@@ -81,7 +81,7 @@ def _auth(user: User) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# ISO-04 — storage crypto primitives
+# ISO-04 - storage crypto primitives
 # ---------------------------------------------------------------------------
 
 def test_envelope_roundtrip_preserves_bytes():
@@ -171,7 +171,7 @@ def test_keyring_from_settings_parses_previous_entries(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# ISO-04 — EncryptedBackend and get_backend wiring
+# ISO-04 - EncryptedBackend and get_backend wiring
 # ---------------------------------------------------------------------------
 
 def test_encrypted_backend_roundtrip_and_at_rest_ciphertext(tmp_path):
@@ -253,7 +253,7 @@ def test_get_backend_wraps_when_key_configured(monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# SOC2-01 — risk register
+# SOC2-01 - risk register
 # ---------------------------------------------------------------------------
 
 async def test_risk_scale_bounds_are_enforced(client, db_session):
@@ -365,7 +365,7 @@ async def test_risk_endpoints_require_platform_admin(client):
 
 
 # ---------------------------------------------------------------------------
-# ISO-06 — restore-drill harness
+# ISO-06 - restore-drill harness
 # ---------------------------------------------------------------------------
 
 async def _build_backup_with_chains(path: str) -> None:
@@ -454,7 +454,7 @@ async def test_restore_drill_evidence_recording(client, db_session):
     assert resp.status_code == 201
     assert resp.json()["passed"] is True
 
-    # A failed chain is recorded as a failed drill — the API does not polish.
+    # A failed chain is recorded as a failed drill - the API does not polish.
     resp = await client.post(
         "/api/admin/compliance/restore-drills",
         json={"source": "tampered-backup.db", "chain_valid": False},
@@ -479,7 +479,7 @@ async def test_restore_drill_evidence_recording(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# ISO-07 — scheduled scanning surface
+# ISO-07 - scheduled scanning surface
 # ---------------------------------------------------------------------------
 
 def test_ci_runs_security_gates_on_a_weekly_schedule():

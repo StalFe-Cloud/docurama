@@ -21,7 +21,7 @@ import sys
 
 # Deployment target: provided by the environment, never committed.
 # Production infrastructure details (hosts, users, key paths) do not belong in
-# a repository — commit history is effectively a disclosure.
+# a repository - commit history is effectively a disclosure.
 NEXA_HOST = os.getenv("DOCURAMA_VPS_HOST", "")
 NEXA_USER = os.getenv("DOCURAMA_VPS_USER", "")
 NEXA_KEY = os.path.expanduser(os.getenv("DOCURAMA_VPS_KEY", "~/.ssh/id_ed25519"))

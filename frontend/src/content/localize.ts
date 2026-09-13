@@ -4,7 +4,7 @@
  * Every translatable field in the content corpus has a stable key
  * (`doc.<slug>.b<index>.<field>` etc). The `useLocalized*` hooks resolve
  * those keys through the i18n content dictionary and fall back to the
- * English source when a locale string is missing — a half-translated
+ * English source when a locale string is missing - a half-translated
  * corpus degrades to English per field, never to an empty string.
  */
 import { useI18n } from '../i18n';
@@ -15,7 +15,7 @@ const keyOf = (...parts: (string | number)[]) => parts.join('.');
 /**
  * Resolve a content key through the locale dictionary with a safe fallback:
  * a missing translation returns the KEY itself from the i18n runtime, which
- * must never leak into the UI — treat "value === key" as missing and use the
+ * must never leak into the UI - treat "value === key" as missing and use the
  * English source instead.
  */
 const resolve = (ct: (k: string) => string, key: string, fallback: string): string => {

@@ -3,11 +3,11 @@ Sprint 7: change control and vendor security reviews.
 
 Pins the two controls that moved to Implemented this sprint:
 
-- ISO-09 — the four-eyes change workflow: propose -> approve/reject ->
+- ISO-09 - the four-eyes change workflow: propose -> approve/reject ->
   implement, the approver must differ from the requester, emergency changes
   may implement while proposed but stay visibly overdue for retroactive
   review, every transition lands in the hash-chained security ledger;
-- SOC2-03 — the vendor security questionnaire register: seeded initial
+- SOC2-03 - the vendor security questionnaire register: seeded initial
   assessment, outcome vocabulary, next-review date required server-side for
   approved or conditional outcomes, overdue flags, re-review re-stamping.
 
@@ -62,7 +62,7 @@ async def _ledger_has(db_session, event_type: str, needle: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# ISO-09 — change control workflow
+# ISO-09 - change control workflow
 # ---------------------------------------------------------------------------
 
 async def test_change_lifecycle_propose_approve_implement(client, db_session):
@@ -264,7 +264,7 @@ async def test_change_endpoints_are_gated(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# SOC2-03 — vendor security reviews
+# SOC2-03 - vendor security reviews
 # ---------------------------------------------------------------------------
 
 async def test_vendor_reviews_seed_initial_assessment(client, db_session):

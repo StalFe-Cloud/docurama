@@ -1,5 +1,5 @@
 """
-Compliance & Trust Foundation — the control suite.
+Compliance & Trust Foundation - the control suite.
 
 Pins the behaviours the compliance program claims as Implemented:
 
@@ -104,7 +104,7 @@ async def _make_envelope(db_session, account, owner, tmp_path, *, title="Test En
     return envelope
 
 
-import os  # noqa: E402 — used by the helpers above
+import os  # noqa: E402 - used by the helpers above
 
 
 # ---------------------------------------------------------------------------

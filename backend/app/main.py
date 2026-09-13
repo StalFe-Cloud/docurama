@@ -255,7 +255,7 @@ if os.path.exists(frontend_dist) and os.path.isdir(frontend_dist):
         # Unmatched API/WS paths must be real 404s (finding S-2): a
         # 200-with-error-body poisons every health monitor and API client
         # that trusts status codes, and leaks "this is a SPA" to scanners.
-        # Sprint 8: "docs" is NOT reserved here anymore — the public
+        # Sprint 8: "docs" is NOT reserved here anymore - the public
         # Documentation hub lives at /docs (the API's OpenAPI UI is at
         # /api/docs, already caught by the api prefix above).
         if full_path.startswith("api") or full_path.startswith("ws") or full_path in ("healthz", "openapi.json"):

@@ -3,7 +3,7 @@ Sprint 8: workspace-admin email alerts on domain joins.
 
 Pins the enterprise onboarding loop the product now runs: when someone
 activates through a verified domain, the workspace's admins learn about it
-by email — an approval-mode join alerts them to review the queue, an
+by email - an approval-mode join alerts them to review the queue, an
 auto-join alerts them that a member landed. Every attempt is accountable
 in email_send_logs (kind='domain_join_admin_alert'), failures recorded per
 recipient, and an SMTP-less deployment degrades to 'failed' log rows
@@ -108,7 +108,7 @@ async def test_auto_join_alerts_workspace_admin(client, db_session, monkeypatch)
 async def test_alert_failure_never_blocks_activation(client, db_session, monkeypatch):
     """
     The accountability contract: a broken mail path records a failed log row
-    but the activation response stays 200 — membership state must not depend
+    but the activation response stays 200 - membership state must not depend
     on notification delivery.
     """
     _registration_env(monkeypatch)

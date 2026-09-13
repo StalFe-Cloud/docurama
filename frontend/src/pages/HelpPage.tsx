@@ -53,7 +53,7 @@ export const HelpPage: React.FC = () => {
           </section>
         );
       })}
-      {filtered.length === 0 && <p className="text-sm text-[#787671] py-6 text-center">—</p>}
+      {filtered.length === 0 && <p className="text-sm text-[#787671] py-6 text-center">-</p>}
 
       <div className="rounded-xl border border-[#e5e3df] bg-[#f6f5f4] p-5 text-center">
         <p className="text-sm font-semibold text-[#1a1a1a]">{t('help.cta')}</p>

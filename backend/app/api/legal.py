@@ -1,5 +1,5 @@
 """
-Legal notice intake (Sprint 3 — compliance items 5 and 13 of §15.4).
+Legal notice intake (Sprint 3 - compliance items 5 and 13 of §15.4).
 
 A public, rate-limited intake for DMCA counter-notices and TAKE IT DOWN
 requests. The sworn statements are captured verbatim because under both

@@ -106,7 +106,7 @@ const PostView: React.FC<{ slug: string; onBack: () => void }> = ({ slug, onBack
   const tagLabel = useBlogTagLabel();
 
   useEffect(() => {
-    document.title = `${post.title} — Docurama Blog`;
+    document.title = `${post.title} - Docurama Blog`;
     return () => {
       document.title = 'Docurama: Secure Electronic Signatures';
     };

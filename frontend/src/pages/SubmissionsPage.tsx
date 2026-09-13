@@ -250,7 +250,7 @@ export const SubmissionsPage: React.FC<SubmissionsPageProps> = ({ onNavigate }) 
                 {usage.is_trial ? (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-[#f9e79f] text-[#6b4e00] flex items-center gap-1">
                     <Zap className="w-3 h-3" />
-                    Plus Trial — {usage.trial_days_remaining ?? 14} days left · No credit card required
+                    Plus Trial - {usage.trial_days_remaining ?? 14} days left · No credit card required
                   </span>
                 ) : (
                   <span className="text-xs text-[#787671] tabular-nums">

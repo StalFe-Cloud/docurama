@@ -1,7 +1,7 @@
 import type { GalleryItem } from './types';
 
 /**
- * Public template gallery (Sprint 8) — 12 ready-made templates.
+ * Public template gallery (Sprint 8) - 12 ready-made templates.
  * English source; localized through the pipeline. Field counts reflect a
  * sensible default wiring; duplicated templates are fully editable.
  */
@@ -55,7 +55,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     slug: 'onboarding-pack',
     name: 'Employee onboarding pack',
     category: 'HR',
-    description: 'Combined confidentiality, IT policy acceptance, and payroll details — three short documents, one envelope.',
+    description: 'Combined confidentiality, IT policy acceptance, and payroll details - three short documents, one envelope.',
     fields: 12,
     pages: 6,
     roles: ['Employer', 'New hire'],
@@ -91,7 +91,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     slug: 'sales-proposal',
     name: 'Sales proposal',
     category: 'Sales',
-    description: 'Proposal with pricing summary, acceptance block, and validity date — send, sign, convert.',
+    description: 'Proposal with pricing summary, acceptance block, and validity date - send, sign, convert.',
     fields: 7,
     pages: 4,
     roles: ['Vendor', 'Customer'],
@@ -109,7 +109,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
     slug: 'rental-agreement',
     name: 'Equipment rental agreement',
     category: 'Operations',
-    description: 'Rental terms, condition checklist fields, deposit, and return acknowledgement — handy for logistics teams.',
+    description: 'Rental terms, condition checklist fields, deposit, and return acknowledgement - handy for logistics teams.',
     fields: 10,
     pages: 3,
     roles: ['Owner', 'Renter'],

@@ -76,7 +76,7 @@ async def test_cloud_mode_allows_registration_on_platform_hosts(client, registra
 
 
 # ---------------------------------------------------------------------------
-# Sprint 3 — neutral age gate (P1-7). The gate records a statement; the
+# Sprint 3 - neutral age gate (P1-7). The gate records a statement; the
 # operator can switch it off where even the statement is wrong to ask.
 # ---------------------------------------------------------------------------
 

@@ -68,7 +68,7 @@ async def _make_envelope(db_session: AsyncSession, account: Account, code: str, 
 
 
 # ---------------------------------------------------------------------------
-# P1-3 — verify portal redaction
+# P1-3 - verify portal redaction
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -101,7 +101,7 @@ async def test_verify_uuid_is_not_a_lookup_key(client, db_session):
 
 
 # ---------------------------------------------------------------------------
-# P1-4 — settings redaction and role gates
+# P1-4 - settings redaction and role gates
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio

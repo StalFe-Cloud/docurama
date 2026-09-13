@@ -4,7 +4,7 @@ This directory contains deployment specifications for running Docurama as an iso
 
 ## Overview
 
-- **Host**: `https://docurama.stalfe.com` (and legacy `docuseal.stalfe.com`)
+- **Host**: `https://docurama.stalfe.com`
 - **Location on VPS**: `/opt/docurama-enterprise`
 - **Port**: `3003` (bound to `172.17.0.1:3003`)
 - **Network**: `docurama_enterprise_net`

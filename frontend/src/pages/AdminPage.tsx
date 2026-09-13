@@ -170,7 +170,7 @@ export const AdminPage: React.FC = () => {
                   <td className="px-4 py-2">{t.member_count}</td>
                   <td className="px-4 py-2">{t.envelope_count}</td>
                   <td className="px-4 py-2 text-[#64748B]">
-                    {t.created_at ? new Date(t.created_at).toLocaleDateString() : '—'}
+                    {t.created_at ? new Date(t.created_at).toLocaleDateString() : '-'}
                   </td>
                 </tr>
               ))}
@@ -218,7 +218,7 @@ export const AdminPage: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-[#37352f]">{j.user_email}</p>
                 <p className="text-xs text-[#64748B]">
-                  Requested {j.created_at ? new Date(j.created_at).toLocaleString() : '—'}
+                  Requested {j.created_at ? new Date(j.created_at).toLocaleString() : '-'}
                 </p>
               </div>
               <button

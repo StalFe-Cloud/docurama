@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sprint 3 research R1 — strix agent-based dynamic security testing runner.
+# Sprint 3 research R1 - strix agent-based dynamic security testing runner.
 #
 # strix is the agent-driven pentest harness from github.com/usestrix/strix.
 # It requires an operator-managed model key and Docker; neither ships with the

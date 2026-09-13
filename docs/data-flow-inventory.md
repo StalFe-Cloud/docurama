@@ -2,7 +2,7 @@
 
 **Owner:** Platform operator · **Review frequency:** quarterly · **Scope:** every personal-data pathway the code can exercise, and every third party it can reach.
 
-This inventory describes what the **code actually does** — the flows an
+This inventory describes what the **code actually does** - the flows an
 out-of-the-box deployment can produce. It is the factual counterpart to the
 operator-maintained subprocessor registry (see
 `docs/policies/subprocessors.md`): when the operator enables one of the
@@ -13,17 +13,17 @@ its real data location before traffic flows.
 
 | Store | Contents (personal data) | Location | Access path |
 |-------|--------------------------|----------|-------------|
-| PostgreSQL database | Identity (name, email, password hash — Argon2id), workspace memberships, envelope metadata, recipient email + signing-channel metadata, audit events, billing state (Stripe customer/subscription ids; no card data), settings | Operator-chosen (EU region required for the EU claim) | App only, credentials via environment |
+| PostgreSQL database | Identity (name, email, password hash - Argon2id), workspace memberships, envelope metadata, recipient email + signing-channel metadata, audit events, billing state (Stripe customer/subscription ids; no card data), settings | Operator-chosen (EU region required for the EU claim) | App only, credentials via environment |
 | Document storage (`DOCURAMA_STORAGE_DIR` or S3) | Uploaded PDFs, signed/sealed PDFs, preview renders | Operator-chosen volume or private bucket; AES-256-GCM at rest when `DOCURAMA_STORAGE_ENCRYPTION_KEY` is set | Envelope-scoped paths, account-checked on every read |
-| Signing certificates (PKCS#12, root CA) | Signing identity — NOT personal data of end users, but trust-anchor material | Local certs dir, part of encrypted backup set | Signing engine only |
+| Signing certificates (PKCS#12, root CA) | Signing identity - NOT personal data of end users, but trust-anchor material | Local certs dir, part of encrypted backup set | Signing engine only |
 
 ## 2. Processor map (code-level touchpoints)
 
 | Processor | When it receives data | What it receives | Resident EU? | Contract needed |
 |-----------|----------------------|------------------|--------------|-----------------|
 | **Stripe** | Checkout, subscription lifecycle | Email (checkout), name/billing details entered on Stripe-hosted pages, plan + commitment metadata, account id | Stripe supports EU data processing; residency depends on the Stripe contract/region settings | DPA via Stripe |
-| **SMTP provider** (operator-configured) | Every transactional email (activation, reset, invitation, signing, completion, admin alerts) | Recipient email, document title, signing/verification links (contain opaque tokens) | Whichever provider the operator configures — EU claim requires an EU mail provider | DPA with the mail provider |
-| **TSA (RFC 3161)** | Sealing, when `DOCURAMA_TSA_URL` is set | A SHA-256 hash of the signature (message imprint) — **no document content, no personal data by design** | Operator's choice; the qualified-TSA decision (EIDAS-02) should select an EU-listed authority | Service terms; no DPA needed when only hashes flow |
+| **SMTP provider** (operator-configured) | Every transactional email (activation, reset, invitation, signing, completion, admin alerts) | Recipient email, document title, signing/verification links (contain opaque tokens) | Whichever provider the operator configures - EU claim requires an EU mail provider | DPA with the mail provider |
+| **TSA (RFC 3161)** | Sealing, when `DOCURAMA_TSA_URL` is set | A SHA-256 hash of the signature (message imprint) - **no document content, no personal data by design** | Operator's choice; the qualified-TSA decision (EIDAS-02) should select an EU-listed authority | Service terms; no DPA needed when only hashes flow |
 | **Redis** (optional, `DOCURAMA_REDIS_URL`) | WebSocket relay fan-out when configured | Signing-session relay payloads (ephemeral) | Operator-chosen instance | Internal/none if self-operated |
 | **Edge/reverse proxy** (Caddy/nginx) | All traffic | TLS-terminated requests, IPs in access logs | Operator's infrastructure | n/a |
 
@@ -82,4 +82,4 @@ EU-resident:
    without registering it and re-evaluating the claim.
 
 Anything less must be described as "EU-available with configurable
-residency" in marketing material — never as unconditional "EU-only".
+residency" in marketing material - never as unconditional "EU-only".

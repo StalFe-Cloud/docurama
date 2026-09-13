@@ -20,7 +20,7 @@ surface; it is intentionally short enough to be followed rather than admired.
 
 Typography: the existing system sans stack at 14px base. Numeric columns in
 tables stay tabular (`font-variant-numeric: tabular-nums`) once a mono token
-lands. Radii: 6px controls, 8px cards. Motion: 150–200ms ease-out on color and
+lands. Radii: 6px controls, 8px cards. Motion: 150-200ms ease-out on color and
 opacity only; nothing bounces, nothing slides without a purpose.
 
 ## Accessibility floor (non-negotiable)
@@ -28,10 +28,10 @@ opacity only; nothing bounces, nothing slides without a purpose.
 1. Every interactive element is reachable and operable by keyboard; visible
    focus using `focus:ring-2 focus:ring-[#37352f]/20` or the accent ring.
 2. Icon-only buttons carry an `aria-label`. Toggles expose state via
-   `aria-checked`/`aria-expanded` — the historic suite had exactly one
+   `aria-checked`/`aria-expanded` - the historic suite had exactly one
    aria-label in total; new surfaces must not continue that pattern.
 3. Text contrast ≥ 4.5:1 against its background token.
-4. Status is never conveyed by color alone — pair badges with text.
+4. Status is never conveyed by color alone - pair badges with text.
 5. Modals and dialogs trap focus and restore it on close (when one is added).
 
 ## Honest-status rule

@@ -83,7 +83,7 @@ const MarketingFooter: React.FC<{ navigate: (tab: string) => void }> = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
           <p className="text-xs font-semibold text-[#1a1a1a]">
-            &copy; {new Date().getFullYear()} DOCURAMA — a product of STALFE · 1 Rue Marguerin, 75014 Paris, France
+            &copy; {new Date().getFullYear()} DOCURAMA - a product of STALFE · 1 Rue Marguerin, 75014 Paris, France
           </p>
           <p className="mt-1 text-[11px] leading-5 text-[#787671] max-w-md">{t('footer.trust')}</p>
         </div>
@@ -390,14 +390,14 @@ const AppShell: React.FC = () => {
     return <ActivationPage />;
   }
 
-  // 6d. Public trust center: /trust. No auth, no badges — the facts and the
+  // 6d. Public trust center: /trust. No auth, no badges - the facts and the
   // readiness vocabulary, served from GET /api/trust.
   if (path === '/trust') {
     return <TrustPage />;
   }
 
   // 6e. Public legal pages: /legal, /legal/terms, /legal/privacy, /legal/dpa,
-  // /legal/imprint — Terms, Privacy Notice, DPA and publisher information.
+  // /legal/imprint - Terms, Privacy Notice, DPA and publisher information.
   if (path === '/legal' || path.startsWith('/legal/')) {
     const seg = path.split('/')[2];
     const initialDoc = (['terms', 'privacy', 'dpa', 'imprint'] as const).find((d) => d === seg);
@@ -556,7 +556,7 @@ const AppShell: React.FC = () => {
           <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div>
               <p className="text-xs font-semibold text-[#1a1a1a]">
-                &copy; {new Date().getFullYear()} DOCURAMA — a product of STALFE · 1 Rue Marguerin, 75014 Paris, France
+                &copy; {new Date().getFullYear()} DOCURAMA - a product of STALFE · 1 Rue Marguerin, 75014 Paris, France
               </p>
               <p className="mt-1 text-[11px] leading-5 text-[#787671] max-w-md">
                 PAdES signatures with X.509 seals, RFC 3161 timestamping, and a

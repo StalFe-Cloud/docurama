@@ -1197,7 +1197,7 @@ export const api = {
   }
 };
 
-// Sprint 3 — Cloud launch surfaces (admin console, billing, domain activation)
+// Sprint 3 - Cloud launch surfaces (admin console, billing, domain activation)
 export const adminApi = {
   tenants: async (q: string = ''): Promise<any[]> => {
     const res = await fetch(`${API_BASE}/admin/tenants?q=${encodeURIComponent(q)}`);
@@ -1544,7 +1544,7 @@ export const complianceApi = {
   },
 };
 
-// Public trust center — no authentication, factual content only.
+// Public trust center - no authentication, factual content only.
 export const trustApi = {
   get: async (): Promise<any> => {
     const res = await fetch(`${API_BASE}/trust`);

@@ -71,14 +71,14 @@ const SYSTEM = `You are a professional SaaS localization translator for Docurama
 Translate English strings into the target language with a warm, precise, professional tone (Notion-like clarity).
 Rules:
 - Preserve inline HTML tags exactly: <strong>, <code> and their placement.
-- Never translate or transliterate product and standard names: Docurama, PAdES, eIDAS, ESIGN, RFC 3161, X.509, PKCS#12, AES-GCM, SHA-256, Stripe, OIDC, SAML, MCP, "Fair Exit Guarantee" (translate the words naturally but keep the English name in parentheses on first mention ONLY in long strings — otherwise keep "Fair Exit Guarantee" as-is).
+- Never translate or transliterate product and standard names: Docurama, PAdES, eIDAS, ESIGN, RFC 3161, X.509, PKCS#12, AES-GCM, SHA-256, Stripe, OIDC, SAML, MCP, "Fair Exit Guarantee" (translate the words naturally but keep the English name in parentheses on first mention ONLY in long strings - otherwise keep "Fair Exit Guarantee" as-is).
 - Keep placeholders, numbers, currency amounts (EUR), and dates unchanged.
 - This platform never claims certifications. Any source text about compliance describes a "compliance program", "controls implemented", "readiness", or "evidence". Translate faithfully WITHOUT inventing certification claims; if the source says the platform does NOT claim certifications, keep that negation.
 - Return STRICT JSON only: {"<key>": "<translation>", ...}. No markdown fences, no commentary.`;
 
 // Vocabulary guard patterns per locale. They ban certification CLAIMS
 // ("certified platform", "we hold certification") while allowing the noun
-// "certificate" where it names a real artifact — e.g. the audit certificate
+// "certificate" where it names a real artifact - e.g. the audit certificate
 // (FR "certificat d'audit", ES "certificado de auditoría", DE "Zertifikat").
 const BANNED: Record<string, RegExp> = {
   // FR/DE: ban the "certified"/"certification" claim words; the artifact noun

@@ -10,7 +10,7 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 # Deployment target: ALWAYS provided by the environment, never committed.
 # Production infrastructure details (hosts, users, key paths) do not belong in
-# a public repository — commit history is effectively a disclosure.
+# a public repository - commit history is effectively a disclosure.
 NEXA_HOST = os.getenv("DOCURAMA_VPS_HOST", "")
 NEXA_USER = os.getenv("DOCURAMA_VPS_USER", "")
 NEXA_KEY = os.path.expanduser(os.getenv("DOCURAMA_VPS_KEY", "~/.ssh/id_ed25519"))

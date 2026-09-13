@@ -1,5 +1,5 @@
 /**
- * Docurama i18n — UI chrome dictionaries (Sprint 8).
+ * Docurama i18n - UI chrome dictionaries (Sprint 8).
  *
  * Four launch locales: English, French, German, Spanish. The marketing
  * surface (nav, hero, pricing, footer) is fully translated at launch; long-form
@@ -7,7 +7,7 @@
  * the content pipeline, falling back to English when a string is missing.
  *
  * Vocabulary guardrail applies to every locale: the platform describes a
- * compliance *program* and *readiness* — it never claims certification.
+ * compliance *program* and *readiness* - it never claims certification.
  */
 export type Locale = 'en' | 'fr' | 'de' | 'es';
 
@@ -36,13 +36,13 @@ const en: Dict = {
   'hero.badge': 'PAdES under eIDAS & ESIGN',
   'hero.title1': 'Documents signed.',
   'hero.title2': 'Simplified.',
-  'hero.sub': 'Docurama seals every agreement with qualified-grade PAdES signatures, X.509 certificates, and RFC 3161 timestamps — then proves it, forever, with a verifiable audit trail.',
+  'hero.sub': 'Docurama seals every agreement with qualified-grade PAdES signatures, X.509 certificates, and RFC 3161 timestamps - then proves it, forever, with a verifiable audit trail.',
   'hero.cta1': 'Start your free trial',
   'hero.cta2': 'See pricing',
   'hero.trust': 'No credit card · EU data residency · Cancel anytime',
-  'cycle.banner': 'Every cycle is 35 days — weekends on us. Twelve annual cycles cover 420 days, 55 more than a calendar year.',
+  'cycle.banner': 'Every cycle is 35 days - weekends on us. Twelve annual cycles cover 420 days, 55 more than a calendar year.',
   'pricing.title': 'Premium e-signing, priced honestly',
-  'pricing.sub': 'Two self-serve plans on one honest cycle — 35 days everywhere — plus Enterprise with the deployment model your organisation needs. Annual billing saves about 20%.',
+  'pricing.sub': 'Two self-serve plans on one honest cycle - 35 days everywhere - plus Enterprise with the deployment model your organisation needs. Annual billing saves about 20%.',
   'pricing.interval': 'Billing interval',
   'pricing.interval.monthly': 'Monthly',
   'pricing.interval.annual': 'Annual',
@@ -88,7 +88,7 @@ const en: Dict = {
   'footer.help': 'Help center',
   'footer.source': 'Source',
   'docs.title': 'Documentation',
-  'docs.sub': 'Everything you need to run signing workflows on Docurama — from your first envelope to the audit API.',
+  'docs.sub': 'Everything you need to run signing workflows on Docurama - from your first envelope to the audit API.',
   'docs.search': 'Search documentation…',
   'docs.readmore': 'Read article',
   'docs.back': 'All articles',
@@ -108,7 +108,7 @@ const en: Dict = {
   'common.learnmore': 'Learn more',
   'common.back': 'Back',
   'common.language': 'Language',
-  // Content categories & tags — every key exists in every locale by design.
+  // Content categories & tags - every key exists in every locale by design.
   'cat.basics': 'Basics',
   'cat.workflow': 'Workflow',
   'cat.trust': 'Trust',
@@ -141,13 +141,13 @@ const fr: Dict = {
   'hero.badge': 'PAdES conforme eIDAS et ESIGN',
   'hero.title1': 'Vos documents signés.',
   'hero.title2': 'En toute simplicité.',
-  'hero.sub': 'Docurama scelle chaque accord avec des signatures PAdES de niveau qualifié, des certificats X.509 et des horodatages RFC 3161 — puis le prouve, pour toujours, grâce à une piste d\u2019audit vérifiable.',
+  'hero.sub': 'Docurama scelle chaque accord avec des signatures PAdES de niveau qualifié, des certificats X.509 et des horodatages RFC 3161 - puis le prouve, pour toujours, grâce à une piste d\u2019audit vérifiable.',
   'hero.cta1': 'Commencez votre essai gratuit',
   'hero.cta2': 'Voir les tarifs',
   'hero.trust': 'Sans carte bancaire · Données hébergées en Europe · Résiliable à tout moment',
-  'cycle.banner': 'Chaque cycle dure 35 jours — les week-ends sont pour nous. Douze cycles annuels couvrent 420 jours, soit 55 de plus qu’une année calendaire.',
+  'cycle.banner': 'Chaque cycle dure 35 jours - les week-ends sont pour nous. Douze cycles annuels couvrent 420 jours, soit 55 de plus qu’une année calendaire.',
   'pricing.title': 'La signature électronique premium, tarifée honnêtement',
-  'pricing.sub': 'Deux formules en libre-service sur un cycle honnête — 35 jours partout — plus l’Entreprise avec le modèle de déploiement qu’exige votre organisation. La facturation annuelle économise environ 20 %.',
+  'pricing.sub': 'Deux formules en libre-service sur un cycle honnête - 35 jours partout - plus l’Entreprise avec le modèle de déploiement qu’exige votre organisation. La facturation annuelle économise environ 20 %.',
   'pricing.interval': 'Période de facturation',
   'pricing.interval.monthly': 'Mensuel',
   'pricing.interval.annual': 'Annuel',
@@ -193,7 +193,7 @@ const fr: Dict = {
   'footer.help': 'Centre d\u2019aide',
   'footer.source': 'Code source',
   'docs.title': 'Documentation',
-  'docs.sub': 'Tout ce qu\u2019il faut pour lancer vos workflows de signature sur Docurama — de votre première enveloppe à l\u2019API d\u2019audit.',
+  'docs.sub': 'Tout ce qu\u2019il faut pour lancer vos workflows de signature sur Docurama - de votre première enveloppe à l\u2019API d\u2019audit.',
   'docs.search': 'Rechercher dans la documentation…',
   'docs.readmore': 'Lire l\u2019article',
   'docs.back': 'Tous les articles',
@@ -245,13 +245,13 @@ const de: Dict = {
   'hero.badge': 'PAdES nach eIDAS und ESIGN',
   'hero.title1': 'Dokumente signiert.',
   'hero.title2': 'Vereinfacht.',
-  'hero.sub': 'Docurama versiegelt jede Vereinbarung mit PAdES-Signaturen auf Qualifiziertem Niveau, X.509-Zertifikaten und RFC-3161-Zeitstempeln — und weist es dauerhaft über eine überprüfbare Audit-Traille nach.',
+  'hero.sub': 'Docurama versiegelt jede Vereinbarung mit PAdES-Signaturen auf Qualifiziertem Niveau, X.509-Zertifikaten und RFC-3161-Zeitstempeln - und weist es dauerhaft über eine überprüfbare Audit-Traille nach.',
   'hero.cta1': 'Kostenlose Testphase starten',
   'hero.cta2': 'Preise ansehen',
   'hero.trust': 'Keine Kreditkarte · EU-Datenhaltung · Jederzeit kündbar',
-  'cycle.banner': 'Jeder Zyklus dauert 35 Tage — die Wochenenden gehen auf uns. Zwölf Jahreszyklen ergeben 420 Tage, 55 mehr als ein Kalenderjahr.',
+  'cycle.banner': 'Jeder Zyklus dauert 35 Tage - die Wochenenden gehen auf uns. Zwölf Jahreszyklen ergeben 420 Tage, 55 mehr als ein Kalenderjahr.',
   'pricing.title': 'Premium-E-Signatur, ehrlich bepreist',
-  'pricing.sub': 'Zwei Selbstbedienungs-Tarife auf einem ehrlichen Zyklus — überall 35 Tage — plus Enterprise mit dem Deployment-Modell, das Ihr Unternehmen braucht. Jahresabrechnung spart rund 20 %.',
+  'pricing.sub': 'Zwei Selbstbedienungs-Tarife auf einem ehrlichen Zyklus - überall 35 Tage - plus Enterprise mit dem Deployment-Modell, das Ihr Unternehmen braucht. Jahresabrechnung spart rund 20 %.',
   'pricing.interval': 'Abrechnungsintervall',
   'pricing.interval.monthly': 'Monatlich',
   'pricing.interval.annual': 'Jährlich',
@@ -287,7 +287,7 @@ const de: Dict = {
   'pricing.refundcash': 'Erstattung',
   'pricing.refundperiodend': 'Abdeckung läuft bis zum Ende des bezahlten Zyklus',
   'pricing.fairexit.title': 'Die Fair-Exit-Garantie',
-  'pricing.fairexit.body': 'Pläne ändern sich. Bei Jahresabrechnung wird jeder ungenutzte volle Zyklus pro rata erstattet — selbstständig, mit einem Klick. Bei monatlicher Abrechnung läuft die Abdeckung einfach bis zum Ende des bezahlten Zyklus. Keine Anrufe, keine Rückgewinnungs-Skripte.',
+  'pricing.fairexit.body': 'Pläne ändern sich. Bei Jahresabrechnung wird jeder ungenutzte volle Zyklus pro rata erstattet - selbstständig, mit einem Klick. Bei monatlicher Abrechnung läuft die Abdeckung einfach bis zum Ende des bezahlten Zyklus. Keine Anrufe, keine Rückgewinnungs-Skripte.',
   'pricing.faq': 'Fragen zu den Preisen',
   'pricing.choose': 'Wählen',
   'footer.trust': 'PAdES-Signaturen mit X.509-Siegeln, RFC-3161-Zeitstempeln und einer überprüfbaren Audit-Traille. Europäische Datenhaltung standardmäßig.',
@@ -297,7 +297,7 @@ const de: Dict = {
   'footer.help': 'Hilfe-Center',
   'footer.source': 'Quellcode',
   'docs.title': 'Dokumentation',
-  'docs.sub': 'Alles, was Sie für Signatur-Workflows auf Docurama brauchen — vom ersten Umschlag bis zur Audit-API.',
+  'docs.sub': 'Alles, was Sie für Signatur-Workflows auf Docurama brauchen - vom ersten Umschlag bis zur Audit-API.',
   'docs.search': 'Dokumentation durchsuchen…',
   'docs.readmore': 'Artikel lesen',
   'docs.back': 'Alle Artikel',
@@ -349,13 +349,13 @@ const es: Dict = {
   'hero.badge': 'PAdES conforme a eIDAS y ESIGN',
   'hero.title1': 'Documentos firmados.',
   'hero.title2': 'Simplificados.',
-  'hero.sub': 'Docurama sella cada acuerdo con firmas PAdES de nivel cualificado, certificados X.509 y sellos de tiempo RFC 3161 — y lo demuestra para siempre con una pista de auditoría verificable.',
+  'hero.sub': 'Docurama sella cada acuerdo con firmas PAdES de nivel cualificado, certificados X.509 y sellos de tiempo RFC 3161 - y lo demuestra para siempre con una pista de auditoría verificable.',
   'hero.cta1': 'Empieza tu prueba gratis',
   'hero.cta2': 'Ver precios',
   'hero.trust': 'Sin tarjeta · Residencia de datos en la UE · Cancela cuando quieras',
-  'cycle.banner': 'Cada ciclo dura 35 días — los fines de semana corren de nuestra cuenta. Doce ciclos anuales cubren 420 días, 55 más que un año natural.',
+  'cycle.banner': 'Cada ciclo dura 35 días - los fines de semana corren de nuestra cuenta. Doce ciclos anuales cubren 420 días, 55 más que un año natural.',
   'pricing.title': 'Firma electrónica premium, con precios honestos',
-  'pricing.sub': 'Dos planes de autoservicio sobre un ciclo honesto — 35 días en todas partes — más Enterprise con el modelo de despliegue que tu organización necesite. La facturación anual ahorra un 20 % aproximadamente.',
+  'pricing.sub': 'Dos planes de autoservicio sobre un ciclo honesto - 35 días en todas partes - más Enterprise con el modelo de despliegue que tu organización necesite. La facturación anual ahorra un 20 % aproximadamente.',
   'pricing.interval': 'Intervalo de facturación',
   'pricing.interval.monthly': 'Mensual',
   'pricing.interval.annual': 'Anual',
@@ -401,7 +401,7 @@ const es: Dict = {
   'footer.help': 'Centro de ayuda',
   'footer.source': 'Código fuente',
   'docs.title': 'Documentación',
-  'docs.sub': 'Todo lo necesario para ejecutar flujos de firma en Docurama — desde tu primer sobre hasta la API de auditoría.',
+  'docs.sub': 'Todo lo necesario para ejecutar flujos de firma en Docurama - desde tu primer sobre hasta la API de auditoría.',
   'docs.search': 'Buscar en la documentación…',
   'docs.readmore': 'Leer artículo',
   'docs.back': 'Todos los artículos',

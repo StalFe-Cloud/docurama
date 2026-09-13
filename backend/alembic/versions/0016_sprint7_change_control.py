@@ -2,11 +2,11 @@
 
 Two tables plus catalog refresh:
 
-- change_requests: the ISO-09 four-eyes change workflow — proposed ->
+- change_requests: the ISO-09 four-eyes change workflow - proposed ->
   approved or rejected -> implemented, approver must differ from requester,
   emergency changes stay visibly overdue for retroactive review until a
   reviewer signs off.
-- vendor_reviews: the SOC2-03 vendor security questionnaire register — data
+- vendor_reviews: the SOC2-03 vendor security questionnaire register - data
   access level, personal-data involvement, hosting region, questionnaire
   answers, outcome (approved/conditional/rejected/pending), findings and a
   next-review date required server-side for approved or conditional

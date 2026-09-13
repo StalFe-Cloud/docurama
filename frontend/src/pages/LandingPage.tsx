@@ -135,7 +135,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               className="bg-white rounded-xl p-6 sm:p-8 border border-[#e5e3df] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.08),0_0_1px_1px_rgba(0,0,0,0.04)] select-none text-[#37352f] relative"
             >
               {/* Self-playing signing sequence (Sprint 8): cursor, signature draw,
-                  signer flip, seal pop — one shared 9s CSS timeline. */}
+                  signer flip, seal pop - one shared 9s CSS timeline. */}
               <HeroDemoOverlay />
               {/* Envelope Header Bar */}
               <div className="flex items-center justify-between border-b border-[#e5e3df] pb-4 mb-6">

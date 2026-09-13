@@ -6,7 +6,7 @@ Produces a dependency inventory of the running environment as JSON:
 every Python distribution visible to the interpreter (with its version and
 purl), plus the frontend's production dependency tree when npm is available.
 
-This is an inventory artifact, not a formal CycloneDX/SPDX document — it
+This is an inventory artifact, not a formal CycloneDX/SPDX document - it
 gives the weekly CI run a diffable record of what shipped, which is what the
 vulnerability-management control actually needs. CI uploads it as a build
 artifact; operators can diff consecutive runs to spot surprise dependencies.

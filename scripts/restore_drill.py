@@ -8,13 +8,13 @@ touching the original or the live database:
   1. copy the backup file to a temporary location (the scratch copy),
   2. run SQLite's integrity_check on the copy,
   3. reconcile per-table row counts (optionally against a live baseline),
-  4. re-verify the hash-chained audit ledgers on the restored copy —
+  4. re-verify the hash-chained audit ledgers on the restored copy -
      the platform-wide security ledger and every per-envelope chain.
 
 The drill exits 0 only when integrity is clean and every chain verifies;
 exit 1 means the restore is NOT trustworthy and the drill failed. The JSON
 report is written to stdout (or --output) and is what
-POST /api/admin/compliance/restore-drills archives as evidence — the API
+POST /api/admin/compliance/restore-drills archives as evidence - the API
 records what the harness measured; it does not re-run or re-judge it.
 
 Usage:

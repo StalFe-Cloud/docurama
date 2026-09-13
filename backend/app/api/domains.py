@@ -406,7 +406,7 @@ async def get_public_domain_status(
 
 
 # ---------------------------------------------------------------------------
-# Enterprise domain activation (§18) — join modes and the approval queue.
+# Enterprise domain activation (§18) - join modes and the approval queue.
 # Only a VERIFIED domain may carry a join mode: an unverified domain record is
 # a claim about ownership, and enabling auto-join on an unproven claim would
 # let anyone sign up as that organisation.

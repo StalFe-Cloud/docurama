@@ -2,11 +2,11 @@
 
 Two tables plus catalog refresh:
 
-- risk_register: the SOC2-01 risk-assessment instrument — 1-5 likelihood and
+- risk_register: the SOC2-01 risk-assessment instrument - 1-5 likelihood and
   impact scales, server-computed inherent/residual scores, one of the four
   standard treatments, owner and next review date. Seeded with the platform's
   initial assessment derived from IMPROVEMENTS.md section 15.
-- restore_drills: ISO-06 drill evidence — the harness output (integrity check,
+- restore_drills: ISO-06 drill evidence - the harness output (integrity check,
   per-table row counts, audit-chain re-verification) recorded per drill.
 
 The control catalog is refreshed in the same migration: ISO-04 (encryption at

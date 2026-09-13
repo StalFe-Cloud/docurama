@@ -504,7 +504,7 @@ async def domain_join_activate(
             )
             db.add(new_request)
             await db.flush()
-            # Sprint 8: admins learn about the pending join by email —
+            # Sprint 8: admins learn about the pending join by email -
             # the queue is only useful if someone knows it has entries.
             await _notify_workspace_admins(
                 db,

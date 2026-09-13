@@ -219,7 +219,7 @@ class EncryptedBackend(StorageBackend):
 
     Presigned URLs are disabled under encryption: a presigned object URL would
     hand out ciphertext the browser cannot read, and serving plaintext through
-    object storage would bypass the API's authorisation layer — documents are
+    object storage would bypass the API's authorisation layer - documents are
     streamed through the API instead, where session and scope checks apply.
 
     Tamper detection is a read-time property: any modification of the stored

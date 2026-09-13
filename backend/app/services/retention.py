@@ -11,7 +11,7 @@ Rules the implementation enforces:
 - The sweep processes a bounded batch per run and records every deletion as a
   security-ledger event, so a retention deletion can never happen silently.
 - Envelopes still in flight (draft/sent/delivered) are never retention
-  candidates — retention applies to terminal envelopes only.
+  candidates - retention applies to terminal envelopes only.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -170,7 +170,7 @@ async def _anonymize_envelope(db: AsyncSession, envelope: Envelope) -> None:
 async def purge_expired_security_events(db: AsyncSession, *, now: Optional[datetime] = None) -> int:
     """Apply the security_events retention policy, if any.
 
-    Deleting ledger rows breaks the chain by design — the verify endpoint will
+    Deleting ledger rows breaks the chain by design - the verify endpoint will
     report the gap. That is the honest trade-off: the retention policy's
     existence is itself recorded in the ledger before any rows are removed.
     """

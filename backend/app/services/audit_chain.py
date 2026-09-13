@@ -3,13 +3,13 @@ Tamper-evident audit hash chains.
 
 Two ledgers are chained:
 
-- ``SecurityEvent`` — the platform-wide ledger (authentication, administrative,
+- ``SecurityEvent`` - the platform-wide ledger (authentication, administrative,
   privacy and operational events), chained globally by monotonic ``seq``.
-- ``AuditEvent`` — the per-envelope trail, chained within each envelope.
+- ``AuditEvent`` - the per-envelope trail, chained within each envelope.
 
 Chaining is enforced by a SQLAlchemy ``before_flush`` listener on the session
 class, so EVERY new row of either ledger is committed to the chain no matter
-which code path created it — envelope creation, signing completion, the
+which code path created it - envelope creation, signing completion, the
 reminder sweeper, verification channels, or anything added later. A row that
 arrives at flush time without a hash gets chained; a row that already carries
 one (from ``append_security_event``) is left untouched.
@@ -25,8 +25,8 @@ verification can also detect rewrites of history against what was previously
 observed.
 
 Terminology guardrail: this is tamper *evidence*, not a certification. The
-verify endpoint reports exactly what it recomputed — valid or the first broken
-link — and nothing more.
+verify endpoint reports exactly what it recomputed - valid or the first broken
+link - and nothing more.
 """
 import hashlib
 import json
@@ -123,7 +123,7 @@ def _materialize_defaults(obj) -> None:
 
     The flush listener runs before column defaults fire, so a row constructed
     without actor_name/severity would hash one payload and store another. The
-    defaults are materialised here — exactly what the ORM will persist — so
+    defaults are materialised here - exactly what the ORM will persist - so
     the stored hash verifies against the stored row.
     """
     if isinstance(obj, SecurityEvent):
@@ -142,7 +142,7 @@ def _before_flush(session, flush_context, instances) -> None:
     Rows pending in the same flush are chained as a batch: the listener walks
     each scope (global for SecurityEvent, per-envelope for AuditEvent),
     continues the sequence from the last committed row, and links each new row
-    to its predecessor — committed or pending.
+    to its predecessor - committed or pending.
     """
     if not settings.AUDIT_CHAIN_ENABLED:
         return
@@ -181,7 +181,7 @@ def _before_flush(session, flush_context, instances) -> None:
                         obj.created_at = datetime.now(timezone.utc)
                     obj.event_hash = compute_event_hash(obj.prev_hash, _envelope_payload(obj))
                     tip = obj.event_hash
-    except Exception:  # noqa: BLE001 — never write an unchained ledger row
+    except Exception:  # noqa: BLE001 - never write an unchained ledger row
         # A chain failure means the row would be written WITHOUT its link, i.e.
         # an unchained row inside an otherwise chained ledger. That is worse
         # than surfacing the error, so the exception propagates: callers see the
@@ -248,7 +248,7 @@ async def safe_append(db: AsyncSession, **kwargs) -> Optional[SecurityEvent]:
     """
     try:
         return await append_security_event(db, **kwargs)
-    except Exception:  # noqa: BLE001 — the ledger must never take auth down
+    except Exception:  # noqa: BLE001 - the ledger must never take auth down
         logger.warning(
             "security-ledger append failed for event_type=%s", kwargs.get("event_type"),
             exc_info=True,
@@ -315,7 +315,7 @@ async def _verify(db, model, payload_fn, filters=None, limit=None) -> dict:
 
 async def seal_security_chain(db: AsyncSession, sealed_by: str = "system") -> AuditChainSeal:
     """Snapshot the security ledger tip. Callers commit."""
-    from sqlalchemy.ext.asyncio import AsyncSession as _AS  # noqa: F401 — typing aid only
+    from sqlalchemy.ext.asyncio import AsyncSession as _AS  # noqa: F401 - typing aid only
     tip = (
         await db.execute(select(SecurityEvent).order_by(SecurityEvent.seq.desc()).limit(1))
     ).scalar_one_or_none()
