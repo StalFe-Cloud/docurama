@@ -524,14 +524,13 @@ async def test_control_catalog_seeded_with_honest_vocabulary(client, db_session)
     legal = {"Implemented", "Partial", "Missing", "Needs Review"}
     assert all(c["readiness"] in legal for c in controls)
     # The catalog itself must not claim more than the code delivers.
-    # (Sprint 6 moved ISO-04/06/07 and SOC2-01 to Implemented with code and
-    # tests behind them; ISO-09 and SOC2-03 remain Partial, EIDAS-02 stays
-    # Partial because a qualified TSA is the operator's choice.)
+    # (Sprint 6 moved ISO-04/06/07 and SOC2-01 to Implemented; Sprint 7 moved
+    # ISO-09 and SOC2-03 with the change workflow and vendor register behind
+    # them; EIDAS-02 stays Partial because a qualified TSA is the operator's
+    # choice.)
     by_id = {c["control_id"]: c for c in controls}
-    for moved in ("ISO-04", "ISO-06", "ISO-07", "SOC2-01"):
+    for moved in ("ISO-04", "ISO-06", "ISO-07", "ISO-09", "SOC2-01", "SOC2-03"):
         assert by_id[moved]["readiness"] == "Implemented"
-    assert by_id["ISO-09"]["readiness"] == "Partial"
-    assert by_id["SOC2-03"]["readiness"] == "Partial"
     assert by_id["EIDAS-02"]["readiness"] == "Partial"
     # No control may carry certification-flavoured readiness.
     assert not any(

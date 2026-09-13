@@ -831,3 +831,63 @@ catches CVEs published after merge. Triage lands in the risk register.
   unauthenticated; demo account 403 on drill recording (privilege boundary
   holds).
 - Local security gates: ALL GATES GREEN; frontend build green.
+
+## §18 — Sprint 7: change control and vendor reviews (implemented)
+
+The last two code-addressable gaps in the §16 catalog are closed in source.
+After this sprint the readiness baseline is **24 Implemented / 1 Partial**
+(EIDAS-02 remains Partial honestly: a qualified TSA is the operator's
+configuration choice, not something code can ship).
+
+### 18.1 Change control (ISO-09)
+
+`change_requests` implements the four-eyes workflow: a change enters as
+`proposed`, a **different** platform admin approves or rejects it (the server
+refuses self-approval with 422 — a workflow the requester could rubber-stamp
+would not be a control), and an approved change moves to `implemented` with
+timestamps at every transition. Emergency changes may implement while still
+proposed — that is what makes them emergency — but the register ages them
+visibly: a proposed emergency older than 48 hours carries
+`emergency_review_overdue` in the list output and the overview, so the gap
+shows in red instead of hiding. Every transition (`change_proposed`,
+`change_decided`, `change_implemented`) lands in the hash-chained security
+ledger. Endpoints: `GET/POST /api/admin/compliance/changes`,
+`POST .../{id}/decision`, `POST .../{id}/implement` (platform-admin gated;
+401 unauthenticated, 403 for workspace admins).
+
+### 18.2 Vendor security reviews (SOC2-03)
+
+`vendor_reviews` records, per vendor relationship: what the vendor does, its
+data-access level (none/limited/full), whether personal data is involved,
+hosting region, a structured questionnaire (data processed, security
+controls, DPA status, breach-notification channel), the outcome
+(approved/conditional/rejected/pending), findings, and a next-review date —
+required server-side for approved or conditional outcomes, so the register
+ages visibly (overdue rows flagged). Any content change re-stamps reviewer
+and review date: the register shows who last looked, not who originally
+wrote it. The register ships seeded with the platform's initial assessment
+of its four real vendor touchpoints (Stripe, the RFC 3161 TSA, the SMTP
+relay, the object-storage backend) — all deliberately `conditional`, because
+a review cannot judge an operator configuration that does not exist yet. The
+TSA row records the honest data boundary: the vendor receives the document
+hash and nothing else. Endpoints: `GET/POST/PATCH
+/api/admin/compliance/vendors`; events `vendor_reviewed`,
+`vendor_review_updated` chain into the security ledger. The compliance
+dashboard renders both registers (propose/approve/implement actions; vendor
+questionnaires expandable), and the overview aggregate carries
+`changes` and `vendors` summaries.
+
+### 18.3 Verification
+
+- 534/534 tests (519 + 15 new: change lifecycle, four-eyes refusal, reject
+  flow, implement-requires-approval, emergency implement-while-proposed and
+  48h aging, vocabulary enforcement on both registers, admin gating, seed
+  assessment shape, next-review-date enforcement, re-review re-stamping,
+  ledger events, catalog baseline, evidence hygiene).
+- Migration 0016 verified both dialects: offline PostgreSQL renders the
+  tables + indexes; real SQLite upgrade applied to the live database
+  (4 vendor seeds, ISO-09/SOC2-03 read back as Implemented, EIDAS-02 still
+  Partial, evidence replaced).
+- Live probe battery: healthz/readyz/trust/SPA 200; new endpoints 401
+  unauthenticated and 403 for the demo account; local security gates ALL
+  GREEN; frontend tsc + vite build green.

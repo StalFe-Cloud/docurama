@@ -33,10 +33,10 @@ from app.api.legal import _require_platform_admin
 from app.core.config import settings
 from app.core.database import get_db
 from app.models import (
-    AccessReview, Account, AuditChainSeal, ComplianceControl, ConsentRecord,
-    ControlEvidence, DsarRequest, Envelope, LegalHold, RestoreDrill,
-    RetentionPolicy, RiskRegisterEntry, SecurityEvent, SecurityIncident,
-    Subprocessor, User,
+    AccessReview, Account, AuditChainSeal, ChangeRequest, ComplianceControl,
+    ConsentRecord, ControlEvidence, DsarRequest, Envelope, LegalHold,
+    RestoreDrill, RetentionPolicy, RiskRegisterEntry, SecurityEvent,
+    SecurityIncident, Subprocessor, User, VendorReview,
 )
 from app.services import audit_chain, compliance_catalog, dsar as dsar_service, retention as retention_service
 
@@ -179,6 +179,52 @@ class RestoreDrillIn(BaseModel):
     passed: Optional[bool] = None
     notes: Optional[str] = None
     executed_at: Optional[datetime] = None
+
+
+class ChangeCreate(BaseModel):
+    """A proposed platform change (ISO-09). Review happens via /decision."""
+    title: str = PydField(min_length=3, max_length=255)
+    description: str = PydField(min_length=1)
+    change_type: str = PydField(pattern="^(standard|normal|emergency)$", default="normal")
+    risk_notes: Optional[str] = None
+    control_refs: Optional[str] = PydField(default=None, max_length=500)
+
+
+class ChangeDecision(BaseModel):
+    """Approve or reject a proposed change. Reviewer must differ from requester."""
+    decision: str = PydField(pattern="^(approved|rejected)$")
+    review_notes: Optional[str] = None
+
+
+class VendorCreate(BaseModel):
+    """One recorded vendor security review (SOC2-03)."""
+    vendor_name: str = PydField(min_length=1, max_length=255)
+    service_provided: str = PydField(min_length=1, max_length=500)
+    data_access_level: str = PydField(pattern="^(none|limited|full)$", default="limited")
+    personal_data: bool = False
+    hosting_region: Optional[str] = PydField(default=None, max_length=120)
+    reviewed_at: Optional[datetime] = None
+    reviewer: str = PydField(default="Platform operator", max_length=255)
+    questionnaire: Optional[dict] = None
+    outcome: str = PydField(pattern="^(approved|conditional|rejected|pending)$", default="pending")
+    findings: Optional[str] = None
+    next_review_due: Optional[datetime] = None
+    control_refs: Optional[str] = PydField(default=None, max_length=500)
+
+
+class VendorUpdate(BaseModel):
+    """All fields optional; next-review enforcement applies on outcome change."""
+    vendor_name: Optional[str] = PydField(default=None, min_length=1, max_length=255)
+    service_provided: Optional[str] = PydField(default=None, min_length=1, max_length=500)
+    data_access_level: Optional[str] = PydField(default=None, pattern="^(none|limited|full)$")
+    personal_data: Optional[bool] = None
+    hosting_region: Optional[str] = PydField(default=None, max_length=120)
+    reviewer: Optional[str] = PydField(default=None, max_length=255)
+    questionnaire: Optional[dict] = None
+    outcome: Optional[str] = PydField(default=None, pattern="^(approved|conditional|rejected|pending)$")
+    findings: Optional[str] = None
+    next_review_due: Optional[datetime] = None
+    control_refs: Optional[str] = PydField(default=None, max_length=500)
 
 
 # ---------------------------------------------------------------------------
@@ -1052,6 +1098,359 @@ async def update_risk(
     return _risk_out(risk)
 
 
+# ---------------------------------------------------------------------------
+# Change control (ISO-09) — four-eyes workflow
+# ---------------------------------------------------------------------------
+
+# Emergency changes may be implemented before review (that is what makes them
+# emergency), but the retroactive review has a deadline. The list endpoint
+# ages overdue emergencies visibly instead of hiding the gap.
+_EMERGENCY_REVIEW_SLACK = timedelta(hours=48)
+
+
+def _change_out(c: ChangeRequest, now: Optional[datetime] = None) -> dict:
+    created = _utc_aware(c.created_at)
+    emergency_review_overdue = (
+        c.change_type == "emergency"
+        and c.status == "proposed"
+        and created is not None
+        and (now or datetime.now(timezone.utc)) - created > _EMERGENCY_REVIEW_SLACK
+    )
+    return {
+        "id": c.id,
+        "change_key": c.change_key,
+        "title": c.title,
+        "description": c.description,
+        "change_type": c.change_type,
+        "risk_notes": c.risk_notes,
+        "control_refs": c.control_refs,
+        "status": c.status,
+        "requested_by": c.requested_by,
+        "reviewed_by": c.reviewed_by,
+        "review_notes": c.review_notes,
+        "decided_at": _iso(c.decided_at),
+        "implemented_at": _iso(c.implemented_at),
+        "created_at": _iso(c.created_at),
+        "updated_at": _iso(c.updated_at),
+        "emergency_review_overdue": emergency_review_overdue,
+    }
+
+
+async def _next_change_key(db: AsyncSession) -> str:
+    numbers = []
+    for key in (await db.execute(select(ChangeRequest.change_key))).scalars().all():
+        try:
+            numbers.append(int(key.rsplit("-", 1)[-1]))
+        except (ValueError, AttributeError):
+            continue
+    return f"CHG-{(max(numbers) + 1) if numbers else 1:03d}"
+
+
+@router.get("/compliance/changes")
+async def list_changes(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    rows = (await db.execute(
+        select(ChangeRequest).order_by(ChangeRequest.created_at.desc())
+    )).scalars().all()
+    now = datetime.now(timezone.utc)
+    items = [_change_out(c, now) for c in rows]
+    return {
+        "summary": {
+            "total": len(items),
+            "proposed": sum(1 for i in items if i["status"] == "proposed"),
+            "approved": sum(1 for i in items if i["status"] == "approved"),
+            "implemented": sum(1 for i in items if i["status"] == "implemented"),
+            "rejected": sum(1 for i in items if i["status"] == "rejected"),
+            "emergency_review_overdue": sum(
+                1 for i in items if i["emergency_review_overdue"]),
+        },
+        "review_slack_hours": int(_EMERGENCY_REVIEW_SLACK.total_seconds() // 3600),
+        "changes": items,
+    }
+
+
+@router.post("/compliance/changes", status_code=201)
+async def propose_change(
+    payload: ChangeCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    change = ChangeRequest(
+        change_key=await _next_change_key(db),
+        title=payload.title,
+        description=payload.description,
+        change_type=payload.change_type,
+        risk_notes=payload.risk_notes,
+        control_refs=payload.control_refs,
+        status="proposed",
+        requested_by=current_user.email,
+    )
+    db.add(change)
+    await audit_chain.append_security_event(
+        db,
+        event_type="change_proposed",
+        description=f"Change {change.change_key} proposed: {payload.title}",
+        actor_email=current_user.email,
+        detail={"change_key": change.change_key, "change_type": change.change_type},
+    )
+    await db.commit()
+    return _change_out(change)
+
+
+@router.post("/compliance/changes/{change_id}/decision")
+async def decide_change(
+    change_id: str,
+    payload: ChangeDecision,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    change = (await db.execute(
+        select(ChangeRequest).where(ChangeRequest.id == change_id)
+    )).scalar_one_or_none()
+    if change is None:
+        raise HTTPException(status_code=404, detail="change not found")
+    if change.status != "proposed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"change is {change.status}; only proposed changes can be decided",
+        )
+    # Four-eyes: the approver must differ from the requester. Self-approval
+    # would make the workflow a rubber stamp, so it is refused server-side.
+    if change.requested_by == current_user.email:
+        raise HTTPException(
+            status_code=422,
+            detail="four-eyes: the reviewer must differ from the requester",
+        )
+    change.status = payload.decision
+    change.reviewed_by = current_user.email
+    change.review_notes = payload.review_notes
+    change.decided_at = datetime.now(timezone.utc)
+    await audit_chain.append_security_event(
+        db,
+        event_type="change_decided",
+        description=f"Change {change.change_key} {payload.decision} by {current_user.email}",
+        actor_email=current_user.email,
+        detail={"change_key": change.change_key, "decision": payload.decision},
+    )
+    await db.commit()
+    return _change_out(change)
+
+
+@router.post("/compliance/changes/{change_id}/implement")
+async def implement_change(
+    change_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    change = (await db.execute(
+        select(ChangeRequest).where(ChangeRequest.id == change_id)
+    )).scalar_one_or_none()
+    if change is None:
+        raise HTTPException(status_code=404, detail="change not found")
+    # Emergency changes may be implemented while still proposed (retroactive
+    # review remains due and visible); everything else needs approval first.
+    if change.status != "approved" and not (
+        change.change_type == "emergency" and change.status == "proposed"
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"change is {change.status}; only approved (or emergency-proposed) changes can be implemented",
+        )
+    change.status = "implemented"
+    change.implemented_at = datetime.now(timezone.utc)
+    await audit_chain.append_security_event(
+        db,
+        event_type="change_implemented",
+        description=f"Change {change.change_key} implemented",
+        actor_email=current_user.email,
+        detail={"change_key": change.change_key,
+                "reviewed_before_implement": bool(change.reviewed_by)},
+    )
+    await db.commit()
+    return _change_out(change)
+
+
+# ---------------------------------------------------------------------------
+# Vendor security reviews (SOC2-03) — questionnaire register
+# ---------------------------------------------------------------------------
+
+_VENDOR_OUTCOMES_REQUIRING_REVIEW = ("approved", "conditional")
+
+
+def _utc_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """SQLite returns naive datetimes; comparisons need a consistent clock."""
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _vendor_out(v: VendorReview, now: Optional[datetime] = None) -> dict:
+    next_due = _utc_aware(v.next_review_due)
+    review_overdue = (
+        v.outcome in _VENDOR_OUTCOMES_REQUIRING_REVIEW
+        and next_due is not None
+        and next_due < (now or datetime.now(timezone.utc))
+    )
+    return {
+        "id": v.id,
+        "vendor_key": v.vendor_key,
+        "vendor_name": v.vendor_name,
+        "service_provided": v.service_provided,
+        "data_access_level": v.data_access_level,
+        "personal_data": v.personal_data,
+        "hosting_region": v.hosting_region,
+        "reviewed_at": _iso(v.reviewed_at),
+        "reviewer": v.reviewer,
+        "questionnaire": v.questionnaire,
+        "outcome": v.outcome,
+        "findings": v.findings,
+        "next_review_due": _iso(next_due),
+        "control_refs": v.control_refs,
+        "created_at": _iso(v.created_at),
+        "updated_at": _iso(v.updated_at),
+        "review_overdue": review_overdue,
+    }
+
+
+def _vendor_review_date_ok(outcome: str, next_review_due: Optional[datetime]) -> bool:
+    """Approved/conditional outcomes must carry a next-review date — the
+    register ages visibly instead of silently."""
+    if outcome in _VENDOR_OUTCOMES_REQUIRING_REVIEW:
+        return next_review_due is not None
+    return True
+
+
+@router.get("/compliance/vendors")
+async def list_vendor_reviews(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    await compliance_catalog.ensure_vendor_reviews_seeded(db)
+    rows = (await db.execute(
+        select(VendorReview).order_by(VendorReview.vendor_key)
+    )).scalars().all()
+    now = datetime.now(timezone.utc)
+    items = [_vendor_out(v, now) for v in rows]
+    return {
+        "summary": {
+            "total": len(items),
+            "approved": sum(1 for i in items if i["outcome"] == "approved"),
+            "conditional": sum(1 for i in items if i["outcome"] == "conditional"),
+            "rejected": sum(1 for i in items if i["outcome"] == "rejected"),
+            "pending": sum(1 for i in items if i["outcome"] == "pending"),
+            "review_overdue": sum(1 for i in items if i["review_overdue"]),
+            "with_personal_data": sum(1 for i in items if i["personal_data"]),
+        },
+        "vendors": items,
+    }
+
+
+@router.post("/compliance/vendors", status_code=201)
+async def create_vendor_review(
+    payload: VendorCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    await compliance_catalog.ensure_vendor_reviews_seeded(db)
+    if not _vendor_review_date_ok(payload.outcome, payload.next_review_due):
+        raise HTTPException(
+            status_code=422,
+            detail="outcome approved/conditional requires next_review_due",
+        )
+    numbers = []
+    for key in (await db.execute(select(VendorReview.vendor_key))).scalars().all():
+        try:
+            numbers.append(int(key.rsplit("-", 1)[-1]))
+        except (ValueError, AttributeError):
+            continue
+    review = VendorReview(
+        vendor_key=f"VND-{(max(numbers) + 1) if numbers else 1:03d}",
+        vendor_name=payload.vendor_name,
+        service_provided=payload.service_provided,
+        data_access_level=payload.data_access_level,
+        personal_data=payload.personal_data,
+        hosting_region=payload.hosting_region,
+        reviewed_at=payload.reviewed_at or datetime.now(timezone.utc),
+        reviewer=payload.reviewer,
+        questionnaire=payload.questionnaire,
+        outcome=payload.outcome,
+        findings=payload.findings,
+        next_review_due=payload.next_review_due,
+        control_refs=payload.control_refs,
+    )
+    db.add(review)
+    await audit_chain.append_security_event(
+        db,
+        event_type="vendor_reviewed",
+        description=f"Vendor review {review.vendor_key}: {payload.vendor_name} ({payload.outcome})",
+        actor_email=current_user.email,
+        detail={"vendor_key": review.vendor_key, "outcome": payload.outcome,
+                "data_access_level": payload.data_access_level,
+                "personal_data": payload.personal_data},
+    )
+    await db.commit()
+    return _vendor_out(review)
+
+
+@router.patch("/compliance/vendors/{vendor_id}")
+async def update_vendor_review(
+    vendor_id: str,
+    payload: VendorUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    review = (await db.execute(
+        select(VendorReview).where(VendorReview.id == vendor_id)
+    )).scalar_one_or_none()
+    if review is None:
+        raise HTTPException(status_code=404, detail="vendor review not found")
+
+    changed = []
+    for field in ("vendor_name", "service_provided", "data_access_level",
+                  "personal_data", "hosting_region", "reviewer", "questionnaire",
+                  "findings", "control_refs"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(review, field, value)
+            changed.append(field)
+    if payload.outcome is not None:
+        review.outcome = payload.outcome
+        changed.append("outcome")
+    if payload.next_review_due is not None:
+        review.next_review_due = payload.next_review_due
+        changed.append("next_review_due")
+    # A re-review (any content change on a decided row) re-stamps the review
+    # metadata so the register reflects who last looked and when.
+    if changed:
+        review.reviewed_at = datetime.now(timezone.utc)
+        review.reviewer = payload.reviewer or current_user.email
+    if not _vendor_review_date_ok(review.outcome, review.next_review_due):
+        raise HTTPException(
+            status_code=422,
+            detail="outcome approved/conditional requires next_review_due",
+        )
+
+    await audit_chain.append_security_event(
+        db,
+        event_type="vendor_review_updated",
+        description=f"Vendor review {review.vendor_key} updated ({', '.join(changed) or 'no changes'})",
+        actor_email=current_user.email,
+        detail={"vendor_key": review.vendor_key, "fields": changed,
+                "outcome": review.outcome},
+    )
+    await db.commit()
+    return _vendor_out(review)
+
+
 @router.post("/compliance/restore-drills", status_code=201)
 async def record_restore_drill(
     payload: RestoreDrillIn,
@@ -1134,6 +1533,7 @@ async def compliance_overview(
     await _require_platform_admin(current_user)
     await compliance_catalog.ensure_seeded(db)
     await compliance_catalog.ensure_risks_seeded(db)
+    await compliance_catalog.ensure_vendor_reviews_seeded(db)
 
     controls = (await db.execute(select(ComplianceControl))).scalars().all()
     by_framework: dict[str, dict[str, int]] = {}
@@ -1178,6 +1578,15 @@ async def compliance_overview(
         select(func.count(Subprocessor.id)).where(Subprocessor.status != "retired")
     )).scalar()
 
+    change_rows = (await db.execute(select(ChangeRequest))).scalars().all()
+    vendor_rows = (await db.execute(select(VendorReview))).scalars().all()
+    vendor_overdue = sum(
+        1 for v in vendor_rows
+        if v.outcome in _VENDOR_OUTCOMES_REQUIRING_REVIEW
+        and v.next_review_due is not None
+        and v.next_review_due.replace(tzinfo=v.next_review_due.tzinfo or timezone.utc) <= now
+    )
+
     chain = await audit_chain.verify_security_chain(db)
 
     return {
@@ -1201,6 +1610,22 @@ async def compliance_overview(
         "legal_holds_active": int(hold_count or 0),
         "retention_policies": int(policy_count or 0),
         "subprocessors_active_or_planned": int(subprocessor_count or 0),
+        "changes": {
+            "proposed": sum(1 for c in change_rows if c.status == "proposed"),
+            "approved": sum(1 for c in change_rows if c.status == "approved"),
+            "implemented": sum(1 for c in change_rows if c.status == "implemented"),
+            "emergency_review_overdue": sum(
+                1 for c in change_rows
+                if c.change_type == "emergency" and c.status == "proposed"
+                and c.created_at is not None
+                and now - c.created_at.replace(
+                    tzinfo=c.created_at.tzinfo or timezone.utc) > _EMERGENCY_REVIEW_SLACK
+            ),
+        },
+        "vendors": {
+            "total": len(vendor_rows),
+            "review_overdue": vendor_overdue,
+        },
         "risks": {
             "open": len(open_risks),
             "top_inherent": max((r.inherent_score for r in open_risks), default=0),

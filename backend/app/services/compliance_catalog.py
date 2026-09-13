@@ -114,10 +114,11 @@ _CATALOG = [
      "Implemented", "quarterly",
      [("endpoint", "POST /api/admin/access-reviews", "record a completed review")]),
     ("ISO-09", "Secure development & change control", "ISO27001",
-     "CI gates run tests, typecheck and build on every push; formal change-approval workflow is not implemented.",
-     "Partial", "quarterly",
-     [("config", ".github/workflows/ci.yml", "required checks"),
-      ("gap", "approval flow", "no reviewer sign-off workflow")]),
+     "CI gates run tests, typecheck and build on every push; security-relevant changes travel a four-eyes workflow (change_requests): proposed -> approved or rejected -> implemented, the approver must differ from the requester, and emergency changes stay visibly overdue for retroactive review until a reviewer signs off. Every transition lands in the hash-chained security ledger.",
+     "Implemented", "quarterly",
+     [("code", "app/models/models.py ChangeRequest", "four-eyes change register with status transitions"),
+      ("endpoint", "POST /api/admin/compliance/changes", "propose; decision and implement endpoints complete the workflow"),
+      ("test", "tests/test_sprint7_change_control.py", "lifecycle, four-eyes separation, transition and vocabulary pinned")]),
 
     # ---------------- SOC 2 readiness ----------------
     ("SOC2-01", "Risk assessment", "SOC2",
@@ -132,10 +133,12 @@ _CATALOG = [
      [("endpoint", "POST /api/admin/incidents", "record and progress incidents"),
       ("config", "docs/policies/incident-response.md", "procedure mapping control IDs")]),
     ("SOC2-03", "Vendor & subprocessor management", "SOC2",
-     "Subprocessors are registered and published; formal vendor security review questionnaires are not implemented.",
-     "Partial", "annual",
+     "Subprocessors are registered and published, and each vendor relationship is reviewed through a structured security questionnaire (vendor_reviews): data-access level, personal-data involvement, hosting region, questionnaire answers, outcome (approved/conditional/rejected/pending), findings and a next-review date — required server-side for approved or conditional outcomes, with overdue entries flagged. Ships seeded with the platform's initial vendor assessment.",
+     "Implemented", "annual",
      [("endpoint", "GET /api/admin/subprocessors", "registry"),
-      ("gap", "vendor review", "no security questionnaire process")]),
+      ("code", "app/models/models.py VendorReview", "questionnaire register with outcome vocabulary and review cadence"),
+      ("endpoint", "GET /api/admin/compliance/vendors", "review register CRUD with overdue flags"),
+      ("test", "tests/test_sprint7_change_control.py", "seed assessment, vocabulary and next-review enforcement pinned")]),
     ("SOC2-04", "Tenant isolation", "SOC2",
      "Workspace scoping is enforced in queries and pinned by a dedicated isolation test-suite; cross-tenant reads are tested against real endpoints.",
      "Implemented", "quarterly",
@@ -306,6 +309,110 @@ async def ensure_risks_seeded(db) -> int:
     for attrs in build_risk_rows():
         row = RiskRegisterEntry(**attrs)
         row.next_review_at = datetime.now(timezone.utc) + timedelta(days=90)
+        db.add(row)
+        added += 1
+    await db.commit()
+    return added
+
+
+# ---------------------------------------------------------------------------
+# Vendor security reviews (SOC2-03)
+# ---------------------------------------------------------------------------
+# The platform's initial vendor assessment, derived from the same analysis as
+# the risk register: these are the vendor touchpoints the shipped code can
+# actually reach. Outcomes are deliberately conservative — vendors that only
+# activate under operator configuration are "conditional", not "approved",
+# because the review cannot judge a configuration that does not exist yet.
+
+# (vendor_key, vendor_name, service, data_access_level, personal_data,
+#  hosting_region, outcome, findings, questionnaire, control_refs)
+_VENDOR_REVIEWS = [
+    ("VND-001", "Stripe (operator-configured)", "Payment processing for subscription billing",
+     "limited", True, "Operator's Stripe account region", "conditional",
+     "Billing activates only once the operator configures Stripe keys and webhook secret. Card data never reaches Docurama (checkout runs on Stripe-hosted surfaces); the platform stores plan/period state only. Confirm the agreement covers personal data before production traffic.",
+     {
+         "data_processed": "Billing contact email, subscription and invoice state; no documents, no signature material.",
+         "security_controls": "Vendor-published under its own security program; verification recorded here is of our exposure, not of the vendor's claims.",
+         "dpa_status": "Operator to confirm data processing terms in the Stripe agreement before go-live.",
+         "breach_notification": "Contractual channel via the Stripe agreement; platform incidents with billing impact are additionally recorded in the security ledger.",
+     },
+     "SOC2-03"),
+    ("VND-002", "RFC 3161 TSA (operator-chosen)", "Trusted timestamps for PAdES signatures",
+     "limited", False, "Operator's TSA choice", "conditional",
+     "The TSA receives the document hash and nothing else — no document content, no signer identity. Trust in timestamps equals the operator's TSA choice; a qualified TSA is required for QES-adjacent claims (EIDAS-02 stays Partial until then).",
+     {
+         "data_processed": "Document sha256 digest and timestamp request; no personal data, no document content.",
+         "security_controls": "RFC 3161 response validation happens locally in pyHanko; invalid responses fail signing.",
+         "dpa_status": "Not applicable — no personal data crosses the boundary; operator validates the TSA policy statement.",
+         "breach_notification": "TSA compromise manifests as verification failures, which the platform reports honestly per verification.",
+     },
+     "EIDAS-02,SOC2-03"),
+    ("VND-003", "SMTP relay (operator-configured)", "Outbound email: invitations, reminders, DSAR notifications",
+     "limited", True, "Operator's SMTP provider region", "conditional",
+     "Recipient email addresses and message content traverse the relay. Transport security and provider data location are operator responsibilities; DKIM/SPF alignment is measured by the mail-deliverability service when configured.",
+     {
+         "data_processed": "Recipient email addresses, signing invitation and notification bodies; no signed documents attached.",
+         "security_controls": "Credentials stored encrypted at rest in account settings; STARTTLS/TLS negotiated per connection with timeouts.",
+         "dpa_status": "Operator to confirm the provider's data processing terms and region before go-live.",
+         "breach_notification": "Provider-side notification per contract; platform-side delivery failures surface in EmailSendLog.",
+     },
+     "SOC2-03"),
+    ("VND-004", "Object storage backend (local volume or S3, operator-configured)", "Durable storage of sealed PDFs and uploads",
+     "full", True, "Operator's storage region", "conditional",
+     "Holds the complete document corpus, so exposure risk equals the storage configuration. When DOCURAMA_STORAGE_ENCRYPTION_KEY is set, blobs are AES-256-GCM ciphertext and the provider never observes plaintext (ISO-04); presigned URLs are disabled under encryption because they would bypass API authorization.",
+     {
+         "data_processed": "Sealed PDFs, uploaded documents, template assets; contains personal data when envelopes do.",
+         "security_controls": "Application-side envelope encryption available and evidenced (ISO-04); SSE and bucket policy hardening are operator responsibilities.",
+         "dpa_status": "Operator to confirm storage provider terms; self-hosted local volumes keep the data in-operator.",
+         "breach_notification": "Storage-side incidents are operator-visible by definition in self-hosted mode; recorded in the security ledger with severity.",
+     },
+     "ISO-04,SOC2-03"),
+]
+
+_VENDOR_NEXT_REVIEW_DAYS = 180
+
+
+def build_vendor_review_rows() -> list[dict]:
+    """Return the initial vendor review assessment ready for insertion.
+
+    Review dates are stamped by the caller (seed or migration) at insertion
+    time, the same way risk seeds receive their next-review dates.
+    """
+    rows = []
+    for (vendor_key, vendor_name, service, access, personal, region,
+         outcome, findings, questionnaire, control_refs) in _VENDOR_REVIEWS:
+        rows.append({
+            "vendor_key": vendor_key,
+            "vendor_name": vendor_name,
+            "service_provided": service,
+            "data_access_level": access,
+            "personal_data": personal,
+            "hosting_region": region,
+            "outcome": outcome,
+            "findings": findings,
+            "questionnaire": questionnaire,
+            "control_refs": control_refs,
+        })
+    return rows
+
+
+async def ensure_vendor_reviews_seeded(db) -> int:
+    """Idempotently seed the vendor review register (count added returned)."""
+    from sqlalchemy import func, select
+    from app.models import VendorReview
+
+    existing = (await db.execute(select(func.count(VendorReview.id)))).scalar()
+    if existing:
+        return 0
+    now = datetime.now(timezone.utc)
+    added = 0
+    for attrs in build_vendor_review_rows():
+        row = VendorReview(**attrs)
+        row.reviewed_at = now
+        row.reviewer = "Platform operator"
+        # approved/conditional rows always carry a next-review date — the same
+        # rule the API enforces at write time, applied to the seeds.
+        row.next_review_due = now + timedelta(days=_VENDOR_NEXT_REVIEW_DAYS)
         db.add(row)
         added += 1
     await db.commit()

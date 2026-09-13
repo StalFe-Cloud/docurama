@@ -4,14 +4,16 @@ import { complianceApi, ComplianceControl } from '../lib/api';
 /**
  * Compliance dashboard (platform-admin gated server-side).
  *
- * One screen, four honest panels:
+ * One screen, six honest panels:
  *  - overview: readiness counts per framework, DSAR queue, open incidents,
  *    audit-chain integrity;
  *  - controls: the readiness catalog with the four-state vocabulary and the
  *    evidence each control cites;
  *  - DSAR queue: create, run, cancel export/erasure requests;
  *  - incidents: the GDPR 72-hour clock, overdue in red;
- *  - subprocessors: the registry the trust center publishes.
+ *  - subprocessors: the registry the trust center publishes;
+ *  - change control (ISO-09): the four-eyes workflow with visible gaps;
+ *  - vendor reviews (SOC2-03): questionnaire register with overdue flags.
  *
  * The vocabulary guardrail lives in the UI too: readiness badges only ever
  * show the four legal states, and there is no "certified" badge anywhere.
@@ -49,6 +51,36 @@ const stateBadge = (state: string): string => {
   }
 };
 
+const changeStatusBadge = (status: string): string => {
+  switch (status) {
+    case 'proposed':
+      return 'bg-amber-100 text-amber-800';
+    case 'approved':
+      return 'bg-sky-100 text-sky-800';
+    case 'implemented':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'rejected':
+      return 'bg-neutral-100 text-neutral-500';
+    default:
+      return 'bg-neutral-100 text-neutral-700';
+  }
+};
+
+const vendorOutcomeBadge = (outcome: string): string => {
+  switch (outcome) {
+    case 'approved':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'conditional':
+      return 'bg-amber-100 text-amber-800';
+    case 'rejected':
+      return 'bg-red-100 text-red-800';
+    case 'pending':
+      return 'bg-neutral-100 text-neutral-700';
+    default:
+      return 'bg-neutral-100 text-neutral-700';
+  }
+};
+
 const Card: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="rounded-lg border border-[#e9e7e4] bg-white p-4">
     <h3 className="text-sm font-semibold text-[#91918e] uppercase tracking-wide">{title}</h3>
@@ -63,20 +95,27 @@ export const CompliancePage: React.FC = () => {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [subprocessors, setSubprocessors] = useState<any[]>([]);
   const [chains, setChains] = useState<any>(null);
+  const [changes, setChanges] = useState<any>(null);
+  const [vendors, setVendors] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [dsarEmail, setDsarEmail] = useState('');
   const [dsarKind, setDsarKind] = useState('export');
+  const [chgTitle, setChgTitle] = useState('');
+  const [chgDesc, setChgDesc] = useState('');
+  const [chgType, setChgType] = useState('normal');
 
   const refresh = useCallback(async () => {
     try {
-      const [ov, ct, ds, inc, sub, ch] = await Promise.all([
+      const [ov, ct, ds, inc, sub, ch, cg, vd] = await Promise.all([
         complianceApi.overview(),
         complianceApi.controls(),
         complianceApi.listDsar(),
         complianceApi.incidents(),
         complianceApi.subprocessors(),
         complianceApi.verifyChains('security'),
+        complianceApi.listChanges(),
+        complianceApi.listVendors(),
       ]);
       setOverview(ov);
       setControls(ct);
@@ -84,6 +123,8 @@ export const CompliancePage: React.FC = () => {
       setIncidents(inc);
       setSubprocessors(sub);
       setChains(ch);
+      setChanges(cg);
+      setVendors(vd);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -314,6 +355,163 @@ export const CompliancePage: React.FC = () => {
               <p className="py-2 text-sm text-[#91918e]">
                 Registry empty — subprocessors appear on /trust as they are added.
               </p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Change control (ISO-09) */}
+      <div className="mt-4">
+        <Card title="Change control — four-eyes (ISO-09)">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="flex-1 rounded-md border border-[#e0dedb] px-3 py-1.5 text-sm"
+              placeholder="change title"
+              value={chgTitle}
+              onChange={(e) => setChgTitle(e.target.value)}
+            />
+            <input
+              className="flex-1 rounded-md border border-[#e0dedb] px-3 py-1.5 text-sm"
+              placeholder="what changes and why"
+              value={chgDesc}
+              onChange={(e) => setChgDesc(e.target.value)}
+            />
+            <select
+              className="rounded-md border border-[#e0dedb] px-2 py-1.5 text-sm"
+              value={chgType}
+              onChange={(e) => setChgType(e.target.value)}
+            >
+              <option value="normal">normal</option>
+              <option value="standard">standard</option>
+              <option value="emergency">emergency</option>
+            </select>
+            <button
+              className="rounded-md bg-[#37352f] text-white text-sm px-3 py-1.5 disabled:opacity-50"
+              disabled={!chgTitle || !chgDesc || busy !== null}
+              onClick={() =>
+                run('chg', async () => {
+                  await complianceApi.proposeChange({
+                    title: chgTitle,
+                    description: chgDesc,
+                    change_type: chgType,
+                  });
+                  setChgTitle('');
+                  setChgDesc('');
+                })
+              }
+            >
+              Propose
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-[#91918e]">
+            The approver must differ from the requester. Emergency changes may implement
+            first, but stay flagged until a reviewer signs off (48h slack).
+          </p>
+          <div className="mt-3 max-h-64 overflow-y-auto divide-y divide-[#f1f0ee]">
+            {(changes?.changes ?? []).map((c: any) => (
+              <div key={c.id} className="py-2.5 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-[#91918e]">{c.change_key}</span>
+                    <span className="text-sm font-medium">{c.title}</span>
+                    {c.change_type !== 'normal' && (
+                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs">{c.change_type}</span>
+                    )}
+                    {c.emergency_review_overdue && (
+                      <span className="rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">
+                        retro-review overdue
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-[#91918e]">
+                    by {c.requested_by}
+                    {c.reviewed_by ? ` · reviewed by ${c.reviewed_by}` : ''}
+                    {c.review_notes ? ` · ${c.review_notes}` : ''}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${changeStatusBadge(c.status)}`}>
+                    {c.status}
+                  </span>
+                  {c.status === 'proposed' && (
+                    <>
+                      <button
+                        className="text-xs text-blue-700 hover:underline disabled:opacity-50"
+                        disabled={busy !== null}
+                        onClick={() => run(`chg-ap-${c.id}`, () => complianceApi.decideChange(c.id, 'approved'))}
+                      >
+                        approve
+                      </button>
+                      <button
+                        className="text-xs text-[#91918e] hover:underline disabled:opacity-50"
+                        disabled={busy !== null}
+                        onClick={() => run(`chg-rj-${c.id}`, () => complianceApi.decideChange(c.id, 'rejected'))}
+                      >
+                        reject
+                      </button>
+                    </>
+                  )}
+                  {c.status === 'approved' && (
+                    <button
+                      className="text-xs text-blue-700 hover:underline disabled:opacity-50"
+                      disabled={busy !== null}
+                      onClick={() => run(`chg-im-${c.id}`, () => complianceApi.implementChange(c.id))}
+                    >
+                      implement
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {(changes?.changes ?? []).length === 0 && (
+              <p className="py-2 text-sm text-[#91918e]">No changes proposed yet.</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Vendor security reviews (SOC2-03) */}
+      <div className="mt-4">
+        <Card title={`Vendor security reviews (SOC2-03) — ${vendors?.summary?.review_overdue ?? 0} overdue`}>
+          <div className="divide-y divide-[#f1f0ee]">
+            {(vendors?.vendors ?? []).map((v: any) => (
+              <details key={v.id} className="group py-2.5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-[#91918e]">{v.vendor_key}</span>
+                      <span className="text-sm font-medium">{v.vendor_name}</span>
+                      {v.personal_data && (
+                        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs">personal data</span>
+                      )}
+                      {v.review_overdue && (
+                        <span className="rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">
+                          review overdue
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-[#91918e]">
+                      {v.service_provided} · access: {v.data_access_level}
+                      {v.next_review_due ? ` · next review ${v.next_review_due.slice(0, 10)}` : ''}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${vendorOutcomeBadge(v.outcome)}`}>
+                    {v.outcome}
+                  </span>
+                </summary>
+                <div className="mt-2 rounded-md bg-[#faf9f8] p-3 text-xs leading-5 text-[#5f5e5b]">
+                  {v.findings && <p className="mb-2">{v.findings}</p>}
+                  {Object.entries(v.questionnaire ?? {}).map(([q, a]) => (
+                    <p key={q}>
+                      <span className="font-medium text-[#37352f]">{q}:</span> {String(a)}
+                    </p>
+                  ))}
+                  <p className="mt-2 text-[#91918e]">reviewed by {v.reviewer}</p>
+                </div>
+              </details>
+            ))}
+            {(vendors?.vendors ?? []).length === 0 && (
+              <p className="py-2 text-sm text-[#91918e]">Vendor register empty.</p>
             )}
           </div>
         </Card>

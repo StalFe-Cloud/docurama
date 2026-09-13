@@ -881,3 +881,71 @@ class RestoreDrill(Base):
     notes = Column(Text, nullable=True)
     executed_at = Column(DateTime(timezone=True), nullable=False)
     recorded_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class ChangeRequest(Base):
+    """A formally reviewed platform change with four-eyes sign-off (ISO-09).
+
+    The instrument behind the change-management control: every change to the
+    platform's security-relevant surface travels proposed -> approved (or
+    rejected) -> implemented, and the approver must differ from the requester
+    (four-eyes). Emergency changes are allowed to be implemented first but
+    stay visibly overdue for retroactive review until a reviewer signs off —
+    the list endpoint ages them honestly instead of hiding the gap.
+    """
+    __tablename__ = "change_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    # Stable human-facing identifier: CHG-001, CHG-002, ...
+    change_key = Column(String(50), nullable=False, unique=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    # standard | normal | emergency
+    change_type = Column(String(20), nullable=False, default="normal", index=True)
+    risk_notes = Column(Text, nullable=True)
+    # Comma-separated control IDs the change touches (e.g. "ISO-04,GDPR-06").
+    control_refs = Column(String(500), nullable=True)
+    # proposed | approved | rejected | implemented
+    status = Column(String(20), nullable=False, default="proposed", index=True)
+    requested_by = Column(String(255), nullable=False)
+    reviewed_by = Column(String(255), nullable=True)
+    review_notes = Column(Text, nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    implemented_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class VendorReview(Base):
+    """A recorded vendor/subprocessor security review (SOC2-03).
+
+    Each review captures what the vendor does, how much data it can reach
+    (none / limited / full), whether personal data is involved, the hosting
+    region, a structured questionnaire (question -> answer JSON), the outcome
+    (approved / conditional / rejected / pending), findings, and the next
+    review due date. An approved or conditional outcome requires a
+    next-review date server-side, so the register ages visibly instead of
+    silently — overdue entries are flagged in the list output.
+    """
+    __tablename__ = "vendor_reviews"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    # Stable human-facing identifier: VND-001, VND-002, ...
+    vendor_key = Column(String(50), nullable=False, unique=True, index=True)
+    vendor_name = Column(String(255), nullable=False)
+    service_provided = Column(String(500), nullable=False)
+    # none | limited | full
+    data_access_level = Column(String(20), nullable=False, default="limited", index=True)
+    personal_data = Column(Boolean, nullable=False, default=False)
+    hosting_region = Column(String(120), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=False)
+    reviewer = Column(String(255), nullable=False)
+    questionnaire = Column(JSON, nullable=True)
+    # approved | conditional | rejected | pending
+    outcome = Column(String(20), nullable=False, default="pending", index=True)
+    findings = Column(Text, nullable=True)
+    next_review_due = Column(DateTime(timezone=True), nullable=True)
+    # Comma-separated control IDs the vendor relationship touches (e.g. "ISO-04,SOC2-03").
+    control_refs = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

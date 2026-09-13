@@ -1446,6 +1446,102 @@ export const complianceApi = {
     }
     return res.json();
   },
+  // --- Change control (ISO-09) ---
+  listChanges: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/changes`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load change register');
+    }
+    return res.json();
+  },
+  proposeChange: async (payload: {
+    title: string;
+    description: string;
+    change_type?: string;
+    risk_notes?: string;
+    control_refs?: string;
+  }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/changes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to propose change');
+    }
+    return res.json();
+  },
+  decideChange: async (changeId: string, decision: 'approved' | 'rejected', reviewNotes?: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/changes/${changeId}/decision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, review_notes: reviewNotes }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to record decision');
+    }
+    return res.json();
+  },
+  implementChange: async (changeId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/changes/${changeId}/implement`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to implement change');
+    }
+    return res.json();
+  },
+  // --- Vendor security reviews (SOC2-03) ---
+  listVendors: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/vendors`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to load vendor register');
+    }
+    return res.json();
+  },
+  createVendorReview: async (payload: {
+    vendor_name: string;
+    service_provided: string;
+    data_access_level?: string;
+    personal_data?: boolean;
+    hosting_region?: string;
+    outcome?: string;
+    findings?: string;
+    next_review_due?: string;
+    questionnaire?: Record<string, string>;
+  }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/vendors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to record vendor review');
+    }
+    return res.json();
+  },
+  updateVendorReview: async (vendorId: string, payload: {
+    outcome?: string;
+    findings?: string;
+    next_review_due?: string;
+  }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/admin/compliance/vendors/${vendorId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update vendor review');
+    }
+    return res.json();
+  },
 };
 
 // Public trust center — no authentication, factual content only.
