@@ -29,8 +29,7 @@ COPY backend/alembic.ini backend/migrate.py backend/entrypoint.sh /app/
 # run inside the API container as documented.
 COPY scripts/ /app/scripts/
 # Strip CR and mark executable. Git on Windows can rewrite this file to CRLF,
-# which makes the kernel look for an interpreter named "/bin/sh
-" and the
+# which makes the kernel look for an interpreter named "/bin/sh\r" and the
 # container fails to start with a misleading "no such file or directory".
 RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
