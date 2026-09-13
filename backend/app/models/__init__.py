@@ -7,6 +7,7 @@ from app.models.models import (
     SecurityEvent, DsarRequest, ConsentRecord, LegalHold, RetentionPolicy,
     SecurityIncident, Subprocessor, ComplianceControl, ControlEvidence,
     AccessReview, AuditChainSeal,
+    RiskRegisterEntry, RestoreDrill,
 )
 
 __all__ = [
@@ -45,4 +46,6 @@ __all__ = [
     "ControlEvidence",
     "AccessReview",
     "AuditChainSeal",
+    "RiskRegisterEntry",
+    "RestoreDrill",
 ]

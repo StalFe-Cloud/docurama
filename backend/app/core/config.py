@@ -130,6 +130,19 @@ class Settings(BaseSettings):
     # where an age statement is itself problematic).
     AGE_GATE_REQUIRED: bool = os.getenv("DOCURAMA_AGE_GATE_REQUIRED", "true").strip().lower() in ("1", "true", "yes", "on")
 
+    # --- Sprint 6: closing the honest gaps --------------------------------
+    # At-rest encryption for stored documents (AES-256-GCM, storage layer).
+    # Empty disables it: documents then stay plaintext on the backend and
+    # volume/disk encryption remains the operator's control (documented as
+    # such in the ISO-04 catalog entry). Accepts hex, base64 or 32 raw bytes.
+    # Generate: python -c "import secrets; print(secrets.token_hex(32))"
+    STORAGE_ENCRYPTION_KEY: str = os.getenv("DOCURAMA_STORAGE_ENCRYPTION_KEY", "")
+    # Key identifier for the primary key (0-255). Bump it and move the old
+    # material into STORAGE_ENCRYPTION_KEY_PREVIOUS to rotate.
+    STORAGE_ENCRYPTION_KEY_ID: int = int(os.getenv("DOCURAMA_STORAGE_ENCRYPTION_KEY_ID", "1"))
+    # Rotated-out keys, decrypt-only: "id:hexmaterial,id:hexmaterial".
+    STORAGE_ENCRYPTION_KEY_PREVIOUS: str = os.getenv("DOCURAMA_STORAGE_ENCRYPTION_KEY_PREVIOUS", "")
+
     # --- Compliance & Trust Foundation -----------------------------------
     # Background compliance workers (DSAR processing, retention sweeps). Off by
     # default so single-worker local runs stay quiet; operators opt in, and the

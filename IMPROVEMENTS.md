@@ -746,3 +746,88 @@ paperwork, STRIX pentest key, TSA choice (qualified or not), storage volume
 encryption, restore drills, vendor contracts + registry entries for actually
 engaged processors. The trust center publishes exactly what the registry
 contains — nothing is invented on the operator's behalf.
+
+## §17 — Sprint 6: closing the honest gaps (implemented)
+
+The Sprint 5 baseline was honest about four gaps: documents were plaintext at
+rest, risk assessment had no register, restore drills had no harness, and
+vulnerability scanning only ran at merge time. Sprint 6 closes each gap in
+source code — not in prose — and moves the four controls accordingly.
+
+### 17.1 What landed
+
+| Control | Was | Now | Where |
+|---|---|---|---|
+| ISO-04 Encryption at rest (documents) | Partial | Implemented | `app/services/storage_crypto.py`, `EncryptedBackend` in `storage_backend.py` |
+| SOC2-01 Risk assessment | Missing | Implemented | `risk_register` table, `RiskRegisterEntry`, `/api/admin/compliance/risks` |
+| ISO-06 Backup & restore | Partial | Implemented | `scripts/restore_drill.py`, `restore_drills` table, `POST /api/admin/compliance/restore-drills` |
+| ISO-07 Vulnerability management | Partial | Implemented | weekly CI schedule + `container-scan` (trivy) job + SBOM artifact (`scripts/sbom.py`) |
+
+Still Partial / Needs Review on purpose: ISO-09 (change approval workflow),
+SOC2-03 (vendor questionnaires), EIDAS-02 (qualified TSA is the operator's
+choice). The four-state vocabulary is unchanged and still enforced.
+
+### 17.2 At-rest encryption design (ISO-04)
+
+AES-256-GCM envelope format: `DCRM1 | key_id (1B) | nonce (96b) | ciphertext+tag`.
+Every backend (local, S3, future) is wrapped transparently by
+`EncryptedBackend`, so the plaintext never touches disk or object storage.
+Tampering of stored bytes fails the authentication tag check at read time.
+Rotation travels in the header: bump `DOCURAMA_STORAGE_ENCRYPTION_KEY_ID`,
+move old material into `DOCURAMA_STORAGE_ENCRYPTION_KEY_PREVIOUS`
+(`id:hex,...`, decrypt-only). Rows written before activation are read through
+unencrypted and re-encrypted on their next save — turning encryption on never
+bricks existing documents. Presigned URLs are disabled under encryption: a
+presign would hand out ciphertext, and plaintext object URLs would bypass API
+authorisation. Activation is the operator's key configuration; volume
+encryption remains defence-in-depth.
+
+### 17.3 Risk register (SOC2-01)
+
+`risk_register` scores likelihood x impact on 1-5 scales **server-side at
+write time** — clients cannot submit scores. Each row carries one of the four
+standard treatments (mitigate / accept / transfer / avoid), residual scores,
+owner, next review date, and control references. The register ships seeded
+with the platform's initial nine-risk assessment (RSK-001…009) derived from
+§15: document exposure, supply chain, signing availability, operator
+credentials, legal-hold misconfiguration, TSA outage, audit tampering,
+unrecoverable loss, cross-tenant leakage. Every create/update lands in the
+hash-chained security ledger (`risk_registered`, `risk_updated`).
+
+### 17.4 Restore drills (ISO-06)
+
+`scripts/restore_drill.py` copies a backup into a scratch database, runs
+SQLite `integrity_check`, reconciles per-table row counts (optionally against
+a live baseline for drift), and re-verifies the hash chains — the platform
+security ledger and every per-envelope chain. Exit 0 requires integrity ok
+AND all chains valid. The harness output travels verbatim into
+`restore_drills` as evidence; the recording API deliberately does not re-run
+or re-judge the verification — a server that graded its own backups would be
+grading its own homework. First recorded drill (live backup, 2026-09-13):
+harness PASSED (integrity ok, chains valid); archiving through the admin API
+is the operator's step — the demo account is deliberately not a platform
+admin, and the 403 confirmed that boundary.
+
+### 17.5 Scheduled scanning (ISO-07)
+
+CI gains a weekly `schedule:` trigger (plus `workflow_dispatch`), a
+`container-scan` job running trivy on both deploy images with critical
+findings blocking (unfixed criticals are ignored but visible), and an SBOM
+inventory artifact (`scripts/sbom.py`: pypi + npm production trees, diffable
+across runs). Merge-time gates are unchanged; the weekly cadence is what
+catches CVEs published after merge. Triage lands in the risk register.
+
+### 17.6 Verification
+
+- 519/519 tests (490 + 29 new: crypto primitives, backend wiring, S3
+  ciphertext-at-rest, rotation, legacy tolerance, register lifecycle +
+  vocabulary + admin gates, drill pass/tamper/missing/evidence, CI surface,
+  catalog baseline).
+- Migration 0015 verified both dialects: offline PostgreSQL renders the new
+  tables + seeds; real SQLite upgrade applied to the live database (9 risks
+  seeded, ISO-04/SOC2-01 read back as Implemented, 4 evidence rows).
+- Live probe battery: trust center 15 features with empty certifications and
+  readiness states ⊆ {Implemented, Partial}; new admin endpoints 401
+  unauthenticated; demo account 403 on drill recording (privilege boundary
+  holds).
+- Local security gates: ALL GATES GREEN; frontend build green.

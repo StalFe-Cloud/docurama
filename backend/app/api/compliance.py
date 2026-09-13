@@ -34,8 +34,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import (
     AccessReview, Account, AuditChainSeal, ComplianceControl, ConsentRecord,
-    ControlEvidence, DsarRequest, Envelope, LegalHold, RetentionPolicy,
-    SecurityEvent, SecurityIncident, Subprocessor, User,
+    ControlEvidence, DsarRequest, Envelope, LegalHold, RestoreDrill,
+    RetentionPolicy, RiskRegisterEntry, SecurityEvent, SecurityIncident,
+    Subprocessor, User,
 )
 from app.services import audit_chain, compliance_catalog, dsar as dsar_service, retention as retention_service
 
@@ -122,6 +123,62 @@ class AccessReviewIn(BaseModel):
     findings: Optional[str] = None
     accounts_reviewed: int = 0
     changes_required: int = 0
+
+
+class RiskCreate(BaseModel):
+    title: str = PydField(min_length=3, max_length=255)
+    description: str = PydField(min_length=1)
+    category: str = PydField(
+        pattern="^(security|privacy|availability|vendor|operational|compliance)$",
+        default="security",
+    )
+    likelihood: int = PydField(ge=1, le=5)
+    impact: int = PydField(ge=1, le=5)
+    treatment: str = PydField(pattern="^(mitigate|accept|transfer|avoid)$", default="mitigate")
+    treatment_notes: Optional[str] = None
+    residual_likelihood: int = PydField(ge=1, le=5, default=2)
+    residual_impact: int = PydField(ge=1, le=5, default=2)
+    owner: str = PydField(default="Platform operator", max_length=255)
+    control_refs: Optional[str] = PydField(default=None, max_length=500)
+    next_review_at: Optional[datetime] = None
+
+
+class RiskUpdate(BaseModel):
+    """All fields optional; scores are always recomputed server-side."""
+    title: Optional[str] = PydField(default=None, min_length=3, max_length=255)
+    description: Optional[str] = None
+    category: Optional[str] = PydField(
+        default=None, pattern="^(security|privacy|availability|vendor|operational|compliance)$"
+    )
+    likelihood: Optional[int] = PydField(default=None, ge=1, le=5)
+    impact: Optional[int] = PydField(default=None, ge=1, le=5)
+    treatment: Optional[str] = PydField(default=None, pattern="^(mitigate|accept|transfer|avoid)$")
+    treatment_notes: Optional[str] = None
+    residual_likelihood: Optional[int] = PydField(default=None, ge=1, le=5)
+    residual_impact: Optional[int] = PydField(default=None, ge=1, le=5)
+    owner: Optional[str] = PydField(default=None, max_length=255)
+    # open | mitigating | accepted | closed
+    status: Optional[str] = PydField(default=None, pattern="^(open|mitigating|accepted|closed)$")
+    control_refs: Optional[str] = PydField(default=None, max_length=500)
+    next_review_at: Optional[datetime] = None
+
+
+class RestoreDrillIn(BaseModel):
+    """Evidence record for one executed restore drill.
+
+    The verification itself runs offline in scripts/restore_drill.py; its
+    JSON report travels verbatim in drill_output so a reviewer can see what
+    the harness actually measured, not just the summary booleans.
+    """
+    source: str = PydField(min_length=1, max_length=500)
+    rows_recovered: int = PydField(ge=0, default=0)
+    tables_checked: int = PydField(ge=0, default=0)
+    chain_valid: bool
+    drill_output: Optional[dict] = None
+    performed_by: str = PydField(default="system", max_length=255)
+    passed: Optional[bool] = None
+    notes: Optional[str] = None
+    executed_at: Optional[datetime] = None
 
 
 # ---------------------------------------------------------------------------
@@ -826,6 +883,248 @@ async def list_access_reviews(
              "completed_at": _iso(r.completed_at)} for r in rows]
 
 
+# ---------------------------------------------------------------------------
+# Risk register (SOC2-01) and restore drills (ISO-06)
+# ---------------------------------------------------------------------------
+
+def _risk_out(r: RiskRegisterEntry) -> dict:
+    return {
+        "id": r.id,
+        "risk_key": r.risk_key,
+        "title": r.title,
+        "description": r.description,
+        "category": r.category,
+        "likelihood": r.likelihood,
+        "impact": r.impact,
+        "inherent_score": r.inherent_score,
+        "treatment": r.treatment,
+        "treatment_notes": r.treatment_notes,
+        "residual_likelihood": r.residual_likelihood,
+        "residual_impact": r.residual_impact,
+        "residual_score": r.residual_score,
+        "owner": r.owner,
+        "status": r.status,
+        "control_refs": r.control_refs,
+        "next_review_at": _iso(r.next_review_at),
+        "closed_at": _iso(r.closed_at),
+        "created_at": _iso(r.created_at),
+        "updated_at": _iso(r.updated_at),
+    }
+
+
+@router.get("/compliance/risks")
+async def list_risks(
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The risk register with a summary; scores were computed at write time."""
+    await _require_platform_admin(current_user)
+    await compliance_catalog.ensure_risks_seeded(db)
+    query = select(RiskRegisterEntry).order_by(RiskRegisterEntry.inherent_score.desc())
+    if status:
+        query = query.where(RiskRegisterEntry.status == status)
+    rows = (await db.execute(query)).scalars().all()
+    open_rows = [r for r in rows if r.status != "closed"]
+    return {
+        "summary": {
+            "total": len(rows),
+            "open": len(open_rows),
+            "top_inherent": max((r.inherent_score for r in open_rows), default=0),
+            "max_residual": max((r.residual_score for r in open_rows), default=0),
+            "due_for_review": sum(
+                1 for r in open_rows
+                if r.next_review_at is not None
+                and r.next_review_at.replace(tzinfo=r.next_review_at.tzinfo or timezone.utc)
+                <= datetime.now(timezone.utc)
+            ),
+        },
+        "risks": [_risk_out(r) for r in rows],
+    }
+
+
+@router.post("/compliance/risks", status_code=201)
+async def create_risk(
+    payload: RiskCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    await compliance_catalog.ensure_risks_seeded(db)
+    # Human-facing key continues after the highest existing RSK number.
+    existing_keys = (await db.execute(
+        select(RiskRegisterEntry.risk_key)
+    )).scalars().all()
+    numbers = []
+    for key in existing_keys:
+        try:
+            numbers.append(int(key.rsplit("-", 1)[-1]))
+        except (ValueError, AttributeError):
+            continue
+    risk_key = f"RSK-{(max(numbers) + 1) if numbers else 1:03d}"
+
+    risk = RiskRegisterEntry(
+        risk_key=risk_key,
+        title=payload.title,
+        description=payload.description,
+        category=payload.category,
+        likelihood=payload.likelihood,
+        impact=payload.impact,
+        inherent_score=payload.likelihood * payload.impact,  # server-computed
+        treatment=payload.treatment,
+        treatment_notes=payload.treatment_notes,
+        residual_likelihood=payload.residual_likelihood,
+        residual_impact=payload.residual_impact,
+        residual_score=payload.residual_likelihood * payload.residual_impact,
+        owner=payload.owner,
+        status="open",
+        control_refs=payload.control_refs,
+        next_review_at=payload.next_review_at,
+    )
+    db.add(risk)
+    await audit_chain.append_security_event(
+        db,
+        event_type="risk_registered",
+        description=f"Risk {risk_key} registered: {payload.title}",
+        actor_email=current_user.email,
+        detail={"risk_key": risk_key, "inherent_score": risk.inherent_score,
+                "treatment": risk.treatment},
+    )
+    await db.commit()
+    return _risk_out(risk)
+
+
+@router.patch("/compliance/risks/{risk_id}")
+async def update_risk(
+    risk_id: str,
+    payload: RiskUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    risk = (await db.execute(
+        select(RiskRegisterEntry).where(RiskRegisterEntry.id == risk_id)
+    )).scalar_one_or_none()
+    if risk is None:
+        raise HTTPException(status_code=404, detail="risk not found")
+
+    changed = []
+    for field in ("title", "description", "category", "treatment", "treatment_notes",
+                  "owner", "control_refs", "next_review_at"):
+        value = getattr(payload, field)
+        if value is not None:
+            setattr(risk, field, value)
+            changed.append(field)
+    # Scores recomputed server-side whenever a scale component changes.
+    if payload.likelihood is not None:
+        risk.likelihood = payload.likelihood
+        changed.append("likelihood")
+    if payload.impact is not None:
+        risk.impact = payload.impact
+        changed.append("impact")
+    if payload.residual_likelihood is not None:
+        risk.residual_likelihood = payload.residual_likelihood
+        changed.append("residual_likelihood")
+    if payload.residual_impact is not None:
+        risk.residual_impact = payload.residual_impact
+        changed.append("residual_impact")
+    risk.inherent_score = risk.likelihood * risk.impact
+    risk.residual_score = risk.residual_likelihood * risk.residual_impact
+
+    if payload.status is not None:
+        if payload.status == "closed" and risk.status != "closed":
+            risk.closed_at = datetime.now(timezone.utc)
+        elif payload.status != "closed":
+            risk.closed_at = None
+        risk.status = payload.status
+        changed.append("status")
+
+    await audit_chain.append_security_event(
+        db,
+        event_type="risk_updated",
+        description=f"Risk {risk.risk_key} updated ({', '.join(changed) or 'no changes'})",
+        actor_email=current_user.email,
+        detail={"risk_key": risk.risk_key, "fields": changed,
+                "inherent_score": risk.inherent_score, "residual_score": risk.residual_score,
+                "status": risk.status},
+    )
+    await db.commit()
+    return _risk_out(risk)
+
+
+@router.post("/compliance/restore-drills", status_code=201)
+async def record_restore_drill(
+    payload: RestoreDrillIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record the evidence of one executed restore drill.
+
+    The drill itself runs offline via scripts/restore_drill.py (restore into
+    a scratch database, integrity check, row counts, audit-chain
+    re-verification). This endpoint archives the harness output verbatim;
+    it deliberately does not re-run or re-judge the verification, because a
+    server that judged its own backups would be grading its own homework.
+    """
+    await _require_platform_admin(current_user)
+    drill = RestoreDrill(
+        source=payload.source,
+        rows_recovered=payload.rows_recovered,
+        tables_checked=payload.tables_checked,
+        chain_valid=payload.chain_valid,
+        drill_output=payload.drill_output,
+        performed_by=payload.performed_by or current_user.email,
+        passed=bool(payload.chain_valid) if payload.passed is None else payload.passed,
+        notes=payload.notes,
+        executed_at=payload.executed_at or datetime.now(timezone.utc),
+    )
+    db.add(drill)
+    await audit_chain.append_security_event(
+        db,
+        event_type="restore_drill_recorded",
+        description=f"Restore drill recorded from {payload.source}: "
+                    f"chain_valid={payload.chain_valid}, passed={drill.passed}",
+        actor_email=current_user.email,
+        detail={"drill_id": drill.id, "passed": drill.passed,
+                "rows_recovered": drill.rows_recovered},
+    )
+    await db.commit()
+    return {
+        "id": drill.id,
+        "source": drill.source,
+        "rows_recovered": drill.rows_recovered,
+        "tables_checked": drill.tables_checked,
+        "chain_valid": drill.chain_valid,
+        "passed": drill.passed,
+        "executed_at": _iso(drill.executed_at),
+        "recorded_at": _iso(drill.recorded_at),
+    }
+
+
+@router.get("/compliance/restore-drills")
+async def list_restore_drills(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_platform_admin(current_user)
+    rows = (await db.execute(
+        select(RestoreDrill).order_by(RestoreDrill.executed_at.desc()).limit(100)
+    )).scalars().all()
+    return [{
+        "id": d.id,
+        "source": d.source,
+        "rows_recovered": d.rows_recovered,
+        "tables_checked": d.tables_checked,
+        "chain_valid": d.chain_valid,
+        "passed": d.passed,
+        "performed_by": d.performed_by,
+        "notes": d.notes,
+        "drill_output": d.drill_output,
+        "executed_at": _iso(d.executed_at),
+        "recorded_at": _iso(d.recorded_at),
+    } for d in rows]
+
+
 @router.get("/compliance/overview")
 async def compliance_overview(
     current_user: User = Depends(get_current_user),
@@ -834,6 +1133,7 @@ async def compliance_overview(
     """Everything the dashboard renders, in one honest aggregate."""
     await _require_platform_admin(current_user)
     await compliance_catalog.ensure_seeded(db)
+    await compliance_catalog.ensure_risks_seeded(db)
 
     controls = (await db.execute(select(ComplianceControl))).scalars().all()
     by_framework: dict[str, dict[str, int]] = {}
@@ -862,6 +1162,12 @@ async def compliance_overview(
 
     last_review = (await db.execute(
         select(AccessReview).order_by(AccessReview.completed_at.desc()).limit(1)
+    )).scalar_one_or_none()
+
+    risk_rows = (await db.execute(select(RiskRegisterEntry))).scalars().all()
+    open_risks = [r for r in risk_rows if r.status != "closed"]
+    last_drill = (await db.execute(
+        select(RestoreDrill).order_by(RestoreDrill.executed_at.desc()).limit(1)
     )).scalar_one_or_none()
 
     hold_count = (await db.execute(
@@ -895,6 +1201,22 @@ async def compliance_overview(
         "legal_holds_active": int(hold_count or 0),
         "retention_policies": int(policy_count or 0),
         "subprocessors_active_or_planned": int(subprocessor_count or 0),
+        "risks": {
+            "open": len(open_risks),
+            "top_inherent": max((r.inherent_score for r in open_risks), default=0),
+            "max_residual": max((r.residual_score for r in open_risks), default=0),
+            "overdue_reviews": sum(
+                1 for r in open_risks
+                if r.next_review_at is not None
+                and r.next_review_at.replace(tzinfo=r.next_review_at.tzinfo or timezone.utc)
+                <= now
+            ),
+        },
+        "last_restore_drill": {
+            "passed": last_drill.passed,
+            "chain_valid": last_drill.chain_valid,
+            "executed_at": _iso(last_drill.executed_at),
+        } if last_drill else None,
         "last_access_review": {
             "completed_at": _iso(last_review.completed_at),
             "reviewer_email": last_review.reviewer_email,
@@ -945,9 +1267,13 @@ async def trust_center(db: AsyncSession = Depends(get_db)):
             "Hash-chained, tamper-evident audit trails with public verification vocabulary",
             "TOTP multi-factor authentication and session revocation",
             "Scoped API keys, hashed at rest",
+            "AES-256-GCM encryption at rest for stored documents (operator-activated via key configuration)",
             "DSAR export and erasure workflows with an honest five-state lifecycle",
             "Configurable retention with legal holds",
             "Security incident tracking with the GDPR 72-hour notification clock",
+            "Scored risk register with an initial published assessment",
+            "Restore-drill harness that re-verifies audit chains on restored backups",
+            "Weekly scheduled security scanning (dependencies, containers, secrets) with an SBOM inventory",
             "Structured request logging and rate limiting",
             "Strict security headers including a CSP on every response",
         ],

@@ -814,3 +814,70 @@ class AuditChainSeal(Base):
     event_count = Column(Integer, nullable=False)
     sealed_by = Column(String(255), nullable=False, default="system")
     sealed_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class RiskRegisterEntry(Base):
+    """A security/compliance risk with server-computed scores (SOC2-01).
+
+    The register is the concrete instrument behind the risk-assessment
+    control: likelihood and impact live on 1-5 scales, scores are computed
+    server-side at write time (never trusted from clients), treatment follows
+    one of the four standard options, and every entry carries an owner and a
+    next review date so the register ages visibly instead of silently.
+    """
+    __tablename__ = "risk_register"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    # Stable human-facing identifier: RSK-001, RSK-002, ...
+    risk_key = Column(String(50), nullable=False, unique=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    # security | privacy | availability | vendor | operational | compliance
+    category = Column(String(50), nullable=False, default="security", index=True)
+    # 1..5 scales; inherent/residual scores are derived, not stored blind.
+    likelihood = Column(Integer, nullable=False, default=3)
+    impact = Column(Integer, nullable=False, default=3)
+    inherent_score = Column(Integer, nullable=False, default=9, index=True)
+    # mitigate | accept | transfer | avoid
+    treatment = Column(String(20), nullable=False, default="mitigate", index=True)
+    treatment_notes = Column(Text, nullable=True)
+    residual_likelihood = Column(Integer, nullable=False, default=2)
+    residual_impact = Column(Integer, nullable=False, default=2)
+    residual_score = Column(Integer, nullable=False, default=4)
+    owner = Column(String(255), nullable=False, default="Platform operator")
+    # open | mitigating | accepted | closed
+    status = Column(String(20), nullable=False, default="open", index=True)
+    # Comma-separated control IDs this risk is treated by (e.g. "ISO-04,GDPR-06").
+    control_refs = Column(String(500), nullable=True)
+    next_review_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class RestoreDrill(Base):
+    """A recorded restore drill: a backup was restored and verified (ISO-06).
+
+    The harness (scripts/restore_drill.py) copies a backup into a scratch
+    database, runs SQLite integrity checks, reconciles per-table row counts
+    and re-verifies the audit hash chains on the restored copy; the resulting
+    JSON report is what this row preserves as evidence. The API records the
+    evidence; it cannot re-run the verification itself — that is what makes
+    recording honest: the harness output travels with the record.
+    """
+    __tablename__ = "restore_drills"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    # Backup path or a description of the source the drill restored from.
+    source = Column(String(500), nullable=False)
+    rows_recovered = Column(Integer, nullable=False, default=0)
+    tables_checked = Column(Integer, nullable=False, default=0)
+    # Whether the audit hash chains re-verified on the restored copy.
+    chain_valid = Column(Boolean, nullable=False, default=False)
+    # Full harness report (integrity check, counts, chain verification).
+    drill_output = Column(JSON, nullable=True)
+    performed_by = Column(String(255), nullable=False, default="system")
+    passed = Column(Boolean, nullable=False, default=False, index=True)
+    notes = Column(Text, nullable=True)
+    executed_at = Column(DateTime(timezone=True), nullable=False)
+    recorded_at = Column(DateTime(timezone=True), default=utcnow)

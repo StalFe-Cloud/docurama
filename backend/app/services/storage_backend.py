@@ -26,6 +26,13 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 from app.core.config import settings
+from app.services.storage_crypto import (
+    KeyRing,
+    EncryptionError,
+    decrypt as _crypto_decrypt,
+    encrypt as _crypto_encrypt,
+    is_encrypted_blob,
+)
 
 
 class StorageError(Exception):
@@ -200,9 +207,60 @@ class S3Backend(StorageBackend):
         )
 
 
+class EncryptedBackend(StorageBackend):
+    """
+    Transparent at-rest encryption wrapper (ISO-04).
+
+    Every payload is envelope-encrypted with AES-256-GCM before it reaches
+    the inner backend, and authenticated-decrypted on the way back out, so
+    the plaintext never touches disk or object storage. Reads of rows written
+    before encryption was activated pass through untouched (legacy tolerance)
+    and are re-encrypted on their next save.
+
+    Presigned URLs are disabled under encryption: a presigned object URL would
+    hand out ciphertext the browser cannot read, and serving plaintext through
+    object storage would bypass the API's authorisation layer — documents are
+    streamed through the API instead, where session and scope checks apply.
+
+    Tamper detection is a read-time property: any modification of the stored
+    bytes after write fails the GCM tag check and surfaces as EncryptionError.
+    """
+
+    name = "encrypted"
+
+    def __init__(self, inner: StorageBackend, ring: KeyRing):
+        self.inner = inner
+        self.ring = ring
+
+    def save(self, key: str, data: bytes) -> str:
+        return self.inner.save(key, _crypto_encrypt(self.ring, data))
+
+    def open(self, handle: str) -> bytes:
+        blob = self.inner.open(handle)
+        if not is_encrypted_blob(blob):
+            # Legacy row written before activation; read through as-is.
+            return blob
+        return _crypto_decrypt(self.ring, blob)
+
+    def presign(self, handle: str, ttl_seconds: int = 300) -> Optional[str]:
+        # Ciphertext-only URLs are useless to clients and plaintext URLs would
+        # bypass authorisation, so presigning is intentionally unavailable.
+        return None
+
+
 def get_backend() -> StorageBackend:
-    """Return the configured backend; unknown names fail closed to local."""
+    """Return the configured backend; unknown names fail closed to local.
+
+    When DOCURAMA_STORAGE_ENCRYPTION_KEY is set, the chosen backend is
+    wrapped in EncryptedBackend so every write is envelope-encrypted no
+    matter which backend is underneath.
+    """
     chosen = (getattr(settings, "STORAGE_BACKEND", "local") or "local").strip().lower()
     if chosen == "s3":
-        return S3Backend()
-    return LocalBackend()
+        backend: StorageBackend = S3Backend()
+    else:
+        backend = LocalBackend()
+    ring = KeyRing.from_settings()
+    if ring is not None:
+        return EncryptedBackend(backend, ring)
+    return backend

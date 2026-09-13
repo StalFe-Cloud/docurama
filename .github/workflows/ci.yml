@@ -4,6 +4,12 @@ on:
   push:
     branches: [main, Quality]
   pull_request:
+  # ISO-07: the gates are not just a merge-time check — they re-run weekly so
+  # newly-published CVEs against already-merged dependencies surface without
+  # waiting for the next push. Trivy container scanning rides the same trigger.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
 
 jobs:
   backend:
@@ -48,6 +54,40 @@ jobs:
         run: gitleaks detect --no-git --redact -v
       - name: NPM dependency audit — fails on critical
         run: cd frontend && npm audit --omit=dev --audit-level=critical
+      # ISO-07 evidence: a diffable inventory of what shipped with this run.
+      - name: SBOM inventory artifact
+        run: python scripts/sbom.py --output sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+  # ISO-07 runtime posture: the images that actually deploy get scanned on
+  # the weekly schedule and on demand. CRITICAL findings block; unfixed
+  # criticals are ignored (nothing to act on) but visible in the log.
+  container-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f backend/Dockerfile -t docurama-api:scan .
+      - name: Build unified image
+        run: docker build -t docurama:scan .
+      - name: Trivy scan (API image) — fails on critical
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: docurama-api:scan
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: "true"
+      - name: Trivy scan (unified image) — fails on critical
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: docurama:scan
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: "true"
 
   clean-room-audit:
     runs-on: ubuntu-latest
