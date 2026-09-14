@@ -63,3 +63,20 @@ Work Log:
 
 Stage Summary:
 - The portal now carries the official Docurama brand end-to-end (logo, palette, favicon, og-image, dark mode), the legal entity is Docurama SAS — 1 Rue Marguerin, 75014 Paris, France everywhere, and a new "Email & DNS" admin section provisions the full docurama.eu digital identity: 12 mailboxes/aliases, 11 sub-domains, 11 deliverability DNS records, live zone-file export — with persistent state and audit trail. Deliverables: download/docurama.eu.zone + download/DOCURAMA-DNS-EMAIL-PROVISIONING.md.
+
+---
+Task ID: 4
+Agent: Main agent (Super Z)
+Task: "Push to quality" — deliver the branded, provisioned portal to the remote quality branch on github.com/StalFe-Cloud/docurama
+
+Work Log:
+- Re-attached the missing git remote (origin) using the user-supplied PAT; fetched: remote main and quality both at f03e05c (the original Python/FastAPI platform, ~150 commits) — completely unrelated history to the local Next.js rebuild.
+- Security sweep before push: no PAT/secret strings in any tracked file; .env contains only the local DATABASE_URL path.
+- Found environment scaffolding tracked in git (docurama gitlink to the original clone, tool-results/, .zscripts/, examples/, mini-services/, tests/, force-added .env) — untracked them all via git rm --cached, extended .gitignore, added .env.example with a relative DATABASE_URL for QA clones.
+- Committed demo-DB sync (provisioning state from browser verification) + cleanup on local main (ab75e12); tree down to 120 product files, working tree clean.
+- Built local `quality` as an orphan branch with one descriptive commit (f22c8f4) covering the portal, branding, legal entity, and docurama.eu provisioning — no environment internals in tree or history.
+- Pushed with --force-with-lease: quality f03e05c → f22c8f4 (forced update). Remote main left untouched at f03e05c, so the original platform history is preserved.
+- Post-push verification: git ls-remote confirms quality=f22c8f4, main=f03e05c; working tree clean; app 200 on /, login API 200 with admin@docurama.eu/admin1234.
+
+Stage Summary:
+- Remote quality branch now holds the QA-ready Docurama portal (single clean commit f22c8f4): enterprise dual portal, official branding, Docurama SAS legal entity, full email/DNS provisioning suite. Remote main still preserves the original platform. Local quality branch is the active delivery line for future "push to quality" updates (fast-forward pushes).
