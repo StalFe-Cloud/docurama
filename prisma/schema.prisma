@@ -23,8 +23,59 @@ model User {
   signatureName String?
   signatureStyle String? @default("signature-font-caveat")
 
+  // Production settings additions
+  activeTenantId     String?    // multi-org: which membership the workspace is scoped to
+  totpSecret         String?    // base32 TOTP secret (RFC 6238)
+  totpPendingSecret  String?    // secret staged during enrolment, before verification
+  totpRecoveryCodes  String?    // JSON array of SHA-256 hashes, shown once
+  passwordChangedAt  DateTime?
+
   memberships Member[]
   createdDocs Envelope[] @relation("createdDocs")
+  sessions    Session[]
+  signatures  UserSignature[]
+  challenges  AuthChallenge[]
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuthChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  purpose   String   @default("2FA_LOGIN")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSignature {
+  id        String   @id @default(cuid())
+  userId    String
+  kind      String   @default("signature") // signature | initial
+  method    String   @default("draw")      // draw | type | upload
+  value     String   // dataURL (draw/upload) or text (type)
+  font      String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Member {
@@ -53,6 +104,8 @@ model Tenant {
   createdAt       DateTime  @default(now())
   trialEndsAt     DateTime?
 
+  enforceTwoFactor Boolean @default(false) // require TOTP for every member
+
   members      Member[]
   envelopes    Envelope[]
   templates    Template[]
@@ -61,6 +114,12 @@ model Tenant {
   apiKeys      ApiKey[]
   webhookEndpoints WebhookEndpoint[]
   legalHolds   LegalHold[]
+  certificates  SigningCertificate[]
+  tsaConfig     TsaConfig?
+  esignPrefs    EsignPreferences?
+  notificationSettings NotificationSettings?
+  smsGateway    SmsGateway?
+  mcpConfig     McpConfig?
 }
 
 // ─── Documents & Signing ──────────────────────────────────────────────────────
@@ -82,6 +141,8 @@ model Envelope {
   voidReason        String?
   createdAt         DateTime  @default(now())
   lastRemindedAt    DateTime?
+  autoRemind        Boolean   @default(false) // per-envelope reminder job (user-enabled)
+  reminderCount     Int       @default(0)
 
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy  User      @relation("createdDocs", fields: [createdById], references: [id])
@@ -145,8 +206,141 @@ model Domain {
   method      String    @default("TXT") // TXT | CNAME | HTTP
   status      String    @default("PENDING") // PENDING | VERIFIED | FAILED | JOIN_REQUESTED
   token       String
+  purpose     String    @default("JOIN") // JOIN (workspace join) | SENDING (authenticated email domain)
   verifiedAt  DateTime?
   requestedAt DateTime  @default(now())
+  lastCheckedAt DateTime?
+  lastCheckNote  String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Production settings: eSign, notifications, SMS, MCP ──────────────────────
+
+model SigningCertificate {
+  id               String   @id @default(cuid())
+  tenantId         String
+  userId           String
+  commonName       String
+  organization     String?
+  email            String?
+  serialNumber     String
+  thumbprint       String   // SHA-256 fingerprint
+  issuer           String
+  keyAlgorithm     String   @default("RSA-2048")
+  signatureAlgorithm String @default("SHA-256")
+  notBefore        DateTime
+  notAfter         DateTime
+  status           String   @default("PENDING") // PENDING | ISSUED | ACTIVE | REVOKED | EXPIRED
+  purpose          String   @default("signing") // signing | sealing
+  pkcs12Base64     String?  // encrypted PKCS#12 blob (passphrase never stored)
+  certificatePem   String?
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model TsaConfig {
+  id              String    @id @default(cuid())
+  tenantId        String    @unique
+  url             String    @default("https://timestamp.digicert.com")
+  hashAlgorithm   String    @default("SHA-256")
+  authType        String    @default("none") // none | basic
+  username        String?
+  enabled         Boolean   @default(false)
+  lastTestAt      DateTime?
+  lastTestStatus  String?   // OK | UNREACHABLE | TLS_ERROR | TIMEOUT
+  lastTestLatencyMs Int?
+  updatedAt        DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model EsignPreferences {
+  id                     String   @id @default(cuid())
+  tenantId               String   @unique
+  allowMultipleSignatures Boolean @default(true)
+  flattenFormFields      Boolean @default(true)
+  filenameFormat         String   @default("{title} - {signer} ({date})")
+  sealOnCompletion       Boolean @default(true)
+  requireReauth          Boolean @default(false) // 21 CFR Part 11: re-authenticate before signing
+  signatureLevel         String   @default("advanced") // simple | advanced | qualified (eIDAS)
+  part11Mode             Boolean @default(false)
+  consentText            String?
+  consentVersion         String   @default("v1.0")
+  updatedAt              DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model NotificationSettings {
+  id                String   @id @default(cuid())
+  tenantId          String   @unique
+  // Email delivery (per-org SMTP override; falls back to platform SMTP)
+  smtpHost          String?
+  smtpPort          Int      @default(587)
+  smtpUser          String?
+  smtpPassword      String?
+  smtpFrom          String   @default("Docurama Sign <notifications@docurama.eu>")
+  smtpSecure        Boolean  @default(true)
+  smtpLastTestAt    DateTime?
+  smtpLastTestStatus String?
+  // Signer completion alerts
+  alertOnSent       Boolean  @default(true)
+  alertOnViewed     Boolean  @default(true)
+  alertOnSigned     Boolean  @default(true)
+  alertOnCompleted  Boolean  @default(true)
+  alertOnDeclined   Boolean  @default(false)
+  dailyDigest       Boolean  @default(false)
+  digestTime        String   @default("09:00")
+  // Sign request reminders
+  reminderMode      String   @default("manual") // manual | user_job | platform_job
+  reminderIntervalDays Int   @default(3)
+  reminderMaxCount  Int      @default(5)
+  quietHoursStart   String   @default("21:00")
+  quietHoursEnd     String   @default("08:00")
+  skipWeekends      Boolean  @default(true)
+  escalateToSms     Boolean  @default(false)
+  escalateAfterDays Int      @default(7)
+  reminderJobLastRunAt DateTime?
+  updatedAt         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model SmsGateway {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  provider        String   @default("twilio")
+  apiKey          String?  // Account SID / key — masked in responses
+  apiSecret       String?  // Auth token / secret — never echoed
+  senderId        String   @default("DOCURAMA")
+  lowCostMode     Boolean  @default(false)
+  // Optional WhatsApp channel (separate provider)
+  whatsappEnabled   Boolean @default(false)
+  whatsappProvider  String?
+  whatsappApiKey    String?
+  status          String   @default("not_configured") // not_configured | configured | tested | error
+  lastTestAt      DateTime?
+  lastTestStatus  String?
+  lastTestTo      String?
+  updatedAt       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model McpConfig {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  enabled         Boolean  @default(false)
+  transport       String   @default("streamable-http") // streamable-http | sse
+  allowedTools    String   @default("envelope_list,document_verify,template_list")
+  rateLimitPerMin Int      @default(60)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
