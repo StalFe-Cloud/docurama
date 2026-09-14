@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Plus, Trash2, ShieldCheck } from "lucide-react";
+import { Users, Plus, Trash2, ShieldCheck, Mail } from "lucide-react";
 import { apiGet } from "@/lib/client";
 import { ConfirmDialog, ErrorState, StatusBadge, fmtDate, cn } from "@/components/portal/shared";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type UsersData = {
   members: { id: string; role: string; name: string; email: string; status: string; totpEnabled: boolean; lastActiveAt: string | null }[];
+  invitations: { id: string; email: string; role: string; invitedBy: string; createdAt: string; expiresAt: string }[];
   plan: { seatLimit: number } | null;
   isAdmin: boolean;
 };
@@ -38,8 +39,50 @@ export function UsersTab() {
   return (
     <div className="space-y-6">
       <TeamCard data={base.data} />
+      {base.data.invitations?.length > 0 && <PendingInvitesCard data={base.data} />}
       <EnforcementCard enforce={account.data?.enforceTwoFactor ?? false} isAdmin={base.data.isAdmin} />
     </div>
+  );
+}
+
+function PendingInvitesCard({ data }: { data: UsersData }) {
+  const act = useSettingsAct(["settings"]);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Mail className="h-4 w-4 text-muted-foreground" aria-hidden /> Pending invitations
+        </CardTitle>
+        <CardDescription>
+          Tokenized links emailed from notifications@docurama.eu — invitees create their own password at /invite/&lt;token&gt;, so this workspace never handles credentials on their behalf. Re-send by inviting the same address again.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="divide-y rounded-lg border">
+          {data.invitations.map((inv) => (
+            <li key={inv.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{inv.email}</p>
+                <p className="text-xs text-muted-foreground">
+                  {inv.role === "ADMIN" ? "Workspace admin" : "Member"} · invited by {inv.invitedBy} · {fmtDate(inv.createdAt)}
+                </p>
+              </div>
+              <ConfirmDialog
+                trigger={
+                  <Button variant="ghost" size="sm" className="text-destructive" disabled={act.isPending}>
+                    Revoke
+                  </Button>
+                }
+                title={`Revoke invitation for ${inv.email}?`}
+                description="The invitation link stops working immediately. You can send a fresh invitation at any time."
+                confirmLabel="Revoke invitation"
+                onConfirm={() => act.mutateAsync({ op: "invite-revoke", id: inv.id })}
+              />
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 

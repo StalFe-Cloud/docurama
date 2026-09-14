@@ -30,11 +30,31 @@ model User {
   totpRecoveryCodes  String?    // JSON array of SHA-256 hashes, shown once
   passwordChangedAt  DateTime?
 
+  // Onboarding (Task 7)
+  emailVerifiedAt DateTime?     // proof of mailbox control at signup
+  onboardingJson  String?       // { skippedInvite, skippedSecurity, completedAt }
+
   memberships Member[]
   createdDocs Envelope[] @relation("createdDocs")
   sessions    Session[]
   signatures  UserSignature[]
   challenges  AuthChallenge[]
+  verifications EmailVerification[]
+}
+
+model EmailVerification {
+  id        String    @id @default(cuid())
+  userId    String
+  email     String
+  tokenHash String    @unique // SHA-256 of the raw token — the raw value only lives in the email link
+  purpose   String    @default("SIGNUP")
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Session {
@@ -78,6 +98,44 @@ model UserSignature {
   @@index([userId])
 }
 
+model Invitation {
+  id          String    @id @default(cuid())
+  tenantId    String
+  email       String
+  name        String?
+  role        String    @default("MEMBER") // OWNER | ADMIN | MEMBER
+  token       String    @unique // inv_<48 hex> — carried by the /invite/<token> link
+  status      String    @default("PENDING") // PENDING | ACCEPTED | REVOKED
+  invitedBy   String    // display name of the inviter
+  invitedById String?
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+// Transactional mail ledger — every outbound system email (verification,
+// invites, reminders) is recorded here. Delivery transport (platform SMTP
+// credentials) is not wired yet, so messages are queued and inspectable
+// instead of silently dropped.
+model MailOutbox {
+  id        String   @id @default(cuid())
+  toEmail   String
+  fromEmail String   @default("Docurama Sign <notifications@docurama.eu>")
+  subject   String
+  template  String   // SIGNUP_VERIFICATION | TEAM_INVITE | REMINDER | TEST
+  status    String   @default("QUEUED") // QUEUED | SENT | FAILED
+  bodyText  String
+  linkUrl   String?
+  createdAt DateTime @default(now())
+  sentAt    DateTime?
+
+  @@index([toEmail])
+}
+
 model Member {
   id        String   @id @default(cuid())
   userId    String
@@ -106,6 +164,11 @@ model Tenant {
 
   enforceTwoFactor Boolean @default(false) // require TOTP for every member
 
+  // Onboarding profile (Task 7) — optional context captured in the welcome wizard
+  industry    String?
+  companySize String?
+
+  invitations Invitation[]
   members      Member[]
   envelopes    Envelope[]
   templates    Template[]
