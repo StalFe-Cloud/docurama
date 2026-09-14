@@ -50,5 +50,14 @@ test
 prompt
 
 server.log
+
+# environment scaffolding (not part of the product)
+/docurama/
+/tool-results/
+/.zscripts/
+/examples/
+/mini-services/
+/tests/
+
 # Skills directory
 /skills/
