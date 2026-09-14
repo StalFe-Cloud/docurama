@@ -24,6 +24,14 @@ export function sessionCookieAttributes(request: Request): string {
     : "Path=/; HttpOnly; SameSite=Lax; Max-Age=604800";
 }
 
+export type SessionOrg = {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  planCode: string;
+};
+
 export type SessionUser = {
   id: string;
   email: string;
@@ -36,35 +44,56 @@ export type SessionUser = {
   tenantSlug: string | null;
   tenantPlan: string | null;
   workspaceRole: string | null;
+  /** Id of the server-side session row backing this request (null for legacy tokens). */
+  sessionId: string | null;
+  /** Every organization this account belongs to — powers the workspace switcher. */
+  orgs: SessionOrg[];
 };
 
 /**
- * Resolve the signed-in user from the session cookie, falling back to the
- * `Authorization: Bearer <token>` header. The bearer fallback keeps sign-in
- * working in embedding contexts (e.g. the preview iframe) where browsers
- * refuse to store third-party cookies even with CHIPS attributes.
- * Returns null when no valid session exists.
+ * Resolve the signed-in user from the session cookie (or the
+ * `Authorization: Bearer <token>` fallback used in embedding contexts).
+ *
+ * Tokens are server-side Session rows — revocable, expiring, carrying device
+ * metadata for Settings → Account → Access security. Legacy tokens that hold
+ * a raw user id (issued before the session table existed) keep working.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const jar = await cookies();
-  let userId = jar.get(SESSION_COOKIE)?.value;
+  let token = jar.get(SESSION_COOKIE)?.value;
 
-  if (!userId) {
+  if (!token) {
     const hdrs = await headers();
     const auth = hdrs.get("authorization");
     if (auth?.startsWith("Bearer ")) {
-      userId = auth.slice("Bearer ".length).trim();
+      const raw = auth.slice("Bearer ".length).trim();
+      token = raw.length ? raw : undefined;
     }
   }
-  if (!userId) return null;
+  if (!token) return null;
 
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    include: { memberships: { include: { tenant: true }, take: 1 } },
-  });
+  let user: Awaited<ReturnType<typeof loadUser>> = null;
+  let sessionId: string | null = null;
+
+  const session = await db.session.findUnique({ where: { id: token } });
+  if (session) {
+    if (session.revokedAt || session.expiresAt <= new Date()) return null;
+    sessionId = session.id;
+    user = await loadUser(session.userId);
+    // Touch the session at most once a minute to keep the activity list fresh.
+    if (session.lastSeenAt.getTime() < Date.now() - 60_000) {
+      await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+    }
+  } else {
+    // Legacy token (raw user id) — still valid, but no session row to revoke.
+    user = await loadUser(token);
+  }
+
   if (!user || user.status === "SUSPENDED") return null;
+  const activeTenantId = user.activeTenantId;
+  const active =
+    user.memberships.find((m) => m.tenantId === activeTenantId) ?? user.memberships[0];
 
-  const m = user.memberships[0];
   return {
     id: user.id,
     email: user.email,
@@ -72,12 +101,23 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     lastName: user.lastName,
     role: user.role,
     totpEnabled: user.totpEnabled,
-    tenantId: m?.tenantId ?? null,
-    tenantName: m?.tenant.name ?? null,
-    tenantSlug: m?.tenant.slug ?? null,
-    tenantPlan: m?.tenant.planCode ?? null,
-    workspaceRole: m?.role ?? null,
+    tenantId: active?.tenantId ?? null,
+    tenantName: active?.tenant.name ?? null,
+    tenantSlug: active?.tenant.slug ?? null,
+    tenantPlan: active?.tenant.planCode ?? null,
+    workspaceRole: active?.role ?? null,
+    sessionId,
+    orgs: user.memberships.map((m) => ({
+      id: m.tenantId, name: m.tenant.name, slug: m.tenant.slug, role: m.role, planCode: m.tenant.planCode,
+    })),
   };
+}
+
+function loadUser(userId: string) {
+  return db.user.findUnique({
+    where: { id: userId },
+    include: { memberships: { include: { tenant: true } } },
+  });
 }
 
 /** Guard for platform-admin API routes. Throws a 403 Response when not authorised. */

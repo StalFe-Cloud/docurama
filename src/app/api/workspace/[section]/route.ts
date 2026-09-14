@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { requireUser, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
+import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const tenantId = me.tenantId;
 
     // Workspace context requires a tenant membership.
-    if (["envelopes", "templates", "settings", "overview"].includes(section) && !tenantId) {
+    if (
+      ["envelopes", "templates", "settings", "overview", "settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp"].includes(section) &&
+      !tenantId
+    ) {
       return jsonError("No workspace membership for this account", 403);
+    }
+
+    // Production settings sections (account security, eSign, notifications,
+    // SMS gateway, MCP) are served by the dedicated handlers module.
+    if (["settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp"].includes(section)) {
+      return getSettingsSection(section, me);
     }
 
     switch (section) {
@@ -156,47 +166,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
 
       case "settings": {
-        const user = await db.user.findUnique({ where: { id: me.id } });
-        const tenant = await db.tenant.findUnique({
-          where: { id: tenantId! },
-          include: { members: { include: { user: true } }, subscriptions: { take: 1 } },
-        });
-        const keys = await db.apiKey.findMany({ where: { tenantId: tenantId! }, orderBy: { createdAt: "desc" } });
-        const plan = await db.plan.findUnique({ where: { code: tenant!.planCode } });
-        // Notification preferences — every persisted field is returned so the
-        // form can render true state (fixes the "SMS toggle resets" bug).
-        const notifPrefs = {
-          emailOnSend: true, emailOnSign: true, emailOnComplete: true, emailOnDecline: false,
-          smsEnabled: (tenant!.slug === "northwind"),
-          smsProvider: "twilio",
-          smsAccountSid: "AC7f2e91b4" + sha(tenant!.slug).slice(0, 8),
-          smsAuthToken: "••••••••••••" + sha(tenant!.slug + "sms").slice(0, 4),
-          smsSenderName: "DOCURAMA",
-          maxReminders: 3,
-          reminderSubject: "[Action required] {{document}} awaits your signature",
-          digestWeekly: true,
-        };
-        return jsonOk({
-          profile: {
-            firstName: user!.firstName, lastName: user!.lastName, email: user!.email,
-            totpEnabled: user!.totpEnabled,
-            signatureName: user!.signatureName ?? `${user!.firstName} ${user!.lastName}`,
-            signatureStyle: user!.signatureStyle ?? "signature-font-caveat",
-          },
-          org: {
-            name: tenant!.name, slug: tenant!.slug, planCode: tenant!.planCode,
-            billingEmail: tenant!.billingEmail, createdAt: tenant!.createdAt.toISOString(),
-            storageUsedMb: tenant!.storageUsedMb,
-          },
-          plan: plan ? iso(plan) : null,
-          subscription: tenant!.subscriptions[0] ? iso(tenant!.subscriptions[0]) : null,
-          notifications: notifPrefs,
-          apiKeys: isos(keys).map((k) => ({ ...k, secretMasked: undefined, prefix: k.prefix })),
-          members: tenant!.members.map((m) => ({
-            id: m.id, role: m.role, name: `${m.user.firstName} ${m.user.lastName}`,
-            email: m.user.email, status: m.user.status, totpEnabled: m.user.totpEnabled,
-          })),
-        });
+        // Profile, org, memberships, saved signatures, API keys, team — the
+        // full production-settings base payload.
+        return getSettingsSection("settings", me);
       }
 
       default:
@@ -313,81 +285,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       }
 
       case "settings": {
-        if (op === "save-profile") {
-          const firstName = String(data.firstName ?? "").trim();
-          const lastName = String(data.lastName ?? "").trim();
-          if (!firstName || !lastName) return jsonError("First and last name are required");
-          // The original UI collected these fields but never sent them.
-          await db.user.update({ where: { id: me.id }, data: { firstName, lastName } });
-          return jsonOk({ ok: true, message: "Profile updated" });
-        }
-        if (op === "save-signature") {
-          const signatureName = String(data.signatureName ?? "").trim();
-          if (!signatureName) return jsonError("Signature name is required");
-          await db.user.update({
-            where: { id: me.id },
-            data: { signatureName, signatureStyle: String(data.signatureStyle ?? "signature-font-caveat") },
-          });
-          return jsonOk({ ok: true, message: "Signature saved — future signatures will use this exact stamp" });
-        }
-        if (op === "save-org") {
-          const name = String(data.name ?? "").trim();
-          const billingEmail = String(data.billingEmail ?? "").trim();
-          if (!name) return jsonError("Organisation name is required");
-          await db.tenant.update({ where: { id: tenantId! }, data: { name, billingEmail: billingEmail || null } });
-          return jsonOk({ ok: true, message: "Organisation updated" });
-        }
-        if (op === "save-notifications") {
-          // Validate + acknowledge every field the form collects (the original
-          // UI silently dropped SMS auth token, max reminders, and subject).
-          if (data.smsEnabled === true && !String(data.smsAuthToken ?? "").trim()) {
-            return jsonError("SMS auth token is required when SMS delivery is enabled");
-          }
-          await recordAudit({
-            actor, actorRole: me.role, action: "notification_settings.updated",
-            resource: `tenant:${me.tenantSlug}`, severity: "INFO", tenantName: me.tenantName,
-            detail: `Email prefs saved · SMS ${data.smsEnabled ? "enabled" : "disabled"}`,
-          });
-          return jsonOk({ ok: true, message: "Notification settings saved — including SMS credentials and reminder schedule" });
-        }
-        if (op === "create-key") {
-          const name = String(data.name ?? "").trim();
-          const scope = String(data.scope ?? "READONLY");
-          if (!name) return jsonError("Key name is required");
-          const prefix = `dk_live_${Math.random().toString(36).slice(2, 6)}`;
-          await db.apiKey.create({ data: { tenantId: tenantId!, name, prefix, scope, createdBy: actor } });
-          await recordAudit({ actor, actorRole: me.role, action: "api_key.created", resource: `api_key:${prefix}`, severity: "WARNING", tenantName: me.tenantName });
-          return jsonOk({ ok: true, message: `Key created: ${prefix}… — copy it now, it will not be shown again` });
-        }
-        if (op === "revoke-key") {
-          const k = await db.apiKey.findFirst({ where: { id, tenantId: tenantId! } });
-          if (!k) return jsonError("Key not found", 404);
-          await db.apiKey.update({ where: { id }, data: { status: "REVOKED" } });
-          await recordAudit({ actor, actorRole: me.role, action: "api_key.revoked", resource: `api_key:${k.prefix}`, severity: "WARNING", tenantName: me.tenantName });
-          return jsonOk({ ok: true, message: `Key ${k.prefix} revoked` });
-        }
-        if (op === "invite-member") {
-          const email = String(data.email ?? "").trim().toLowerCase();
-          if (!email.includes("@")) return jsonError("A valid email is required");
-          const exists = await db.user.findUnique({ where: { email } });
-          if (exists) {
-            const already = await db.member.findFirst({ where: { userId: exists.id, tenantId: tenantId! } });
-            if (already) return jsonError("This person is already a member of the workspace");
-          }
-          const user = exists ?? await db.user.create({
-            data: { email, passwordHash: sha(`invite-${Date.now()}-${email}`), firstName: "New", lastName: "Member", status: "INVITED", role: "MEMBER" },
-          });
-          await db.member.create({ data: { userId: user.id, tenantId: tenantId!, role: String(data.role ?? "MEMBER"), status: "INVITED" } });
-          return jsonOk({ ok: true, message: `Invitation sent to ${email}` });
-        }
-        if (op === "remove-member") {
-          const m = await db.member.findFirst({ where: { id, tenantId: tenantId! } });
-          if (!m) return jsonError("Member not found", 404);
-          if (m.role === "OWNER") return jsonError("The workspace owner cannot be removed");
-          await db.member.delete({ where: { id } });
-          return jsonOk({ ok: true, message: "Member removed from workspace" });
-        }
-        return jsonError("Unsupported operation");
+        // All workspace settings mutations (profile, signatures, orgs, 2FA,
+        // sessions, domains, certificates, TSA, eSign, notifications, SMS,
+        // API keys, MCP) live in the dedicated handlers module.
+        if (!tenantId) return jsonError("No workspace membership for this account", 403);
+        return postSettingsOp(me, { op, id, data }, req);
       }
 
       default:

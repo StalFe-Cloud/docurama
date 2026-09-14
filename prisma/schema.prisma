@@ -233,6 +233,7 @@ model SigningCertificate {
   notAfter         DateTime
   status           String   @default("PENDING") // PENDING | ISSUED | ACTIVE | REVOKED | EXPIRED
   purpose          String   @default("signing") // signing | sealing
+  validityDays     Int      @default(365)
   pkcs12Base64     String?  // encrypted PKCS#12 blob (passphrase never stored)
   certificatePem   String?
   revokedAt        DateTime?
@@ -529,6 +530,7 @@ model ApiKey {
   tenantId    String?
   name        String
   prefix      String // e.g. dk_live_ab12
+  secretHash  String?   // SHA-256 of the full key — enables real X-API-Key authentication
   scope       String    @default("READONLY") // READONLY | ENVELOPES | TEMPLATES | FULL
   status      String    @default("ACTIVE") // ACTIVE | REVOKED
   createdBy   String
