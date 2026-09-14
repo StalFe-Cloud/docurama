@@ -80,3 +80,29 @@ Work Log:
 
 Stage Summary:
 - Remote quality branch now holds the QA-ready Docurama portal (single clean commit f22c8f4): enterprise dual portal, official branding, Docurama SAS legal entity, full email/DNS provisioning suite. Remote main still preserves the original platform. Local quality branch is the active delivery line for future "push to quality" updates (fast-forward pushes).
+
+---
+Task ID: 5
+Agent: Main agent (Super Z)
+Task: Plan for production; restore from repo as an incremental baseline; build the production settings suite (account, profile, users, eSign, notifications, SMS, API, MCP) with compliance re-imagination
+
+Work Log:
+- Baseline: synced local from remote quality (source of truth), preserved latest runtime DB, worked incrementally with 5 feature commits + merge to quality (33b6f3a).
+- Production plan: docs/PRODUCTION-PLAN.md (+ download copy) — architecture, cold-start restore-from-repo runbook (~10 min), incremental update workflow, config inventory, security baseline, compliance posture, backup/restore, go-live checklist, scale-out path; root README.md added.
+- Schema (additive db push): Session, AuthChallenge, UserSignature, SigningCertificate, TsaConfig, EsignPreferences, NotificationSettings, SmsGateway, McpConfig; User gains activeTenantId + TOTP/recovery/password fields; Tenant.enforceTwoFactor; Domain.purpose SENDING + check fields; Envelope.autoRemind/reminderCount; ApiKey.secretHash.
+- Auth rework: server-side session table (revocable, device/IP metadata, 7-day expiry, legacy-token fallback); login issues session ids; logout revokes; getSessionUser resolves multi-org activeTenantId and returns orgs + sessionId.
+- 2FA (real RFC 6238, zero deps): lib/totp.ts; enrolment with server-generated QR SVG (qrcode pkg); ±1-step window; 10 one-time recovery codes stored as SHA-256; login two-step challenge flow (5-min AuthChallenge, 5 attempts); org-level enforcement flag.
+- Certificates: real OpenSSL RSA-2048/SHA-256 issuance (lib/certificates.ts) — request → one-click provision → activate → encrypted PKCS#12 download; passphrase never stored; revoke/delete with audit.
+- DNS: live verification over DoH (Google + Cloudflare fallback) for sending-domain TXT records.
+- TSA: RFC 3161 config with presets (DigiCert/Sectigo/GlobalSign/FreeTSA) + real reachability/latency test.
+- Notifications: per-org SMTP override with real TCP connection test; signer alerts; three reminder modes (manual / per-envelope job / platform job) with quiet hours, weekend skip, SMS escalation, and an honest dry-run job scan.
+- SMS: gateway config + 14-provider researched catalogue (WhatsApp Cloud API free tier, Telnyx, Twilio, Vonage, Bird, Brevo FR, Smsmode FR, Plivo, ClickSend, SNS, 360dialog, Infobip, Sinch, Textlocal) with free/trial/paid tiers, low-cost flags, WhatsApp channel; WhatsApp Cloud API tokens validated live against Meta.
+- API: real X-API-Key auth (sha256-stored keys, shown once) on public /api/v1 (envelopes, envelope detail, templates, verify); full in-app reference + quickstart (curl/JS/Python) + webhook event catalogue.
+- MCP: /api/mcp JSON-RPC 2.0 (initialize, tools/list, tools/call) with 4 real tools, per-tenant enable/allowlist, per-key rate limit.
+- UI: portal refactored to real URLs (/, /documents, /templates, /verify, /settings/{8 tabs}, /admin/{13 sections}) via history.pushState; 8 settings tabs (account: orgs+domains+access security+Part 11; profile: stamps (draw/type/upload canvas)+2FA; users: roles+2FA policy; esign: certs+TSA+preferences incl. filename formats; notifications; sms; api; mcp); org switcher in header; 2FA OTP step in sign-in.
+- Compliance re-imagination: Part 11 mode (§11.50 signature manifestation preview, §11.100 consent capture versioned, re-auth before signing), eIDAS SES/AdES/QES level, GDPR/DSAR linkage, audit events on every mutation.
+- Demo data: Alex in second org (Aurora Legal), pending sending domain, real issued ACTIVE certificate, auto-remind envelope.
+- Verification: tsc 0 errors; ESLint clean; 42/42 API tests (scripts/test-prod-settings-api.sh) covering login/sessions/orgs/all 6 settings sections/2FA/cert issuance+download/domain DoH/notifications+dry-run/SMS/v1 keys/MCP/revocation; browser E2E: all 8 tabs deep-link, tab navigation, org switch round-trip, 2FA enrol+OTP login+disable full cycle, admin deep links, zero console errors; production build passes with all routes; VLM QA pass.
+
+Stage Summary:
+- quality branch at 33b6f3a carries the full production settings suite with real, honest implementations (real OpenSSL certs, real DoH DNS checks, real TOTP, real revocable sessions, real X-API-Key auth, real MCP JSON-RPC) — every feature from the request map implemented, brainstormed (reminder jobs) and compliance-aligned (Part 11, eIDAS, GDPR). Production restore/update runbook documented in docs/PRODUCTION-PLAN.md.
