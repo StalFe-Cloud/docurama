@@ -1,0 +1,435 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Identity & Tenancy ───────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         String    @default("MEMBER") // PLATFORM_ADMIN | WORKSPACE_ADMIN | MEMBER
+  status       String    @default("ACTIVE") // ACTIVE | SUSPENDED | INVITED
+  totpEnabled  Boolean   @default(false)
+  lastActiveAt DateTime?
+  createdAt    DateTime  @default(now())
+  signatureName String?
+  signatureStyle String? @default("signature-font-caveat")
+
+  memberships Member[]
+  createdDocs Envelope[] @relation("createdDocs")
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String
+  role      String   @default("MEMBER") // OWNER | ADMIN | MEMBER
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+}
+
+model Tenant {
+  id              String    @id @default(cuid())
+  name            String
+  slug            String    @unique
+  planCode        String    @default("STARTER") // STARTER | BUSINESS | ENTERPRISE
+  status          String    @default("TRIAL") // ACTIVE | TRIAL | SUSPENDED
+  suspendedReason String?
+  billingEmail    String?
+  storageUsedMb   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  trialEndsAt     DateTime?
+
+  members      Member[]
+  envelopes    Envelope[]
+  templates    Template[]
+  domains      Domain[]
+  subscriptions Subscription[]
+  apiKeys      ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  legalHolds   LegalHold[]
+}
+
+// ─── Documents & Signing ──────────────────────────────────────────────────────
+
+model Envelope {
+  id                String    @id @default(cuid())
+  publicCode        String    @unique // DOC-XXXXXX verification code
+  title             String
+  tenantId          String
+  createdById       String
+  status            String    @default("DRAFT") // DRAFT | SENT | PARTIALLY_SIGNED | COMPLETED | VOIDED | DECLINED | EXPIRED
+  message           String?
+  pages             Int       @default(1)
+  conformanceLevel  String?   // B-B | B-T | B-LT | B-LTA
+  sha256            String?
+  sealedAt          DateTime?
+  completedAt       DateTime?
+  voidedAt          DateTime?
+  voidReason        String?
+  createdAt         DateTime  @default(now())
+  lastRemindedAt    DateTime?
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy  User      @relation("createdDocs", fields: [createdById], references: [id])
+  recipients Recipient[]
+  events     EnvelopeEvent[]
+
+  @@index([tenantId, createdAt])
+}
+
+model Recipient {
+  id          String    @id @default(cuid())
+  envelopeId  String
+  name        String
+  email       String
+  role        String    @default("SIGNER") // SIGNER | CC | APPROVER
+  status      String    @default("PENDING") // PENDING | DELIVERED | SIGNED | DECLINED
+  order       Int       @default(1)
+  authMethod  String    @default("EMAIL") // EMAIL | SMS | PASSKEY
+  signedAt    DateTime?
+  accessToken String    @unique // signing access token (never exposed to other recipients in UI)
+
+  envelope Envelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+
+  @@index([envelopeId])
+}
+
+model EnvelopeEvent {
+  id         String   @id @default(cuid())
+  envelopeId String
+  at         DateTime @default(now())
+  actor      String
+  action     String // CREATED | SENT | VIEWED | DELIVERED | REMINDED | SIGNED | DECLINED | VOIDED | SEALED | DELEGATED | CORRECTION_REQUESTED
+  detail     String?
+  ipHash     String?
+
+  envelope Envelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+
+  @@index([envelopeId, at])
+}
+
+model Template {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  category    String    @default("General")
+  folder      String    @default("All templates")
+  pages       Int       @default(1)
+  usageCount  Int       @default(0)
+  publicSlug  String    @unique
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Domain {
+  id          String    @id @default(cuid())
+  tenantId    String
+  domain      String
+  method      String    @default("TXT") // TXT | CNAME | HTTP
+  status      String    @default("PENDING") // PENDING | VERIFIED | FAILED | JOIN_REQUESTED
+  token       String
+  verifiedAt  DateTime?
+  requestedAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+model Plan {
+  id          String  @id @default(cuid())
+  code        String  @unique // STARTER | BUSINESS | ENTERPRISE
+  name        String
+  monthlyEur  Int
+  seatLimit   Int
+  envelopeLimit Int
+  storageGb   Int
+  apiAccess   Boolean @default(false)
+  slaUptime   String  @default("99.5%")
+  support     String
+  features    String // pipe-separated
+  active      Boolean @default(true)
+}
+
+model Subscription {
+  id             String    @id @default(cuid())
+  tenantId       String
+  planCode       String
+  status         String    @default("ACTIVE") // ACTIVE | TRIALING | PAST_DUE | CANCELED
+  mrrEur         Int       @default(0)
+  seats          Int       @default(1)
+  renewalAt      DateTime
+  paymentMethod  String    @default("SEPA ••4291")
+  lastInvoiceAt  DateTime?
+  failedPayment  Boolean   @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Legal, Privacy & Compliance ──────────────────────────────────────────────
+
+model DsarRequest {
+  id          String    @id @default(cuid())
+  tenantId    String?
+  type        String // ACCESS | ERASURE | RECTIFICATION | PORTABILITY
+  subjectEmail String
+  status      String    @default("OPEN") // OPEN | RUNNING | COMPLETED | CANCELED
+  notes       String?
+  requestedAt DateTime  @default(now())
+  dueAt       DateTime
+  completedAt DateTime?
+}
+
+model DmcaNotice {
+  id            String    @id @default(cuid())
+  complainant   String
+  targetUrl     String
+  works         String
+  status        String    @default("OPEN") // OPEN | RESOLVED
+  severity      String    @default("NORMAL") // NORMAL | HIGH
+  receivedAt    DateTime  @default(now())
+  slaDueAt      DateTime
+  resolvedAt    DateTime?
+  resolutionNote String?
+}
+
+model Control {
+  id             String   @id @default(cuid())
+  ref            String   @unique // e.g. SOC2-CC6.1
+  title          String
+  framework      String   @default("SOC 2")
+  category       String
+  status         String   @default("IMPLEMENTED") // IMPLEMENTED | PARTIAL | PLANNED
+  owner          String
+  evidenceCount  Int      @default(0)
+  lastReviewedAt DateTime?
+}
+
+model RetentionPolicy {
+  id           String    @id @default(cuid())
+  name         String
+  scope        String
+  retentionDays Int
+  disposition  String    @default("DELETE") // DELETE | ANONYMIZE | ARCHIVE
+  status       String    @default("ACTIVE") // ACTIVE | DRAFT
+  lastSweepAt  DateTime?
+}
+
+model LegalHold {
+  id        String    @id @default(cuid())
+  tenantId  String
+  reason    String
+  scope     String
+  status    String    @default("ACTIVE") // ACTIVE | RELEASED
+  issuedBy  String
+  issuedAt  DateTime  @default(now())
+  releasedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Consent {
+  id          String    @id @default(cuid())
+  subjectEmail String
+  purpose     String
+  source      String    @default("signup")
+  grantedAt   DateTime  @default(now())
+  status      String    @default("GRANTED") // GRANTED | WITHDRAWN
+  withdrawnAt DateTime?
+}
+
+model Incident {
+  id          String    @id @default(cuid())
+  title       String
+  severity    String    @default("SEV3") // SEV1 | SEV2 | SEV3
+  status      String    @default("OPEN") // OPEN | CONTAINED | RESOLVED
+  description String
+  assignee    String
+  detectedAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+}
+
+model AccessReview {
+  id          String    @id @default(cuid())
+  quarter     String
+  reviewer    String
+  scope       String
+  status      String    @default("PENDING") // PENDING | COMPLETED
+  findings    Int       @default(0)
+  completedAt DateTime?
+}
+
+model Risk {
+  id         String  @id @default(cuid())
+  title      String
+  category   String
+  likelihood String  @default("MEDIUM") // LOW | MEDIUM | HIGH
+  impact     String  @default("MEDIUM") // LOW | MEDIUM | HIGH
+  score      Int     @default(9)
+  mitigation String?
+  status     String  @default("OPEN") // OPEN | MITIGATED | ACCEPTED
+  owner      String
+}
+
+model Change {
+  id          String    @id @default(cuid())
+  title       String
+  type        String    @default("STANDARD") // STANDARD | EMERGENCY
+  description String
+  requestedBy String
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | IMPLEMENTED
+  decidedBy   String?
+  decisionAt  DateTime?
+}
+
+model Vendor {
+  id          String    @id @default(cuid())
+  name        String
+  service     String
+  riskLevel   String    @default("LOW") // LOW | MEDIUM | HIGH
+  dpdSigned   Boolean   @default(false)
+  lastAuditAt DateTime?
+  status      String    @default("APPROVED") // APPROVED | REVIEW | REJECTED
+}
+
+model RestoreDrill {
+  id          String    @id @default(cuid())
+  scope       String
+  rtoTarget   String
+  rtoActual   String?
+  result      String    @default("PASS") // PASS | PARTIAL | FAIL
+  executedAt  DateTime  @default(now())
+  notes       String?
+}
+
+model Subprocessor {
+  id                String  @id @default(cuid())
+  name              String
+  purpose           String
+  location          String
+  dpaSigned         Boolean @default(true)
+  transferMechanism String  @default("SCC")
+}
+
+// ─── Integrations ─────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String?
+  name        String
+  prefix      String // e.g. dk_live_ab12
+  scope       String    @default("READONLY") // READONLY | ENVELOPES | TEMPLATES | FULL
+  status      String    @default("ACTIVE") // ACTIVE | REVOKED
+  createdBy   String
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model WebhookEndpoint {
+  id            String    @id @default(cuid())
+  tenantId      String
+  url           String
+  events        String // pipe-separated event list
+  status        String    @default("ACTIVE") // ACTIVE | PAUSED | FAILING
+  secretMasked  String
+  successRate   Int       @default(100)
+  lastDeliveryAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  endpointId String
+  event      String
+  statusCode Int
+  durationMs Int
+  success    Boolean
+  at         DateTime @default(now())
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+}
+
+// ─── Audit & Ops ──────────────────────────────────────────────────────────────
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  at         DateTime @default(now())
+  actor      String
+  actorRole  String
+  action     String
+  resource   String
+  tenantName String?
+  severity   String   @default("INFO") // INFO | WARNING | CRITICAL
+  ip         String
+  detail     String?
+}
+
+model SecurityEvent {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  type     String
+  severity String   @default("INFO") // INFO | LOW | MEDIUM | HIGH | CRITICAL
+  actor    String
+  ip       String
+  blocked  Boolean  @default(true)
+  detail   String?
+}
+
+model DailyStat {
+  id               String   @id @default(cuid())
+  date             String   @unique // YYYY-MM-DD
+  envelopesCreated Int      @default(0)
+  envelopesSealed  Int      @default(0)
+  signersActive    Int      @default(0)
+  activeTenants    Int      @default(0)
+  mrrEur           Int      @default(0)
+}
+
+model PlatformSetting {
+  id                  String   @id @default("singleton")
+  smtpHost            String   @default("smtp.eu.mailprovider.io")
+  smtpPort            Int      @default(587)
+  smtpUser            String   @default("notifications@docurama.eu")
+  smtpFrom            String   @default("Docurama Sign <notifications@docurama.eu>")
+  smtpTls             Boolean  @default(true)
+  tsaUrl              String   @default("https://timestamp.digicert.com")
+  tsaReachable        Boolean  @default(true)
+  certFingerprint     String   @default("3A:F2:88:1B:6C:9E:44:D0:A7:2E:5F:B1:C3:98:0D:64:71:AA:29:5C")
+  certExpiryAt        DateTime
+  signingConformance  String   @default("B-LT")
+  trialLengthDays     Int      @default(14)
+  maintenanceMode     Boolean  @default(false)
+  featureFlags        String   @default("{\"smsDelivery\":true,\"bulkSend\":true,\"webhooks\":true,\"passkeys\":true,\"aiFieldDetect\":false,\"euResidencyOnly\":false}")
+  provisioningState   String   @default("{}") // persisted provisioning state for docurama.eu emails/subdomains/DNS
+  sweeperLastRunAt    DateTime @default(now())
+  queueDepth          Int      @default(3)
+  apiReplicas         Int      @default(2)
+  diskUsedPct         Int      @default(41)
+  lastDeployAt        DateTime @default(now())
+  version             String   @default("4.2.1")
+  auditChainSealedAt  DateTime @default(now())
+  auditChainBlockHeight Int   @default(1842)
+  updatedAt           DateTime @default(now())
+}
