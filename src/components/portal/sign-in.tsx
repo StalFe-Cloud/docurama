@@ -64,6 +64,10 @@ export function SignIn() {
       // Persist the bearer fallback token so the session survives embedding
       // contexts where the browser blocks third-party cookies entirely.
       if (body?.token) setSessionToken(body.token);
+      // Signing in from /login (or /welcome) lands the user in the app root.
+      if (window.location.pathname !== "/") {
+        window.history.pushState({}, "", "/");
+      }
       queryClient.invalidateQueries({ queryKey: ["session"] });
       toast.success("Welcome back");
     },
@@ -213,6 +217,15 @@ export function SignIn() {
               </p>
             )}
           </form>
+
+          {!challenge && (
+            <p className="text-center text-sm text-muted-foreground">
+              New to Docurama?{" "}
+              <a href="/welcome" className="font-medium text-primary underline-offset-4 hover:underline">
+                Create a free account
+              </a>
+            </p>
+          )}
 
           {!challenge && (
             <div className="space-y-3">

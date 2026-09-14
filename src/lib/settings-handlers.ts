@@ -12,6 +12,7 @@ import { validateFilenameFormat } from "@/lib/esign";
 import { verifySendingDomain } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
+import { createInvitation, requestOrigin } from "@/lib/onboarding";
 
 /**
  * Workspace Settings API — GET sections and POST operations behind
@@ -76,9 +77,10 @@ export async function getSettingsSection(
         where: { id: tenantId },
         include: { members: { include: { user: true } }, subscriptions: { take: 1 } },
       });
-      const [keys, signatures] = await Promise.all([
+      const [keys, signatures, invitations] = await Promise.all([
         db.apiKey.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } }),
         db.userSignature.findMany({ where: { userId: me.id }, orderBy: { createdAt: "desc" } }),
+        db.invitation.findMany({ where: { tenantId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
       ]);
       const plan = await db.plan.findUnique({ where: { code: tenant!.planCode } });
       return jsonOk({
@@ -104,6 +106,10 @@ export async function getSettingsSection(
           isDefault: s.isDefault, createdAt: s.createdAt.toISOString(),
         })),
         apiKeys: isos(keys).map((k) => ({ ...k, secretHash: undefined })),
+        invitations: invitations.map((i) => ({
+          id: i.id, email: i.email, role: i.role, invitedBy: i.invitedBy,
+          createdAt: i.createdAt.toISOString(), expiresAt: i.expiresAt.toISOString(),
+        })),
         members: tenant!.members.map((m) => ({
           id: m.id, role: m.role, name: `${m.user.firstName} ${m.user.lastName}`,
           email: m.user.email, status: m.user.status, totpEnabled: m.user.totpEnabled,
@@ -530,18 +536,38 @@ export async function postSettingsOp(
 
   if (op === "invite-member") {
     const email = String(data.email ?? "").trim().toLowerCase();
-    if (!email.includes("@")) return jsonError("A valid email is required");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return jsonError("A valid email is required");
     const exists = await db.user.findUnique({ where: { email } });
     if (exists) {
       const already = await db.member.findFirst({ where: { userId: exists.id, tenantId } });
       if (already) return jsonError("This person is already a member of the workspace");
     }
-    const invited = exists ?? await db.user.create({
-      data: { email, passwordHash: sha(`invite-${Date.now()}-${email}`), firstName: "New", lastName: "Member", status: "INVITED", role: "MEMBER" },
-    });
+    // Real invitations: a tokenized link is emailed (queued in the outbox);
+    // the invited person creates their own password at /invite/<token> — the
+    // workspace never fabricates accounts or credentials on their behalf.
     const role = ["ADMIN", "MEMBER"].includes(String(data.role)) ? String(data.role) : "MEMBER";
-    await db.member.create({ data: { userId: invited.id, tenantId, role, status: "INVITED" } });
-    return jsonOk({ ok: true, message: `Invitation sent to ${email}` });
+    await createInvitation({
+      tenantId, email, role,
+      invitedBy: `${user.firstName} ${user.lastName}`, invitedById: me.id,
+      origin: requestOrigin(req),
+    });
+    await recordAudit({
+      actor: `${me.firstName} ${me.lastName}`, actorRole: me.role,
+      action: "invite.sent", resource: `invite:${email}`, tenantName: me.tenantName,
+      detail: `Invitation queued for ${email} (${role})`,
+    });
+    return jsonOk({ ok: true, message: `Invitation sent to ${email} — they create their own password from the link` });
+  }
+
+  if (op === "invite-revoke") {
+    const inv = await db.invitation.findFirst({ where: { id, tenantId, status: "PENDING" } });
+    if (!inv) return jsonError("Invitation not found", 404);
+    await db.invitation.update({ where: { id: inv.id }, data: { status: "REVOKED" } });
+    await recordAudit({
+      actor: `${me.firstName} ${me.lastName}`, actorRole: me.role,
+      action: "invite.revoked", resource: `invite:${inv.email}`, tenantName: me.tenantName,
+    });
+    return jsonOk({ ok: true, message: `Invitation for ${inv.email} revoked` });
   }
 
   if (op === "remove-member") {
