@@ -192,12 +192,12 @@ function CreateCertDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="cn">Certificate name (CN) <span className="text-destructive" aria-hidden>*</span></Label>
-            <Input id="cn" value={form.commonName} onChange={(e) => setForm({ ...form, commonName: e.target.value })} placeholder="Northwind Signing 2026" className="h-11" />
+            <Input id="cn" value={form.commonName} onChange={(e) => setForm({ ...form, commonName: e.target.value })} placeholder="StålFe Signing 2026" className="h-11" />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="org">Organization (O)</Label>
-              <Input id="org" value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} placeholder="Northwind Industries" className="h-11" />
+              <Input id="org" value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} placeholder="StålFe AB" className="h-11" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cemail">Email</Label>

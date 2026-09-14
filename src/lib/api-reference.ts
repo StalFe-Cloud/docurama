@@ -53,8 +53,8 @@ export const API_REFERENCE: ApiGroup[] = [
         response: `{
   "user": {
     "email": "alex@northwind.example",
-    "tenantName": "Northwind Industries",
-    "orgs": [ { "id": "…", "name": "Northwind Industries", "role": "OWNER" } ]
+    "tenantName": "StålFe AB",
+    "orgs": [ { "id": "…", "name": "StålFe AB", "role": "OWNER" } ]
   }
 }`,
       },

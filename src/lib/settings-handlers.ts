@@ -585,7 +585,7 @@ export async function postSettingsOp(
     const email = String(data.email ?? "").trim() || null;
     const purpose = data.purpose === "sealing" ? "sealing" : "signing";
     const days = Math.min(1095, Math.max(30, Number(data.days ?? 365)));
-    if (commonName.length < 3) return jsonError("Certificate name (CN) is required - e.g. “Northwind Signing 2026”");
+    if (commonName.length < 3) return jsonError("Certificate name (CN) is required - e.g. “StålFe Signing 2026”");
     if (email && !/.+@.+\..+/.test(email)) return jsonError("Enter a valid email or leave it empty");
     const pendingCount = await db.signingCertificate.count({ where: { tenantId, status: "PENDING" } });
     if (pendingCount >= 5) return jsonError("Too many pending certificates - provision or delete the existing ones first");

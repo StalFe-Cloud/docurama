@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { HeroDemo } from "@/components/marketing/hero-demo";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -199,19 +200,20 @@ export function MarketingPage() {
         )}
       </header>
 
-      {/* Hero: asymmetric split, real product screenshot */}
-      <section id="top" className="border-b">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-20">
-          <div className="space-y-6">
-            <h1 className="text-4xl font-semibold leading-[1.08] tracking-tighter sm:text-5xl">
+      {/* Hero: centered statement over the live product movie,
+           filling exactly the first viewport fold */}
+      <section id="top" className="hero-fold flex border-b">
+        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-10 sm:px-6 sm:py-12">
+          <div className="text-center">
+            <h1 className="hero-in mx-auto max-w-3xl text-4xl font-semibold leading-[1.06] tracking-tighter sm:text-5xl lg:text-6xl">
               Sign documents.<br />
               <span className="text-primary">Prove everything.</span>
             </h1>
-            <p className="max-w-md text-base leading-relaxed text-muted-foreground sm:text-lg">
+            <p className="hero-in mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg" style={{ animationDelay: ".08s" }}>
               EU-built eSignatures with cryptographic evidence: X.509 sealing,
               RFC 3161 timestamps and an audit trail built for review.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="hero-in mt-7 flex flex-wrap justify-center gap-3" style={{ animationDelay: ".16s" }}>
               <Button size="lg" onClick={() => { window.location.assign("/welcome"); }}>
                 Start free trial <ArrowRight className="h-4 w-4" aria-hidden />
               </Button>
@@ -220,19 +222,16 @@ export function MarketingPage() {
               </Button>
             </div>
           </div>
-          <figure className="space-y-3">
-            <div className="overflow-hidden rounded-xl border bg-card shadow-lg shadow-foreground/[0.04]">
-              <Image
-                src="/brand/product-evidence.png"
-                alt="Docurama documents view with the cryptographic evidence drawer open: sealed date, PAdES B-LT conformance and the SHA-256 digest of a completed Master Services Agreement."
-                width={1600} height={1200} priority
-                className="h-auto w-full"
-                sizes="(min-width: 1024px) 50vw, 100vw"
-              />
+          <figure className="relative mt-7 flex min-h-0 flex-1 flex-col">
+            <div aria-hidden className="pointer-events-none absolute -inset-x-8 -top-8 bottom-0 rounded-[32px]" style={{ background: "radial-gradient(60% 55% at 50% 30%, rgba(15,122,90,.06), transparent 70%)" }} />
+            <div className="relative min-h-[300px] w-full flex-1">
+              <HeroDemo />
             </div>
-            <figcaption className="text-xs text-muted-foreground">
-              The evidence drawer in the real product, opened from the documents
-              table of a demo workspace.
+            <figcaption className="mx-auto mt-4 max-w-2xl shrink-0 text-center text-xs leading-relaxed text-muted-foreground">
+              The StålFe demo workspace replayed end to end: a mill certificate
+              goes to the foundry, is signed, sealed and proven with
+              cryptographic evidence. The same flow is live in the{" "}
+              <a className="font-medium underline underline-offset-2 hover:text-foreground" href="/login">demo account</a>.
             </figcaption>
           </figure>
         </div>
@@ -496,10 +495,10 @@ export function MarketingPage() {
   -H "X-API-Key: dk_live_••••••••••" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "title": "Master Services Agreement",
+    "title": "EN 10204 3.1 Mill Certificate · S355J2 Plates",
     "recipients": [
-      { "name": "Marc Dupont",
-        "email": "marc@acme.fr",
+      { "name": "Lars Bergström",
+        "email": "lars@nordjarm.example",
         "role": "SIGNER" }
     ]
   }'

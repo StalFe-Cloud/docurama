@@ -18,8 +18,8 @@ const DEMO_ACCOUNTS = [
     desc: "Full admin control panel: tenants, compliance, billing, ops",
   },
   {
-    label: "Workspace Admin - Northwind Logistics",
-    email: "alex@northwind.example",
+    label: "Workspace Admin - StålFe",
+    email: "alex@stalfe.example",
     password: "demo1234",
     desc: "Enterprise user portal: documents, templates, settings",
   },

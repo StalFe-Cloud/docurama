@@ -12,7 +12,7 @@ check() { # name, expected, actual
 json() { python3 -c "import sys,json; d=json.load(sys.stdin); print(eval(sys.argv[1], {'d': d}))" "$2" 2>/dev/null; }
 
 # ── 1. Login (session) ──
-LOGIN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" -d '{"email":"alex@northwind.example","password":"demo1234"}')
+LOGIN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" -d '{"email":"alex@stalfe.example","password":"demo1234"}')
 TOKEN=$(echo "$LOGIN" | json - "d['token']")
 [ -n "$TOKEN" ] && PASS=$((PASS+1)) && echo "PASS  login returns session token" || { FAIL=$((FAIL+1)); echo "FAIL  login token"; }
 
@@ -23,7 +23,7 @@ ME=$(curl -s $BASE/api/auth/me -H "$AUTH")
 ORGS=$(echo "$ME" | json - "len(d['user']['orgs'])")
 check "me returns 2 organizations for Alex" "2" "$ORGS"
 ACTIVE=$(echo "$ME" | json - "d['user']['tenantName']")
-check "active org is Northwind" "Northwind Logistics" "$ACTIVE"
+check "active org is StålFe" "StålFe" "$ACTIVE"
 SESSIONS=$(echo "$ME" | json - "d['user']['sessionId'] != None")
 check "me exposes sessionId" "True" "$SESSIONS"
 
@@ -56,7 +56,7 @@ WRONG=$(curl -s -o /dev/null -w "%{http_code}" -X POST $BASE/api/workspace/setti
 check "2fa.enable with wrong code → 401" "401" "$WRONG"
 
 # ── 5. Certificates: create + provision with real OpenSSL ──
-CERTCREATE=$(curl -s -X POST $BASE/api/workspace/settings -H "$AUTH" -H "Content-Type: application/json" -d '{"op":"cert.create","data":{"commonName":"QA Test Cert","organization":"Northwind Logistics","days":90,"purpose":"signing"}}')
+CERTCREATE=$(curl -s -X POST $BASE/api/workspace/settings -H "$AUTH" -H "Content-Type: application/json" -d '{"op":"cert.create","data":{"commonName":"QA Test Cert","organization":"StålFe AB","days":90,"purpose":"signing"}}')
 CERTID=$(echo "$CERTCREATE" | json - "d.get('id','')")
 [ -n "$CERTID" ] && PASS=$((PASS+1)) && echo "PASS  cert.create returns id" || { FAIL=$((FAIL+1)); echo "FAIL  cert.create id"; }
 CERTPROV=$(curl -s -X POST $BASE/api/workspace/settings -H "$AUTH" -H "Content-Type: application/json" -d "{\"op\":\"cert.provision\",\"id\":\"$CERTID\",\"data\":{\"passphrase\":\"qa-test-passphrase-123\"}}")

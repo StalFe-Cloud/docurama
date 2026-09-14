@@ -1,4 +1,4 @@
-/* Docurama portal seed — realistic demo dataset */
+/* Docurama portal seed · realistic demo dataset */
 import { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 
@@ -32,7 +32,7 @@ async function main() {
 
   // ── Tenants ────────────────────────────────────────────────────────────
   const tenantsData = [
-    { name: "Northwind Logistics", slug: "northwind", plan: "ENTERPRISE", status: "ACTIVE", storage: 214_800 },
+    { name: "StålFe", slug: "stalfe", plan: "ENTERPRISE", status: "ACTIVE", storage: 214_800 },
     { name: "Aurora Legal LLP", slug: "aurora-legal", plan: "BUSINESS", status: "ACTIVE", storage: 18_200 },
     { name: "Helios Energy Group", slug: "helios-energy", plan: "ENTERPRISE", status: "ACTIVE", storage: 331_000 },
     { name: "Bayern Immobilien AG", slug: "bayern-immo", plan: "BUSINESS", status: "ACTIVE", storage: 24_600 },
@@ -60,9 +60,10 @@ async function main() {
   const usersData = [
     { email: "admin@docurama.eu", first: "Elena", last: "Marchetti", role: "PLATFORM_ADMIN", pw: "admin1234", tenant: null, mrole: null, totp: true },
     { email: "ops@docurama.eu", first: "Jonas", last: "Weber", role: "PLATFORM_ADMIN", pw: "admin1234", tenant: null, mrole: null, totp: true },
-    { email: "alex@northwind.example", first: "Alexandra", last: "Fischer", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "northwind", mrole: "OWNER", totp: true },
-    { email: "marco@northwind.example", first: "Marco", last: "Bianchi", role: "MEMBER", pw: "demo1234", tenant: "northwind", mrole: "ADMIN", totp: false },
-    { email: "sofia@northwind.example", first: "Sofia", last: "Lindqvist", role: "MEMBER", pw: "demo1234", tenant: "northwind", mrole: "MEMBER", totp: false },
+    { email: "alex@stalfe.example", first: "Alexandra", last: "Fischer", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "stalfe", mrole: "OWNER", totp: true },
+    { email: "marco@stalfe.example", first: "Marco", last: "Bianchi", role: "MEMBER", pw: "demo1234", tenant: "stalfe", mrole: "ADMIN", totp: false },
+    { email: "sofia@stalfe.example", first: "Sofia", last: "Lindqvist", role: "MEMBER", pw: "demo1234", tenant: "stalfe", mrole: "MEMBER", totp: false },
+    { email: "lars@nordjarm.example", first: "Lars", last: "Bergström", role: "MEMBER", pw: "demo1234", tenant: "stalfe", mrole: "MEMBER", totp: false },
     { email: "pietro@aurora-legal.example", first: "Pietro", last: "Rinaldi", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "aurora-legal", mrole: "OWNER", totp: true },
     { email: "hannah@helios-energy.example", first: "Hannah", last: "Schulz", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "helios-energy", mrole: "OWNER", totp: true },
     { email: "lucas@bayern-immo.example", first: "Lucas", last: "Huber", role: "MEMBER", pw: "demo1234", tenant: "bayern-immo", mrole: "ADMIN", totp: false },
@@ -90,7 +91,7 @@ async function main() {
 
   // ── Subscriptions ──────────────────────────────────────────────────────
   const subData: [string, string, number, number][] = [
-    ["northwind", "ENTERPRISE", 349, 18], ["aurora-legal", "BUSINESS", 79, 7],
+    ["stalfe", "ENTERPRISE", 349, 18], ["aurora-legal", "BUSINESS", 79, 7],
     ["helios-energy", "ENTERPRISE", 349, 42], ["bayern-immo", "BUSINESS", 79, 5],
     ["solstice-media", "STARTER", 19, 2], ["atlas-freight", "BUSINESS", 79, 9],
     ["verdant-agri", "STARTER", 19, 2], ["corvus-mfg", "ENTERPRISE", 349, 24],
@@ -108,25 +109,31 @@ async function main() {
 
   // ── Envelopes ──────────────────────────────────────────────────────────
   const envTitles = [
-    "Master Services Agreement — Helios Energy", "Mutual NDA — Aurora Legal", "Employment Contract — J. Weber",
-    "Freight Terms & Conditions 2026", "Office Lease — Munich Hauptbahnhof", "Vendor Onboarding Pack — Corvus",
-    "Consultancy Agreement — Q3", "Data Processing Addendum", "Settlement Agreement — Case 4711",
-    "Procurement Contract — Solar Panels", "NDA — Meteora Clinical Trial", "Distribution Agreement — DACH",
-    "Pilot Agreement — Lumen Study 12", "Maintenance Contract — HVAC", "Insurance Policy Endorsement",
-    "Sales Agent Agreement — Iberia", "Transfer of IP — App Suite", "Loan Agreement — BayWa",
-    "Internship Agreement — Winter Cohort", "Renewal — Atlas Platform License", "SOW #4 — Integration Works",
-    "Severance Agreement — HR-2291", "Warehouse Rental — Rotterdam", "Confidentiality Deed — Investors",
+    "EN 10204 3.1 Mill Certificate · S355J2 Plates", "Foundry Partner Qualification · Nordjärm Gjuteri",
+    "Welding Procedure WPS-2219 · Qualification Record", "Inspection Certificate 3.2 · Pressure Housings",
+    "Purchase Order PO-2026-0417 · Steel Castings", "Supplier Quality Agreement · Gusswerk Rheinland",
+    "CE Declaration of Conformity · Gearbox Housings", "NDT Report UT-88 · Ultrasonic Testing",
+    "Delivery Note DN-4471 · Port of Hamburg", "Heat Treatment Certificate · Batch HT-912",
+    "Mutual NDA · Aurora Legal", "Employment Contract · J. Weber",
+    "Freight Terms & Conditions 2026", "Office Lease · Munich Hauptbahnhof",
+    "Consultancy Agreement · Q3", "Data Processing Addendum",
+    "Settlement Agreement · Case 4711", "NDA · Meteora Clinical Trial",
+    "Pilot Agreement · Lumen Study 12", "Insurance Policy Endorsement",
+    "Sales Agent Agreement · Iberia", "Transfer of IP · App Suite",
+    "Internship Agreement · Winter Cohort", "Master Services Agreement · Helios Energy",
+    "SOW #4 · Integration Works", "Severance Agreement · HR-2291",
+    "Warehouse Rental · Rotterdam", "Material Substitution Approval · S420N",
   ];
   const statuses = ["COMPLETED", "COMPLETED", "COMPLETED", "SENT", "SENT", "PARTIALLY_SIGNED", "PARTIALLY_SIGNED", "DRAFT", "VOIDED", "DECLINED", "EXPIRED", "COMPLETED"];
   const signers = [
-    ["Alexandra Fischer", "alex@northwind.example"], ["Marco Bianchi", "marco@northwind.example"],
+    ["Alexandra Fischer", "alex@stalfe.example"], ["Marco Bianchi", "marco@stalfe.example"],
+    ["Lars Bergström", "lars@nordjarm.example"], ["Elisa Righi", "elisa@fonderia-padana.example"],
     ["Hannah Schulz", "hannah@helios-energy.example"], ["Pietro Rinaldi", "pietro@aurora-legal.example"],
-    ["Dmitri Volkov", "dmitri@atlas-freight.example"], ["Lucas Huber", "lucas@bayern-immo.example"],
-    ["Amara Okafor", "amara@meteora-health.example"], ["Yuki Tanaka", "yuki@lumen-research.example"],
+    ["Dmitri Volkov", "dmitri@atlas-freight.example"], ["Sofia Lindqvist", "sofia@stalfe.example"],
   ];
-  const creatorPool = ["alex@northwind.example", "pietro@aurora-legal.example", "hannah@helios-energy.example", "dmitri@atlas-freight.example", "lucas@bayern-immo.example"];
-  // Weighted pool (Northwind twice) with a coprime step so every tenant gets envelopes.
-  const tenantPool = ["northwind", "northwind", "aurora-legal", "helios-energy", "bayern-immo", "atlas-freight", "meteora-health", "lumen-research", "solstice-media", "verdant-agri"];
+  const creatorPool = ["alex@stalfe.example", "pietro@aurora-legal.example", "hannah@helios-energy.example", "dmitri@atlas-freight.example", "lucas@bayern-immo.example"];
+  // Weighted pool (StålFe twice) with a coprime step so every tenant gets envelopes.
+  const tenantPool = ["stalfe", "stalfe", "aurora-legal", "helios-energy", "bayern-immo", "atlas-freight", "meteora-health", "lumen-research", "solstice-media", "verdant-agri"];
 
   for (let i = 0; i < 64; i++) {
     const slug = pick(tenantPool, i * 3 + 1);
@@ -145,7 +152,7 @@ async function main() {
         conformanceLevel: done ? pick(["B-LT", "B-LTA", "B-T"], i) : null,
         sha256: done ? sha(`docurama-seal-${code}`).slice(0, 64) : null,
         voidedAt: status === "VOIDED" ? d(i % 20) : null,
-        voidReason: status === "VOIDED" ? "Withdrawn by sender — terms renegotiated" : null,
+        voidReason: status === "VOIDED" ? "Withdrawn by sender · terms renegotiated" : null,
         lastRemindedAt: status === "SENT" && i % 3 === 0 ? d(0.5) : null,
       },
     });
@@ -178,7 +185,7 @@ async function main() {
         await db.envelopeEvent.create({
           data: {
             envelopeId: env.id, actor, action, at: d((i % 30), -off * 24),
-            detail: action === "SENT" ? "Signing invitations delivered via SMTP" : action === "SIGNED" ? "Signature applied — PAdES compliant" : null,
+            detail: action === "SENT" ? "Signing invitations delivered via SMTP" : action === "SIGNED" ? "Signature applied · PAdES compliant" : null,
             ipHash: sha(`ip-${env.id}-${action}`).slice(0, 12),
           },
         });
@@ -196,15 +203,17 @@ async function main() {
 
   // ── Templates ──────────────────────────────────────────────────────────
   const tplData: [string, string, string, number][] = [
+    ["Mill Certificate 3.1 (EN 10204)", "Material test certificate per EN 10204 type 3.1", "Quality", 2],
+    ["Foundry Partner Qualification", "Supplier audit and qualification record for foundry partners", "Compliance", 6],
     ["Mutual NDA (Standard)", "Two-way confidentiality agreement with EU governing law", "Legal", 4],
-    ["Employment Contract — DE", "German employment contract with probation clause", "HR", 8],
+    ["Employment Contract (DE)", "German employment contract with probation clause", "HR", 8],
     ["Master Services Agreement", "Core MSA with SLA schedules", "Legal", 12],
     ["Data Processing Addendum", "GDPR Art. 28 processor terms", "Compliance", 6],
     ["Freight Service Terms", "Logistics terms & conditions 2026", "Operations", 5],
     ["Consultant Agreement", "Independent contractor terms", "HR", 5],
   ];
   for (const [name, desc, cat, pages] of tplData) {
-    for (const slug of ["northwind", "aurora-legal", "helios-energy"]) {
+    for (const slug of ["stalfe", "aurora-legal", "helios-energy"]) {
       await db.template.create({
         data: {
           tenantId: tenants[slug], name, description: desc, category: cat, pages,
@@ -217,7 +226,7 @@ async function main() {
 
   // ── Domains ────────────────────────────────────────────────────────────
   const domData: [string, string, string, string][] = [
-    ["northwind", "northwind-logistics.com", "TXT", "VERIFIED"],
+    ["stalfe", "stalfe.com", "TXT", "VERIFIED"],
     ["aurora-legal", "auroralegal.co.uk", "CNAME", "VERIFIED"],
     ["helios-energy", "helios-energy.de", "TXT", "VERIFIED"],
     ["bayern-immo", "bayern-immo.de", "HTTP", "PENDING"],
@@ -238,7 +247,7 @@ async function main() {
 
   // ── DSAR + DMCA ────────────────────────────────────────────────────────
   const dsarData: [string, string, string, string][] = [
-    ["ACCESS", "data.subject@helios-energy.example", "RUNNING", "northwind"],
+    ["ACCESS", "data.subject@helios-energy.example", "RUNNING", "stalfe"],
     ["ERASURE", "former.employee@aurora-legal.example", "OPEN", "aurora-legal"],
     ["PORTABILITY", "client@atlas-freight.example", "COMPLETED", "atlas-freight"],
     ["RECTIFICATION", "member@meteora-health.example", "OPEN", "meteora-health"],
@@ -270,12 +279,12 @@ async function main() {
 
   // ── Compliance ─────────────────────────────────────────────────────────
   const controls: [string, string, string, string, string, number][] = [
-    ["SOC2-CC6.1", "Logical access — network & system controls", "Security", "IMPLEMENTED", "E. Marchetti", 6],
+    ["SOC2-CC6.1", "Logical access · network & system controls", "Security", "IMPLEMENTED", "E. Marchetti", 6],
     ["SOC2-CC6.6", "Boundary protection & transmission security", "Security", "IMPLEMENTED", "J. Weber", 4],
     ["SOC2-CC7.2", "Anomaly & security event monitoring", "Security", "PARTIAL", "J. Weber", 3],
     ["SOC2-CC8.1", "Change management controls", "Availability", "IMPLEMENTED", "E. Marchetti", 8],
     ["SOC2-CC9.1", "Risk mitigation & third-party assurance", "Confidentiality", "PARTIAL", "E. Marchetti", 2],
-    ["ISO-27001-A.5.15", "Access control — classification", "Security", "PLANNED", "Security Team", 0],
+    ["ISO-27001-A.5.15", "Access control · classification", "Security", "PLANNED", "Security Team", 0],
     ["ISO-27001-A.8.12", "Data leakage prevention", "Confidentiality", "PARTIAL", "Security Team", 1],
     ["GDPR-32", "Security of processing (Art. 32)", "Privacy", "IMPLEMENTED", "E. Marchetti", 5],
     ["GDPR-30", "Records of processing activities", "Privacy", "IMPLEMENTED", "DPO Office", 7],
@@ -304,9 +313,9 @@ async function main() {
   }
   await db.legalHold.createMany({
     data: [
-      { tenantId: tenants["northwind"], reason: "Pending litigation — Case 4711 (Rotterdam District Court)", scope: "All envelopes with counterparty Corvus Manufacturing", issuedBy: "E. Marchetti", issuedAt: d(11) },
-      { tenantId: tenants["corvus-mfg"], reason: "Regulatory investigation — export control audit", scope: "Freight terms & customs envelopes 2025-2026", issuedBy: "E. Marchetti", issuedAt: d(25) },
-      { tenantId: tenants["aurora-legal"], reason: "Arbitration — Matter ARB-882", scope: "Settlement agreement drafts", issuedBy: "J. Weber", issuedAt: d(4), status: "RELEASED", releasedAt: d(1) },
+      { tenantId: tenants["stalfe"], reason: "Pending litigation · Case 4711 (Rotterdam District Court)", scope: "All envelopes with counterparty Corvus Manufacturing", issuedBy: "E. Marchetti", issuedAt: d(11) },
+      { tenantId: tenants["corvus-mfg"], reason: "Regulatory investigation · export control audit", scope: "Freight terms & customs envelopes 2025-2026", issuedBy: "E. Marchetti", issuedAt: d(25) },
+      { tenantId: tenants["aurora-legal"], reason: "Arbitration · Matter ARB-882", scope: "Settlement agreement drafts", issuedBy: "J. Weber", issuedAt: d(4), status: "RELEASED", releasedAt: d(1) },
     ],
   });
   const consents: [string, string, string][] = [
@@ -331,9 +340,9 @@ async function main() {
   await db.accessReview.createMany({
     data: [
       { quarter: "Q3 2026", reviewer: "E. Marchetti", scope: "Platform admin & prod access (4 identities)", status: "COMPLETED", findings: 1, completedAt: d(20) },
-      { quarter: "Q3 2026", reviewer: "A. Fischer", scope: "Northwind workspace admin roles", status: "COMPLETED", findings: 0, completedAt: d(18) },
+      { quarter: "Q3 2026", reviewer: "A. Fischer", scope: "StålFe workspace admin roles", status: "COMPLETED", findings: 0, completedAt: d(18) },
       { quarter: "Q4 2026", reviewer: "J. Weber", scope: "Platform admin & prod access (4 identities)", status: "PENDING" },
-      { quarter: "Q4 2026", reviewer: "H. Schulz", scope: "Helios workspace — segregation of duties", status: "PENDING" },
+      { quarter: "Q4 2026", reviewer: "H. Schulz", scope: "Helios workspace · segregation of duties", status: "PENDING" },
     ],
   });
   const risks: [string, string, string, string, number, string, string, string][] = [
@@ -368,7 +377,7 @@ async function main() {
       { scope: "Primary database (eu-west-1a)", rtoTarget: "2h", rtoActual: "1h 22m", result: "PASS", executedAt: d(45), notes: "Full restore verified with 4 TB snapshot." },
       { scope: "Envelope storage bucket", rtoTarget: "4h", rtoActual: "3h 05m", result: "PASS", executedAt: d(30) },
       { scope: "Signing HSM keys (offline backup)", rtoTarget: "24h", rtoActual: "31h", result: "FAIL", executedAt: d(75), notes: "Escrow retrieval SLA breached; vendor contract updated." },
-      { scope: "Cross-region failover", rtoTarget: "1h", rtoActual: null, result: "PARTIAL", executedAt: d(15), notes: "DNS cutover manual — automation ticketed as CR-121." },
+      { scope: "Cross-region failover", rtoTarget: "1h", rtoActual: null, result: "PARTIAL", executedAt: d(15), notes: "DNS cutover manual · automation ticketed as CR-121." },
     ],
   });
   await db.subprocessor.createMany({
@@ -382,8 +391,8 @@ async function main() {
 
   // ── API keys & webhooks ────────────────────────────────────────────────
   const keysData: [string, string, string, string, boolean, string | null][] = [
-    ["Northwind production key", "dk_live_nw91", "FULL", "northwind", true, "A. Fischer"],
-    ["Northwind envelope sync", "dk_live_nw42", "ENVELOPES", "northwind", true, "M. Bianchi"],
+    ["StålFe production key", "dk_live_sf91", "FULL", "stalfe", true, "A. Fischer"],
+    ["StålFe envelope sync", "dk_live_sf42", "ENVELOPES", "stalfe", true, "M. Bianchi"],
     ["Aurora CI pipeline", "dk_live_aur7", "READONLY", "aurora-legal", false, "P. Rinaldi"],
     ["Helios ERP bridge", "dk_live_hel13", "ENVELOPES", "helios-energy", true, "H. Schulz"],
     ["Atlas legacy v1 key", "dk_live_atl55", "FULL", "atlas-freight", true, "D. Volkov"],
@@ -392,7 +401,7 @@ async function main() {
   for (const [name, prefix, scope, slug, active, creator] of keysData) {
     await db.apiKey.create({
       data: {
-        tenantId: tenants[slug], name, prefix, scope, createdBy: creator ?? "—",
+        tenantId: tenants[slug], name, prefix, scope, createdBy: creator ?? "·",
         status: active ? "ACTIVE" : "REVOKED", lastUsedAt: active ? d(Math.random()) : d(20),
         createdAt: d(90),
       },
@@ -403,7 +412,7 @@ async function main() {
     data: { tenantId: null, name: "Docurama internal ops", prefix: "dk_ops_004", scope: "FULL", createdBy: "E. Marchetti", status: "ACTIVE", lastUsedAt: d(0.2), createdAt: d(120) },
   });
   const hooksData: [string, string, string, string, number][] = [
-    ["northwind", "https://ops.northwind-logistics.example/hooks/docurama", "envelope.completed|envelope.voided", "ACTIVE", 99],
+    ["stalfe", "https://ops.stalfe.example/hooks/docurama", "envelope.completed|envelope.voided", "ACTIVE", 99],
     ["helios-energy", "https://erp.helios-energy.de/api/docurama-events", "envelope.completed|recipient.signed", "ACTIVE", 100],
     ["aurora-legal", "https://auroralegal.co.uk/automation/signing", "envelope.created|envelope.completed|template.used", "FAILING", 62],
     ["atlas-freight", "https://atlasfreight.io/webhooks/docs", "envelope.declined", "PAUSED", 100],
@@ -435,7 +444,7 @@ async function main() {
     ["envelope.sealed", "envelope:DOC-8241", "INFO", "A. Fischer", "WORKSPACE_ADMIN"],
     ["api_key.created", "api_key:dk_live_hel13", "WARNING", "H. Schulz", "MEMBER"],
     ["domain.verified", "domain:helios-energy.de", "INFO", "H. Schulz", "WORKSPACE_ADMIN"],
-    ["legal_hold.issued", "tenant:northwind", "WARNING", "E. Marchetti", "PLATFORM_ADMIN"],
+    ["legal_hold.issued", "tenant:stalfe", "WARNING", "E. Marchetti", "PLATFORM_ADMIN"],
     ["dsar.downloaded", "dsar:access-request", "INFO", "J. Weber", "PLATFORM_ADMIN"],
     ["smtp_settings.updated", "platform:settings", "WARNING", "J. Weber", "PLATFORM_ADMIN"],
     ["retention.sweep_completed", "platform:retention", "INFO", "system", "SYSTEM"],
@@ -450,9 +459,9 @@ async function main() {
     });
   }
   const secEvents: [string, string, string, boolean, string][] = [
-    ["MFA_CHALLENGE_TOKEN_MISUSE_BLOCKED", "HIGH", "unknown@protonmail.example", true, "MFA challenge token presented as session token — rejected by purpose check"],
-    ["SIGNER_TOKEN_HARVEST_ATTEMPT_BLOCKED", "HIGH", "recipient:marco@northwind.example", true, "Attempt to access co-signer session — recipient tokens no longer serialized"],
-    ["FAILED_LOGIN", "LOW", "greta@corvus-mfg.example", false, "3 consecutive failures — account cool-down applied"],
+    ["MFA_CHALLENGE_TOKEN_MISUSE_BLOCKED", "HIGH", "unknown@protonmail.example", true, "MFA challenge token presented as session token · rejected by purpose check"],
+    ["SIGNER_TOKEN_HARVEST_ATTEMPT_BLOCKED", "HIGH", "recipient:marco@stalfe.example", true, "Attempt to access co-signer session · recipient tokens no longer serialized"],
+    ["FAILED_LOGIN", "LOW", "greta@corvus-mfg.example", false, "3 consecutive failures · account cool-down applied"],
     ["RATE_LIMIT", "MEDIUM", "198.51.100.77", true, "42 verify-portal requests/min from single IP"],
     ["ADMIN_LOGIN", "INFO", "admin@docurama.eu", false, "Platform admin signed in with TOTP"],
     ["CREDENTIAL_STUFFING_WAVE", "HIGH", "41 source IPs", true, "Edge rule CH-77 auto-blocked for 24h"],

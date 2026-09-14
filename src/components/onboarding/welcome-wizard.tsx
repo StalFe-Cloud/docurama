@@ -444,7 +444,7 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
             <Label htmlFor="su-org">Organization name</Label>
             <Input id="su-org" required maxLength={80} value={form.organization}
               onChange={(e) => setForm({ ...form, organization: e.target.value })}
-              placeholder="Northwind Logistics" className="h-11" />
+              placeholder="StålFe" className="h-11" />
             <p className="text-xs text-muted-foreground">Your workspace - teammates join it by invitation.</p>
           </div>
         )}
@@ -576,7 +576,7 @@ function OrgStep({ state, onDone }: { state: OnboardingData; onDone: () => void 
         <div className="space-y-1.5">
           <Label htmlFor="org-name">Organization name</Label>
           <Input id="org-name" required maxLength={80} value={form.name} className="h-11"
-            onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Northwind Logistics" />
+            onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="StålFe" />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
