@@ -242,12 +242,12 @@ export function SignerScene({ visible, sigFocus, signing, signed, adopting, adop
             transition: "transform .25s cubic-bezier(.34,1.56,.64,1)",
           }}
         >
-          {/* Letterhead */}
+          {/* Letterhead: the real StålFe mark */}
           <div style={{ position: "absolute", left: 20, top: 16, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 22, height: 22, borderRadius: 6, border: `2.5px solid ${INK}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: EMERALD, background: "#fff" }}>Å</span>
+            <img src="/brand/stalfe-mark.png" alt="" width={23} height={27} style={{ display: "block" }} />
             <span>
-              <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: INK, lineHeight: 1.1 }}>StålFe</span>
-              <span style={{ display: "block", fontSize: 7.5, color: FAINT, letterSpacing: ".04em" }}>FOUNDRY &amp; INDUSTRIAL SUPPLY CHAIN</span>
+              <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#14284b", lineHeight: 1.05, letterSpacing: ".01em" }}>StålFe</span>
+              <span style={{ display: "block", fontSize: 7, color: FAINT, letterSpacing: ".14em", marginTop: 1 }}>FOUNDRY &amp; INDUSTRIAL SUPPLY CHAIN</span>
             </span>
           </div>
           <p style={{ position: "absolute", right: 20, top: 20, fontSize: 8, color: FAINT, fontFamily: "var(--font-geist-mono), monospace" }}>EN 10204 · TYPE 3.1</p>

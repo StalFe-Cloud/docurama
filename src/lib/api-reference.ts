@@ -36,7 +36,7 @@ export const API_REFERENCE: ApiGroup[] = [
         method: "POST", path: "/api/auth/login", auth: "none",
         summary: "Sign in with email + password (returns { ok, token, user }; 2FA-enabled accounts get { requiresOtp, challenge })",
         request: `{
-  "email": "alex@northwind.example",
+  "email": "alex@stalfe.example",
   "password": "••••••••",
   "otp": "123456",          // required when the account has 2FA
   "challenge": "challenge-id" // from the requiresOtp response
@@ -44,7 +44,7 @@ export const API_REFERENCE: ApiGroup[] = [
         response: `{
   "ok": true,
   "token": "sess_9f3…",
-  "user": { "id": "…", "email": "…", "role": "WORKSPACE_ADMIN", "name": "Alex Martin" }
+  "user": { "id": "…", "email": "…", "role": "WORKSPACE_ADMIN", "name": "Alexandra Fischer" }
 }`,
       },
       {
@@ -52,7 +52,7 @@ export const API_REFERENCE: ApiGroup[] = [
         summary: "Current session, active organization and memberships",
         response: `{
   "user": {
-    "email": "alex@northwind.example",
+    "email": "alex@stalfe.example",
     "tenantName": "StålFe AB",
     "orgs": [ { "id": "…", "name": "StålFe AB", "role": "OWNER" } ]
   }

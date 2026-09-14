@@ -283,3 +283,16 @@
 @supports (min-height: 100svh) {
   .hero-fold { min-height: calc(100svh - 4rem); }
 }
+
+/* ── Live demo canvases (bento table/verify + tabbed live examples).
+   When the visitor prefers reduced motion, every demo renders its static
+   end tableau: no animations, no transitions, nothing that moves. ── */
+@media (prefers-reduced-motion: reduce) {
+  .demo-root,
+  .demo-root *,
+  .demo-root *::before,
+  .demo-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

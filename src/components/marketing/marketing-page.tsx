@@ -8,14 +8,15 @@
  * at app.docurama.eu. Sign in points to /login, the primary CTA to /welcome.
  *
  * Design rules applied (taste-skill): no em-dashes anywhere, one accent
- * (emerald), one signup CTA label across the page, no fake div-based product
- * shots (real product screenshots only), asymmetric hero, bento grid with
- * exact cell count and rhythm, no "Step N" labels, eyebrows rationed to two,
- * middle dots rationed, honest copy ("aligned", never "certified").
+ * (emerald), one signup CTA label across the page, live product demos only
+ * (the hero movie, the bento table and verify demos, and the tabbed live
+ * examples), asymmetric hero, bento grid with exact cell count and rhythm,
+ * no "Step N" labels, eyebrows rationed to two, middle dots rationed,
+ * honest copy ("aligned", never "certified"). The developer section lives
+ * on its own /developers page.
  */
 
 import { useState } from "react";
-import Image from "next/image";
 import {
   ArrowRight, BadgeCheck, BellRing, FileSignature, FileCheck2, Fingerprint,
   Lock, Menu, X, PenTool, ScrollText, ShieldCheck, Timer, MessageSquare,
@@ -23,17 +24,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 import { HeroDemo } from "@/components/marketing/hero-demo";
+import { TableDemo } from "@/components/marketing/table-demo";
+import { VerifyDemo } from "@/components/marketing/verify-demo";
+import { LiveExamples } from "@/components/marketing/live-examples";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "#product", label: "Product" },
+  { href: "#examples", label: "Examples" },
   { href: "#compliance", label: "Compliance" },
   { href: "#pricing", label: "Pricing" },
-  { href: "#developers", label: "Developers" },
+  { href: "/developers", label: "Developers" },
   { href: "#faq", label: "FAQ" },
 ];
 
-/** The bento: three feature cells plus two real product screenshots. */
+/** The bento: three feature cells plus two live product demos. */
 const BENTO_FEATURES = [
   {
     icon: FileSignature,
@@ -246,7 +251,7 @@ export function MarketingPage() {
         </p>
       </section>
 
-      {/* Product bento: 2 real screenshots + 3 feature cells, asymmetric */}
+      {/* Product bento: 2 live demos + 3 feature cells, asymmetric */}
       <section id="product" className="reveal border-b">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-24">
           <h2 className="max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -258,19 +263,15 @@ export function MarketingPage() {
           </p>
 
           <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-            {/* Documents screenshot: large cell, spans two rows */}
+            {/* Documents table: live demo, large cell, spans two rows */}
             <figure className="md:col-span-2 lg:col-span-4 lg:row-span-2">
-              <div className="h-full overflow-hidden rounded-xl border bg-card">
-                <Image
-                  src="/brand/product-documents.png"
-                  alt="Envelope tracking table with signer progress, status badges and evidence digests per document."
-                  width={1600} height={1200}
-                  className="h-auto w-full border-b"
-                  sizes="(min-width: 1024px) 66vw, 100vw"
-                />
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
+                <div className="min-h-0 flex-1 border-b">
+                  <TableDemo />
+                </div>
                 <figcaption className="px-5 py-4 text-xs leading-relaxed text-muted-foreground">
                   Signer progress, status and the evidence digest for every
-                  envelope in the workspace.
+                  envelope in the workspace, replayed live.
                 </figcaption>
               </div>
             </figure>
@@ -294,16 +295,12 @@ export function MarketingPage() {
               <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{BENTO_FEATURES[2].body}</p>
             </div>
 
-            {/* Verify screenshot: wide cell to close the grid */}
+            {/* Public verify portal: live demo, wide cell to close the grid */}
             <figure className="md:col-span-2 lg:col-span-4">
-              <div className="h-full overflow-hidden rounded-xl border bg-card">
-                <Image
-                  src="/brand/product-verify.png"
-                  alt="Public verification portal showing a verified document with its SHA-256 digest and signer list."
-                  width={1200} height={900}
-                  className="h-auto w-full border-b"
-                  sizes="(min-width: 1024px) 66vw, 100vw"
-                />
+              <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
+                <div className="min-h-0 flex-1 border-b">
+                  <VerifyDemo />
+                </div>
                 <figcaption className="px-5 py-4 text-xs leading-relaxed text-muted-foreground">
                   Anyone can check a completed document's code on the public
                   portal. Proof without exposing the file.
@@ -326,6 +323,9 @@ export function MarketingPage() {
           </div>
         </div>
       </section>
+
+      {/* Live examples: one product flow per document type */}
+      <LiveExamples />
 
       {/* Compliance: three framework rows, tag and title left, points right */}
       <section id="compliance" className="reveal border-b bg-muted/40">
@@ -463,52 +463,6 @@ export function MarketingPage() {
         </div>
       </section>
 
-      {/* Developers */}
-      <section id="developers" className="reveal border-b">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-20">
-          <div className="space-y-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">For developers</p>
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Built API-first</h2>
-            <p className="max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Envelopes, templates and verification are REST endpoints behind
-              X-API-Key authentication. Keys are hashed at rest, scoped,
-              revocable and shown exactly once. Business and Enterprise plans
-              also get signed webhooks and an MCP server for AI agents.
-            </p>
-            <ul className="flex flex-wrap gap-2" aria-label="API endpoints">
-              {["POST /api/v1/envelopes", "GET /api/v1/envelopes/{id}", "GET /api/v1/templates", "GET /api/v1/verify/{code}"].map((e) => (
-                <li key={e} className="rounded-md border bg-muted/60 px-2.5 py-1 font-mono text-[11px] text-muted-foreground">{e}</li>
-              ))}
-            </ul>
-            <p className="text-sm">
-              <a className="font-medium underline underline-offset-2" href="/docs">
-                Read the full documentation at docs.docurama.eu
-              </a>
-            </p>
-          </div>
-          <div className="overflow-hidden rounded-xl border bg-foreground text-background">
-            <div className="flex items-center justify-between border-b border-background/10 px-4 py-2.5">
-              <span className="font-mono text-[11px] text-background/60">curl</span>
-              <span className="font-mono text-[11px] text-background/40">send an envelope</span>
-            </div>
-            <pre className="overflow-x-auto p-5 font-mono text-[12px] leading-relaxed text-background/85"><code>{`curl -X POST https://api.docurama.eu/api/v1/envelopes \\
-  -H "X-API-Key: dk_live_••••••••••" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "title": "EN 10204 3.1 Mill Certificate · S355J2 Plates",
-    "recipients": [
-      { "name": "Lars Bergström",
-        "email": "lars@nordjarm.example",
-        "role": "SIGNER" }
-    ]
-  }'
-
-# 201 Created
-# { "publicCode": "DOC-7K2M9XQA", ... }`}</code></pre>
-          </div>
-        </div>
-      </section>
-
       {/* FAQ */}
       <section id="faq" className="reveal border-b bg-muted/40">
         <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:py-20">
@@ -559,7 +513,7 @@ export function MarketingPage() {
           <nav aria-label="Product">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Product</p>
             <ul className="space-y-2.5 text-sm">
-              {[["Features", "#product"], ["Compliance", "#compliance"], ["Pricing", "#pricing"], ["Developers", "#developers"], ["Verify a document", "/verify"], ["Documentation", "/docs"], ["Create account", "/welcome"]].map(([l, h]) => (
+              {[["Features", "#product"], ["Live examples", "#examples"], ["Compliance", "#compliance"], ["Pricing", "#pricing"], ["Developers", "/developers"], ["Verify a document", "/verify"], ["Documentation", "/docs"], ["Create account", "/welcome"]].map(([l, h]) => (
                 <li key={l}><a className="text-muted-foreground transition-colors hover:text-foreground" href={h}>{l}</a></li>
               ))}
             </ul>

@@ -6,7 +6,7 @@
 export const FILENAME_TOKENS: { token: string; description: string; example: string }[] = [
   { token: "{title}", description: "Envelope title", example: "Service Agreement" },
   { token: "{document}", description: "Document file name", example: "contract-v3" },
-  { token: "{signer}", description: "Signer full name", example: "Alex Martin" },
+  { token: "{signer}", description: "Signer full name", example: "Alexandra Fischer" },
   { token: "{sender}", description: "Sender full name", example: "Priya Shah" },
   { token: "{envelope_id}", description: "Public verification code", example: "DOC-8F3K2M9P" },
   { token: "{sequence}", description: "Recipient signing order", example: "1" },
@@ -52,7 +52,7 @@ export function previewFilename(
   const values: Record<string, string> = {
     title: "Service Agreement",
     document: "contract-v3",
-    signer: "Alex Martin",
+    signer: "Alexandra Fischer",
     sender: "Priya Shah",
     envelope_id: "DOC-8F3K2M9P",
     sequence: "1",
@@ -83,10 +83,10 @@ export const DEFAULT_CONSENT_TEXT =
   "and eIDAS.";
 
 export const SIGNATURE_MANIFESTATION_FIELDS = [
-  { field: "Printed name", example: "Alex Martin", regulation: "21 CFR §11.50(a)(1)" },
+  { field: "Printed name", example: "Alexandra Fischer", regulation: "21 CFR §11.50(a)(1)" },
   { field: "Date & time (UTC)", example: "2026-09-14 16:42:07 UTC", regulation: "21 CFR §11.50(a)(2)" },
   { field: "Meaning", example: "Approval, reviewed and agreed", regulation: "21 CFR §11.50(a)(3)" },
-  { field: "Signer identity", example: "alex@northwind.example (authenticated)", regulation: "21 CFR §11.100(c)" },
+  { field: "Signer identity", example: "alex@stalfe.example (authenticated)", regulation: "21 CFR §11.100(c)" },
   { field: "Document hash", example: "SHA-256: 3a2f…9c41", regulation: "Integrity control" },
   { field: "RFC 3161 timestamp", example: "TSA: timestamp.digicert.com, genTime 16:42:09 UTC", regulation: "Long-term validation" },
 ];
