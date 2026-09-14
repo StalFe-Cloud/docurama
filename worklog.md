@@ -106,3 +106,18 @@ Work Log:
 
 Stage Summary:
 - quality branch at 33b6f3a carries the full production settings suite with real, honest implementations (real OpenSSL certs, real DoH DNS checks, real TOTP, real revocable sessions, real X-API-Key auth, real MCP JSON-RPC) — every feature from the request map implemented, brainstormed (reminder jobs) and compliance-aligned (Part 11, eIDAS, GDPR). Production restore/update runbook documented in docs/PRODUCTION-PLAN.md.
+
+---
+Task ID: 6
+Agent: Super Z (main)
+Task: Hotfix — Turbopack build error "Module not found: Can't resolve 'qrcode'" reported from user preview of /settings pages.
+
+Work Log:
+- Root cause: Task 5's settings-handlers.ts imports QRCode (TOTP 2FA enrolment SVG) but `qrcode` was never added to package.json — the dependency was intended (per Task 5 worklog) but the install/commit step was missed.
+- Fix: `bun add qrcode` + `bun add -d @types/qrcode` → package.json +2 lines, bun.lock +54 lines. No other missing external imports (audited totp/certificates/esign/dns-check/sms-providers/mcp libs — only node builtins).
+- Landed on quality as 41aeb6f (cherry-picked from main 238d572; first commit landed on main due to env auto-reset to main between tool calls — mitigated by doing checkout+cherry-pick+push in a single command).
+- Repo hygiene: `git config core.fileMode false` (env forces 755 on all files; repo convention is 644) — status noise dropped 152 files → 1 (db/custom.db dev churn only).
+- Verification: tsc 0 errors on src/; all 8 /settings/* pages HTTP 200 (account, profile, users, esign, notifications, sms, api, mcp); all 5 settings API sections 200; POST op 2fa.start returns secret + otpauth URI + QR SVG (4031 chars, 51x51 grid); browser E2E: profile page renders, "Enable 2FA" dialog shows QR SVG in DOM, zero console/page errors.
+
+Stage Summary:
+- quality = origin/quality = 41aeb6f (a203669 + qrcode fix). Build error resolved end-to-end; 2FA enrolment QR flow verified in browser.
