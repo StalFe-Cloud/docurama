@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Home, Files, LayoutTemplate, BadgeCheck, Settings, LogOut, Sun, Moon, Menu, ChevronDown,
+  Building2, Check, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ export function UserShell({
   children: ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
   const initials = `${user.firstName[0] ?? ""}${user.lastName[0] ?? ""}`.toUpperCase();
@@ -47,6 +49,24 @@ export function UserShell({
     clearSessionToken(); // drop the bearer fallback token as well
     queryClient.invalidateQueries({ queryKey: ["session"] });
     toast.success("Signed out");
+  };
+
+  // ── Multi-organization switching (Settings → Account) ──
+  const switchOrg = async (tenantId: string, name: string) => {
+    if (switching || tenantId === user.tenantId) return;
+    setSwitching(true);
+    try {
+      await apiPost<{ ok: boolean; message: string }>("/api/workspace/settings", {
+        op: "org.switch", data: { tenantId },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["session"] });
+      await queryClient.invalidateQueries({ queryKey: ["workspace"] });
+      toast.success(`Switched to ${name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not switch organization");
+    } finally {
+      setSwitching(false);
+    }
   };
 
   const links = (
@@ -104,10 +124,41 @@ export function UserShell({
 
             <a href="/" className="flex items-center gap-2.5" aria-label="Docurama home">
               <BrandMark className="h-9 w-9" />
-              <span className="hidden leading-tight sm:block">
-                <span className="block text-sm font-semibold tracking-tight">{user.tenantName ?? "Docurama"}</span>
-                <span className="block text-[11px] text-muted-foreground">Docurama Workspace</span>
-              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="hidden rounded-lg px-2 py-1 text-left leading-tight transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:block"
+                    aria-label={`Switch organization — current: ${user.tenantName ?? "Docurama"}`}
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
+                      {user.tenantName ?? "Docurama"}
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {user.orgs.length > 1 ? `${user.orgs.length} organizations` : "Docurama Workspace"}
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Your organizations</DropdownMenuLabel>
+                  {user.orgs.map((org) => (
+                    <DropdownMenuItem
+                      key={org.id}
+                      disabled={switching}
+                      onClick={() => switchOrg(org.id, org.name)}
+                    >
+                      <Building2 className="h-4 w-4" aria-hidden />
+                      <span className="flex-1 truncate">{org.name}</span>
+                      {org.id === user.tenantId && <Check className="h-4 w-4 text-primary" aria-hidden />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onNavigate("settings")}>
+                    <Plus className="h-4 w-4" aria-hidden /> New organization
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </a>
           </div>
 

@@ -84,7 +84,8 @@ export async function getSettingsSection(
       return jsonOk({
         profile: {
           firstName: user.firstName, lastName: user.lastName, email: user.email,
-          totpEnabled: user.totpEnabled,
+          // Truthful own-state: seeded demo flags without a real secret don't count.
+          totpEnabled: user.totpEnabled && Boolean(user.totpSecret),
           signatureName: user.signatureName ?? `${user.firstName} ${user.lastName}`,
           signatureStyle: user.signatureStyle ?? "signature-font-caveat",
           passwordChangedAt: user.passwordChangedAt?.toISOString() ?? null,
@@ -95,6 +96,7 @@ export async function getSettingsSection(
           storageUsedMb: tenant!.storageUsedMb,
         },
         orgs: me.orgs,
+        activeTenantId: me.tenantId,
         plan: plan ? iso(plan) : null,
         subscription: tenant!.subscriptions[0] ? iso(tenant!.subscriptions[0]) : null,
         signatures: signatures.map((s) => ({
@@ -412,7 +414,7 @@ export async function postSettingsOp(
 
   // ── Two-factor authentication (TOTP) ──
   if (op === "2fa.start") {
-    if (user.totpEnabled) return jsonError("Two-factor authentication is already enabled");
+    if (user.totpEnabled && user.totpSecret) return jsonError("Two-factor authentication is already enabled");
     const secret = generateTotpSecret();
     await db.user.update({ where: { id: me.id }, data: { totpPendingSecret: secret } });
     const uri = otpauthUri(secret, user.email);
@@ -708,6 +710,28 @@ export async function postSettingsOp(
   }
 
   // ── eSign preferences ──
+  if (op === "part11.save") {
+    // 21 CFR Part 11 compliance mode — lives on the Account tab but shares
+    // the EsignPreferences row with the eSign tab.
+    const prefs = await ensureEsignPrefs(tenantId);
+    const part11Mode = data.part11Mode === true;
+    const requireReauth = data.requireReauth === true;
+    const consentText = String(data.consentText ?? "").trim();
+    if (part11Mode && consentText.length < 40) {
+      return jsonError("Part 11 mode requires a signature agreement text of at least 40 characters");
+    }
+    await db.esignPreferences.update({
+      where: { tenantId },
+      data: { part11Mode, requireReauth, consentText: consentText || null, updatedAt: new Date() },
+    });
+    await recordAudit({
+      actor, actorRole: me.role, action: "part11_mode.updated", resource: `tenant:${me.tenantSlug}`,
+      severity: "WARNING", tenantName: me.tenantName,
+      detail: `21 CFR Part 11 mode ${part11Mode ? "enabled" : "disabled"}${part11Mode ? ` · re-auth ${requireReauth ? "required" : "optional"}` : ""}`,
+    });
+    return jsonOk({ ok: true, message: `Part 11 compliance mode ${part11Mode ? "enabled" : "disabled"} — ${prefs.consentVersion} agreement saved` });
+  }
+
   if (op === "esign.save") {
     const format = String(data.filenameFormat ?? "");
     const check = validateFilenameFormat(format);
