@@ -25,6 +25,14 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-nautical: var(--nautical);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -33,6 +41,8 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-deep: var(--primary-deep);
+  --color-primary-soft: var(--primary-soft);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -43,73 +53,100 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/*
+ * Docurama design tokens.
+ * Light surfaces from the Docurama workspace (#fafaf9 / #f6f5f4), primary
+ * purple #5645d4, brand navy #0a1530, hairline borders #e5e3df, and the
+ * semantic pastel set (success / warning / destructive / info).
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.5rem;
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #5645d4;
+  --primary-foreground: #ffffff;
+  --primary-deep: #3a2a99;
+  --primary-soft: #e6e0f5;
+  --secondary: #f6f5f4;
+  --secondary-foreground: #37352f;
+  --muted: #f6f5f4;
+  --muted-foreground: #787671;
+  --accent: #f0eeec;
+  --accent-foreground: #37352f;
+  --destructive: #c92a2a;
+  --destructive-foreground: #ffffff;
+  --success: #1a7f37;
+  --success-soft: #d9f3e1;
+  --warning: #9a5b00;
+  --warning-soft: #f9e79f;
+  --info: #0075de;
+  --info-soft: #dcecfa;
+  --nautical: #0a1530;
+  --border: #e5e3df;
+  --input: #e5e3df;
+  --ring: #5645d4;
+  --chart-1: #5645d4;
+  --chart-2: #1a7f37;
+  --chart-3: #9a5b00;
+  --chart-4: #0a1530;
+  --chart-5: #a4a097;
+  --sidebar: #fafaf9;
+  --sidebar-foreground: #37352f;
+  --sidebar-primary: #5645d4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0eeec;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e5e3df;
+  --sidebar-ring: #5645d4;
 }
 
+/* Dark theme — Docurama navy surfaces with lifted purple accents. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0b1122;
+  --foreground: #e8eaf2;
+  --card: #121a31;
+  --card-foreground: #e8eaf2;
+  --popover: #121a31;
+  --popover-foreground: #e8eaf2;
+  --primary: #8d7bf0;
+  --primary-foreground: #0b1122;
+  --primary-deep: #b3a5f7;
+  --primary-soft: #26204a;
+  --secondary: #182140;
+  --secondary-foreground: #c9cede;
+  --muted: #182140;
+  --muted-foreground: #98a0bb;
+  --accent: #1f2950;
+  --accent-foreground: #e8eaf2;
+  --destructive: #f2555a;
+  --destructive-foreground: #ffffff;
+  --success: #4ade80;
+  --success-soft: #0f3324;
+  --warning: #fbbf24;
+  --warning-soft: #3a2d0a;
+  --info: #60c5f8;
+  --info-soft: #0c2b45;
+  --nautical: #e8eaf2;
+  --border: #253052;
+  --input: #253052;
+  --ring: #8d7bf0;
+  --chart-1: #8d7bf0;
+  --chart-2: #4ade80;
+  --chart-3: #fbbf24;
+  --chart-4: #93a4e8;
+  --chart-5: #98a0bb;
+  --sidebar: #0e1529;
+  --sidebar-foreground: #c9cede;
+  --sidebar-primary: #8d7bf0;
+  --sidebar-primary-foreground: #0b1122;
+  --sidebar-accent: #1f2950;
+  --sidebar-accent-foreground: #e8eaf2;
+  --sidebar-border: #253052;
+  --sidebar-ring: #8d7bf0;
 }
 
 @layer base {
@@ -118,5 +155,35 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 24%, transparent);
+  }
+}
+
+/* ── Custom scrollbar (long lists / tables) ── */
+.docurama-scroll::-webkit-scrollbar,
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.docurama-scroll::-webkit-scrollbar-thumb,
+[data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+  border-radius: 8px;
+}
+.docurama-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
+}
+
+/* ── Handwriting signature fonts (bundled via @fontsource, no CDN) ── */
+.signature-font-caveat { font-family: "Caveat", cursive; }
+.signature-font-dancing { font-family: "Dancing Script", cursive; }
+.signature-font-greatvibes { font-family: "Great Vibes", cursive; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
