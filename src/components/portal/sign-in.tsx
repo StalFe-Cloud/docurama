@@ -7,7 +7,7 @@ import { FileCheck2, ShieldCheck, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError } from "@/lib/client";
+import { ApiError, setSessionToken } from "@/lib/client";
 
 const DEMO_ACCOUNTS = [
   {
@@ -37,11 +37,16 @@ export function SignIn() {
         credentials: "same-origin",
         body: JSON.stringify(creds),
       }).then(async (res) => {
-        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean; error?: string; token?: string;
+        };
         if (!res.ok) throw new ApiError(body.error ?? `Sign-in failed (HTTP ${res.status})`, res.status);
         return body;
       }),
-    onSuccess: () => {
+    onSuccess: (body) => {
+      // Persist the bearer fallback token so the session survives embedding
+      // contexts where the browser blocks third-party cookies entirely.
+      if (body?.token) setSessionToken(body.token);
       queryClient.invalidateQueries({ queryKey: ["session"] });
       toast.success("Welcome back");
     },

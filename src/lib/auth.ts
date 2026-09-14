@@ -1,9 +1,28 @@
 import { createHash } from "crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { db } from "@/lib/db";
 
 export const SESSION_COOKIE = "docurama_session";
+export const SESSION_TOKEN_STORE = "docurama_token";
 export const hashPassword = (pw: string) => createHash("sha256").update(pw).digest("hex");
+
+/**
+ * Build the Set-Cookie attribute string for the session cookie.
+ *
+ * When the request arrived over HTTPS (preview URLs, production) the cookie is
+ * emitted with `SameSite=None; Secure; Partitioned` (CHIPS) so it survives the
+ * third-party iframe context the portal is commonly previewed in. Plain-HTTP
+ * local development keeps the classic `SameSite=Lax` attributes.
+ */
+export function sessionCookieAttributes(request: Request): string {
+  const proto =
+    request.headers.get("x-forwarded-proto") ??
+    (request.url.startsWith("https:") ? "https" : "http");
+  const isHttps = proto.split(",")[0].trim() === "https";
+  return isHttps
+    ? "Path=/; HttpOnly; SameSite=None; Secure; Partitioned; Max-Age=604800"
+    : "Path=/; HttpOnly; SameSite=Lax; Max-Age=604800";
+}
 
 export type SessionUser = {
   id: string;
@@ -20,12 +39,23 @@ export type SessionUser = {
 };
 
 /**
- * Resolve the signed-in user from the session cookie.
+ * Resolve the signed-in user from the session cookie, falling back to the
+ * `Authorization: Bearer <token>` header. The bearer fallback keeps sign-in
+ * working in embedding contexts (e.g. the preview iframe) where browsers
+ * refuse to store third-party cookies even with CHIPS attributes.
  * Returns null when no valid session exists.
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const jar = await cookies();
-  const userId = jar.get(SESSION_COOKIE)?.value;
+  let userId = jar.get(SESSION_COOKIE)?.value;
+
+  if (!userId) {
+    const hdrs = await headers();
+    const auth = hdrs.get("authorization");
+    if (auth?.startsWith("Bearer ")) {
+      userId = auth.slice("Bearer ".length).trim();
+    }
+  }
   if (!userId) return null;
 
   const user = await db.user.findUnique({

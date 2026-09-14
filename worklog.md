@@ -23,3 +23,19 @@ Stage Summary:
 - All 40+ analysed UI/UX bug classes from the original app are fixed by construction in the rebuild (documented in shared.tsx header and each view's comments).
 - Demo accounts: admin@docurama.eu / admin1234 (Platform Admin) · alex@northwind.example / demo1234 (Workspace Admin).
 - Zero console errors, lint clean, all API endpoints 200.
+
+---
+Task ID: 2
+Agent: Main agent (Super Z)
+Task: Fix "login accounts are not working" reported via preview URL
+
+Work Log:
+- Reproduced & diagnosed: both demo accounts (admin@docurama.eu/admin1234, alex@northwind.example/demo1234) worked via curl on :3000 and through the Caddy proxy on :81 — API, cookie set, and /api/auth/me all correct. Browser tests on localhost also worked. Root cause: the preview URL embeds the app in a third-party iframe context, where browsers refuse to store SameSite=Lax cookies — POST /api/auth/login succeeds but the session cookie is dropped, so /api/auth/me returns null and the UI bounces back to the sign-in page.
+- Fix 1 (CHIPS cookie): login/logout now emit `SameSite=None; Secure; Partitioned` when the request is HTTPS (x-forwarded-proto aware), keeping `SameSite=Lax` for local HTTP dev. Cookie-removal attributes match set attributes so logout actually deletes the cookie.
+- Fix 2 (Bearer fallback — immune to any cookie policy): login response now includes `token`; getSessionUser() resolves the session from the cookie OR `Authorization: Bearer <token>` header; client stores the token in localStorage (docurama_token) and attaches it to every apiGet/apiPost; sign-in persists the token; both shells clear it on logout.
+- Also fixed pre-existing tsc error in admin-audit.tsx (onConfirm Promise<void> mismatch).
+- Verified: tsc clean for all changed files; ESLint clean; API tests (cookie flow, bearer-only flow, 403/200 guards on admin+workspace APIs, HTTPS CHIPS header, anonymous null) all pass; browser E2E: one-click admin login, manual workspace login, session survives cookie loss via bearer (the exact iframe scenario that was broken), logout clears cookie+token, wrong-password shows "Invalid email or password", all 12 admin sections render, zero console errors.
+
+Stage Summary:
+- Login now works in every context: direct browser, iframe preview (CHIPS cookie), and hardened environments that block all third-party cookies (bearer token fallback).
+- Files changed: src/lib/auth.ts, src/lib/client.ts, src/app/api/auth/login/route.ts, src/app/api/auth/logout/route.ts, src/components/portal/sign-in.tsx, src/components/portal/admin-shell.tsx, src/components/portal/user-shell.tsx, src/components/portal/admin/admin-audit.tsx.

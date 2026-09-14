@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiPost } from "@/lib/client";
+import { apiPost, clearSessionToken } from "@/lib/client";
 import { toast } from "sonner";
 import type { SessionUser } from "@/lib/auth";
 
@@ -106,6 +106,7 @@ export function AdminShell({
 
   const logout = async () => {
     await apiPost("/api/auth/logout", { op: "logout" }).catch(() => undefined);
+    clearSessionToken(); // drop the bearer fallback token as well
     queryClient.invalidateQueries({ queryKey: ["session"] });
     toast.success("Signed out");
   };

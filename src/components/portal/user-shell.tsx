@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { apiPost } from "@/lib/client";
+import { apiPost, clearSessionToken } from "@/lib/client";
 import type { SessionUser } from "@/lib/auth";
 
 export const USER_SECTIONS = [
@@ -43,6 +43,7 @@ export function UserShell({
 
   const logout = async () => {
     await apiPost("/api/auth/logout", { op: "logout" }).catch(() => undefined);
+    clearSessionToken(); // drop the bearer fallback token as well
     queryClient.invalidateQueries({ queryKey: ["session"] });
     toast.success("Signed out");
   };

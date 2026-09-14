@@ -94,7 +94,7 @@ export function AdminAudit() {
             description="A new block is committed covering all events since the last seal."
             confirmLabel="Seal chain"
             destructive={false}
-            onConfirm={() => seal.mutateAsync()}
+            onConfirm={async () => { await seal.mutateAsync(); }}
           />
         }
       />

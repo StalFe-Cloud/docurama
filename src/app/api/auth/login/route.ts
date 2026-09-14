@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { SESSION_COOKIE, hashPassword, recordAudit } from "@/lib/auth";
+import { SESSION_COOKIE, hashPassword, recordAudit, sessionCookieAttributes } from "@/lib/auth";
 import { jsonError, jsonOk } from "@/lib/serializers";
 
 export async function POST(req: NextRequest) {
@@ -35,13 +35,16 @@ export async function POST(req: NextRequest) {
     action: "user.login.portal", resource: `user:${user.email}`, ip: "10.42.0.7",
   });
 
+  // The session token is echoed in the body as a bearer fallback for embedding
+  // contexts where the browser refuses to persist any cookie at all.
   const res = jsonOk({
     ok: true,
+    token: user.id,
     user: { id: user.id, email: user.email, role: user.role, name: `${user.firstName} ${user.lastName}` },
   });
   res.headers.append(
     "set-cookie",
-    `${SESSION_COOKIE}=${user.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`,
+    `${SESSION_COOKIE}=${user.id}; ${sessionCookieAttributes(req)}`,
   );
   return res;
 }
