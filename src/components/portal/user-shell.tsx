@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Home, Files, LayoutTemplate, BadgeCheck, Settings, FileCheck2, LogOut, Sun, Moon, Menu, ChevronDown,
+  Home, Files, LayoutTemplate, BadgeCheck, Settings, LogOut, Sun, Moon, Menu, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { apiPost, clearSessionToken } from "@/lib/client";
 import type { SessionUser } from "@/lib/auth";
+import { BrandMark, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 
 export const USER_SECTIONS = [
   { key: "home", label: "Home", icon: Home },
@@ -90,9 +91,7 @@ export function UserShell({
                 <SheetTitle className="sr-only">Workspace navigation</SheetTitle>
                 <div className="space-y-6 pt-2">
                   <div className="flex items-center gap-2.5">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                      <FileCheck2 className="h-5 w-5" aria-hidden />
-                    </span>
+                    <BrandMark className="h-9 w-9" />
                     <div className="leading-tight">
                       <p className="text-sm font-semibold tracking-tight">{user.tenantName ?? "Docurama"}</p>
                       <p className="text-[11px] text-muted-foreground">{user.tenantPlan} plan</p>
@@ -104,9 +103,7 @@ export function UserShell({
             </Sheet>
 
             <a href="/" className="flex items-center gap-2.5" aria-label="Docurama home">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <FileCheck2 className="h-5 w-5" aria-hidden />
-              </span>
+              <BrandMark className="h-9 w-9" />
               <span className="hidden leading-tight sm:block">
                 <span className="block text-sm font-semibold tracking-tight">{user.tenantName ?? "Docurama"}</span>
                 <span className="block text-[11px] text-muted-foreground">Docurama Workspace</span>
@@ -166,7 +163,7 @@ export function UserShell({
 
       <footer className="border-t bg-background">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© 2026 Docurama Technologies — documents sealed with PAdES and RFC 3161 timestamps.</p>
+          <p>© 2026 {BRAND_LEGAL_NAME} — {BRAND_ADDRESS} — documents sealed with PAdES and RFC 3161 timestamps.</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>EU data residency</span>
             <span aria-hidden>·</span>

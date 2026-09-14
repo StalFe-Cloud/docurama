@@ -51,7 +51,7 @@ export function AdminOverview({ onNavigate }: { onNavigate: (k: AdminSectionKey)
     day: new Date(s.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
   }));
   const pieData = data.planDist.map((p) => ({ name: p.planCode, value: p._count }));
-  const PIE_COLORS: Record<string, string> = { STARTER: "#a4a097", BUSINESS: "#5645d4", ENTERPRISE: "#0a1530" };
+  const PIE_COLORS: Record<string, string> = { STARTER: "#a4a097", BUSINESS: "#0f7a5a", ENTERPRISE: "#1a1a1a" };
   const certDays = daysUntil(data.health.certExpiryAt);
 
   return (
@@ -122,8 +122,8 @@ export function AdminOverview({ onNavigate }: { onNavigate: (k: AdminSectionKey)
                 <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
                   <defs>
                     <linearGradient id="created" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#5645d4" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#5645d4" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="#0f7a5a" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#0f7a5a" stopOpacity={0.02} />
                     </linearGradient>
                     <linearGradient id="sealed" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#1a7f37" stopOpacity={0.3} />
@@ -137,7 +137,7 @@ export function AdminOverview({ onNavigate }: { onNavigate: (k: AdminSectionKey)
                     contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                     formatter={(value: number, name: string) => [value, name === "envelopesCreated" ? "Created" : "Sealed"]}
                   />
-                  <Area type="monotone" dataKey="envelopesCreated" stroke="#5645d4" strokeWidth={2} fill="url(#created)" />
+                  <Area type="monotone" dataKey="envelopesCreated" stroke="#0f7a5a" strokeWidth={2} fill="url(#created)" />
                   <Area type="monotone" dataKey="envelopesSealed" stroke="#1a7f37" strokeWidth={2} fill="url(#sealed)" />
                 </AreaChart>
               </ResponsiveContainer>

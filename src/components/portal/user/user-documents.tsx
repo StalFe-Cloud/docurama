@@ -293,7 +293,7 @@ export function UserDocuments() {
               <section aria-labelledby="audit">
                 <h3 id="audit" className="mb-2 text-sm font-semibold">Audit trail</h3>
                 <ol className="relative space-y-4 border-l pl-4">
-                  {detail.data.events.map((ev) => (
+                  {(detail.data?.events ?? []).map((ev) => (
                     <li key={ev.id} className="relative">
                       <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" aria-hidden />
                       <p className="text-sm font-medium capitalize">{ev.action.toLowerCase().replace(/_/g, " ")}</p>

@@ -4,7 +4,7 @@ import { ReactNode, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Building2, Users, FileSignature, Globe, Scale, ShieldCheck,
-  CreditCard, Webhook, Settings2, HeartPulse, ScrollText, FileCheck2, LogOut,
+  CreditCard, Webhook, Settings2, HeartPulse, ScrollText, LogOut, Mail,
   Sun, Moon, Menu, ChevronDown, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiPost, clearSessionToken } from "@/lib/client";
 import { toast } from "sonner";
 import type { SessionUser } from "@/lib/auth";
+import { BrandMark, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 
 export const ADMIN_SECTIONS = [
   { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "Platform KPIs, health and activity" },
@@ -30,6 +31,7 @@ export const ADMIN_SECTIONS = [
   { key: "compliance", label: "Compliance", icon: ShieldCheck, desc: "Controls, retention, holds, incidents" },
   { key: "billing", label: "Billing", icon: CreditCard, desc: "Plans, subscriptions and revenue" },
   { key: "integrations", label: "API & Webhooks", icon: Webhook, desc: "Keys, endpoints and deliveries" },
+  { key: "provisioning", label: "Email & DNS", icon: Mail, desc: "docurama.eu mailboxes, sub-domains, zone file" },
   { key: "settings", label: "Platform Settings", icon: Settings2, desc: "SMTP, TSA, feature flags" },
   { key: "health", label: "Ops Health", icon: HeartPulse, desc: "Service status and signing readiness" },
   { key: "audit", label: "Audit Log", icon: ScrollText, desc: "Immutable chain, security events" },
@@ -85,7 +87,8 @@ function SidebarFooter({ onNavigate }: { onNavigate: (key: AdminSectionKey) => v
         </span>
       </button>
       <p className="px-1 text-[11px] leading-snug text-muted-foreground">
-        Docurama Platform Console · v4.2.1 · EU-West
+        <span className="font-medium">{BRAND_LEGAL_NAME}</span>
+        <span className="block">{BRAND_ADDRESS}</span>
       </p>
     </div>
   );
@@ -119,11 +122,9 @@ export function AdminShell({
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-sidebar lg:flex">
         <div className="docurama-scroll min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
           <div className="flex items-center gap-2.5 px-1 pt-1">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <FileCheck2 className="h-5 w-5" aria-hidden />
-            </span>
+            <BrandMark className="h-9 w-9" />
             <div className="leading-tight">
-              <p className="text-sm font-semibold tracking-tight">Docurama</p>
+              <p className="text-sm font-semibold tracking-tight">Docu<span className="text-primary">rama</span></p>
               <p className="text-[11px] text-muted-foreground">Platform Console</p>
             </div>
           </div>
@@ -148,11 +149,9 @@ export function AdminShell({
                 <div className="flex h-full flex-col justify-between">
                   <div className="space-y-6 p-4">
                     <div className="flex items-center gap-2.5">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                        <FileCheck2 className="h-5 w-5" aria-hidden />
-                      </span>
+                      <BrandMark className="h-9 w-9" />
                       <div className="leading-tight">
-                        <p className="text-sm font-semibold tracking-tight">Docurama</p>
+                        <p className="text-sm font-semibold tracking-tight">Docu<span className="text-primary">rama</span></p>
                         <p className="text-[11px] text-muted-foreground">Platform Console</p>
                       </div>
                     </div>

@@ -22,11 +22,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://app.docurama.eu"),
   title: "Docurama — Enterprise Portal & Admin Control Panel",
   description:
-    "Docurama platform console: document signing, PAdES cryptographic verification, tenant administration, compliance operations and trust analytics.",
-  icons: {
-    icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235645d4'/%3E%3Cpath d='M9 20.5 13.5 25 23 11.5' stroke='white' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+    "Docurama platform console by Docurama SAS (Paris, France): document signing, PAdES cryptographic verification, tenant administration, compliance operations and trust analytics.",
+  // Favicon (app/icon.svg) and touch icon (app/apple-icon.png) are resolved
+  // automatically from the app directory by the Next.js file conventions.
+  openGraph: {
+    title: "Docurama — Sign • Seal • Verify",
+    description:
+      "The enterprise portal for signed, sealed and verifiable documents. Docurama SAS — 1 Rue Marguerin, 75014 Paris, France.",
+    siteName: "Docurama",
+    images: ["/brand/og-image.png"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Docurama — Sign • Seal • Verify",
+    description:
+      "The enterprise portal for signed, sealed and verifiable documents.",
+    images: ["/brand/og-image.png"],
   },
 };
 

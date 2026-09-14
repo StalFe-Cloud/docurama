@@ -5,14 +5,9 @@ import { jsonOk } from "@/lib/serializers";
 export async function POST(req: NextRequest) {
   const res = jsonOk({ ok: true });
 
-  // Clear the bearer token when the client asks for it (kept client-side in
-  // localStorage — see lib/client.ts clearSessionToken()).
-  if (req.headers.get("authorization")?.startsWith("Bearer ")) {
-    return res;
-  }
-
-  // The removal attributes must match how the cookie was set (CHIPS over
-  // HTTPS, Lax locally) so the browser actually deletes it.
+  // Always clear the session cookie (attribute-matched so the browser actually
+  // deletes it). The client also drops its bearer token from localStorage —
+  // see lib/client.ts clearSessionToken().
   const proto =
     req.headers.get("x-forwarded-proto") ??
     (req.url.startsWith("https:") ? "https" : "http");

@@ -39,3 +39,27 @@ Work Log:
 Stage Summary:
 - Login now works in every context: direct browser, iframe preview (CHIPS cookie), and hardened environments that block all third-party cookies (bearer token fallback).
 - Files changed: src/lib/auth.ts, src/lib/client.ts, src/app/api/auth/login/route.ts, src/app/api/auth/logout/route.ts, src/components/portal/sign-in.tsx, src/components/portal/admin-shell.tsx, src/components/portal/user-shell.tsx, src/components/portal/admin/admin-audit.tsx.
+
+---
+Task ID: 3
+Agent: Main agent (Super Z)
+Task: Apply official logo branding everywhere; provision all DNS sub-domains on docurama.eu; update legal entity to Docurama SAS (1 Rue Marguerin, Paris 75014); provision the 12 role-based email addresses with RFC-compliant DNS records
+
+Work Log:
+- Analysed the uploaded brand board via VLM (1536×1024): horizontal lockup + stacked variant + app icons + palette. Extracted brand spec: wordmark "Docurama" ("Docu" ink, "rama" emerald), tagline "SIGN • SEAL • VERIFY", symbol = document in rounded-square ink border with purple dog-ear, 3 pill lines, emerald signature stroke. Palette: #1A1A1A ink, #0F7A5A emerald, #4FD1A1 mint, #6B66A3 purple, #D1D1D1 lines.
+- Rebuilt the brand as scalable assets: src/app/icon.svg (favicon), public/brand/docurama-mark.svg, src/components/brand/logo.tsx (BrandMark / BrandSignature / BrandLogo with invert + tagline variants, CSS-var driven light/dark), generated apple-icon.png (180×180) + og-image.png (1200×630) via headless render, VLM QA-passed.
+- Re-themed the whole portal from purple #5645d4 to the brand palette: primary emerald #0F7A5A (light) / mint #4FD1A1 (dark), primary-soft mint tints, ink-emerald dark surfaces, nautical panel #0B1714, chart colors updated in overview + billing.
+- Applied branding: sign-in brand panel + mobile logo, admin sidebar (desktop+mobile), user shell header + mobile sheet, Boot screen, metadata (title/description/openGraph/twitter with og-image, metadataBase app.docurama.eu), SMTP sender-identity hint.
+- Legal entity: all "Docurama Technologies" mentions replaced with "Docurama SAS — 1 Rue Marguerin, 75014 Paris, France" (sign-in footer, user-shell footer, admin sidebar footer, demo account labels, admin-users org, metadata). Company identity card added under Email & DNS with fill-in placeholders (SIREN, VAT, capital, phone) marked "to be updated".
+- Built src/lib/provisioning.ts: COMPANY identity, 12 EMAIL_ACCOUNTS (notifications@/admin@→docurama@voiria.com/support@/sales@/billing@/contact@/privacy@/legal@/security@/postmaster@/abuse@/dmarc@ with kinds, purposes, forward targets, RFC refs, P0-P2 priorities), 11 SUBDOMAINS (apex, www, app, verify, api, admin, mail, mta-sts, status, docs, staging), 11 DNS_RECORDS (MX×2, SPF, DKIM×2, DMARC, MTA-STS, TLS-RPT, CAA×2, PTR), ProvisioningState + parse + BIND buildZoneFile generator.
+- Schema: added PlatformSetting.provisioningState column (db push + generate + dev-server restart to load new client); updated SMTP defaults to "Docurama Sign <notifications@docurama.eu>" + notifications@ user, existing row updated via Prisma.
+- API: /api/admin/provisioning GET (company, emails, subdomains, dnsRecords, zoneFile, summary) + POST ops email.provision/deprovision/test, subdomain.verify, dns.check, dns.check-all — all persisted to provisioningState with audit events.
+- UI: new admin section "Email & DNS" (admin-provisioning.tsx) with 4 tabs — Mailboxes & aliases (grouped by category, provision/test buttons), Sub-domains (verify DNS), DNS & deliverability (per-record verify + re-run all), Zone file & identity (company card + live zone file with copy/download). Registered in admin nav + page.
+- Fixed pre-existing strictness errors: widened shared.tsx contracts (Column.header → ReactNode, ConfirmDialog.onConfirm → unknown|Promise<unknown>) fixing 12 call sites; optional-chained user-documents events. tsc now 0 errors in src/, lint clean.
+- Fixed a self-introduced logout bug: the route skipped cookie clearing when a Bearer header was present, so cookie sessions stuck after sign-out; now always clears attribute-matched.
+- DevOps: discovered tool-spawned daemons are reaped between tool calls; established the subshell-orphan pattern `(setsid nohup … &)` for a persistent dev server.
+- Generated deliverables: download/docurama.eu.zone (BIND zone, 56 lines) + download/DOCURAMA-DNS-EMAIL-PROVISIONING.md (158 lines: identity, sub-domains, emails, records, MTA-STS policy, security.txt, setup runbook, GDPR/eIDAS notes).
+- Browser-verified: Email & DNS section (all 4 tabs), provision support@ via UI, verify admin.docurama.eu, re-run all DNS checks (11/11), zone download, branded sign-in (VLM QA pass), dark mode (VLM QA pass), workspace footer legal line, favicon/apple-icon/og-image all 200, login+logout cycle, zero console errors, 13 admin sections render.
+
+Stage Summary:
+- The portal now carries the official Docurama brand end-to-end (logo, palette, favicon, og-image, dark mode), the legal entity is Docurama SAS — 1 Rue Marguerin, 75014 Paris, France everywhere, and a new "Email & DNS" admin section provisions the full docurama.eu digital identity: 12 mailboxes/aliases, 11 sub-domains, 11 deliverability DNS records, live zone-file export — with persistent state and audit trail. Deliverables: download/docurama.eu.zone + download/DOCURAMA-DNS-EMAIL-PROVISIONING.md.

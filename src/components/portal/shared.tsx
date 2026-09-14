@@ -300,7 +300,7 @@ export function CardsSkeleton({ cards = 4 }: { cards?: number }) {
 
 export type Column<T> = {
   key: string;
-  header: string;
+  header: ReactNode;
   className?: string;
   render: (row: T) => ReactNode;
 };
@@ -418,7 +418,9 @@ export function ConfirmDialog({
   description: string;
   confirmLabel?: string;
   destructive?: boolean;
-  onConfirm: (reason: string) => void | Promise<void>;
+  // Callers commonly pass `() => mutation.mutateAsync(...)` which resolves to
+  // the mutation payload — accept any resolved value, only void/awaited usage matters.
+  onConfirm: (reason: string) => unknown | Promise<unknown>;
   requireReason?: boolean;
   reasonLabel?: string;
 }) {

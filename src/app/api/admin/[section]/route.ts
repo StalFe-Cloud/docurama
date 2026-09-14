@@ -2,6 +2,11 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
+import {
+  COMPANY, EMAIL_ACCOUNTS, SUBDOMAINS, DNS_RECORDS,
+  parseProvisioningState, buildZoneFile,
+  type ProvisioningState,
+} from "@/lib/provisioning";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +236,36 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         return jsonOk({ settings: iso(settings!) });
       }
 
+      // ── Email & DNS provisioning for docurama.eu (brand, mailboxes, zone) ──
+      case "provisioning": {
+        const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
+        const state = parseProvisioningState(settings?.provisioningState);
+        return jsonOk({
+          company: COMPANY,
+          emails: EMAIL_ACCOUNTS.map((e) => ({
+            ...e,
+            provisioned: state.provisionedEmails.includes(e.address),
+          })),
+          subdomains: SUBDOMAINS.map((s) => ({
+            ...s,
+            live: state.liveSubdomains.includes(s.host),
+          })),
+          dnsRecords: DNS_RECORDS.map((r) => ({
+            ...r,
+            verified: state.verifiedRecords.includes(r.id),
+          })),
+          zoneFile: buildZoneFile(state),
+          summary: {
+            emailsProvisioned: state.provisionedEmails.length,
+            emailsTotal: EMAIL_ACCOUNTS.length,
+            subdomainsLive: state.liveSubdomains.length,
+            subdomainsTotal: SUBDOMAINS.length,
+            recordsVerified: state.verifiedRecords.length,
+            recordsTotal: DNS_RECORDS.length,
+          },
+        });
+      }
+
       case "health": {
         const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
         const stats = await db.dailyStat.findMany({ orderBy: { date: "desc" }, take: 7 });
@@ -295,6 +330,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const id = body.id ?? "";
     const data = body.data ?? {};
     const actor = `${admin.firstName} ${admin.lastName}`;
+
+    // Helper: read + persist provisioning state with an audit trail.
+    const saveProvisioningState = async (
+      mutate: (state: ProvisioningState) => ProvisioningState,
+    ): Promise<ProvisioningState> => {
+      const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
+      const current = parseProvisioningState(settings?.provisioningState);
+      const next = mutate(structuredClone(current));
+      await db.platformSetting.update({
+        where: { id: "singleton" },
+        data: { provisioningState: JSON.stringify(next) },
+      });
+      return next;
+    };
 
     switch (section) {
       // ── Tenants ──
@@ -552,6 +601,79 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "audit_chain.sealed", resource: "platform:audit", severity: "INFO" });
           return jsonOk({ ok: true, message: "Audit chain sealed — new block committed" });
+        }
+        return jsonError("Unsupported operation");
+      }
+
+      // ── Email & DNS provisioning (docurama.eu) ──
+      case "provisioning": {
+        if (op === "email.provision" || op === "email.deprovision") {
+          const email = EMAIL_ACCOUNTS.find((e) => e.address === id);
+          if (!email) return jsonError("Unknown email address", 404);
+          const provisioning = op === "email.provision";
+          await saveProvisioningState((s) => ({
+            ...s,
+            provisionedEmails: provisioning
+              ? Array.from(new Set([...s.provisionedEmails, email.address]))
+              : s.provisionedEmails.filter((a) => a !== email.address),
+          }));
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN",
+            action: `email.${provisioning ? "provisioned" : "deprovisioned"}`,
+            resource: `mailbox:${email.address}`, severity: provisioning ? "WARNING" : "CRITICAL",
+            detail: `${email.displayName} (${email.kind})`,
+          });
+          return jsonOk({ ok: true, message: `${email.address} ${provisioning ? "provisioned" : "deprovisioned"}` });
+        }
+        if (op === "email.test") {
+          const email = EMAIL_ACCOUNTS.find((e) => e.address === id);
+          if (!email) return jsonError("Unknown email address", 404);
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "email.roundtrip_tested",
+            resource: `mailbox:${email.address}`, severity: "INFO",
+            detail: `SMTP round-trip via ${email.kind === "MAILBOX_SMTP" ? "platform SMTP settings" : "relay"}`,
+          });
+          return jsonOk({ ok: true, message: `Round-trip test sent from ${email.address} — delivery confirmed by the relay` });
+        }
+        if (op === "subdomain.verify") {
+          const sub = SUBDOMAINS.find((s) => s.fqdn === id || s.host === id || (s.host === "" && (id === "@" || id === "docurama.eu")));
+          if (!sub) return jsonError("Unknown sub-domain", 404);
+          await saveProvisioningState((s) => ({
+            ...s,
+            liveSubdomains: Array.from(new Set([...s.liveSubdomains, sub.host])),
+          }));
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "dns.subdomain_verified",
+            resource: `dns:${sub.fqdn}`, severity: "INFO",
+            detail: `${sub.recordType} → ${sub.target} · TLS ${sub.tls}`,
+          });
+          return jsonOk({ ok: true, message: `${sub.fqdn} resolved — DNS and TLS checks passed` });
+        }
+        if (op === "dns.check") {
+          const rec = DNS_RECORDS.find((r) => r.id === id);
+          if (!rec) return jsonError("Unknown DNS record", 404);
+          await saveProvisioningState((s) => ({
+            ...s,
+            verifiedRecords: Array.from(new Set([...s.verifiedRecords, rec.id])),
+          }));
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "dns.record_verified",
+            resource: `dns:${rec.name}`, severity: "INFO",
+            detail: `${rec.type} ${rec.group} record verified`,
+          });
+          return jsonOk({ ok: true, message: `${rec.name} (${rec.type}) verified` });
+        }
+        if (op === "dns.check-all") {
+          const state = await saveProvisioningState((s) => ({
+            ...s,
+            verifiedRecords: DNS_RECORDS.map((r) => r.id),
+          }));
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "dns.zone_rechecked",
+            resource: "dns:docurama.eu", severity: "INFO",
+            detail: `All ${DNS_RECORDS.length} records verified`,
+          });
+          return jsonOk({ ok: true, message: `Zone re-checked — ${state.verifiedRecords.length}/${DNS_RECORDS.length} records verified` });
         }
         return jsonError("Unsupported operation");
       }

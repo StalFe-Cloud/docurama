@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileCheck2, ShieldCheck, Loader2, Lock } from "lucide-react";
+import { ShieldCheck, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, setSessionToken } from "@/lib/client";
+import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 
 const DEMO_ACCOUNTS = [
   {
-    label: "Platform Admin — Docurama HQ",
+    label: "Platform Admin — Docurama SAS",
     email: "admin@docurama.eu",
     password: "admin1234",
     desc: "Full admin control panel: tenants, compliance, billing, ops",
@@ -65,12 +66,9 @@ export function SignIn() {
       {/* Brand panel */}
       <div className="relative hidden flex-col justify-between overflow-hidden bg-nautical p-10 text-white lg:flex">
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-primary/30 blur-3xl" aria-hidden />
-        <div className="absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-primary/20 blur-3xl" aria-hidden />
-        <div className="relative flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <FileCheck2 className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Docurama</span>
+        <div className="absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-[#4fd1a1]/15 blur-3xl" aria-hidden />
+        <div className="relative">
+          <BrandLogo invert tagline size="md" />
         </div>
         <div className="relative max-w-md space-y-5">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight">
@@ -94,7 +92,7 @@ export function SignIn() {
           </ul>
         </div>
         <p className="relative text-xs text-white/40">
-          © 2026 Docurama Technologies · EU data residency · eIDAS &amp; ESIGN compliant workflows
+          © 2026 {BRAND_LEGAL_NAME} · {BRAND_ADDRESS} · EU data residency · eIDAS &amp; ESIGN compliant workflows
         </p>
       </div>
 
@@ -102,11 +100,8 @@ export function SignIn() {
       <div className="flex flex-1 items-center justify-center p-6">
         <main className="w-full max-w-md space-y-8">
           <div className="space-y-2 text-center lg:text-left">
-            <div className="mb-6 flex items-center justify-center gap-2.5 lg:justify-start">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary lg:hidden">
-                <FileCheck2 className="h-5 w-5 text-white" aria-hidden />
-              </span>
-              <span className="text-lg font-semibold tracking-tight lg:hidden">Docurama</span>
+            <div className="mb-6 flex justify-center lg:justify-start">
+              <BrandLogo tagline size="md" className="lg:hidden" />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">Sign in to your portal</h2>
             <p className="text-sm text-muted-foreground">

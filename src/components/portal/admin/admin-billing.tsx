@@ -77,8 +77,8 @@ export function AdminBilling() {
               <AreaChart data={chartData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
                 <defs>
                   <linearGradient id="mrrFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#5645d4" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#5645d4" stopOpacity={0.02} />
+                    <stop offset="0%" stopColor="#0f7a5a" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#0f7a5a" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -88,7 +88,7 @@ export function AdminBilling() {
                   contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }}
                   formatter={(value: number) => [`€${value.toLocaleString()}`, "MRR"]}
                 />
-                <Area type="monotone" dataKey="mrr" stroke="#5645d4" strokeWidth={2} fill="url(#mrrFill)" />
+                <Area type="monotone" dataKey="mrr" stroke="#0f7a5a" strokeWidth={2} fill="url(#mrrFill)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

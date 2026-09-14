@@ -88,8 +88,11 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               <Input id="smtp-user" value={smtp.smtpUser} onChange={(e) => setSmtp({ ...smtp, smtpUser: e.target.value })} className="h-11" autoComplete="off" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="smtp-from">From address</Label>
+              <Label htmlFor="smtp-from">Sender identity</Label>
               <Input id="smtp-from" value={smtp.smtpFrom} onChange={(e) => setSmtp({ ...smtp, smtpFrom: e.target.value })} className="h-11" />
+              <p className="text-xs text-muted-foreground">
+                Recommended: <span className="font-mono">Docurama Sign &lt;notifications@docurama.eu&gt;</span> — provisioned under Email &amp; DNS.
+              </p>
             </div>
           </div>
           <label className="flex min-h-11 items-center justify-between gap-4 rounded-lg border p-3">

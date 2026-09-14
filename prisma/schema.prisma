@@ -411,8 +411,8 @@ model PlatformSetting {
   id                  String   @id @default("singleton")
   smtpHost            String   @default("smtp.eu.mailprovider.io")
   smtpPort            Int      @default(587)
-  smtpUser            String   @default("postmaster@docurama.eu")
-  smtpFrom            String   @default("Docurama <no-reply@docurama.eu>")
+  smtpUser            String   @default("notifications@docurama.eu")
+  smtpFrom            String   @default("Docurama Sign <notifications@docurama.eu>")
   smtpTls             Boolean  @default(true)
   tsaUrl              String   @default("https://timestamp.digicert.com")
   tsaReachable        Boolean  @default(true)
@@ -422,6 +422,7 @@ model PlatformSetting {
   trialLengthDays     Int      @default(14)
   maintenanceMode     Boolean  @default(false)
   featureFlags        String   @default("{\"smsDelivery\":true,\"bulkSend\":true,\"webhooks\":true,\"passkeys\":true,\"aiFieldDetect\":false,\"euResidencyOnly\":false}")
+  provisioningState   String   @default("{}") // persisted provisioning state for docurama.eu emails/subdomains/DNS
   sweeperLastRunAt    DateTime @default(now())
   queueDepth          Int      @default(3)
   apiReplicas         Int      @default(2)

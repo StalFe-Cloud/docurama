@@ -27,6 +27,7 @@ import { AdminLegal } from "@/components/portal/admin/admin-legal";
 import { AdminCompliance } from "@/components/portal/admin/admin-compliance";
 import { AdminBilling } from "@/components/portal/admin/admin-billing";
 import { AdminIntegrations } from "@/components/portal/admin/admin-integrations";
+import { AdminProvisioning } from "@/components/portal/admin/admin-provisioning";
 import { AdminSettings } from "@/components/portal/admin/admin-settings";
 import { AdminHealth } from "@/components/portal/admin/admin-health";
 import { AdminAudit } from "@/components/portal/admin/admin-audit";
@@ -36,7 +37,7 @@ import { UserTemplates } from "@/components/portal/user/user-templates";
 import { UserVerify } from "@/components/portal/user/user-verify";
 import { UserSettings } from "@/components/portal/user/user-settings";
 import type { SessionUser } from "@/lib/auth";
-import { FileCheck2 } from "lucide-react";
+import { BrandMark } from "@/components/brand/logo";
 
 function Portal({ user }: { user: SessionUser }) {
   const isAdmin = user.role === "PLATFORM_ADMIN";
@@ -70,6 +71,7 @@ function Portal({ user }: { user: SessionUser }) {
         {adminSection === "compliance" && <AdminCompliance />}
         {adminSection === "billing" && <AdminBilling />}
         {adminSection === "integrations" && <AdminIntegrations />}
+        {adminSection === "provisioning" && <AdminProvisioning />}
         {adminSection === "settings" && <AdminSettings />}
         {adminSection === "health" && <AdminHealth />}
         {adminSection === "audit" && <AdminAudit />}
@@ -91,9 +93,7 @@ function Portal({ user }: { user: SessionUser }) {
 function Boot() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background" role="status" aria-live="polite">
-      <span className="flex h-12 w-12 animate-pulse items-center justify-center rounded-xl bg-primary">
-        <FileCheck2 className="h-6 w-6 text-primary-foreground" aria-hidden />
-      </span>
+      <BrandMark className="h-12 w-12 animate-pulse" />
       <p className="text-sm text-muted-foreground">Loading Docurama portal…</p>
     </div>
   );
