@@ -15,11 +15,11 @@ import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
 import { createInvitation, requestOrigin } from "@/lib/onboarding";
 
 /**
- * Workspace Settings API — GET sections and POST operations behind
+ * Workspace Settings API - GET sections and POST operations behind
  * /api/workspace/settings* and the certificate download route.
  *
  * Secrets policy: SMTP passwords, SMS secrets, TOTP secrets and PKCS#12 blobs
- * are persisted but never echoed back — only masked previews / has* flags.
+ * are persisted but never echoed back - only masked previews / has* flags.
  */
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -297,7 +297,7 @@ export async function postSettingsOp(
       where: { id: me.id },
       data: { signatureName, signatureStyle: String(data.signatureStyle ?? "signature-font-caveat") },
     });
-    return jsonOk({ ok: true, message: "Signature saved — future signatures will use this exact stamp" });
+    return jsonOk({ ok: true, message: "Signature saved - future signatures will use this exact stamp" });
   }
 
   if (op === "signature.add") {
@@ -306,7 +306,7 @@ export async function postSettingsOp(
     const value = String(data.value ?? "");
     if (!value || value.length > 400_000) return jsonError("Signature data is missing or too large (max ~300 KB)");
     if (method === "type" && value.trim().length > 60) return jsonError("Typed signature must be under 60 characters");
-    // Only one default per kind — unset others when this one becomes default.
+    // Only one default per kind - unset others when this one becomes default.
     const isDefault = data.isDefault === true;
     if (isDefault) {
       await db.userSignature.updateMany({ where: { userId: me.id, kind }, data: { isDefault: false } });
@@ -370,7 +370,7 @@ export async function postSettingsOp(
       actor, actorRole: me.role, action: "organization.created", resource: `tenant:${slug}`,
       tenantName: name, detail: "New organization created from Settings → Account",
     });
-    return jsonOk({ ok: true, message: `Organization “${name}” created — you are the owner. 14-day trial started.` });
+    return jsonOk({ ok: true, message: `Organization “${name}” created - you are the owner. 14-day trial started.` });
   }
 
   // ── Access security ──
@@ -389,7 +389,7 @@ export async function postSettingsOp(
       where: { id: me.id },
       data: { passwordHash: hashPassword(next), passwordChangedAt: new Date() },
     });
-    // Revoke every other session — standard post-credential-change hygiene.
+    // Revoke every other session - standard post-credential-change hygiene.
     const others = await db.session.findMany({ where: { userId: me.id, revokedAt: null, NOT: { id: me.sessionId ?? "" } } });
     await db.session.updateMany({
       where: { id: { in: others.map((s) => s.id) } },
@@ -399,7 +399,7 @@ export async function postSettingsOp(
       data: { type: "PASSWORD_CHANGED", severity: "INFO", actor: me.email, ip: "10.42.0.7", blocked: false, detail: `${others.length} other session(s) revoked` },
     });
     await recordAudit({ actor, actorRole: me.role, action: "password.changed", resource: `user:${me.email}`, severity: "WARNING", tenantName: me.tenantName });
-    return jsonOk({ ok: true, message: `Password changed — ${others.length} other session${others.length === 1 ? "" : "s"} signed out` });
+    return jsonOk({ ok: true, message: `Password changed - ${others.length} other session${others.length === 1 ? "" : "s"} signed out` });
   }
 
   if (op === "session.revoke") {
@@ -433,7 +433,7 @@ export async function postSettingsOp(
     if (!pending) return jsonError("Start the enrolment first (no pending secret)");
     const code = String(data.code ?? "");
     if (!verifyTotp(pending, code)) {
-      return jsonError("That code is not valid yet — make sure your authenticator app added the account and check its clock", 401);
+      return jsonError("That code is not valid yet - make sure your authenticator app added the account and check its clock", 401);
     }
     const { codes, hashes } = generateRecoveryCodes();
     await db.user.update({
@@ -444,7 +444,7 @@ export async function postSettingsOp(
       data: { type: "2FA_ENABLED", severity: "INFO", actor: me.email, ip: "10.42.0.7", blocked: false, detail: "TOTP enrolled from Settings → Profile" },
     });
     await recordAudit({ actor, actorRole: me.role, action: "2fa.enabled", resource: `user:${me.email}`, severity: "WARNING", tenantName: me.tenantName });
-    // Shown exactly once — only the hashes are stored.
+    // Shown exactly once - only the hashes are stored.
     return jsonOk({ ok: true, message: "Two-factor authentication enabled", recoveryCodes: codes });
   }
 
@@ -486,7 +486,7 @@ export async function postSettingsOp(
     const row = await db.domain.create({
       data: { tenantId, domain, purpose: "SENDING", token, status: "PENDING", method: "TXT" },
     });
-    return jsonOk({ ok: true, message: `Domain ${domain} added — publish the TXT record below, then verify`, id: row.id, token });
+    return jsonOk({ ok: true, message: `Domain ${domain} added - publish the TXT record below, then verify`, id: row.id, token });
   }
 
   if (op === "domain.verify") {
@@ -543,7 +543,7 @@ export async function postSettingsOp(
       if (already) return jsonError("This person is already a member of the workspace");
     }
     // Real invitations: a tokenized link is emailed (queued in the outbox);
-    // the invited person creates their own password at /invite/<token> — the
+    // the invited person creates their own password at /invite/<token> - the
     // workspace never fabricates accounts or credentials on their behalf.
     const role = ["ADMIN", "MEMBER"].includes(String(data.role)) ? String(data.role) : "MEMBER";
     await createInvitation({
@@ -556,7 +556,7 @@ export async function postSettingsOp(
       action: "invite.sent", resource: `invite:${email}`, tenantName: me.tenantName,
       detail: `Invitation queued for ${email} (${role})`,
     });
-    return jsonOk({ ok: true, message: `Invitation sent to ${email} — they create their own password from the link` });
+    return jsonOk({ ok: true, message: `Invitation sent to ${email} - they create their own password from the link` });
   }
 
   if (op === "invite-revoke") {
@@ -585,15 +585,15 @@ export async function postSettingsOp(
     const email = String(data.email ?? "").trim() || null;
     const purpose = data.purpose === "sealing" ? "sealing" : "signing";
     const days = Math.min(1095, Math.max(30, Number(data.days ?? 365)));
-    if (commonName.length < 3) return jsonError("Certificate name (CN) is required — e.g. “Northwind Signing 2026”");
+    if (commonName.length < 3) return jsonError("Certificate name (CN) is required - e.g. “Northwind Signing 2026”");
     if (email && !/.+@.+\..+/.test(email)) return jsonError("Enter a valid email or leave it empty");
     const pendingCount = await db.signingCertificate.count({ where: { tenantId, status: "PENDING" } });
-    if (pendingCount >= 5) return jsonError("Too many pending certificates — provision or delete the existing ones first");
+    if (pendingCount >= 5) return jsonError("Too many pending certificates - provision or delete the existing ones first");
     const cert = await db.signingCertificate.create({
       data: {
         tenantId, userId: me.id, commonName, organization, email, purpose, validityDays: days,
         status: "PENDING",
-        // Placeholder identity — replaced with real values when provisioned via OpenSSL.
+        // Placeholder identity - replaced with real values when provisioned via OpenSSL.
         serialNumber: "PENDING", thumbprint: "PENDING", issuer: "Pending issuance",
         notBefore: new Date(), notAfter: new Date(Date.now() + days * 86400_000),
       },
@@ -602,7 +602,7 @@ export async function postSettingsOp(
       actor, actorRole: me.role, action: "certificate.requested", resource: `certificate:${cert.id}`,
       tenantName: me.tenantName, detail: `CN=${commonName}, ${days} days, purpose=${purpose}`,
     });
-    return jsonOk({ ok: true, message: `Certificate “${commonName}” requested — provision it in one click when ready`, id: cert.id });
+    return jsonOk({ ok: true, message: `Certificate “${commonName}” requested - provision it in one click when ready`, id: cert.id });
   }
 
   if (op === "cert.provision") {
@@ -639,7 +639,7 @@ export async function postSettingsOp(
       });
       return jsonOk({
         ok: true,
-        message: `Certificate issued — serial ${issued.serialNumber.slice(0, 16)}… Download the .p12 bundle now`,
+        message: `Certificate issued - serial ${issued.serialNumber.slice(0, 16)}… Download the .p12 bundle now`,
       });
     } catch (err) {
       return jsonError(err instanceof Error ? err.message : "Certificate issuance failed", 500);
@@ -652,7 +652,7 @@ export async function postSettingsOp(
     if (cert.status !== "ISSUED") return jsonError("Only issued certificates can be activated");
     if (cert.notAfter.getTime() < Date.now()) return jsonError("This certificate has expired");
     if (cert.userId !== me.id && !adminRoles(me)) return jsonError("Only the certificate owner or a workspace admin can activate it", 403);
-    // One active certificate per purpose — deactivate the others.
+    // One active certificate per purpose - deactivate the others.
     await db.signingCertificate.updateMany({
       where: { tenantId, purpose: cert.purpose, status: "ACTIVE" },
       data: { status: "ISSUED" },
@@ -674,7 +674,7 @@ export async function postSettingsOp(
       actor, actorRole: me.role, action: "certificate.revoked", resource: `certificate:${cert.id}`,
       severity: "CRITICAL", tenantName: me.tenantName, detail: `Serial ${cert.serialNumber.slice(0, 16)}… revoked`,
     });
-    return jsonOk({ ok: true, message: `Certificate revoked — new signatures will no longer use it` });
+    return jsonOk({ ok: true, message: `Certificate revoked - new signatures will no longer use it` });
   }
 
   if (op === "cert.delete") {
@@ -703,7 +703,7 @@ export async function postSettingsOp(
       actor, actorRole: me.role, action: "tsa.configured", resource: `tenant:${me.tenantSlug}`,
       tenantName: me.tenantName, detail: `TSA ${url} (${hashAlgorithm}) ${enabled ? "enabled" : "saved disabled"}`,
     });
-    return jsonOk({ ok: true, message: `TSA configuration saved — ${url}` });
+    return jsonOk({ ok: true, message: `TSA configuration saved - ${url}` });
   }
 
   if (op === "tsa.test") {
@@ -719,7 +719,7 @@ export async function postSettingsOp(
         const res = await fetch(tsa.url, { method: "GET", signal: ctrl.signal, redirect: "manual" });
         const latency = Date.now() - started;
         status = "OK";
-        note = `Reachable — HTTP ${res.status} in ${latency} ms over ${tsa.url.startsWith("https") ? "TLS" : "plain HTTP"}. RFC 3161 token issuance runs in the sealing pipeline.`;
+        note = `Reachable - HTTP ${res.status} in ${latency} ms over ${tsa.url.startsWith("https") ? "TLS" : "plain HTTP"}. RFC 3161 token issuance runs in the sealing pipeline.`;
       } finally {
         clearTimeout(timer);
       }
@@ -737,7 +737,7 @@ export async function postSettingsOp(
 
   // ── eSign preferences ──
   if (op === "part11.save") {
-    // 21 CFR Part 11 compliance mode — lives on the Account tab but shares
+    // 21 CFR Part 11 compliance mode - lives on the Account tab but shares
     // the EsignPreferences row with the eSign tab.
     const prefs = await ensureEsignPrefs(tenantId);
     const part11Mode = data.part11Mode === true;
@@ -755,7 +755,7 @@ export async function postSettingsOp(
       severity: "WARNING", tenantName: me.tenantName,
       detail: `21 CFR Part 11 mode ${part11Mode ? "enabled" : "disabled"}${part11Mode ? ` · re-auth ${requireReauth ? "required" : "optional"}` : ""}`,
     });
-    return jsonOk({ ok: true, message: `Part 11 compliance mode ${part11Mode ? "enabled" : "disabled"} — ${prefs.consentVersion} agreement saved` });
+    return jsonOk({ ok: true, message: `Part 11 compliance mode ${part11Mode ? "enabled" : "disabled"} - ${prefs.consentVersion} agreement saved` });
   }
 
   if (op === "esign.save") {
@@ -839,7 +839,7 @@ export async function postSettingsOp(
       tenantName: me.tenantName,
       detail: `SMTP ${smtpHost ? `override (${smtpHost})` : "platform default"} · reminders=${reminderMode} every ${reminderIntervalDays}d (max ${reminderMaxCount})`,
     });
-    return jsonOk({ ok: true, message: "Notification settings saved — including the reminder policy" });
+    return jsonOk({ ok: true, message: "Notification settings saved - including the reminder policy" });
   }
 
   if (op === "smtp.test") {
@@ -850,7 +850,7 @@ export async function postSettingsOp(
       const platform = await db.platformSetting.findUnique({ where: { id: "singleton" } });
       return jsonOk({
         ok: true,
-        message: `No per-organization SMTP override — using the platform relay ${platform?.smtpHost ?? "smtp.eu.mailprovider.io"}:${platform?.smtpPort ?? 587} (${platform?.smtpFrom ?? "Docurama Sign"})`,
+        message: `No per-organization SMTP override - using the platform relay ${platform?.smtpHost ?? "smtp.eu.mailprovider.io"}:${platform?.smtpPort ?? 587} (${platform?.smtpFrom ?? "Docurama Sign"})`,
       });
     }
     const port = n!.smtpPort;
@@ -859,9 +859,9 @@ export async function postSettingsOp(
       const socket = new net.Socket();
       const finish = (ok: boolean, note: string) => { socket.destroy(); resolve({ ok, note }); };
       socket.setTimeout(5000);
-      socket.once("connect", () => finish(true, `Connected to ${host}:${port} in ${Date.now() - started} ms — relay reachable`));
+      socket.once("connect", () => finish(true, `Connected to ${host}:${port} in ${Date.now() - started} ms - relay reachable`));
       socket.once("timeout", () => finish(false, `Connection to ${host}:${port} timed out after 5 s`));
-      socket.once("error", (err) => finish(false, `Could not connect to ${host}:${port} — ${err.message}`));
+      socket.once("error", (err) => finish(false, `Could not connect to ${host}:${port} - ${err.message}`));
       socket.connect(port, host);
     });
     await db.notificationSettings.update({
@@ -979,13 +979,13 @@ export async function postSettingsOp(
           { signal: AbortSignal.timeout(6000) },
         );
         if (res.ok) {
-          note = `WhatsApp Cloud API token validated live against Meta (HTTP ${res.status}) — the channel is production-ready. SMS config accepted → ${to}.`;
+          note = `WhatsApp Cloud API token validated live against Meta (HTTP ${res.status}) - the channel is production-ready. SMS config accepted → ${to}.`;
         } else {
           status = "ERROR";
-          note = `Meta rejected the WhatsApp token (HTTP ${res.status}) — check Settings → SMS credentials.`;
+          note = `Meta rejected the WhatsApp token (HTTP ${res.status}) - check Settings → SMS credentials.`;
         }
       } catch {
-        note = `Could not reach Meta to validate the WhatsApp token (network) — SMS config accepted → ${to}.`;
+        note = `Could not reach Meta to validate the WhatsApp token (network) - SMS config accepted → ${to}.`;
       }
     }
 
@@ -1012,8 +1012,8 @@ export async function postSettingsOp(
       data: { tenantId, name, prefix, secretHash: sha(fullKey), scope, createdBy: actor },
     });
     await recordAudit({ actor, actorRole: me.role, action: "api_key.created", resource: `api_key:${prefix}`, severity: "WARNING", tenantName: me.tenantName });
-    // The full key is returned exactly once — only its hash is stored.
-    return jsonOk({ ok: true, message: `Key created — copy it now, it will not be shown again`, key: fullKey, prefix });
+    // The full key is returned exactly once - only its hash is stored.
+    return jsonOk({ ok: true, message: `Key created - copy it now, it will not be shown again`, key: fullKey, prefix });
   }
 
   if (op === "revoke-key") {
@@ -1041,7 +1041,7 @@ export async function postSettingsOp(
       severity: "WARNING", tenantName: me.tenantName,
       detail: `MCP ${enabled ? "enabled" : "disabled"} (${transport}, ${tools.length} tools, ${rateLimitPerMin}/min)`,
     });
-    return jsonOk({ ok: true, message: `MCP server ${enabled ? "enabled" : "disabled"} — ${tools.length} tool${tools.length === 1 ? "" : "s"} exposed at /api/mcp` });
+    return jsonOk({ ok: true, message: `MCP server ${enabled ? "enabled" : "disabled"} - ${tools.length} tool${tools.length === 1 ? "" : "s"} exposed at /api/mcp` });
   }
 
   return jsonError(`Unsupported operation: ${op}`);

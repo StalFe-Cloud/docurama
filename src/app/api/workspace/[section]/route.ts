@@ -147,7 +147,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           where: { publicCode: code },
           include: { recipients: true, tenant: { select: { name: true } } },
         });
-        // Honest verification states — never present an unsigned document as verified.
+        // Honest verification states - never present an unsigned document as verified.
         if (!e) return jsonOk({ result: "NOT_FOUND", code });
         if (e.status === "VOIDED") return jsonOk({ result: "VOIDED", code, voidedAt: e.voidedAt?.toISOString() ?? null, voidReason: e.voidReason });
         if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
@@ -166,7 +166,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
 
       case "settings": {
-        // Profile, org, memberships, saved signatures, API keys, team — the
+        // Profile, org, memberships, saved signatures, API keys, team - the
         // full production-settings base payload.
         return getSettingsSection("settings", me);
       }
@@ -228,15 +228,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
               { envelopeId: env.id, actor: "Docurama", action: "SENT", detail: "Signing invitations delivered via SMTP" },
             ],
           });
-          return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} — code ${code}` });
+          return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} - code ${code}` });
         }
         if (op === "remind") {
           const e = await db.envelope.findFirst({ where: { id, tenantId: tenantId! } });
           if (!e) return jsonError("Envelope not found", 404);
           if (!["SENT", "PARTIALLY_SIGNED"].includes(e.status)) return jsonError("Reminders can only be sent for active envelopes");
-          // Anti-spam throttle — the original UI allowed unlimited reminder spam.
+          // Anti-spam throttle - the original UI allowed unlimited reminder spam.
           if (e.lastRemindedAt && Date.now() - e.lastRemindedAt.getTime() < 6 * 3600000) {
-            return jsonError("A reminder was already sent recently — please wait before sending another.");
+            return jsonError("A reminder was already sent recently - please wait before sending another.");
           }
           await db.envelope.update({ where: { id }, data: { lastRemindedAt: new Date() } });
           await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "REMINDED", detail: "Reminder email dispatched" } });

@@ -64,7 +64,7 @@ export function EsignTab() {
   );
 }
 
-// ── Signing certificates (X.509 / PKCS#12) — one-click provisioning ──────────
+// ── Signing certificates (X.509 / PKCS#12) - one-click provisioning ──────────
 
 function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
   const act = useSettingsAct(["settings-esign"]);
@@ -76,7 +76,7 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Award className="h-4 w-4 text-muted-foreground" aria-hidden /> Signing certificates — X.509 / PKCS#12
+            <Award className="h-4 w-4 text-muted-foreground" aria-hidden /> Signing certificates - X.509 / PKCS#12
           </CardTitle>
           <CardDescription>
             Real RSA-2048 certificates issued by OpenSSL in one click, exactly like the DNS flow: request → provision → activate → download the encrypted .p12.
@@ -91,7 +91,7 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
           <div className="rounded-lg border border-dashed p-6 text-center">
             <FileSignature className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden />
             <p className="text-sm text-muted-foreground">
-              No signing certificates yet — create one and provision it in a single click. Signatures sealed without a workspace certificate use the platform certificate.
+              No signing certificates yet - create one and provision it in a single click. Signatures sealed without a workspace certificate use the platform certificate.
             </p>
           </div>
         ) : (
@@ -160,7 +160,7 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
           ))
         )}
         <p className="text-xs text-muted-foreground">
-          The PKCS#12 bundle is encrypted with your passphrase — Docurama stores the encrypted blob only, never the passphrase itself.
+          The PKCS#12 bundle is encrypted with your passphrase - Docurama stores the encrypted blob only, never the passphrase itself.
         </p>
       </CardContent>
 
@@ -186,7 +186,7 @@ function CreateCertDialog({
         <DialogHeader>
           <DialogTitle>Request a signing certificate</DialogTitle>
           <DialogDescription>
-            Fill in the certificate identity — provisioning happens in one click right after, exactly like domain DNS verification.
+            Fill in the certificate identity - provisioning happens in one click right after, exactly like domain DNS verification.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -252,7 +252,7 @@ function ProvisionDialog({
         <DialogHeader>
           <DialogTitle>Provision “{target?.name}”</DialogTitle>
           <DialogDescription>
-            OpenSSL generates a real RSA-2048 key pair and issues the certificate. Choose an encryption passphrase for the .p12 — it is never stored, so keep it safe.
+            OpenSSL generates a real RSA-2048 key pair and issues the certificate. Choose an encryption passphrase for the .p12 - it is never stored, so keep it safe.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -322,7 +322,7 @@ function TsaCard({ tsa }: { tsa: EsignData["tsa"] }) {
                 <SelectTrigger id="tsa-preset" className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TSA_PRESETS.map((p) => (
-                    <SelectItem key={p.key} value={p.key}>{p.name} — {p.note}</SelectItem>
+                    <SelectItem key={p.key} value={p.key}>{p.name} - {p.note}</SelectItem>
                   ))}
                   <SelectItem value="custom">Custom URL</SelectItem>
                 </SelectContent>
@@ -378,7 +378,7 @@ function TsaCard({ tsa }: { tsa: EsignData["tsa"] }) {
                   {tsa.lastTestStatus} {tsa.lastTestLatencyMs != null ? `· ${tsa.lastTestLatencyMs} ms` : ""} · {fmtDate(tsa.lastTestAt)}
                 </p>
               ) : (
-                <p className="mt-1">Never tested — run a reachability check before enabling.</p>
+                <p className="mt-1">Never tested - run a reachability check before enabling.</p>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -440,7 +440,7 @@ function PreferencesCard({ prefs }: { prefs: EsignData["prefs"] }) {
             checked={form.flattenFormFields}
             onCheckedChange={(v) => setForm({ ...form, flattenFormFields: v })}
             label="Flatten form fields"
-            desc="Convert interactive form fields into permanent content after signing — nothing editable remains"
+            desc="Convert interactive form fields into permanent content after signing - nothing editable remains"
           />
           <ToggleRow
             checked={form.sealOnCompletion}
@@ -454,7 +454,7 @@ function PreferencesCard({ prefs }: { prefs: EsignData["prefs"] }) {
               <SelectTrigger id="sig-level" className="h-11"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ESIGN_LEVELS.map((l) => (
-                  <SelectItem key={l.key} value={l.key}>{l.label} — {l.description}</SelectItem>
+                  <SelectItem key={l.key} value={l.key}>{l.label} - {l.description}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -499,7 +499,7 @@ function PreferencesCard({ prefs }: { prefs: EsignData["prefs"] }) {
               <button
                 key={t.token}
                 type="button"
-                title={`${t.description} — e.g. ${t.example}`}
+                title={`${t.description} - e.g. ${t.example}`}
                 onClick={() => setForm({ ...form, filenameFormat: `${form.filenameFormat}${t.token}` })}
                 className="rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
@@ -511,7 +511,7 @@ function PreferencesCard({ prefs }: { prefs: EsignData["prefs"] }) {
 
         <div className="flex items-center justify-between border-t pt-4">
           <p className="text-xs text-muted-foreground">
-            {prefs.part11Mode ? "21 CFR Part 11 mode is ON (Settings → Account) — re-authentication and consent apply." : "Part 11 mode is off — enable it in Settings → Account for life-sciences workflows."}
+            {prefs.part11Mode ? "21 CFR Part 11 mode is ON (Settings → Account) - re-authentication and consent apply." : "Part 11 mode is off - enable it in Settings → Account for life-sciences workflows."}
           </p>
           <Button
             className="h-11"

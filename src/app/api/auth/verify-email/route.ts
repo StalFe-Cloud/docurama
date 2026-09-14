@@ -7,9 +7,9 @@ import { consumeVerificationToken } from "@/lib/onboarding";
 /**
  * Email verification for signup.
  *
- *  GET  /api/auth/verify-email?token=…  — the link target from the email:
+ *  GET  /api/auth/verify-email?token=…  - the link target from the email:
  *      consumes the token and redirects to /welcome with a result flag.
- *  POST /api/auth/verify-email {token}  — JSON variant used by the wizard.
+ *  POST /api/auth/verify-email {token}  - JSON variant used by the wizard.
  */
 async function verify(token: string): Promise<{ userId: string; email: string } | null> {
   if (!token || token.length < 16) return null;

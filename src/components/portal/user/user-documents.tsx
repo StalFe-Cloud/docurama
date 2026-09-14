@@ -142,7 +142,7 @@ export function UserDocuments() {
                 </Button>
               }
               title="Void this envelope?"
-              description={`${e.title} — signers are notified immediately and the audit trail records your reason verbatim.`}
+              description={`${e.title} - signers are notified immediately and the audit trail records your reason verbatim.`}
               confirmLabel="Void envelope"
               requireReason
               onConfirm={(reason) => act.mutateAsync({ op: "void", id: e.id, data: { reason } })}
@@ -160,7 +160,7 @@ export function UserDocuments() {
     <div className="space-y-6">
       <PageHeader
         title="Documents"
-        description="Every envelope your workspace has sent — with signer progress, reminders and cryptographic evidence."
+        description="Every envelope your workspace has sent - with signer progress, reminders and cryptographic evidence."
         actions={
           <Button className="h-11" onClick={() => setSendOpen(true)}>
             <Send className="h-4 w-4" aria-hidden /> New envelope
@@ -193,7 +193,7 @@ export function UserDocuments() {
         onRetry={() => refetch()}
         onRowClick={(row) => setDetailId(row.id)}
         emptyTitle={status === "ALL" ? "No documents yet" : "No documents with this status"}
-        emptyDescription={status === "ALL" ? "Send your first envelope — recipients sign in their browser, no account needed." : "Try another status filter."}
+        emptyDescription={status === "ALL" ? "Send your first envelope - recipients sign in their browser, no account needed." : "Try another status filter."}
         emptyAction={
           status === "ALL" ? (
             <Button size="sm" className="h-11" onClick={() => setSendOpen(true)}>
@@ -283,7 +283,7 @@ export function UserDocuments() {
                   ))}
                 </ol>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Signing links are unique per recipient — tokens are never shared between signers.
+                  Signing links are unique per recipient - tokens are never shared between signers.
                 </p>
               </section>
 
@@ -326,7 +326,7 @@ export function UserDocuments() {
           <DialogHeader>
             <DialogTitle>Send a document for signature</DialogTitle>
             <DialogDescription>
-              Recipients receive a personal signing link — each token is unique and never exposed to other parties.
+              Recipients receive a personal signing link - each token is unique and never exposed to other parties.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -335,7 +335,7 @@ export function UserDocuments() {
               <Input
                 id="doc-title" value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="e.g. Mutual NDA — Aurora Legal" className="h-11"
+                placeholder="e.g. Mutual NDA - Aurora Legal" className="h-11"
               />
             </div>
             <div className="space-y-1.5">

@@ -36,9 +36,9 @@ type TenantDetail = {
 };
 
 const PLANS = [
-  { code: "STARTER", label: "Starter — €19/mo · 25 envelopes · 3 seats" },
-  { code: "BUSINESS", label: "Business — €79/mo · 250 envelopes · 10 seats" },
-  { code: "ENTERPRISE", label: "Enterprise — €349/mo · 5,000 envelopes · 100 seats" },
+  { code: "STARTER", label: "Starter - €19/mo · 25 envelopes · 3 seats" },
+  { code: "BUSINESS", label: "Business - €79/mo · 250 envelopes · 10 seats" },
+  { code: "ENTERPRISE", label: "Enterprise - €349/mo · 5,000 envelopes · 100 seats" },
 ];
 
 export function AdminTenants() {
@@ -101,7 +101,7 @@ export function AdminTenants() {
     },
     {
       key: "mrr", header: "MRR",
-      render: (t) => <span className="tabular-nums text-sm">{t.subscription ? `€${t.subscription.mrrEur}` : "—"}</span>,
+      render: (t) => <span className="tabular-nums text-sm">{t.subscription ? `€${t.subscription.mrrEur}` : "-"}</span>,
     },
     { key: "created", header: "Since", render: (t) => <span className="text-sm text-muted-foreground">{fmtDate(t.createdAt)}</span> },
     {
@@ -306,7 +306,7 @@ export function AdminTenants() {
       <Dialog open={!!planDialogFor} onOpenChange={(v) => !v && setPlanDialogFor(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change plan — {planDialogFor?.name}</DialogTitle>
+            <DialogTitle>Change plan - {planDialogFor?.name}</DialogTitle>
             <DialogDescription>
               The new quota applies immediately and the subscription MRR is adjusted. Tenants are notified by email.
             </DialogDescription>

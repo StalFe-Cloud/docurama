@@ -40,7 +40,7 @@ export function ApiTab() {
   }
 
   // Base URL derived client-side (these cards mount only after the query
-  // resolves — post-hydration — so window is always available here).
+  // resolves - post-hydration - so window is always available here).
   const base = typeof window !== "undefined" ? window.location.origin : "https://app.docurama.eu";
   const snippets = quickstartSnippets(base);
 
@@ -79,7 +79,7 @@ function KeysCard({ keys }: { keys: KeysData["apiKeys"] }) {
       </CardHeader>
       <CardContent className="p-0">
         {keys.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">No API keys — create one to use the Docurama REST API and MCP server.</p>
+          <p className="p-6 text-sm text-muted-foreground">No API keys - create one to use the Docurama REST API and MCP server.</p>
         ) : (
           <ul className="divide-y">
             {keys.map((k) => (
@@ -114,7 +114,7 @@ function KeysCard({ keys }: { keys: KeysData["apiKeys"] }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create API key</DialogTitle>
-            <DialogDescription>The full secret is displayed once — store it securely.</DialogDescription>
+            <DialogDescription>The full secret is displayed once - store it securely.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -126,10 +126,10 @@ function KeysCard({ keys }: { keys: KeysData["apiKeys"] }) {
               <Select value={form.scope} onValueChange={(v) => setForm({ ...form, scope: v })}>
                 <SelectTrigger id="wkey-scope" className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="READONLY">Read-only — envelopes + verification</SelectItem>
-                  <SelectItem value="ENVELOPES">Envelopes — full envelope access</SelectItem>
-                  <SelectItem value="TEMPLATES">Templates — template catalogue</SelectItem>
-                  <SelectItem value="FULL">Full access — everything incl. MCP</SelectItem>
+                  <SelectItem value="READONLY">Read-only - envelopes + verification</SelectItem>
+                  <SelectItem value="ENVELOPES">Envelopes - full envelope access</SelectItem>
+                  <SelectItem value="TEMPLATES">Templates - template catalogue</SelectItem>
+                  <SelectItem value="FULL">Full access - everything incl. MCP</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -153,13 +153,13 @@ function KeysCard({ keys }: { keys: KeysData["apiKeys"] }) {
         </DialogContent>
       </Dialog>
 
-      {/* Full secret — shown exactly once */}
+      {/* Full secret - shown exactly once */}
       <Dialog open={Boolean(created)} onOpenChange={(v) => { if (!v) setCreated(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Copy your API key now</DialogTitle>
             <DialogDescription>
-              This is the only time the full key is displayed. Docurama stores a SHA-256 hash — it cannot be recovered.
+              This is the only time the full key is displayed. Docurama stores a SHA-256 hash - it cannot be recovered.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border bg-muted/40 p-3">
@@ -295,7 +295,7 @@ function ReferenceCard() {
                               {ep.params.map((p) => (
                                 <li key={p.name} className="text-xs">
                                   <code className="rounded bg-muted px-1 py-0.5 font-mono">{p.name}</code>
-                                  <span className="ml-1.5 text-muted-foreground">({p.type}) — {p.description}</span>
+                                  <span className="ml-1.5 text-muted-foreground">({p.type}) - {p.description}</span>
                                 </li>
                               ))}
                             </ul>

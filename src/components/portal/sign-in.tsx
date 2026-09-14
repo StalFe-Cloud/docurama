@@ -12,13 +12,13 @@ import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/l
 
 const DEMO_ACCOUNTS = [
   {
-    label: "Platform Admin — Docurama SAS",
+    label: "Platform Admin - Docurama SAS",
     email: "admin@docurama.eu",
     password: "admin1234",
     desc: "Full admin control panel: tenants, compliance, billing, ops",
   },
   {
-    label: "Workspace Admin — Northwind Logistics",
+    label: "Workspace Admin - Northwind Logistics",
     email: "alex@northwind.example",
     password: "demo1234",
     desc: "Enterprise user portal: documents, templates, settings",
@@ -55,7 +55,7 @@ export function SignIn() {
       }),
     onSuccess: (body) => {
       if (body?.requiresOtp && body?.challenge) {
-        // Password accepted — the account requires the second factor.
+        // Password accepted - the account requires the second factor.
         setChallenge(body.challenge);
         setOtp("");
         return;
@@ -107,7 +107,7 @@ export function SignIn() {
           </h1>
           <p className="text-sm leading-relaxed text-white/70">
             PAdES digital signatures with honest conformance reporting, RFC 3161 timestamps,
-            GDPR-grade compliance operations and full platform administration — in one console.
+            GDPR-grade compliance operations and full platform administration - in one console.
           </p>
           <ul className="space-y-2.5 text-sm text-white/80">
             {[
@@ -139,7 +139,7 @@ export function SignIn() {
             </h2>
             <p className="text-sm text-muted-foreground">
               {challenge
-                ? `Enter the 6-digit code from your authenticator app${useRecovery ? " — or paste one of your recovery codes" : ""}.`
+                ? `Enter the 6-digit code from your authenticator app${useRecovery ? " - or paste one of your recovery codes" : ""}.`
                 : "Platform administrators and workspace members use the same door."}
             </p>
           </div>
@@ -213,7 +213,7 @@ export function SignIn() {
             )}
             {login.isError && (
               <p role="alert" className="text-sm text-destructive">
-                {(login.error as ApiError)?.message ?? "Sign-in failed — please try again."}
+                {(login.error as ApiError)?.message ?? "Sign-in failed - please try again."}
               </p>
             )}
           </form>
@@ -230,7 +230,7 @@ export function SignIn() {
           {!challenge && (
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Demo accounts — one click to enter
+                Demo accounts - one click to enter
               </p>
               {DEMO_ACCOUNTS.map((acc) => (
                 <button

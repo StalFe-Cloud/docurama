@@ -82,7 +82,7 @@ function GatewayCard({ g }: { g: SmsData["gateway"] }) {
           <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden /> SMS delivery gateway
         </CardTitle>
         <CardDescription>
-          Send one-time codes and reminders by SMS. 14 researched providers — including genuinely free tiers (WhatsApp Cloud API) and EU low-cost routes.
+          Send one-time codes and reminders by SMS. 14 researched providers - including genuinely free tiers (WhatsApp Cloud API) and EU low-cost routes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -167,7 +167,7 @@ function GatewayCard({ g }: { g: SmsData["gateway"] }) {
                 checked={form.whatsappEnabled}
                 onCheckedChange={(v) => setForm({ ...form, whatsappEnabled: v })}
                 label="Enable WhatsApp delivery"
-                desc="1,000 free user-initiated conversations/month on the Cloud API — the cheapest signer-verification channel"
+                desc="1,000 free user-initiated conversations/month on the Cloud API - the cheapest signer-verification channel"
               />
               {form.whatsappEnabled && (
                 <div className="space-y-1.5">
@@ -182,7 +182,7 @@ function GatewayCard({ g }: { g: SmsData["gateway"] }) {
                     placeholder="Permanent token from Meta for Developers"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Cloud API tokens are validated live against Meta&apos;s servers when you test — no fake green lights.
+                    Cloud API tokens are validated live against Meta&apos;s servers when you test - no fake green lights.
                   </p>
                 </div>
               )}
@@ -208,7 +208,7 @@ function GatewayCard({ g }: { g: SmsData["gateway"] }) {
                 <StatusBadge status={g.status === "tested" ? "ACTIVE" : g.status === "error" ? "FAILED" : g.status.toUpperCase().replaceAll("_", " ")} />
                 {g.lastTestAt && <>last test {fmtDate(g.lastTestAt)}{g.lastTestTo ? ` → ${g.lastTestTo}` : ""}</>}
               </div>
-              {g.lastTestStatus && <p className="text-xs text-muted-foreground">{g.lastTestStatus === "OK" ? "Configuration validated" : "Last validation failed — check the credentials"}</p>}
+              {g.lastTestStatus && <p className="text-xs text-muted-foreground">{g.lastTestStatus === "OK" ? "Configuration validated" : "Last validation failed - check the credentials"}</p>}
             </div>
           </div>
         </div>
@@ -233,10 +233,10 @@ function ProviderCatalogCard({ lowCost, current }: { lowCost: boolean; current: 
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden /> SMS &amp; WhatsApp providers — free and low-cost research
+            <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden /> SMS &amp; WhatsApp providers - free and low-cost research
           </CardTitle>
           <CardDescription>
-            Fourteen gateways researched for a French/EU sender. Free tiers in green; “low-cost” picks are typically 40–70% below Twilio list prices.
+            Fourteen gateways researched for a French/EU sender. Free tiers in green; “low-cost” picks are typically 40-70% below Twilio list prices.
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" className="h-10" onClick={() => setOnlyCheap((v) => !v)} aria-pressed={onlyCheap}>
@@ -303,7 +303,7 @@ function ProviderCatalogCard({ lowCost, current }: { lowCost: boolean; current: 
           </table>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Optional by design: SMS/WhatsApp is an add-on channel — the workspace works fully with email-only flows, and the gateway stays “not configured” until you save credentials.
+          Optional by design: SMS/WhatsApp is an add-on channel - the workspace works fully with email-only flows, and the gateway stays “not configured” until you save credentials.
         </p>
       </CardContent>
     </Card>

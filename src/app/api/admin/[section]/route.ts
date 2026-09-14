@@ -415,14 +415,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const pass = dom.method === "CNAME" ? Math.random() > 0.15 : dom.status !== "FAILED";
           await db.domain.update({ where: { id }, data: { status: pass ? "VERIFIED" : "FAILED", verifiedAt: pass ? new Date() : null } });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: pass ? "domain.verified" : "domain.verify_failed", resource: `domain:${dom.domain}`, severity: "WARNING", detail: `Method ${dom.method}` });
-          return jsonOk({ ok: true, message: pass ? "Domain verified" : "Verification failed — DNS record not found" });
+          return jsonOk({ ok: true, message: pass ? "Domain verified" : "Verification failed - DNS record not found" });
         }
         if (op === "approve-join" || op === "reject-join") {
           const dom = await db.domain.findUnique({ where: { id } });
           if (!dom) return jsonError("Domain not found", 404);
           await db.domain.update({ where: { id }, data: { status: op === "approve-join" ? "PENDING" : "FAILED" } });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: `domain.join_${op === "approve-join" ? "approved" : "rejected"}`, resource: `domain:${dom.domain}`, severity: "WARNING" });
-          return jsonOk({ ok: true, message: op === "approve-join" ? "Join request approved — DNS verification pending" : "Join request rejected" });
+          return jsonOk({ ok: true, message: op === "approve-join" ? "Join request approved - DNS verification pending" : "Join request rejected" });
         }
         return jsonError("Unsupported operation");
       }
@@ -453,7 +453,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         if (op === "sweep-retention") {
           await db.retentionPolicy.updateMany({ where: { status: "ACTIVE" }, data: { lastSweepAt: new Date() } });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "retention.sweep_completed", resource: "platform:retention", severity: "INFO", detail: "Manual sweep triggered from admin console" });
-          return jsonOk({ ok: true, message: "Retention sweep executed — 3 policies evaluated" });
+          return jsonOk({ ok: true, message: "Retention sweep executed - 3 policies evaluated" });
         }
         if (op === "release-hold") {
           await db.legalHold.update({ where: { id }, data: { status: "RELEASED", releasedAt: new Date() } });
@@ -494,7 +494,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
         if (op === "run-drill") {
           await db.restoreDrill.update({ where: { id }, data: { executedAt: new Date(), rtoActual: "0h 48m", result: "PASS", notes: "Re-run from admin console" } });
-          return jsonOk({ ok: true, message: "Restore drill executed — PASS" });
+          return jsonOk({ ok: true, message: "Restore drill executed - PASS" });
         }
         return jsonError("Unsupported operation");
       }
@@ -506,7 +506,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           if (!sub) return jsonError("Subscription not found", 404);
           await db.subscription.update({ where: { id }, data: { failedPayment: false, status: "ACTIVE" } });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "billing.payment_retried", resource: `subscription:${id}`, severity: "INFO" });
-          return jsonOk({ ok: true, message: "Payment retried — invoice settled" });
+          return jsonOk({ ok: true, message: "Payment retried - invoice settled" });
         }
         if (op === "cancel-subscription") {
           const reason = String(data.reason ?? "").trim();
@@ -555,7 +555,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             data: { endpointId: id, event: "admin.test_event", statusCode: code, durationMs: 90 + Math.floor(Math.random() * 300), success, at: new Date() },
           });
           await db.webhookEndpoint.update({ where: { id }, data: { lastDeliveryAt: new Date() } });
-          return jsonOk({ ok: true, message: success ? `Test delivered — HTTP ${code}` : `Test failed — HTTP ${code}` });
+          return jsonOk({ ok: true, message: success ? `Test delivered - HTTP ${code}` : `Test failed - HTTP ${code}` });
         }
         return jsonError("Unsupported operation");
       }
@@ -575,7 +575,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
         if (op === "test-smtp") {
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "smtp.test_sent", resource: "platform:settings", severity: "INFO" });
-          return jsonOk({ ok: true, message: "Test email delivered — check the inbox of the from-address" });
+          return jsonOk({ ok: true, message: "Test email delivered - check the inbox of the from-address" });
         }
         if (op === "save-tsa") {
           const url = String(data.tsaUrl ?? "").trim();
@@ -600,7 +600,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             data: { auditChainBlockHeight: { increment: 1 }, auditChainSealedAt: new Date() },
           });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "audit_chain.sealed", resource: "platform:audit", severity: "INFO" });
-          return jsonOk({ ok: true, message: "Audit chain sealed — new block committed" });
+          return jsonOk({ ok: true, message: "Audit chain sealed - new block committed" });
         }
         return jsonError("Unsupported operation");
       }
@@ -633,7 +633,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             resource: `mailbox:${email.address}`, severity: "INFO",
             detail: `SMTP round-trip via ${email.kind === "MAILBOX_SMTP" ? "platform SMTP settings" : "relay"}`,
           });
-          return jsonOk({ ok: true, message: `Round-trip test sent from ${email.address} — delivery confirmed by the relay` });
+          return jsonOk({ ok: true, message: `Round-trip test sent from ${email.address} - delivery confirmed by the relay` });
         }
         if (op === "subdomain.verify") {
           const sub = SUBDOMAINS.find((s) => s.fqdn === id || s.host === id || (s.host === "" && (id === "@" || id === "docurama.eu")));
@@ -647,7 +647,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             resource: `dns:${sub.fqdn}`, severity: "INFO",
             detail: `${sub.recordType} → ${sub.target} · TLS ${sub.tls}`,
           });
-          return jsonOk({ ok: true, message: `${sub.fqdn} resolved — DNS and TLS checks passed` });
+          return jsonOk({ ok: true, message: `${sub.fqdn} resolved - DNS and TLS checks passed` });
         }
         if (op === "dns.check") {
           const rec = DNS_RECORDS.find((r) => r.id === id);
@@ -673,7 +673,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             resource: "dns:docurama.eu", severity: "INFO",
             detail: `All ${DNS_RECORDS.length} records verified`,
           });
-          return jsonOk({ ok: true, message: `Zone re-checked — ${state.verifiedRecords.length}/${DNS_RECORDS.length} records verified` });
+          return jsonOk({ ok: true, message: `Zone re-checked - ${state.verifiedRecords.length}/${DNS_RECORDS.length} records verified` });
         }
         return jsonError("Unsupported operation");
       }

@@ -82,7 +82,7 @@ function SidebarFooter({ onNavigate }: { onNavigate: (key: AdminSectionKey) => v
         <span className="min-w-0">
           <span className="block text-xs font-semibold">Public verify portal</span>
           <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-            verify.docurama.eu — anyone can check a signed document
+            verify.docurama.eu - anyone can check a signed document
           </span>
         </span>
       </button>

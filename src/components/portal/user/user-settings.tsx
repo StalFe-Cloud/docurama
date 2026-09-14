@@ -36,10 +36,10 @@ export function UserSettings({ tab, onTabChange }: { tab: SettingsTabKey; onTabC
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Account & security, profile & signatures, users, digital signatures (eSign), notifications, SMS delivery, API and MCP — every change is persisted and audit-logged."
+        description="Account & security, profile & signatures, users, digital signatures (eSign), notifications, SMS delivery, API and MCP - every change is persisted and audit-logged."
       />
 
-      {/* Tab bar — each tab is a real URL (/settings/{tab}) so it can be
+      {/* Tab bar - each tab is a real URL (/settings/{tab}) so it can be
           deep-linked, bookmarked and restored with the back button. */}
       <nav aria-label="Settings sections" className="docurama-scroll -mx-1 flex gap-1 overflow-x-auto pb-1">
         {SETTINGS_TABS.map((t) => (
@@ -61,7 +61,7 @@ export function UserSettings({ tab, onTabChange }: { tab: SettingsTabKey; onTabC
         ))}
       </nav>
 
-      {/* One mounted tab at a time — each fetches exactly its own data. */}
+      {/* One mounted tab at a time - each fetches exactly its own data. */}
       {tab === "account" && <AccountTab />}
       {tab === "profile" && <ProfileTab />}
       {tab === "users" && <UsersTab />}

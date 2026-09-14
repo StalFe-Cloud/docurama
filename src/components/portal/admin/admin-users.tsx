@@ -113,7 +113,7 @@ export function AdminUsers() {
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        description="Platform-wide directory. Enforce 2FA, deactivate accounts and audit activity — every action lands in the audit chain."
+        description="Platform-wide directory. Enforce 2FA, deactivate accounts and audit activity - every action lands in the audit chain."
       />
       <DataTable<UserRow>
         ariaLabel="User directory"

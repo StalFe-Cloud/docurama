@@ -26,7 +26,7 @@ export const MCP_TOOLS: McpTool[] = [
       properties: {
         status: { type: "string", enum: ["SENT", "PARTIALLY_SIGNED", "COMPLETED", "VOIDED", "DECLINED"], description: "Optional status filter" },
         page: { type: "number", description: "1-based page (default 1)" },
-        perPage: { type: "number", description: "Items per page, 5–50 (default 10)" },
+        perPage: { type: "number", description: "Items per page, 5-50 (default 10)" },
       },
     },
     scope: "READONLY",
@@ -143,10 +143,10 @@ export async function executeMcpTool(
         where: { publicCode: code },
         include: { recipients: true, tenant: { select: { name: true } } },
       });
-      if (!e) return text(`NOT_FOUND — no sealed document with code ${code}.`);
-      if (e.status === "VOIDED") return text(`VOIDED — ${e.title} was voided on ${e.voidedAt?.toISOString() ?? "unknown date"}.`);
+      if (!e) return text(`NOT_FOUND - no sealed document with code ${code}.`);
+      if (e.status === "VOIDED") return text(`VOIDED - ${e.title} was voided on ${e.voidedAt?.toISOString() ?? "unknown date"}.`);
       if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
-        return text(`NOT_SEALED — ${e.title} is ${e.status}; it is not sealed yet, so it cannot be verified.`);
+        return text(`NOT_SEALED - ${e.title} is ${e.status}; it is not sealed yet, so it cannot be verified.`);
       }
       return text(JSON.stringify({
         result: "VERIFIED", title: e.title, tenant: e.tenant.name,

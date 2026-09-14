@@ -65,6 +65,6 @@ export function deviceFromUserAgent(ua: string | null): string {
     : /Android/.test(ua) ? "Android"
     : /iPhone|iPad/.test(ua) ? "iOS"
     : /Linux/.test(ua) ? "Linux"
-    : "—";
+    : "-";
   return `${browser} · ${os}`;
 }

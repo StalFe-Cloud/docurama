@@ -1,6 +1,6 @@
 /**
  * Real DNS verification over DNS-over-HTTPS (Google + Cloudflare JSON APIs).
- * Used by the workspace sending-domain verification flow — the TXT record the
+ * Used by the workspace sending-domain verification flow - the TXT record the
  * customer publishes is actually queried, never simulated.
  */
 
@@ -28,7 +28,7 @@ async function dohQuery(endpoint: string, name: string, timeoutMs = 6000): Promi
 
 /**
  * Resolve TXT records for a hostname. Tries Google DoH first, then Cloudflare.
- * Returns ok:false only when both providers fail — a NXDOMAIN (Status 3) is a
+ * Returns ok:false only when both providers fail - a NXDOMAIN (Status 3) is a
  * valid, honest "no records" answer, not an error.
  */
 export async function lookupTxt(name: string): Promise<TxtLookupResult> {
@@ -62,19 +62,19 @@ export async function verifySendingDomain(domain: string, token: string): Promis
   const host = `_docurama.${domain.toLowerCase().trim()}`;
   const result = await lookupTxt(host);
   if (!result.ok) {
-    return { verified: false, note: `DNS lookup failed (${result.error}) — check again in a moment`, records: [] };
+    return { verified: false, note: `DNS lookup failed (${result.error}) - check again in a moment`, records: [] };
   }
   const expected = `docurama-verify=${token}`;
   const match = result.records.find((r) => r.trim() === expected);
   if (match) {
-    return { verified: true, note: `TXT record confirmed via ${result.provider} DoH — domain authenticated for sending`, records: result.records };
+    return { verified: true, note: `TXT record confirmed via ${result.provider} DoH - domain authenticated for sending`, records: result.records };
   }
   if (result.records.length === 0) {
-    return { verified: false, note: `No TXT records found at ${host} yet — DNS propagation can take up to 24h`, records: [] };
+    return { verified: false, note: `No TXT records found at ${host} yet - DNS propagation can take up to 24h`, records: [] };
   }
   return {
     verified: false,
-    note: `TXT records exist at ${host} but the expected value was not found — make sure it matches exactly`,
+    note: `TXT records exist at ${host} but the expected value was not found - make sure it matches exactly`,
     records: result.records,
   };
 }

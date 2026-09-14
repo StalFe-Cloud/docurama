@@ -2,11 +2,11 @@ import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 
 /**
- * Onboarding domain logic (Task 7) — shared by /api/auth/signup,
+ * Onboarding domain logic (Task 7) - shared by /api/auth/signup,
  * /api/onboarding, /api/invitations/[token] and the /welcome wizard.
  *
  * Honest-delivery note: the platform has no outbound SMTP transport wired
- * (PlatformSetting carries host/user metadata only — no credentials), so
+ * (PlatformSetting carries host/user metadata only - no credentials), so
  * transactional mail is recorded in the MailOutbox ledger with status QUEUED
  * instead of being silently dropped. The raw verification / invitation link
  * is stored on the outbox row so an operator can hand it over while the
@@ -16,7 +16,7 @@ import { db } from "@/lib/db";
 
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
-/** True when a platform-level SMTP transport is configured. It is not yet —
+/** True when a platform-level SMTP transport is configured. It is not yet -
  *  see note above. Drives the in-session "demo verify" shortcut visibility. */
 export const SMTP_TRANSPORT_CONFIGURED = false;
 
@@ -172,7 +172,7 @@ export async function issueEmailVerification(userId: string, email: string, orig
   const link = `${origin}/welcome?verify=${token}`;
   await queueMail({
     to: email,
-    subject: "Confirm your email — Docurama",
+    subject: "Confirm your email - Docurama",
     template: "SIGNUP_VERIFICATION",
     body: [
       `Welcome to Docurama!`,
@@ -183,7 +183,7 @@ export async function issueEmailVerification(userId: string, email: string, orig
       ``,
       `This link expires in 24 hours. If you didn't create a Docurama account, you can ignore this message.`,
       ``,
-      `Docurama SAS — 1 Rue Marguerin, 75014 Paris, France`,
+      `Docurama SAS - 1 Rue Marguerin, 75014 Paris, France`,
     ].join("\n"),
     linkUrl: link,
   });
@@ -258,7 +258,7 @@ async function queueInvitationMail(input: { email: string; invitedBy: string; or
       ``,
       `The invitation expires in 14 days. If you weren't expecting it, you can ignore this email.`,
       ``,
-      `Docurama SAS — 1 Rue Marguerin, 75014 Paris, France`,
+      `Docurama SAS - 1 Rue Marguerin, 75014 Paris, France`,
     ].join("\n"),
     linkUrl: link,
   });

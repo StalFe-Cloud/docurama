@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Admin — Email & DNS provisioning for docurama.eu.
+ * Admin - Email & DNS provisioning for docurama.eu.
  *
  * One console for the Docurama SAS digital identity:
  *  - Company identity card (legal entity, Paris address, fill-in registry data).
@@ -10,7 +10,7 @@
  *  - Every sub-domain on the zone with its purpose, record and TLS posture.
  *  - The deliverability record set (MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, CAA)
  *    with per-record verification.
- *  - The generated BIND zone file — copy or download, ready for the registrar.
+ *  - The generated BIND zone file - copy or download, ready for the registrar.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -120,7 +120,7 @@ export function AdminProvisioning() {
     <div className="space-y-6">
       <PageHeader
         title="Email & DNS"
-        description="Docurama SAS digital identity on docurama.eu — mailboxes, sub-domains, DNS deliverability records (SPF, DKIM, DMARC, MTA-STS) and the exportable zone file."
+        description="Docurama SAS digital identity on docurama.eu - mailboxes, sub-domains, DNS deliverability records (SPF, DKIM, DMARC, MTA-STS) and the exportable zone file."
         actions={
           <Button
             variant="outline" size="sm" className="h-11"
@@ -213,7 +213,7 @@ function MailboxesTab({
           <span className="font-medium">Sender identity:</span>
           <CopyableCode value="Docurama Sign <notifications@docurama.eu>" />
           <span className="text-muted-foreground">
-            configured in Platform Settings → SMTP — the display name improves deliverability and user trust.
+            configured in Platform Settings → SMTP - the display name improves deliverability and user trust.
           </span>
         </CardContent>
       </Card>
@@ -470,7 +470,7 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Company identity — Docurama SAS</CardTitle>
+          <CardTitle className="text-base">Company identity - Docurama SAS</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -487,7 +487,7 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
             ))}
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Fields marked “to be updated” are placeholders — complete them with the registry values (SIREN, VAT, capital, phone)
+            Fields marked “to be updated” are placeholders - complete them with the registry values (SIREN, VAT, capital, phone)
             from the company's Kbis; they flow into the legal footer, invoices and DSAR responses.
           </p>
         </CardContent>
@@ -495,7 +495,7 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">BIND zone file — docurama.eu</CardTitle>
+          <CardTitle className="text-base">BIND zone file - docurama.eu</CardTitle>
           <div className="flex items-center gap-2">
             <CopyButton value={data.zoneFile} label="Copy zone" />
             <Button variant="outline" size="sm" className="h-10" onClick={downloadZone}>
@@ -508,7 +508,7 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
             {data.zoneFile}
           </pre>
           <p className="mt-3 text-xs text-muted-foreground">
-            Apply at the registrar (or Infoblox/Cloudflare via API) — the zone regenerates live from the provisioning state above.
+            Apply at the registrar (or Infoblox/Cloudflare via API) - the zone regenerates live from the provisioning state above.
             Replace the placeholder origin IPs and mail-relay targets with production values before publishing.
           </p>
         </CardContent>

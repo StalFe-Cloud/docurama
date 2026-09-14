@@ -13,14 +13,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const me = await getSessionUser();
   if (me) return {};
   return {
-    title: "Docurama — Sign documents. Prove everything.",
+    title: "Docurama: Sign documents. Prove everything.",
     description:
       "EU-built eSignatures with cryptographic evidence: X.509 sealing, RFC 3161 timestamps, GDPR, eIDAS-aligned and 21 CFR Part 11 workflows.",
   };
 }
 
 /**
- * Root entry — host- and session-aware:
+ * Root entry - host- and session-aware:
  *
  *   app.docurama.eu  → always the application portal
  *   docurama.eu /    → the marketing site for anonymous visitors,

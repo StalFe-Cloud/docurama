@@ -1,5 +1,5 @@
 /**
- * Docurama platform provisioning catalog — docurama.eu.
+ * Docurama platform provisioning catalog for docurama.eu.
  *
  * Single source of truth for:
  *  - Company identity (Docurama SAS, 1 Rue Marguerin, 75014 Paris, France).
@@ -46,7 +46,7 @@ export interface EmailAccount {
 }
 
 export const EMAIL_ACCOUNTS: EmailAccount[] = [
-  // 1 — Essential transactional & system
+  // 1. Essential transactional and system
   {
     address: "notifications@docurama.eu",
     displayName: "Docurama Sign",
@@ -69,7 +69,7 @@ export const EMAIL_ACCOUNTS: EmailAccount[] = [
     priority: "P0",
     notes: "Real mailbox, or forwarder to docurama@voiria.com.",
   },
-  // 2 — Business, sales & support
+  // 2. Business, sales and support
   {
     address: "support@docurama.eu",
     displayName: "Docurama Support",
@@ -107,13 +107,13 @@ export const EMAIL_ACCOUNTS: EmailAccount[] = [
     priority: "P2",
     notes: "hello@docurama.eu reserved as an equivalent alias.",
   },
-  // 3 — Legal, privacy & compliance (GDPR / eIDAS)
+  // 3. Legal, privacy and compliance (GDPR / eIDAS)
   {
     address: "privacy@docurama.eu",
     displayName: "Docurama Privacy (DPO)",
     kind: "ALIAS",
     category: "Legal, Privacy & Compliance",
-    purpose: "GDPR data subject requests (DSAR/DSR — access, erasure, portability and export).",
+    purpose: "GDPR data subject requests (DSAR/DSR: access, erasure, portability and export).",
     forwardsTo: "admin@docurama.eu",
     rfc: "GDPR Art. 13/14, Art. 30",
     priority: "P0",
@@ -139,7 +139,7 @@ export const EMAIL_ACCOUNTS: EmailAccount[] = [
     priority: "P0",
     notes: "Referenced from https://docurama.eu/.well-known/security.txt.",
   },
-  // 4 — RFC internet standards & reputation
+  // 4. RFC internet standards and reputation
   {
     address: "postmaster@docurama.eu",
     displayName: "Postmaster",
@@ -188,14 +188,18 @@ export interface Subdomain {
 export const SUBDOMAINS: Subdomain[] = [
   { host: "", fqdn: "docurama.eu", purpose: "Marketing site, legal pages (privacy, terms, imprint) and 301 redirect to www", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
   { host: "www", fqdn: "www.docurama.eu", purpose: "Primary marketing hostname served by the same origin", recordType: "CNAME", target: "docurama.eu", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
-  { host: "app", fqdn: "app.docurama.eu", purpose: "Enterprise portal & admin console — this application (signing workspaces)", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
-  { host: "verify", fqdn: "verify.docurama.eu", purpose: "Public cryptographic verification portal — anyone can validate a sealed document", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "app", fqdn: "app.docurama.eu", purpose: "Enterprise portal and admin console: this application (signing workspaces)", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "verify", fqdn: "verify.docurama.eu", purpose: "Public cryptographic verification portal. Anyone can validate a sealed document.", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
   { host: "api", fqdn: "api.docurama.eu", purpose: "REST API for integrations, API keys and webhook deliveries", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
-  { host: "admin", fqdn: "admin.docurama.eu", purpose: "Hardened internal operations entry — IP allowlist + SSO enforcement", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Internal", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "admin", fqdn: "admin.docurama.eu", purpose: "Hardened internal operations entry with IP allowlist and SSO enforcement.", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Internal", env: "Production", tls: "Let's Encrypt (ACME)" },
   { host: "mail", fqdn: "mail.docurama.eu", purpose: "Outbound SMTP relay FQDN (rDNS/PTR target) and webmail administration", recordType: "A", target: "51.75.124.20 (mail relay)", audience: "Internal", env: "Production", tls: "Let's Encrypt (ACME)" },
-  { host: "mta-sts", fqdn: "mta-sts.docurama.eu", purpose: "MTA-STS policy host — serves /.well-known/mta-sts.txt over HTTPS", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "mta-sts", fqdn: "mta-sts.docurama.eu", purpose: "MTA-STS policy host, serves /.well-known/mta-sts.txt over HTTPS.", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
   { host: "status", fqdn: "status.docurama.eu", purpose: "Public status & uptime page with incident history", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
-  { host: "docs", fqdn: "docs.docurama.eu", purpose: "Product guides and public API documentation", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "docs", fqdn: "docs.docurama.eu", purpose: "Product guides, public API documentation and the legal pack", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "security", fqdn: "security.docurama.eu", purpose: "Security hub: disclosure policy, platform security practices, RFC 9116 security.txt", recordType: "A", target: "51.75.20.14 (EU-West origin)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "assets", fqdn: "assets.docurama.eu", purpose: "Static asset CDN origin (brand files, screenshots, well-known images), long-lived cache", recordType: "CNAME", target: "cdn-eu.docurama.eu (CDN edge)", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "autoconfig", fqdn: "autoconfig.docurama.eu", purpose: "Thunderbird / K-9 mail client autoconfiguration (config-v1.1.xml)", recordType: "CNAME", target: "docurama.eu", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
+  { host: "autodiscover", fqdn: "autodiscover.docurama.eu", purpose: "Outlook Autodiscover endpoint (autodiscover.xml) for mailbox setup", recordType: "CNAME", target: "docurama.eu", audience: "Public", env: "Production", tls: "Let's Encrypt (ACME)" },
   { host: "staging", fqdn: "staging.docurama.eu", purpose: "Pre-production environment for release verification before deploy", recordType: "A", target: "51.75.20.15 (EU-West staging)", audience: "Internal", env: "Staging", tls: "Let's Encrypt (staging CA)" },
 ];
 
@@ -220,11 +224,11 @@ export const DNS_RECORDS: DnsRecord[] = [
   { id: "dkim-s1", group: "DKIM", name: "s1._domainkey.docurama.eu", type: "CNAME", value: "s1.domainkey.docurama.eu.mailrelay.io", ttl: 3600, purpose: "DKIM signing key selector 1 (2048-bit RSA), published by the relay provider.", rfc: "RFC 6376" },
   { id: "dkim-s2", group: "DKIM", name: "s2._domainkey.docurama.eu", type: "CNAME", value: "s2.domainkey.docurama.eu.mailrelay.io", ttl: 3600, purpose: "DKIM signing key selector 2 (rotation).", rfc: "RFC 6376" },
   { id: "dmarc", group: "DMARC", name: "_dmarc.docurama.eu", type: "TXT", value: "v=DMARC1; p=quarantine; rua=mailto:dmarc@docurama.eu; ruf=mailto:dmarc@docurama.eu; adkim=s; aspf=s; fo=1; pct=100", ttl: 3600, purpose: "Strict DMARC enforcement with aggregate + forensic reporting to dmarc@docurama.eu.", rfc: "RFC 7489" },
-  { id: "mta-sts", group: "MTA-STS", name: "_mta-sts.docurama.eu", type: "TXT", value: "v=STSv1; id=2026091401", ttl: 3600, purpose: "Signals MTA-STS policy availability; policy served at https://mta-sts.docurama.eu/.well-known/mta-sts.txt (mode: enforce, mx: mail.docurama.eu).", rfc: "RFC 8460" },
-  { id: "tls-rpt", group: "TLS-RPT", name: "_smtp._tls.docurama.eu", type: "TXT", value: "v=TLSRPTv1; rua=mailto:dmarc@docurama.eu", ttl: 3600, purpose: "SMTP TLS reporting — delivery failures of TLS on inbound mail.", rfc: "RFC 8460" },
+  { id: "mta-sts", group: "MTA-STS", name: "_mta-sts.docurama.eu", type: "TXT", value: "v=STSv1; id=2026091501", ttl: 3600, purpose: "Signals MTA-STS policy availability; policy served at https://mta-sts.docurama.eu/.well-known/mta-sts.txt (mode: enforce, mx: mail.docurama.eu).", rfc: "RFC 8460" },
+  { id: "tls-rpt", group: "TLS-RPT", name: "_smtp._tls.docurama.eu", type: "TXT", value: "v=TLSRPTv1; rua=mailto:dmarc@docurama.eu", ttl: 3600, purpose: "SMTP TLS reporting for delivery failures of TLS on inbound mail.", rfc: "RFC 8460" },
   { id: "caa-le", group: "CAA", name: "docurama.eu", type: "CAA", value: '0 issue "letsencrypt.org"', ttl: 3600, purpose: "Only Let's Encrypt may issue certificates for the zone.", rfc: "RFC 8659" },
   { id: "caa-iodef", group: "CAA", name: "docurama.eu", type: "CAA", value: '0 iodef "mailto:security@docurama.eu"', ttl: 3600, purpose: "Certificate issuance violations reported to security@docurama.eu.", rfc: "RFC 8659" },
-  { id: "ptr", group: "PTR", name: "20.124.75.51.in-addr.arpa", type: "PTR", value: "mail.docurama.eu", ttl: 3600, purpose: "Reverse DNS for the outbound relay IP — must match the SMTP HELO/EHLO name.", rfc: "RFC 1912 §2.1" },
+  { id: "ptr", group: "PTR", name: "20.124.75.51.in-addr.arpa", type: "PTR", value: "mail.docurama.eu", ttl: 3600, purpose: "Reverse DNS for the outbound relay IP. Must match the SMTP HELO/EHLO name.", rfc: "RFC 1912 §2.1" },
 ];
 
 // ─── Provisioning state ──────────────────────────────────────────────────────
@@ -244,7 +248,7 @@ export const DEFAULT_PROVISIONING_STATE: ProvisioningState = {
     "postmaster@docurama.eu",
     "abuse@docurama.eu",
   ],
-  liveSubdomains: ["", "www", "app", "verify", "api", "mta-sts"],
+  liveSubdomains: ["", "www", "app", "verify", "api", "admin", "mta-sts", "status", "docs", "security", "mail"],
   verifiedRecords: ["mx-primary", "spf", "dkim-s1", "dmarc", "caa-le"],
 };
 
@@ -270,7 +274,7 @@ export function buildZoneFile(state: ProvisioningState): string {
     const live = state.liveSubdomains.includes(s.host);
     const label = s.host === "" ? "@" : s.host;
     const target = s.recordType === "CNAME" ? `${s.target.endsWith(".") ? s.target : s.target + "."}` : s.target.split(" ")[0];
-    return `${label.padEnd(12)} ${s.recordType.padEnd(6)} ${target.padEnd(34)} ; ${live ? "LIVE" : "PENDING"} — ${s.purpose}`;
+    return `${label.padEnd(12)} ${s.recordType.padEnd(6)} ${target.padEnd(34)} ; ${live ? "LIVE" : "PENDING"} - ${s.purpose}`;
   });
   const mxLines = DNS_RECORDS.filter((r) => r.type === "MX").map(
     (r) => `@            MX     ${String(r.priority).padEnd(4)} ${r.value}.`.padEnd(47) + ` ; ${r.purpose}`,
@@ -286,8 +290,8 @@ export function buildZoneFile(state: ProvisioningState): string {
   );
 
   return `; ─────────────────────────────────────────────────────────────────────────────
-; Docurama SAS — 1 Rue Marguerin, 75014 Paris, France
-; DNS zone: docurama.eu — generated by the Docurama platform console
+; Docurama SAS - 1 Rue Marguerin, 75014 Paris, France
+; DNS zone: docurama.eu - generated by the Docurama platform console
 ; Provisioned: ${new Date().toISOString()}
 ; Replace 51.75.20.14 / 51.75.124.20 with production origin IPs and
 ; spf.eu.mailrelay.io / domainkey targets with your chosen mail provider.

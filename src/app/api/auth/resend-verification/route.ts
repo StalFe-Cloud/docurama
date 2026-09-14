@@ -4,7 +4,7 @@ import { recordAudit } from "@/lib/auth";
 import { jsonError, jsonOk } from "@/lib/serializers";
 import { issueEmailVerification, requestOrigin } from "@/lib/onboarding";
 
-/** POST /api/auth/resend-verification — re-queues the signup verification email (60s rate limit). */
+/** POST /api/auth/resend-verification - re-queues the signup verification email (60s rate limit). */
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
   const cookieToken = req.cookies.get("docurama_session")?.value;

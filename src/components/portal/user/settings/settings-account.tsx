@@ -102,7 +102,7 @@ function OrganizationsCard({ base }: { base: BaseData }) {
             <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden /> Organizations &amp; multiple companies
           </CardTitle>
           <CardDescription>
-            One login, many workspaces. Switch the active organization any time — documents, templates, keys and settings follow.
+            One login, many workspaces. Switch the active organization any time - documents, templates, keys and settings follow.
           </CardDescription>
         </div>
         <Button size="sm" className="h-10" onClick={() => setDialog(true)}>
@@ -203,7 +203,7 @@ function DomainVerificationCard({ data }: { data: AccountData }) {
       <CardContent className="space-y-4">
         {data.domains.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No sending domains yet — add one to unlock branded, authenticated email delivery.
+            No sending domains yet - add one to unlock branded, authenticated email delivery.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -249,7 +249,7 @@ function DomainVerificationCard({ data }: { data: AccountData }) {
                   </div>
                 )}
                 {d.lastCheckNote && <p className="mt-2 text-xs text-muted-foreground">{d.lastCheckNote}</p>}
-                {d.verifiedAt && <p className="mt-2 text-xs text-success">Verified {fmtDate(d.verifiedAt)} — authenticated sending enabled.</p>}
+                {d.verifiedAt && <p className="mt-2 text-xs text-success">Verified {fmtDate(d.verifiedAt)} - authenticated sending enabled.</p>}
               </li>
             ))}
           </ul>
@@ -339,7 +339,7 @@ function AccessSecurityCard({ base, account }: { base: BaseData; account: Accoun
             </div>
             <p className="text-xs text-muted-foreground">
               {base.profile.totpEnabled
-                ? "Enabled — codes from your authenticator app are required at sign-in (manage it in Settings → Profile)."
+                ? "Enabled - codes from your authenticator app are required at sign-in (manage it in Settings → Profile)."
                 : "Not enabled for your account. Enrol an authenticator app from Settings → Profile."}
             </p>
             <div className="rounded-lg border p-3">
@@ -348,7 +348,7 @@ function AccessSecurityCard({ base, account }: { base: BaseData; account: Accoun
                 disabled={!account.isAdmin || act.isPending}
                 onCheckedChange={(v) => act.mutate({ op: "enforce-2fa", data: { enabled: v } })}
                 label="Require 2FA for all members"
-                desc={account.isAdmin ? "Workspace policy — members must enrol TOTP at next sign-in" : "Only workspace owners and admins can change this policy"}
+                desc={account.isAdmin ? "Workspace policy - members must enrol TOTP at next sign-in" : "Only workspace owners and admins can change this policy"}
               />
             </div>
             <p className="text-xs text-muted-foreground">Recent sign-in activity:</p>
@@ -357,7 +357,7 @@ function AccessSecurityCard({ base, account }: { base: BaseData; account: Accoun
                 <li key={ev.id} className="flex items-start justify-between gap-2 text-xs">
                   <span className="text-muted-foreground">
                     <span className="font-medium text-foreground">{ev.type.replaceAll("_", " ")}</span>
-                    {ev.detail ? ` — ${ev.detail}` : ""}
+                    {ev.detail ? ` - ${ev.detail}` : ""}
                   </span>
                   <span className="shrink-0 text-muted-foreground">{fmtDate(ev.at)}</span>
                 </li>
@@ -443,7 +443,7 @@ function Part11Card({ part11, consentText }: { part11: AccountData["part11"]; co
             checked={state.requireReauth}
             onCheckedChange={(v) => setState({ ...state, requireReauth: v })}
             label="Re-authenticate before signing"
-            desc="Signers re-enter credentials (or OTP) at the moment of signature — §11.100(c) signature uniqueness"
+            desc="Signers re-enter credentials (or OTP) at the moment of signature - §11.100(c) signature uniqueness"
             disabled={!state.part11Mode}
           />
         </div>
@@ -464,12 +464,12 @@ function Part11Card({ part11, consentText }: { part11: AccountData["part11"]; co
             aria-describedby="consent-hint"
           />
           <p id="consent-hint" className="text-xs text-muted-foreground">
-            Every signer&apos;s acceptance is recorded with timestamp and IP. Versioned — changing the text requires signers to re-consent.
+            Every signer&apos;s acceptance is recorded with timestamp and IP. Versioned - changing the text requires signers to re-consent.
           </p>
         </div>
 
         <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Signature manifestation — what gets affixed to every signed document</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Signature manifestation - what gets affixed to every signed document</p>
           <ul className="grid gap-2 sm:grid-cols-2">
             {SIGNATURE_MANIFESTATION_FIELDS.map((f) => (
               <li key={f.field} className="rounded-lg bg-card p-2.5 text-xs">

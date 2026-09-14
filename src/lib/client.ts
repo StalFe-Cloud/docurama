@@ -24,7 +24,7 @@ export function setSessionToken(token: string) {
   try {
     window.localStorage.setItem(SESSION_TOKEN_STORE, token);
   } catch {
-    // Storage unavailable (private mode) — cookie flow still applies.
+    // Storage unavailable (private mode) - cookie flow still applies.
   }
 }
 
@@ -33,7 +33,7 @@ export function clearSessionToken() {
   try {
     window.localStorage.removeItem(SESSION_TOKEN_STORE);
   } catch {
-    // Ignore — nothing to clean up.
+    // Ignore - nothing to clean up.
   }
 }
 
@@ -52,7 +52,7 @@ async function handle<T>(res: Response): Promise<T> {
   try {
     body = await res.json();
   } catch {
-    // Non-JSON body (e.g. empty 500) — fall through to error handling.
+    // Non-JSON body (e.g. empty 500) - fall through to error handling.
   }
   if (!res.ok) {
     const message =

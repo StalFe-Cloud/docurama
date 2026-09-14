@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Accept your workspace invitation and start signing.",
 };
 
-/** /invite/[token] — public invitation landing page. */
+/** /invite/[token] - public invitation landing page. */
 export default function InvitePage() {
   return <AcceptInvite />;
 }

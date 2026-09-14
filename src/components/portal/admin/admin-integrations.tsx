@@ -63,7 +63,7 @@ export function AdminIntegrations() {
     <div className="space-y-6">
       <PageHeader
         title="API & Webhooks"
-        description="Per-key credential lifecycle and webhook delivery operations. Revocation is per-key — never a destructive bulk rotation."
+        description="Per-key credential lifecycle and webhook delivery operations. Revocation is per-key - never a destructive bulk rotation."
         actions={
           <Button size="sm" className="h-11" onClick={() => setKeyDialog(true)}>
             <KeyRound className="h-4 w-4" aria-hidden /> New API key
@@ -249,10 +249,10 @@ export function AdminIntegrations() {
               <Select value={keyScope} onValueChange={setKeyScope}>
                 <SelectTrigger id="key-scope" className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="READONLY">Read-only — list and verify</SelectItem>
-                  <SelectItem value="ENVELOPES">Envelopes — create and manage</SelectItem>
-                  <SelectItem value="TEMPLATES">Templates — manage templates</SelectItem>
-                  <SelectItem value="FULL">Full access — everything</SelectItem>
+                  <SelectItem value="READONLY">Read-only - list and verify</SelectItem>
+                  <SelectItem value="ENVELOPES">Envelopes - create and manage</SelectItem>
+                  <SelectItem value="TEMPLATES">Templates - manage templates</SelectItem>
+                  <SelectItem value="FULL">Full access - everything</SelectItem>
                 </SelectContent>
               </Select>
             </div>

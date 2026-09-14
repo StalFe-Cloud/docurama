@@ -2,7 +2,7 @@ import { createHmac, randomBytes, createHash } from "crypto";
 
 /**
  * RFC 6238 TOTP (Time-based One-Time Password) + RFC 4648 base32.
- * Zero external dependencies — everything runs on Node's crypto.
+ * Zero external dependencies - everything runs on Node's crypto.
  */
 
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";

@@ -57,7 +57,7 @@ export function AdminAudit() {
         </div>
       ),
     },
-    { key: "tenant", header: "Tenant", render: (e) => <span className="text-sm text-muted-foreground">{e.tenantName ?? "—"}</span> },
+    { key: "tenant", header: "Tenant", render: (e) => <span className="text-sm text-muted-foreground">{e.tenantName ?? "-"}</span> },
     { key: "severity", header: "Severity", render: (e) => <StatusBadge status={e.severity} /> },
   ];
 
@@ -86,7 +86,7 @@ export function AdminAudit() {
     <div className="space-y-6">
       <PageHeader
         title="Audit log"
-        description="Immutable, hash-chained record of every privileged action — alongside blocked and logged security events."
+        description="Immutable, hash-chained record of every privileged action - alongside blocked and logged security events."
         actions={
           <ConfirmDialog
             trigger={<Button size="sm" className="h-11"><Lock className="h-4 w-4" aria-hidden /> Seal chain</Button>}
@@ -108,12 +108,12 @@ export function AdminAudit() {
             <div>
               <p className="text-xs text-muted-foreground">Chain status</p>
               <p className="flex items-center gap-1.5 text-sm font-medium">
-                <ShieldCheck className="h-4 w-4 text-success" aria-hidden /> Verified · block #{data?.chain.blockHeight ?? "—"}
+                <ShieldCheck className="h-4 w-4 text-success" aria-hidden /> Verified · block #{data?.chain.blockHeight ?? "-"}
               </p>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Last sealed {data ? fmtRelative(data.chain.sealedAt) : "—"} · every seal is committed with an RFC 3161 timestamp
+            Last sealed {data ? fmtRelative(data.chain.sealedAt) : "-"} · every seal is committed with an RFC 3161 timestamp
           </p>
         </CardContent>
       </Card>

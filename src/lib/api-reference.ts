@@ -1,11 +1,11 @@
 /**
- * Public API reference — the catalogue behind Settings → API.
+ * Public API reference - the catalogue behind Settings → API.
  *
  * Everything documented here is a live endpoint on this deployment:
- *  - /api/auth/*      — session auth (cookie or bearer)
- *  - /api/v1/*        — integration surface, authenticated with X-API-Key
- *  - /api/mcp         — MCP server (JSON-RPC 2.0), X-API-Key
- *  - /api/workspace/* — portal UI surface (session auth), documented for
+ *  - /api/auth/*      - session auth (cookie or bearer)
+ *  - /api/v1/*        - integration surface, authenticated with X-API-Key
+ *  - /api/mcp         - MCP server (JSON-RPC 2.0), X-API-Key
+ *  - /api/workspace/* - portal UI surface (session auth), documented for
  *                       completeness; integrations should prefer /api/v1.
  */
 
@@ -75,7 +75,7 @@ export const API_REFERENCE: ApiGroup[] = [
         params: [
           { name: "status", type: "string", description: "Filter: SENT, PARTIALLY_SIGNED, COMPLETED, VOIDED, DECLINED" },
           { name: "page", type: "number", description: "1-based page index (default 1)" },
-          { name: "perPage", type: "number", description: "5–100 items per page (default 20)" },
+          { name: "perPage", type: "number", description: "5-100 items per page (default 20)" },
         ],
         response: `{
   "total": 42, "page": 1, "perPage": 20,
@@ -95,7 +95,7 @@ export const API_REFERENCE: ApiGroup[] = [
   },
   {
     name: "Verification",
-    description: "Public verification of sealed documents — the same engine behind verify.docurama.eu.",
+    description: "Public verification of sealed documents - the same engine behind verify.docurama.eu.",
     endpoints: [
       {
         method: "GET", path: "/api/v1/verify/{code}", auth: "none",
@@ -130,14 +130,14 @@ export const API_REFERENCE: ApiGroup[] = [
     endpoints: [
       {
         method: "POST", path: "/api/mcp", auth: "api-key",
-        summary: "JSON-RPC 2.0 — methods: initialize, tools/list, tools/call",
+        summary: "JSON-RPC 2.0 - methods: initialize, tools/list, tools/call",
         request: `{
   "jsonrpc": "2.0", "id": 1, "method": "tools/call",
   "params": { "name": "document_verify", "arguments": { "code": "DOC-8F3K2M9P" } }
 }`,
         response: `{
   "jsonrpc": "2.0", "id": 1,
-  "result": { "content": [ { "type": "text", "text": "VERIFIED — Service Agreement, sealed 2026-09-14" } ] }
+  "result": { "content": [ { "type": "text", "text": "VERIFIED - Service Agreement, sealed 2026-09-14" } ] }
 }`,
       },
     ],
@@ -148,7 +148,7 @@ export const WEBHOOK_EVENTS = [
   { event: "envelope.sent", when: "Signing invitations dispatched" },
   { event: "envelope.viewed", when: "A signer opened the document" },
   { event: "envelope.signed", when: "A signer completed their signature" },
-  { event: "envelope.completed", when: "All parties signed — document sealed" },
+  { event: "envelope.completed", when: "All parties signed - document sealed" },
   { event: "envelope.declined", when: "A signer declined, with reason" },
   { event: "envelope.voided", when: "The sender voided the envelope" },
   { event: "reminder.sent", when: "A reminder (manual or scheduled job) was sent" },
@@ -171,7 +171,7 @@ curl -s "${base}/api/v1/verify/DOC-8F3K2M9P"`,
   headers: { "X-API-Key": process.env.DOCURAMA_API_KEY! },
 });
 const { rows } = await res.json();
-console.log(rows.map((e) => \`\${e.publicCode} — \${e.title} [\${e.status}]\`));`,
+console.log(rows.map((e) => \`\${e.publicCode} - \${e.title} [\${e.status}]\`));`,
     },
     {
       lang: "python",

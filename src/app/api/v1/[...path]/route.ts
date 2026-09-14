@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { publicRecipient, iso, isos, jsonError, jsonOk } from "@/lib/serializers";
 
 /**
- * Public integration API (v1) — the surface documented in Settings → API.
+ * Public integration API (v1) - the surface documented in Settings → API.
  *
  * Authentication: `X-API-Key: <full key>` (created in Settings → API; the full
  * secret is displayed exactly once and only its SHA-256 hash is stored).
@@ -13,7 +13,7 @@ import { publicRecipient, iso, isos, jsonError, jsonOk } from "@/lib/serializers
  *   GET /api/v1/envelopes?status=&page=&perPage=
  *   GET /api/v1/envelopes/{idOrCode}
  *   GET /api/v1/templates
- *   GET /api/v1/verify/{code}          (public — no key required)
+ *   GET /api/v1/verify/{code}          (public - no key required)
  */
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ type Ctx = { params: Promise<{ path: string[] }> };
 
 async function resolveApiKey(req: NextRequest) {
   const key = req.headers.get("x-api-key")?.trim();
-  if (!key) return { error: jsonError("Missing X-API-Key header — create a key in Settings → API", 401) };
+  if (!key) return { error: jsonError("Missing X-API-Key header - create a key in Settings → API", 401) };
   const row = await db.apiKey.findFirst({
     where: { secretHash: sha(key), status: "ACTIVE", tenantId: { not: null } },
     include: { tenant: true },
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const { path } = await ctx.params;
     const [resource, ...rest] = path;
 
-    // Public verification — same engine as verify.docurama.eu.
+    // Public verification - same engine as verify.docurama.eu.
     if (resource === "verify" && rest.length === 1) {
       const code = rest[0].trim().toUpperCase();
       const e = await db.envelope.findUnique({

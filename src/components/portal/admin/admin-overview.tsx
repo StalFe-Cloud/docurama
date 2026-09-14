@@ -114,7 +114,7 @@ export function AdminOverview({ onNavigate }: { onNavigate: (k: AdminSectionKey)
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Envelope volume — last 30 days</CardTitle>
+            <CardTitle className="text-base">Envelope volume - last 30 days</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64" role="img" aria-label="Area chart of envelopes created versus sealed per day over the last 30 days">

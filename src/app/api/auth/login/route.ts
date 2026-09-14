@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!email || !password) return jsonError("Email and password are required");
 
   const user = await db.user.findUnique({ where: { email } });
-  // Uniform error — never reveal whether the account exists.
+  // Uniform error - never reveal whether the account exists.
   if (!user || user.passwordHash !== hashPassword(password)) {
     await db.securityEvent.create({
       data: {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (user.totpEnabled && user.totpSecret) {
     const otp = (body.otp ?? "").trim();
     if (!otp) {
-      // Password is correct — hand back a short-lived challenge, do NOT create a session yet.
+      // Password is correct - hand back a short-lived challenge, do NOT create a session yet.
       const challenge = await db.authChallenge.create({
         data: { userId: user.id, purpose: "2FA_LOGIN", expiresAt: new Date(Date.now() + 5 * 60_000) },
       });
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       ? await db.authChallenge.findUnique({ where: { id: challengeId } })
       : null;
     if (!challenge || challenge.userId !== user.id || challenge.expiresAt < new Date() || challenge.attempts >= 5) {
-      return jsonError("Verification session expired — start again", 401);
+      return jsonError("Verification session expired - start again", 401);
     }
 
     const okTotp = verifyTotp(user.totpSecret, otp);
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       const idx = matchRecoveryCode(hashes, otp);
       if (idx >= 0) {
         usedRecovery = true;
-        hashes.splice(idx, 1); // one-time — burn the used code
+        hashes.splice(idx, 1); // one-time - burn the used code
         await db.user.update({
           where: { id: user.id },
           data: { totpRecoveryCodes: JSON.stringify(hashes) },

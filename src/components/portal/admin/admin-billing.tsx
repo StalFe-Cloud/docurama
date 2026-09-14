@@ -69,7 +69,7 @@ export function AdminBilling() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">MRR trend — last 30 days</CardTitle>
+          <CardTitle className="text-base">MRR trend - last 30 days</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-56" role="img" aria-label="Area chart of monthly recurring revenue over the last 30 days">

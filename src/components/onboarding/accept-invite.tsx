@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /invite/[token] — invitation landing page.
+ * /invite/[token] - invitation landing page.
  *
  * Public visitors see who invited them and to which organization. Accepting
  * requires the invited email: existing users sign in, new users create their
@@ -30,14 +30,14 @@ type InviteData = {
 type MeData = { user: { email: string; name: string } | null };
 
 /** The invitation token is the last path segment of /invite/<token>.
- *  Read lazily inside the query/mutation functions — no mount effect, no
+ *  Read lazily inside the query/mutation functions - no mount effect, no
  *  state, and hydration stays consistent. */
 function inviteTokenFromUrl(): string {
   const parts = window.location.pathname.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? "";
 }
 
-/** Exported shell — wires React Query context around the page. */
+/** Exported shell - wires React Query context around the page. */
 export function AcceptInvite() {
   return (
     <PortalProviders>
@@ -91,7 +91,7 @@ function InvitePageInner() {
               <div className="space-y-4 text-center">
                 <p className="text-lg font-semibold">Invitation not found</p>
                 <p className="text-sm text-muted-foreground">
-                  This link doesn&apos;t match any invitation — ask your colleague to send a new one from
+                  This link doesn&apos;t match any invitation - ask your colleague to send a new one from
                   Settings → Users.
                 </p>
               </div>
@@ -99,7 +99,7 @@ function InvitePageInner() {
               <div className="space-y-4 text-center">
                 <p className="text-lg font-semibold">This invitation is {invite.status.toLowerCase()}</p>
                 <p className="text-sm text-muted-foreground">
-                  Ask {invite.invitedBy ?? "the person who invited you"} to send a fresh invitation — it
+                  Ask {invite.invitedBy ?? "the person who invited you"} to send a fresh invitation - it
                   only takes a click in Settings → Users.
                 </p>
                 <Button variant="outline" onClick={() => { window.location.assign("/"); }}>
@@ -121,7 +121,7 @@ function InvitePageInner() {
                   <div className="space-y-4">
                     <p className="flex items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary-soft/50 p-3 text-sm text-primary-deep">
                       <CheckCircle2 className="h-4 w-4" aria-hidden />
-                      Signed in as {me?.email} — ready to accept
+                      Signed in as {me?.email} - ready to accept
                     </p>
                     <Button className="w-full" onClick={() => accept.mutate()} disabled={accept.isPending}>
                       {accept.isPending ? (
@@ -154,7 +154,7 @@ function InvitePageInner() {
                 )}
 
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Docurama SAS — 1 Rue Marguerin, 75014 Paris, France · EU data residency ·
+                  Docurama SAS - 1 Rue Marguerin, 75014 Paris, France · EU data residency ·
                   Questions? <a className="underline underline-offset-2" href="mailto:support@docurama.eu">support@docurama.eu</a>
                 </p>
               </>

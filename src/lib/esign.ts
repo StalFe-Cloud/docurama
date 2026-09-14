@@ -71,7 +71,7 @@ export const TSA_PRESETS: { key: string; name: string; url: string; note: string
   { key: "digicert", name: "DigiCert", url: "https://timestamp.digicert.com", note: "Industry default, high availability" },
   { key: "sectigo", name: "Sectigo", url: "http://timestamp.sectigo.com", note: "Generous rate limits" },
   { key: "globalsign", name: "GlobalSign", url: "https://timestamp.globalsign.com/tsa/rsladvanced/rfc3161", note: "SHA-256 advanced" },
-  { key: "freetsa", name: "FreeTSA.org", url: "https://freetsa.org", note: "Free community TSA — fine for QA, not for qualified seals" },
+  { key: "freetsa", name: "FreeTSA.org", url: "https://freetsa.org", note: "Free community TSA - fine for QA, not for qualified seals" },
 ];
 
 // ── 21 CFR Part 11 reference copy ────────────────────────────────────────────
@@ -92,7 +92,7 @@ export const SIGNATURE_MANIFESTATION_FIELDS = [
 ];
 
 export const ESIGN_LEVELS: { key: string; label: string; description: string }[] = [
-  { key: "simple", label: "Simple (SES)", description: "Basic eIDAS electronic signature — email-to-sign flows" },
+  { key: "simple", label: "Simple (SES)", description: "Basic eIDAS electronic signature - email-to-sign flows" },
   { key: "advanced", label: "Advanced (AdES)", description: "Uniquely linked to the signer, tamper-evident, PAdES conformance" },
-  { key: "qualified", label: "Qualified (QES)", description: "Qualified certificate + qualified timestamp (QSCD) — highest eIDAS level" },
+  { key: "qualified", label: "Qualified (QES)", description: "Qualified certificate + qualified timestamp (QSCD) - highest eIDAS level" },
 ];

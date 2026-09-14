@@ -1,4 +1,4 @@
-# Docurama — DNS & Email Provisioning Guide
+# Docurama: DNS and Email Provisioning Guide
 
 **Docurama SAS** · 1 Rue Marguerin, 75014 Paris, France
 
@@ -33,14 +33,18 @@ mail-relay targets, SIREN/VAT numbers) are marked **to be updated**.
 |---|---|---|---|---|
 | `docurama.eu` | Marketing site, legal pages (privacy, terms, imprint) and 301 redirect to www | A | `51.75.20.14 (EU-West origin)` | Public |
 | `www.docurama.eu` | Primary marketing hostname served by the same origin | CNAME | `docurama.eu` | Public |
-| `app.docurama.eu` | Enterprise portal & admin console — this application (signing workspaces) | A | `51.75.20.14 (EU-West origin)` | Public |
-| `verify.docurama.eu` | Public cryptographic verification portal — anyone can validate a sealed document | A | `51.75.20.14 (EU-West origin)` | Public |
+| `app.docurama.eu` | Enterprise portal and admin console: this application (signing workspaces) | A | `51.75.20.14 (EU-West origin)` | Public |
+| `verify.docurama.eu` | Public cryptographic verification portal. Anyone can validate a sealed document. | A | `51.75.20.14 (EU-West origin)` | Public |
 | `api.docurama.eu` | REST API for integrations, API keys and webhook deliveries | A | `51.75.20.14 (EU-West origin)` | Public |
-| `admin.docurama.eu` | Hardened internal operations entry — IP allowlist + SSO enforcement | A | `51.75.20.14 (EU-West origin)` | Internal |
+| `admin.docurama.eu` | Hardened internal operations entry with IP allowlist and SSO enforcement. | A | `51.75.20.14 (EU-West origin)` | Internal |
 | `mail.docurama.eu` | Outbound SMTP relay FQDN (rDNS/PTR target) and webmail administration | A | `51.75.124.20 (mail relay)` | Internal |
-| `mta-sts.docurama.eu` | MTA-STS policy host — serves /.well-known/mta-sts.txt over HTTPS | A | `51.75.20.14 (EU-West origin)` | Public |
+| `mta-sts.docurama.eu` | MTA-STS policy host, serves /.well-known/mta-sts.txt over HTTPS. | A | `51.75.20.14 (EU-West origin)` | Public |
 | `status.docurama.eu` | Public status & uptime page with incident history | A | `51.75.20.14 (EU-West origin)` | Public |
-| `docs.docurama.eu` | Product guides and public API documentation | A | `51.75.20.14 (EU-West origin)` | Public |
+| `docs.docurama.eu` | Product guides, public API documentation and the legal pack | A | `51.75.20.14 (EU-West origin)` | Public |
+| `security.docurama.eu` | Security hub: disclosure policy, platform security practices, RFC 9116 security.txt | A | `51.75.20.14 (EU-West origin)` | Public |
+| `assets.docurama.eu` | Static asset CDN origin (brand files, screenshots, well-known images), long-lived cache | CNAME | `cdn-eu.docurama.eu (CDN edge)` | Public |
+| `autoconfig.docurama.eu` | Thunderbird / K-9 mail client autoconfiguration (config-v1.1.xml) | CNAME | `docurama.eu` | Public |
+| `autodiscover.docurama.eu` | Outlook Autodiscover endpoint (autodiscover.xml) for mailbox setup | CNAME | `docurama.eu` | Public |
 | `staging.docurama.eu` | Pre-production environment for release verification before deploy | A | `51.75.20.15 (EU-West staging)` | Internal |
 
 All production hosts use Let's Encrypt (ACME) certificates; `staging` uses the
@@ -68,7 +72,7 @@ Let's Encrypt staging CA during pre-production verification.
 
 | Address | Display name | Type | Purpose | Forwards to | Standard / Priority |
 |---|---|---|---|---|---|
-| `privacy@docurama.eu` | Docurama Privacy (DPO) | Alias / forwarder | GDPR data subject requests (DSAR/DSR — access, erasure, portability and export). | `admin@docurama.eu` | GDPR Art. 13/14, Art. 30 · P0 |
+| `privacy@docurama.eu` | Docurama Privacy (DPO) | Alias / forwarder | GDPR data subject requests (DSAR/DSR: access, erasure, portability and export). | `admin@docurama.eu` | GDPR Art. 13/14, Art. 30 · P0 |
 | `legal@docurama.eu` | Docurama Legal | Alias / forwarder | Terms of Service, MSA agreements, NDAs and official legal notices. | `admin@docurama.eu` | — · P1 |
 | `security@docurama.eu` | Docurama Security | Alias / forwarder | Vulnerability disclosure, security bug reports and audit verifications. | `admin@docurama.eu` | RFC 9116 (security.txt) · P0 |
 
@@ -101,11 +105,11 @@ and is already configured in Platform Settings → SMTP.
 | DKIM | `s1._domainkey.docurama.eu` | CNAME | `s1.domainkey.docurama.eu.mailrelay.io` | DKIM signing key selector 1 (2048-bit RSA), published by the relay provider. |
 | DKIM | `s2._domainkey.docurama.eu` | CNAME | `s2.domainkey.docurama.eu.mailrelay.io` | DKIM signing key selector 2 (rotation). |
 | DMARC | `_dmarc.docurama.eu` | TXT | `v=DMARC1; p=quarantine; rua=mailto:dmarc@docurama.eu; ruf=mailto:dmarc@docurama.eu; adkim=s; aspf=s; fo=1; pct=100` | Strict DMARC enforcement with aggregate + forensic reporting to dmarc@docurama.eu. |
-| MTA-STS | `_mta-sts.docurama.eu` | TXT | `v=STSv1; id=2026091401` | Signals MTA-STS policy availability; policy served at https://mta-sts.docurama.eu/.well-known/mta-sts.txt (mode: enforce, mx: mail.docurama.eu). |
-| TLS-RPT | `_smtp._tls.docurama.eu` | TXT | `v=TLSRPTv1; rua=mailto:dmarc@docurama.eu` | SMTP TLS reporting — delivery failures of TLS on inbound mail. |
+| MTA-STS | `_mta-sts.docurama.eu` | TXT | `v=STSv1; id=2026091501` | Signals MTA-STS policy availability; policy served at https://mta-sts.docurama.eu/.well-known/mta-sts.txt (mode: enforce, mx: mail.docurama.eu). |
+| TLS-RPT | `_smtp._tls.docurama.eu` | TXT | `v=TLSRPTv1; rua=mailto:dmarc@docurama.eu` | SMTP TLS reporting for delivery failures of TLS on inbound mail. |
 | CAA | `docurama.eu` | CAA | `0 issue "letsencrypt.org"` | Only Let's Encrypt may issue certificates for the zone. |
 | CAA | `docurama.eu` | CAA | `0 iodef "mailto:security@docurama.eu"` | Certificate issuance violations reported to security@docurama.eu. |
-| PTR | `20.124.75.51.in-addr.arpa` | PTR | `mail.docurama.eu` | Reverse DNS for the outbound relay IP — must match the SMTP HELO/EHLO name. |
+| PTR | `20.124.75.51.in-addr.arpa` | PTR | `mail.docurama.eu` | Reverse DNS for the outbound relay IP. Must match the SMTP HELO/EHLO name. |
 
 ### MTA-STS policy file
 

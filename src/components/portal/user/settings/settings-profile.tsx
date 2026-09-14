@@ -66,7 +66,7 @@ function ProfileFormCard({ profile }: { profile: ProfileData["profile"] }) {
           <UserIcon className="h-4 w-4 text-muted-foreground" aria-hidden /> Your profile
         </CardTitle>
         <CardDescription>
-          Name, email and password state. Both name fields are persisted — and shown again on your next visit.
+          Name, email and password state. Both name fields are persisted - and shown again on your next visit.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -88,7 +88,7 @@ function ProfileFormCard({ profile }: { profile: ProfileData["profile"] }) {
             <Label>Password</Label>
             <p className="flex h-11 items-center text-sm text-muted-foreground">
               {profile.passwordChangedAt ? `Changed ${fmtDate(profile.passwordChangedAt)}` : "Never changed"}
-              <span className="ml-2 text-xs">— change it in Settings → Account</span>
+              <span className="ml-2 text-xs">- change it in Settings → Account</span>
             </p>
           </div>
         </div>
@@ -165,7 +165,7 @@ function SavedSignaturesCard({ signatures, profile }: { signatures: ProfileData[
                           <ConfirmDialog
                             trigger={<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Delete stamp"><Trash2 className="h-3.5 w-3.5" aria-hidden /></Button>}
                             title="Delete this stamp?"
-                            description="Documents already signed with it are unaffected — the audit trail keeps the original image."
+                            description="Documents already signed with it are unaffected - the audit trail keeps the original image."
                             confirmLabel="Delete"
                             onConfirm={() => act.mutateAsync({ op: "signature.delete", id: s.id })}
                           />
@@ -179,7 +179,7 @@ function SavedSignaturesCard({ signatures, profile }: { signatures: ProfileData[
           );
         })}
         <p className="text-xs text-muted-foreground">
-          Signing name: <span className="font-medium text-foreground">{profile.signatureName}</span> — rendered with the same bundled font used at seal time.
+          Signing name: <span className="font-medium text-foreground">{profile.signatureName}</span> - rendered with the same bundled font used at seal time.
         </p>
       </CardContent>
 
@@ -241,7 +241,7 @@ function SignatureDialog({
     setHasDrawn(false);
   };
 
-  // Note: the canvas contents are read only inside the save handler — never
+  // Note: the canvas contents are read only inside the save handler - never
   // during render (react-hooks/refs).
   const hasValue = method === "draw" ? hasDrawn : method === "type" ? Boolean(typed.trim()) : Boolean(uploadData);
 
@@ -325,7 +325,7 @@ function SignatureDialog({
 
           {method === "upload" && (
             <div className="space-y-2">
-              <Label htmlFor="sig-upload">PNG, JPG or SVG — max ~300 KB</Label>
+              <Label htmlFor="sig-upload">PNG, JPG or SVG - max ~300 KB</Label>
               <Input
                 id="sig-upload" type="file" accept="image/png,image/jpeg,image/svg+xml"
                 onChange={(e) => {
@@ -404,7 +404,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
           <div className="flex items-center gap-3">
             <StatusBadge status={enabled ? "ACTIVE" : "OFF"} />
             <p className="text-sm">
-              {enabled ? "Enabled — your account requires a verification code at sign-in." : "Not enabled — your account is protected by password only."}
+              {enabled ? "Enabled - your account requires a verification code at sign-in." : "Not enabled - your account is protected by password only."}
             </p>
           </div>
           {enabled ? (
@@ -429,7 +429,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
             <DialogTitle>{recovery ? "Save your recovery codes" : "Scan with your authenticator app"}</DialogTitle>
             <DialogDescription>
               {recovery
-                ? "These ten codes are shown once. Each can replace a lost authenticator code a single time — store them somewhere safe."
+                ? "These ten codes are shown once. Each can replace a lost authenticator code a single time - store them somewhere safe."
                 : "Scan the QR code, or enter the secret manually. Then confirm with a 6-digit code."}
             </DialogDescription>
           </DialogHeader>
@@ -446,7 +446,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
                   Copy all codes
                 </Button>
                 <Button className="h-10 flex-1" onClick={() => { setEnrol((s) => ({ ...s, open: false })); setRecovery(null); }}>
-                  I saved them — done
+                  I saved them - done
                 </Button>
               </div>
             </div>
@@ -455,7 +455,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
               {enrol.qrSvg && (
                 <div
                   className="mx-auto w-fit rounded-xl border bg-white p-3"
-                  // SVG generated locally by the server for this secret — no external source
+                  // SVG generated locally by the server for this secret - no external source
                   dangerouslySetInnerHTML={{ __html: enrol.qrSvg }}
                 />
               )}

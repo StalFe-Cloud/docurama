@@ -221,7 +221,7 @@ export function AdminCompliance() {
                 {data.reviews.map((r) => (
                   <li key={r.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{r.quarter} — {r.reviewer}</p>
+                      <p className="text-sm font-medium">{r.quarter} - {r.reviewer}</p>
                       <p className="text-xs text-muted-foreground">
                         {r.scope} · {r.findings} finding(s)
                         {r.completedAt ? ` · completed ${fmtDate(r.completedAt)}` : ""}

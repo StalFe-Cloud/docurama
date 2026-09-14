@@ -45,7 +45,7 @@ const REMINDER_MODES = [
   {
     key: "platform_job",
     label: "Platform scheduled job",
-    desc: "Docurama scans every active envelope of this workspace on the policy below — set it once, forget it.",
+    desc: "Docurama scans every active envelope of this workspace on the policy below - set it once, forget it.",
     icon: CalendarClock,
   },
 ] as const;
@@ -97,7 +97,7 @@ function SmtpCard({ s }: { s: NotifData["settings"] }) {
           <Mail className="h-4 w-4 text-muted-foreground" aria-hidden /> Email delivery (SMTP)
         </CardTitle>
         <CardDescription>
-          Per-organization relay override. Leave the host empty to send through the platform relay (Docurama Sign &lt;notifications@docurama.eu&gt;) — the verified, authenticated route.
+          Per-organization relay override. Leave the host empty to send through the platform relay (Docurama Sign &lt;notifications@docurama.eu&gt;) - the verified, authenticated route.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -164,7 +164,7 @@ function AlertsCard({ s }: { s: NotifData["settings"] }) {
         <CardTitle className="flex items-center gap-2 text-base">
           <Bell className="h-4 w-4 text-muted-foreground" aria-hidden /> Signer &amp; completion alerts
         </CardTitle>
-        <CardDescription>Stay informed as each envelope moves — per-event emails plus an optional daily digest.</CardDescription>
+        <CardDescription>Stay informed as each envelope moves - per-event emails plus an optional daily digest.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-3 lg:grid-cols-2">
@@ -220,7 +220,7 @@ function RemindersCard({ s }: { s: NotifData["settings"] }) {
           <CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden /> Sign request email reminders
         </CardTitle>
         <CardDescription>
-          Three ways to nudge signers — manual, per-envelope jobs you enable per document, or a platform-wide scheduled job. Quiet hours and weekend skips keep reminders polite.
+          Three ways to nudge signers - manual, per-envelope jobs you enable per document, or a platform-wide scheduled job. Quiet hours and weekend skips keep reminders polite.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -324,7 +324,7 @@ function RemindersCard({ s }: { s: NotifData["settings"] }) {
 
         {dryRun && (
           <div className="rounded-xl border bg-muted/40 p-4">
-            <p className="text-sm font-medium">Dry-run results — what the job would send right now</p>
+            <p className="text-sm font-medium">Dry-run results - what the job would send right now</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {dryRun.stats.active ?? 0} active envelopes scanned · {dryRun.due.length} due ·
               {" "}{dryRun.stats.skippedThrottle ?? 0} throttled · {dryRun.stats.skippedMax ?? 0} at max ·
@@ -344,7 +344,7 @@ function RemindersCard({ s }: { s: NotifData["settings"] }) {
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">Nothing due — every signer has been reminded recently or completed.</p>
+              <p className="mt-2 text-xs text-muted-foreground">Nothing due - every signer has been reminded recently or completed.</p>
             )}
           </div>
         )}

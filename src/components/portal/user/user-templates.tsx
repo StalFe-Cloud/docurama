@@ -55,7 +55,7 @@ export function UserTemplates() {
     <div className="space-y-6">
       <PageHeader
         title="Templates"
-        description="Reusable documents with pre-configured fields. Only your workspace's real templates are shown — never sample data."
+        description="Reusable documents with pre-configured fields. Only your workspace's real templates are shown - never sample data."
         actions={
           <Button className="h-11" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" aria-hidden /> New template
@@ -85,7 +85,7 @@ export function UserTemplates() {
       ) : rows.length === 0 ? (
         <Card>
           <CardContent>
-            {/* Honest empty state — the original app rendered fake demo templates here */}
+            {/* Honest empty state - the original app rendered fake demo templates here */}
             <EmptyState
               icon={LayoutTemplate}
               title={search ? "No templates match your search" : "No templates yet"}

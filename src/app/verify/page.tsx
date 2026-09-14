@@ -1,11 +1,18 @@
+import type { Metadata } from "next";
 import { getSessionUser } from "@/lib/auth";
 import { PortalRoot } from "@/components/portal/portal-root";
 import { PublicVerify } from "@/components/marketing/public-verify";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "Verify a document",
+  description:
+    "Check a Docurama verification code and confirm the signatures, seal and SHA-256 digest of a completed document. No account needed.",
+};
+
 /**
- * /verify — the public verification portal.
+ * /verify - the public verification portal.
  *
  * Anonymous visitors (marketing-site traffic, counterparties holding a
  * verification code) get the standalone public tool backed by the keyless

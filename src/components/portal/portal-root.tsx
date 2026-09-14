@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Docurama enterprise portal — path-driven application root.
+ * Docurama enterprise portal - path-driven application root.
  *
  * Every section is a real URL (deep-linkable, back-button friendly):
  *   Workspace:  /  /documents  /templates  /verify  /settings/{tab}
  *   Admin:      /admin/{section}
  *
- * Navigation uses window.history.pushState — Next's App Router keeps
+ * Navigation uses window.history.pushState - Next's App Router keeps
  * usePathname in sync without a server round-trip, so switching sections is
  * instant while every path still renders the full app on a hard load.
  */
@@ -139,14 +139,14 @@ function App() {
 
   if (isLoading) return <Boot />;
 
-  // A network failure keeps the user where they are with a retry — it does
+  // A network failure keeps the user where they are with a retry - it does
   // NOT silently sign them out.
   if (isError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-sm font-semibold">Cannot reach Docurama</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {(error as Error)?.message ?? "A network error occurred."} You have not been signed out — please try again.
+          {(error as Error)?.message ?? "A network error occurred."} You have not been signed out - please try again.
         </p>
         <button
           type="button"

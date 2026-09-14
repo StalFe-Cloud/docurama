@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Public document verification — the anonymous face of verify.docurama.eu.
+ * Public document verification - the anonymous face of verify.docurama.eu.
  *
  * Anyone with a verification code (from a certificate of completion) can
  * check what the evidence actually shows, without an account. Uses the
  * public /api/v1/verify/{code} endpoint (no API key, no session) and reports
  * the same honest states as the in-app tool: NOT_FOUND / NOT_SEALED /
- * VOIDED / VERIFIED — never dressing an unsigned document up as verified.
+ * VOIDED / VERIFIED - never dressing an unsigned document up as verified.
  */
 
 import { useState } from "react";
@@ -82,7 +82,7 @@ function VerifyInner() {
           <h1 className="text-2xl font-semibold tracking-tight">Verify a document</h1>
           <p className="text-sm text-muted-foreground">
             Enter the verification code from a Docurama certificate of completion. Results state
-            exactly what the evidence shows — nothing more.
+            exactly what the evidence shows - nothing more.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ function VerifyInner() {
         <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
           Verification checks the cryptographic evidence recorded when the document was sealed:
           the SHA-256 digest, seal timestamp and signer roster. The document file itself is never
-          exposed. Docurama SAS — 1 Rue Marguerin, 75014 Paris, France.
+          exposed. Docurama SAS - 1 Rue Marguerin, 75014 Paris, France.
         </p>
       </main>
     </div>
@@ -125,7 +125,7 @@ function ResultPanel({ result }: { result: VerifyResult }) {
     return (
       <div className="mt-5 space-y-2 rounded-lg border bg-muted/50 p-4">
         <p className="flex items-center gap-2 text-sm font-semibold"><FileQuestion className="h-4 w-4 text-muted-foreground" aria-hidden /> No sealed document with this code</p>
-        <p className="text-sm text-muted-foreground">Check the code on the certificate of completion — codes look like <span className="font-mono">DOC-XXXXXXXX</span>.</p>
+        <p className="text-sm text-muted-foreground">Check the code on the certificate of completion - codes look like <span className="font-mono">DOC-XXXXXXXX</span>.</p>
       </div>
     );
   }
@@ -134,7 +134,7 @@ function ResultPanel({ result }: { result: VerifyResult }) {
       <div className="mt-5 space-y-2 rounded-lg border bg-muted/50 p-4">
         <p className="flex items-center gap-2 text-sm font-semibold"><Clock className="h-4 w-4 text-muted-foreground" aria-hidden /> Not yet sealed</p>
         <p className="text-sm text-muted-foreground">
-          “{result.title}” exists but its current status is <span className="font-mono">{result.status}</span> — it is not a completed, sealed document.
+          “{result.title}” exists but its current status is <span className="font-mono">{result.status}</span> - it is not a completed, sealed document.
         </p>
       </div>
     );
@@ -153,13 +153,13 @@ function ResultPanel({ result }: { result: VerifyResult }) {
   return (
     <div className="mt-5 space-y-4 rounded-lg border border-primary/40 bg-primary-soft/40 p-4">
       <p className="flex items-center gap-2 text-sm font-semibold text-primary-deep">
-        <BadgeCheck className="h-4 w-4" aria-hidden /> Verified — cryptographic evidence found
+        <BadgeCheck className="h-4 w-4" aria-hidden /> Verified - cryptographic evidence found
       </p>
       <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
         <div><dt className="text-xs text-muted-foreground">Document</dt><dd className="font-medium">{env.title}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Organization</dt><dd className="font-medium">{env.tenantName}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Sealed at</dt><dd className="font-medium">{new Date(env.sealedAt).toLocaleString("en-GB")}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">Conformance</dt><dd className="font-medium">{env.conformance ?? "—"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">Conformance</dt><dd className="font-medium">{env.conformance ?? "-"}</dd></div>
         <div className="sm:col-span-2">
           <dt className="text-xs text-muted-foreground">SHA-256 digest</dt>
           <dd className="break-all font-mono text-xs">{env.sha256}</dd>
@@ -180,7 +180,7 @@ function ResultPanel({ result }: { result: VerifyResult }) {
       </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden />
-        This confirms the recorded evidence only — it does not certify the document&apos;s legal meaning.
+        This confirms the recorded evidence only - it does not certify the document&apos;s legal meaning.
       </p>
     </div>
   );

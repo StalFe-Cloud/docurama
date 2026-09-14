@@ -45,7 +45,7 @@ export function UserVerify() {
     <div className="space-y-6">
       <PageHeader
         title="Verify a document"
-        description="Enter a verification code from a certificate of completion. Results state exactly what the evidence shows — nothing more."
+        description="Enter a verification code from a certificate of completion. Results state exactly what the evidence shows - nothing more."
       />
 
       <div className="mx-auto w-full max-w-2xl space-y-6">
@@ -90,7 +90,7 @@ export function UserVerify() {
                     </span>
                     <div>
                       <p className="text-base font-semibold text-success">Signature verified</p>
-                      <p className="text-xs text-muted-foreground">Checked against the sealed file — {data.code}</p>
+                      <p className="text-xs text-muted-foreground">Checked against the sealed file - {data.code}</p>
                     </div>
                   </div>
                   <dl className="space-y-2 text-sm">
@@ -116,7 +116,7 @@ export function UserVerify() {
                   </div>
                   <p className="flex items-start gap-2 rounded-lg bg-success-soft/50 p-3 text-xs text-muted-foreground">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                    Every claim above is derived from an inspection of the sealed file and its embedded certificate — including the RFC 3161 timestamp.
+                    Every claim above is derived from an inspection of the sealed file and its embedded certificate - including the RFC 3161 timestamp.
                   </p>
                 </CardContent>
               </Card>
@@ -128,7 +128,7 @@ export function UserVerify() {
                 <CardContent className="flex items-start gap-3 p-6">
                   <Clock className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
                   <div>
-                    <p className="text-sm font-semibold text-warning">Document found — not yet sealed</p>
+                    <p className="text-sm font-semibold text-warning">Document found - not yet sealed</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       “{data.title}” exists but is still <StatusBadge status={data.status} className="mx-1" />.
                       A verification certificate becomes available only when all parties have signed and the document is sealed.
@@ -146,7 +146,7 @@ export function UserVerify() {
                   <div>
                     <p className="text-sm font-semibold text-destructive">This envelope was voided</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Voided {fmtDate(data.voidedAt)}{data.voidReason ? ` — ${data.voidReason}` : ""}. It carries no valid signature.
+                      Voided {fmtDate(data.voidedAt)}{data.voidReason ? ` - ${data.voidReason}` : ""}. It carries no valid signature.
                     </p>
                   </div>
                 </CardContent>
@@ -161,7 +161,7 @@ export function UserVerify() {
                   <div>
                     <p className="text-sm font-semibold">No envelope with this code</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      We could not find <span className="font-mono">{data.code}</span>. Check the code and try again —
+                      We could not find <span className="font-mono">{data.code}</span>. Check the code and try again -
                       an unknown code is reported as unknown, never as “unsigned”.
                     </p>
                   </div>

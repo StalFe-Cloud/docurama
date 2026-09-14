@@ -35,7 +35,7 @@ export function McpTab() {
     );
   }
 
-  // Cards mount client-side after the query resolves — window is available.
+  // Cards mount client-side after the query resolves - window is available.
   const origin = typeof window !== "undefined" ? window.location.origin : "https://app.docurama.eu";
 
   return (
@@ -72,7 +72,7 @@ function McpConfigCard({ data }: { data: McpData; origin: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Bot className="h-4 w-4 text-muted-foreground" aria-hidden /> MCP server — Model Context Protocol
+          <Bot className="h-4 w-4 text-muted-foreground" aria-hidden /> MCP server - Model Context Protocol
         </CardTitle>
         <CardDescription>
           Expose this workspace to AI assistants (Claude Desktop, Cursor, custom agents) over JSON-RPC 2.0. Authenticated with an API key from Settings → API.
@@ -85,7 +85,7 @@ function McpConfigCard({ data }: { data: McpData; origin: string }) {
               checked={form.enabled}
               onCheckedChange={(v) => setForm({ ...form, enabled: v })}
               label="Enable the MCP server"
-              desc={`Endpoint: ${origin}/api/mcp — JSON-RPC 2.0 over HTTP (initialize, tools/list, tools/call)`}
+              desc={`Endpoint: ${origin}/api/mcp - JSON-RPC 2.0 over HTTP (initialize, tools/list, tools/call)`}
             />
           </div>
           <div className="space-y-1.5">

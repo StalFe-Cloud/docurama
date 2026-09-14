@@ -41,7 +41,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "Global",
     freeTier: "1,000 free service (user-initiated) conversations / month",
-    priceHint: "Business-initiated templates from ~€0.01–0.08 / conversation by country",
+    priceHint: "Business-initiated templates from ~€0.01-0.08 / conversation by country",
     docsUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api",
     fields: [{ key: "whatsappApiKey", label: "Permanent access token", hint: "Meta for Developers → WhatsApp → Configuration" }],
     notes: "The best free channel: replies from signers (service conversations) are free. Ideal for OTP delivery to signers who message you first.",
@@ -54,7 +54,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: false,
     regions: "Global",
     freeTier: "~$15.50 trial credit + free WhatsApp sandbox for testing",
-    priceHint: "≈ €0.07–0.11 / SMS (FR)",
+    priceHint: "≈ €0.07-0.11 / SMS (FR)",
     docsUrl: "https://www.twilio.com/docs/messaging",
     fields: [
       { key: "apiKey", label: "Account SID", hint: "Starts with AC…" },
@@ -70,7 +70,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "EU + Global",
     freeTier: "$10 trial credit",
-    priceHint: "≈ €0.005–0.045 / SMS — among the cheapest for FR/DE/UK",
+    priceHint: "≈ €0.005-0.045 / SMS - among the cheapest for FR/DE/UK",
     docsUrl: "https://developers.telnyx.com/docs/messaging",
     fields: [
       { key: "apiKey", label: "API key v2" },
@@ -86,7 +86,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: false,
     regions: "Global",
     freeTier: "€2 trial credit",
-    priceHint: "≈ €0.06–0.09 / SMS (FR)",
+    priceHint: "≈ €0.06-0.09 / SMS (FR)",
     docsUrl: "https://developer.vonage.com/en/messaging/sms/overview",
     fields: [
       { key: "apiKey", label: "API key" },
@@ -102,7 +102,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "EU HQ (Amsterdam) + Global",
     freeTier: "Free test messages in sandbox",
-    priceHint: "≈ €0.04–0.075 / SMS (FR)",
+    priceHint: "≈ €0.04-0.075 / SMS (FR)",
     docsUrl: "https://docs.bird.com",
     fields: [
       { key: "apiKey", label: "Access key" },
@@ -117,7 +117,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "US/EU",
     freeTier: "$25 trial credit (US numbers)",
-    priceHint: "≈ €0.035–0.065 / SMS",
+    priceHint: "≈ €0.035-0.065 / SMS",
     docsUrl: "https://www.plivo.com/docs/sms/",
     fields: [
       { key: "apiKey", label: "Auth ID" },
@@ -132,7 +132,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "UK/AU/EU",
     freeTier: "Trial credit on signup",
-    priceHint: "≈ €0.04–0.07 / SMS",
+    priceHint: "≈ €0.04-0.07 / SMS",
     docsUrl: "https://developers.clicksend.com/docs/rest/v3/",
     fields: [
       { key: "apiKey", label: "Username" },
@@ -152,7 +152,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     fields: [
       { key: "apiKey", label: "API key v3", hint: "xkeysib-…" },
     ],
-    notes: "French vendor — pairs well with Docurama SAS for invoicing and DPD.",
+    notes: "French vendor - pairs well with Docurama SAS for invoicing and DPD.",
   },
   {
     key: "smsmode",
@@ -162,7 +162,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "FR / UK / ES",
     freeTier: "10 free test SMS",
-    priceHint: "≈ €0.045–0.065 / SMS (FR)",
+    priceHint: "≈ €0.045-0.065 / SMS (FR)",
     docsUrl: "https://api.smsmode.com/documentation",
     fields: [
       { key: "apiKey", label: "Access token" },
@@ -177,7 +177,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: true,
     regions: "UK / IN / EU",
     freeTier: "Free trial credits",
-    priceHint: "≈ €0.02–0.05 / SMS (UK/IN routes)",
+    priceHint: "≈ €0.02-0.05 / SMS (UK/IN routes)",
     docsUrl: "https://www.textlocal.com/developers",
     fields: [
       { key: "apiKey", label: "API key" },
@@ -197,7 +197,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
       { key: "apiKey", label: "Access key ID" },
       { key: "apiSecret", label: "Secret access key" },
     ],
-    notes: "Cheapest if you already run on AWS — same bill, Paris region available.",
+    notes: "Cheapest if you already run on AWS - same bill, Paris region available.",
   },
   {
     key: "360dialog",
@@ -206,7 +206,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     tier: "paid",
     lowCost: false,
     regions: "Global (DE HQ)",
-    freeTier: "No free tier — flat monthly plan per number",
+    freeTier: "No free tier - flat monthly plan per number",
     priceHint: "Flat plan ~€49+/mo incl. conversations",
     docsUrl: "https://docs.360dialog.com",
     fields: [{ key: "whatsappApiKey", label: "D360 API key" }],
@@ -220,7 +220,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: false,
     regions: "EU HQ (Croatia) + Global",
     freeTier: "Demo account with test credit",
-    priceHint: "Volume-based, ≈ €0.05–0.08 / SMS (FR)",
+    priceHint: "Volume-based, ≈ €0.05-0.08 / SMS (FR)",
     docsUrl: "https://www.infobip.com/docs",
     fields: [
       { key: "apiKey", label: "API key" },
@@ -235,7 +235,7 @@ export const SMS_PROVIDERS: SmsProvider[] = [
     lowCost: false,
     regions: "Global",
     freeTier: "Trial credit on signup",
-    priceHint: "≈ €0.05–0.09 / SMS (FR)",
+    priceHint: "≈ €0.05-0.09 / SMS (FR)",
     docsUrl: "https://developers.sinch.com/docs/sms",
     fields: [
       { key: "apiKey", label: "Service plan ID" },

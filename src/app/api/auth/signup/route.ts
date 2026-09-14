@@ -7,7 +7,7 @@ import { issueEmailVerification, requestOrigin } from "@/lib/onboarding";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /**
- * Self-serve signup — POST /api/auth/signup
+ * Self-serve signup - POST /api/auth/signup
  *
  * Creates the account + organization (or joins via invitation token), opens a
  * session immediately (the wizard continues at /welcome), queues the email
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
-    return jsonError("An account with this email already exists — sign in instead", 409);
+    return jsonError("An account with this email already exists - sign in instead", 409);
   }
 
   // ── Invitation join (optional) ──
@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
   if (inviteToken) {
     const found = await db.invitation.findUnique({ where: { token: inviteToken } });
     if (!found || found.status !== "PENDING" || found.expiresAt < new Date()) {
-      return jsonError("This invitation is no longer valid — ask your colleague to send a new one", 410);
+      return jsonError("This invitation is no longer valid - ask your colleague to send a new one", 410);
     }
     if (found.email !== email) {
-      return jsonError(`This invitation was sent to ${found.email} — sign up with that email address`);
+      return jsonError(`This invitation was sent to ${found.email} - sign up with that email address`);
     }
     invitation = found;
   }
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // GDPR Art. 7 — proof of consent captured at signup.
+  // GDPR Art. 7 - proof of consent captured at signup.
   await db.consent.create({
     data: {
       subjectEmail: email,
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Session opens immediately — the wizard continues at /welcome.
+  // Session opens immediately - the wizard continues at /welcome.
   const session = await db.session.create({
     data: { userId: user.id, ip, userAgent, expiresAt: new Date(Date.now() + 7 * 24 * 3600_000) },
   });

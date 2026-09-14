@@ -58,14 +58,14 @@ export function AdminLegal() {
     <div className="space-y-6">
       <PageHeader
         title="Legal & DSAR"
-        description="DMCA intake with SLA tracking and data-subject rights workflows. Every resolution note is recorded verbatim in the audit chain — no ad-hoc prompts."
+        description="DMCA intake with SLA tracking and data-subject rights workflows. Every resolution note is recorded verbatim in the audit chain - no ad-hoc prompts."
       />
 
       {/* DMCA queue */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Gavel className="h-4 w-4 text-muted-foreground" aria-hidden /> DMCA notices — {dmcaOpen.length} open
+            <Gavel className="h-4 w-4 text-muted-foreground" aria-hidden /> DMCA notices - {dmcaOpen.length} open
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -128,7 +128,7 @@ export function AdminLegal() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Scale className="h-4 w-4 text-muted-foreground" aria-hidden /> Data subject requests — GDPR Art. 15–20
+            <Scale className="h-4 w-4 text-muted-foreground" aria-hidden /> Data subject requests - GDPR Art. 15-20
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -163,7 +163,7 @@ export function AdminLegal() {
                         <>
                           <Button
                             size="sm" variant="outline" className="h-11"
-                            onClick={() => toast.info("Export queued — the subject will receive a downloadable archive link.")}
+                            onClick={() => toast.info("Export queued - the subject will receive a downloadable archive link.")}
                           >
                             <FileDown className="h-4 w-4" aria-hidden /> Download
                           </Button>
@@ -220,13 +220,13 @@ export function AdminLegal() {
         </CardContent>
       </Card>
 
-      {/* Resolve DMCA dialog — structured, recorded verbatim (replaces window.prompt) */}
+      {/* Resolve DMCA dialog - structured, recorded verbatim (replaces window.prompt) */}
       <Dialog open={!!resolveFor} onOpenChange={(v) => !v && setResolveFor(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Resolve DMCA notice</DialogTitle>
             <DialogDescription>
-              {resolveFor?.complainant} — the resolution note is stored verbatim and appears in the audit chain. Reference the action taken and any counter-notices.
+              {resolveFor?.complainant} - the resolution note is stored verbatim and appears in the audit chain. Reference the action taken and any counter-notices.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

@@ -5,7 +5,7 @@ import { jsonError, jsonOk } from "@/lib/serializers";
 
 type Ctx = { params: Promise<{ token: string }> };
 
-/** Public shape of an invitation — safe to show before any authentication. */
+/** Public shape of an invitation - safe to show before any authentication. */
 async function loadInvitation(token: string) {
   return db.invitation.findUnique({
     where: { token },
@@ -14,8 +14,8 @@ async function loadInvitation(token: string) {
 }
 
 /**
- * GET  /api/invitations/[token] — public: what am I invited to?
- * POST /api/invitations/[token] — authenticated accept: session email must
+ * GET  /api/invitations/[token] - public: what am I invited to?
+ * POST /api/invitations/[token] - authenticated accept: session email must
  *                               match the invited email.
  */
 export async function GET(_req: NextRequest, ctx: Ctx) {
@@ -48,10 +48,10 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
   const inv = await loadInvitation(token);
   if (!inv) return jsonError("Invitation not found", 404);
   if (inv.status !== "PENDING" || inv.expiresAt < new Date()) {
-    return jsonError("This invitation is no longer valid — ask your colleague to send a new one", 410);
+    return jsonError("This invitation is no longer valid - ask your colleague to send a new one", 410);
   }
   if (me.email.toLowerCase() !== inv.email.toLowerCase()) {
-    return jsonError(`This invitation was sent to ${inv.email} — you're signed in as ${me.email}`, 403);
+    return jsonError(`This invitation was sent to ${inv.email} - you're signed in as ${me.email}`, 403);
   }
 
   const already = await db.member.findFirst({ where: { userId: me.id, tenantId: inv.tenantId } });

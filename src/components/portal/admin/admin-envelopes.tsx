@@ -95,7 +95,7 @@ export function AdminEnvelopes() {
                 </Button>
               }
               title="Void this envelope?"
-              description={`${e.title} — signers receive a void notification and the audit trail records the void with your reason.`}
+              description={`${e.title} - signers receive a void notification and the audit trail records the void with your reason.`}
               confirmLabel="Void envelope"
               requireReason
               onConfirm={(reason) => voidIt.mutateAsync({ id: e.id, reason })}
@@ -149,7 +149,7 @@ export function AdminEnvelopes() {
 
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <FileSignature className="h-3.5 w-3.5" aria-hidden />
-        Recipient signing tokens are never serialized to other parties — only names, statuses and timestamps.
+        Recipient signing tokens are never serialized to other parties - only names, statuses and timestamps.
       </p>
     </div>
   );

@@ -8,17 +8,17 @@ import {
 } from "@/lib/onboarding";
 
 /**
- * GET  /api/onboarding — full wizard state for the signed-in user.
- * POST /api/onboarding — wizard operations:
+ * GET  /api/onboarding - full wizard state for the signed-in user.
+ * POST /api/onboarding - wizard operations:
  *   org.update      {name, industry?, companySize?}
  *   invite.send     {email, role}
  *   invite.revoke   {id}
  *   invite.skip
  *   signature.save  {kind, method, value, font}
  *   security.skip
- *   verify.demo     — in-session verification shortcut while no SMTP
+ *   verify.demo     - in-session verification shortcut while no SMTP
  *                     transport is wired (clearly audit-flagged)
- *   complete        — marks onboarding finished
+ *   complete        - marks onboarding finished
  */
 export async function GET() {
   const me = await getSessionUser();
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       action: "org.profile.updated", resource: `tenant:${me.tenantSlug}`, tenantName: name,
       detail: "Organization profile set during onboarding",
     });
-    return jsonOk({ ok: true, message: `Organization saved — ${name}` });
+    return jsonOk({ ok: true, message: `Organization saved - ${name}` });
   }
 
   // ── Team invites ──
@@ -125,17 +125,17 @@ export async function POST(req: NextRequest) {
     if (me.orgs.some((o) => o.id === me.tenantId)) {
       const tenant = await db.tenant.findUnique({ where: { id: me.tenantId } });
       if (tenant?.enforceTwoFactor) {
-        return jsonError("Your organization requires two-factor authentication — set it up to continue", 403);
+        return jsonError("Your organization requires two-factor authentication - set it up to continue", 403);
       }
     }
     await setOnboardingFlags(me.id, { ...flags, skippedSecurity: true });
-    return jsonOk({ ok: true, message: "Skipped for now — you can enable 2FA anytime in Settings → Profile" });
+    return jsonOk({ ok: true, message: "Skipped for now - you can enable 2FA anytime in Settings → Profile" });
   }
 
   // ── In-session email verification (demo shortcut) ──
   if (op === "verify.demo") {
     if (SMTP_TRANSPORT_CONFIGURED) {
-      return jsonError("SMTP delivery is live — use the link from your inbox", 400);
+      return jsonError("SMTP delivery is live - use the link from your inbox", 400);
     }
     const user = await db.user.findUnique({ where: { id: me.id } });
     if (!user) return jsonError("Not authenticated", 401);
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
       actor: `${me.firstName} ${me.lastName}`, actorRole: me.role,
       action: "user.email.verified", resource: `user:${me.email}`,
       severity: "WARNING",
-      detail: "Verified in-session (no SMTP transport configured — demo shortcut)",
+      detail: "Verified in-session (no SMTP transport configured - demo shortcut)",
     });
     return jsonOk({ ok: true, message: "Email verified in-session" });
   }
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       actor: `${me.firstName} ${me.lastName}`, actorRole: me.role,
       action: "user.onboarding.completed", resource: `user:${me.email}`, tenantName: me.tenantName,
     });
-    return jsonOk({ ok: true, message: "You're all set — welcome to Docurama" });
+    return jsonOk({ ok: true, message: "You're all set - welcome to Docurama" });
   }
 
   return jsonError("Unsupported operation", 404);

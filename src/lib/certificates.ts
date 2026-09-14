@@ -11,7 +11,7 @@ import { randomBytes } from "crypto";
  * Issues a real X.509 certificate (RSA-2048, SHA-256, self-signed for
  * workspace signing) via the system OpenSSL, packages it as an encrypted
  * PKCS#12 (.p12) file, and returns everything the caller needs. The private
- * key and the passphrase are NEVER persisted — only the passphrase-encrypted
+ * key and the passphrase are NEVER persisted - only the passphrase-encrypted
  * PKCS#12 blob is stored, so downloading it later is safe and the user always
  * needs their own passphrase to use the certificate.
  */
@@ -95,7 +95,7 @@ export async function issueSigningCertificate(opts: {
       serialNumber, thumbprint, issuer, notBefore, notAfter,
     };
   } finally {
-    // Private key material lives only in the temp dir — destroy it.
+    // Private key material lives only in the temp dir - destroy it.
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

@@ -57,7 +57,7 @@ export function UserHome({ user, onNavigate }: { user: SessionUser; onNavigate: 
         <Card className="border-warning/40 bg-warning-soft/30">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Bell className="h-4 w-4 text-warning" aria-hidden /> Action required — {data.mySignQueue.length} document{data.mySignQueue.length > 1 ? "s" : ""} waiting for your signature
+              <Bell className="h-4 w-4 text-warning" aria-hidden /> Action required - {data.mySignQueue.length} document{data.mySignQueue.length > 1 ? "s" : ""} waiting for your signature
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -103,7 +103,7 @@ export function UserHome({ user, onNavigate }: { user: SessionUser; onNavigate: 
             <Progress value={quotaPct} aria-label={`${data.quota.used} of ${data.quota.limit} envelopes used this month`} />
             <p className="text-xs text-muted-foreground">
               {quotaPct >= 100
-                ? "Monthly quota reached — upgrade to continue sending."
+                ? "Monthly quota reached - upgrade to continue sending."
                 : `${data.quota.limit - data.quota.used} envelopes remaining this billing period.`}
             </p>
             <Button variant="outline" size="sm" className="h-11 w-full" onClick={() => onNavigate("settings")}>
@@ -121,7 +121,7 @@ export function UserHome({ user, onNavigate }: { user: SessionUser; onNavigate: 
           <CardContent className="p-0">
             {data.recent.length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">
-                No documents yet — create your first envelope from a template.
+                No documents yet - create your first envelope from a template.
               </div>
             ) : (
               <ul className="divide-y">

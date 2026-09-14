@@ -46,7 +46,7 @@ function useAct() {
   });
 }
 
-/** Form body — mounted once data is available so every field starts from saved server state. */
+/** Form body - mounted once data is available so every field starts from saved server state. */
 function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act }) {
   const [smtp, setSmtp] = useState({
     smtpHost: settings.smtpHost, smtpPort: settings.smtpPort,
@@ -91,7 +91,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               <Label htmlFor="smtp-from">Sender identity</Label>
               <Input id="smtp-from" value={smtp.smtpFrom} onChange={(e) => setSmtp({ ...smtp, smtpFrom: e.target.value })} className="h-11" />
               <p className="text-xs text-muted-foreground">
-                Recommended: <span className="font-mono">Docurama Sign &lt;notifications@docurama.eu&gt;</span> — provisioned under Email &amp; DNS.
+                Recommended: <span className="font-mono">Docurama Sign &lt;notifications@docurama.eu&gt;</span> - provisioned under Email &amp; DNS.
               </p>
             </div>
           </div>
@@ -131,7 +131,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Current status: {settings.tsaReachable ? "reachable — timestamps applied to every seal" : "unreachable — seals fall back to B-B conformance"}
+              Current status: {settings.tsaReachable ? "reachable - timestamps applied to every seal" : "unreachable - seals fall back to B-B conformance"}
             </p>
           </div>
           <Separator />
@@ -154,7 +154,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
-              The achieved level is always re-read from the sealed file and recorded per envelope — never claimed from configuration alone.
+              The achieved level is always re-read from the sealed file and recorded per envelope - never claimed from configuration alone.
             </p>
           </div>
         </CardContent>

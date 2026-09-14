@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Always clear the session cookie (attribute-matched so the browser actually
-  // deletes it). The client also drops its bearer token from localStorage —
+  // deletes it). The client also drops its bearer token from localStorage -
   // see lib/client.ts clearSessionToken().
   const proto =
     req.headers.get("x-forwarded-proto") ??

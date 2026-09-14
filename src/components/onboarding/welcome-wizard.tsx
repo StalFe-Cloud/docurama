@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /welcome — GitBook-style onboarding wizard.
+ * /welcome - GitBook-style onboarding wizard.
  *
  * Unauthenticated visitors start at the signup step; the flow then continues
  * through email verification → organization → signature → team invites →
@@ -71,7 +71,7 @@ const stepMeta: Record<Exclude<StepKey, "done">, { label: string; hint: string; 
 
 // ─── Wizard shell ─────────────────────────────────────────────────────────────
 
-/** Exported shell — wires React Query context around the wizard. */
+/** Exported shell - wires React Query context around the wizard. */
 export function WelcomeWizard() {
   return (
     <PortalProviders>
@@ -122,10 +122,10 @@ function Wizard() {
       })
         .then(async (res) => {
           const body = (await res.json().catch(() => ({}))) as { error?: string };
-          setNotice(res.ok ? "Email address verified — thank you!" : body.error ?? "That verification link is no longer valid");
+          setNotice(res.ok ? "Email address verified - thank you!" : body.error ?? "That verification link is no longer valid");
           qc.invalidateQueries({ queryKey: ["onboarding"] });
         })
-        .catch(() => setNotice("Verification failed — please try again"));
+        .catch(() => setNotice("Verification failed - please try again"));
       window.history.replaceState({}, "", "/welcome");
     }
   }, [qc]);
@@ -203,7 +203,7 @@ function Wizard() {
           <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
             {authed
               ? "A few quick steps and your workspace is ready to send, sign and seal documents."
-              : "Create your account — it takes about two minutes to set up a compliant eSignature workspace."}
+              : "Create your account - it takes about two minutes to set up a compliant eSignature workspace."}
           </p>
           {notice && (
             <p role="status" className="mt-3 rounded-lg border border-primary/30 bg-primary-soft/50 px-3 py-2 text-sm text-primary-deep">
@@ -219,7 +219,7 @@ function Wizard() {
                   <span className="font-medium">{inviteInfo.org.name}</span> on Docurama.
                 </>
               ) : (
-                <>This invitation is {inviteInfo.status.toLowerCase()} — you can still create an account and ask to be invited again.</>
+                <>This invitation is {inviteInfo.status.toLowerCase()} - you can still create an account and ask to be invited again.</>
               )}
             </div>
           )}
@@ -294,7 +294,7 @@ function Wizard() {
             </div>
           </nav>
 
-          {/* Active step panel — after signup the flow always continues at email verification */}
+          {/* Active step panel - after signup the flow always continues at email verification */}
           <div>
             {/* key: when the async invite lookup resolves, the account step
                 remounts so the invited email pre-fills the form. */}
@@ -318,7 +318,7 @@ function Wizard() {
 
       <footer className="border-t bg-background py-6">
         <p className="mx-auto max-w-6xl px-4 text-xs text-muted-foreground sm:px-6">
-          Docurama SAS — 1 Rue Marguerin, 75014 Paris, France · EU data residency ·
+          Docurama SAS - 1 Rue Marguerin, 75014 Paris, France · EU data residency ·
           Questions during setup? <a className="underline underline-offset-2" href="mailto:support@docurama.eu">support@docurama.eu</a>
         </p>
       </footer>
@@ -383,7 +383,7 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
     onSuccess: (body) => {
       if (body.token) setSessionToken(body.token);
       qc.invalidateQueries({ queryKey: ["onboarding"] });
-      toast.success("Account created — let's set up your workspace");
+      toast.success("Account created - let's set up your workspace");
       onDone();
     },
     onError: (err: ApiError) => toast.error(err.message),
@@ -407,7 +407,7 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
       title={viaInvite ? `Join ${invite?.org.name} on Docurama` : "Create your account"}
       description={
         viaInvite
-          ? "Your teammates are already here — create your login with the invited email address."
+          ? "Your teammates are already here - create your login with the invited email address."
           : "You'll be the owner of a new organization on a 14-day trial of the Starter plan. No credit card required."
       }
     >
@@ -430,7 +430,7 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
             onChange={(e) => setForm({ ...form, email: e.target.value })}
             readOnly={viaInvite} aria-readonly={viaInvite}
             placeholder="you@company.com" className="h-11" />
-          {viaInvite && <p className="text-xs text-muted-foreground">Locked to the invited address — this invitation belongs to {invite?.email}.</p>}
+          {viaInvite && <p className="text-xs text-muted-foreground">Locked to the invited address - this invitation belongs to {invite?.email}.</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="su-password">Password</Label>
@@ -445,7 +445,7 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
             <Input id="su-org" required maxLength={80} value={form.organization}
               onChange={(e) => setForm({ ...form, organization: e.target.value })}
               placeholder="Northwind Logistics" className="h-11" />
-            <p className="text-xs text-muted-foreground">Your workspace — teammates join it by invitation.</p>
+            <p className="text-xs text-muted-foreground">Your workspace - teammates join it by invitation.</p>
           </div>
         )}
         <label className="flex items-start gap-2.5 rounded-lg border bg-muted/50 p-3 text-sm">
@@ -505,12 +505,12 @@ function VerifyStep({ state, onDone }: { state: OnboardingData; onDone: () => vo
 
   if (state.emailVerified) {
     return (
-      <StepPanel title="Email confirmed" description="Your address is verified — signing, certificates and API access are active.">
+      <StepPanel title="Email confirmed" description="Your address is verified - signing, certificates and API access are active.">
         <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-primary-soft/50 p-4">
           <MailCheck className="h-5 w-5 shrink-0 text-primary" aria-hidden />
           <div className="text-sm">
             <p className="font-medium text-primary-deep">{state.user?.email}</p>
-            <p className="text-muted-foreground">Verified — recorded in your audit trail.</p>
+            <p className="text-muted-foreground">Verified - recorded in your audit trail.</p>
           </div>
         </div>
         <Button onClick={onDone}>Continue <ArrowRight className="h-4 w-4" aria-hidden /></Button>
@@ -528,7 +528,7 @@ function VerifyStep({ state, onDone }: { state: OnboardingData; onDone: () => vo
           <Mail className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <div>
             <p className="font-medium">{state.user?.email}</p>
-            <p className="text-muted-foreground">Check your inbox (and spam folder) — the link expires in 24 hours.</p>
+            <p className="text-muted-foreground">Check your inbox (and spam folder) - the link expires in 24 hours.</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -539,7 +539,7 @@ function VerifyStep({ state, onDone }: { state: OnboardingData; onDone: () => vo
           {!state.smtpTransportConfigured && (
             <Button variant="outline" onClick={() => act.mutate({ op: "verify.demo" })} disabled={act.isPending}>
               {act.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CheckCircle2 className="h-4 w-4" aria-hidden />}
-              Verify now — demo shortcut
+              Verify now - demo shortcut
             </Button>
           )}
         </div>
@@ -549,7 +549,7 @@ function VerifyStep({ state, onDone }: { state: OnboardingData; onDone: () => vo
           complete setup; the audit entry notes how it was verified.
         </p>
         <Button variant="ghost" size="sm" onClick={onDone} className="text-muted-foreground">
-          I&apos;ll do this later — continue setup
+          I&apos;ll do this later - continue setup
         </Button>
       </div>
     </StepPanel>
@@ -671,7 +671,7 @@ function SignatureStep({ state, onDone }: { state: OnboardingData; onDone: () =>
   const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 300_000) { toast.error("Image too large — keep it under 300 KB"); return; }
+    if (file.size > 300_000) { toast.error("Image too large - keep it under 300 KB"); return; }
     const reader = new FileReader();
     reader.onload = () => setUploadData(String(reader.result));
     reader.readAsDataURL(file);
@@ -817,7 +817,7 @@ function InvitesStep({ state, onDone }: { state: OnboardingData; onDone: () => v
   return (
     <StepPanel
       title="Invite your team"
-      description="Teammates receive an invitation email from notifications@docurama.eu with a secure link — they create their own password, so you never handle credentials."
+      description="Teammates receive an invitation email from notifications@docurama.eu with a secure link - they create their own password, so you never handle credentials."
     >
       <div className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -873,7 +873,7 @@ function InvitesStep({ state, onDone }: { state: OnboardingData; onDone: () => v
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          You can invite and manage teammates anytime in Settings → Users — including revoking invitations and
+          You can invite and manage teammates anytime in Settings → Users - including revoking invitations and
           enforcing two-factor authentication for the whole organization.
         </p>
       </div>
@@ -923,7 +923,7 @@ function SecurityStep({ state, onDone }: { state: OnboardingData; onDone: () => 
       title="Secure your account"
       description={
         state.org?.enforceTwoFactor
-          ? "Your organization requires two-factor authentication — enroll an authenticator app to finish setup."
+          ? "Your organization requires two-factor authentication - enroll an authenticator app to finish setup."
           : "Add a second factor with any TOTP authenticator app (Google Authenticator, 1Password, Authy…). Strongly recommended for signing accounts."
       }
     >
@@ -946,7 +946,7 @@ function SecurityStep({ state, onDone }: { state: OnboardingData; onDone: () => 
           <div className="space-y-4">
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
               <div className="shrink-0 rounded-lg border bg-white p-3"
-                // Server-generated QR SVG (safe — no external assets)
+                // Server-generated QR SVG (safe - no external assets)
                 dangerouslySetInnerHTML={{ __html: enrol.qrSvg ?? "" }} />
               <div className="space-y-2 text-sm">
                 <p className="font-medium">Scan with your authenticator app</p>
@@ -971,7 +971,7 @@ function SecurityStep({ state, onDone }: { state: OnboardingData; onDone: () => 
 
         {recoveryCodes && (
           <div className="space-y-3">
-            <p className="text-sm font-medium text-primary-deep">Two-factor enabled — save your recovery codes</p>
+            <p className="text-sm font-medium text-primary-deep">Two-factor enabled - save your recovery codes</p>
             <p className="text-sm text-muted-foreground">
               Each code works exactly once if you lose your authenticator. They are shown only this once.
             </p>
@@ -994,7 +994,7 @@ function SecurityStep({ state, onDone }: { state: OnboardingData; onDone: () => 
             <ShieldCheck className="h-5 w-5 shrink-0 text-primary" aria-hidden />
             <p className="text-primary-deep">
               {state.flags.skippedSecurity
-                ? "Two-factor is optional for your organization — you can enable it anytime in Settings → Profile."
+                ? "Two-factor is optional for your organization - you can enable it anytime in Settings → Profile."
                 : "Two-factor authentication is active on your account."}
             </p>
           </div>
@@ -1020,16 +1020,16 @@ function DoneStep({ state }: { state: OnboardingData }) {
   const checklist = [
     { label: "Account created", done: true },
     { label: "Email verified", done: state.emailVerified },
-    { label: `Organization — ${state.org?.name ?? ""}`, done: state.steps.org },
+    { label: `Organization - ${state.org?.name ?? ""}`, done: state.steps.org },
     { label: "Signature & initials ready", done: state.steps.signature },
-    { label: state.flags.skippedInvite ? "Team invites — skipped" : `${state.pendingInvites} teammate${state.pendingInvites === 1 ? "" : "s"} invited`, done: state.steps.invites },
-    { label: state.flags.skippedSecurity ? "Two-factor — skipped (enable anytime)" : "Two-factor authentication", done: state.steps.security },
+    { label: state.flags.skippedInvite ? "Team invites - skipped" : `${state.pendingInvites} teammate${state.pendingInvites === 1 ? "" : "s"} invited`, done: state.steps.invites },
+    { label: state.flags.skippedSecurity ? "Two-factor - skipped (enable anytime)" : "Two-factor authentication", done: state.steps.security },
   ];
 
   return (
     <StepPanel
       title={state.completed ? "You're all set" : "Finish setup"}
-      description="Here's your workspace summary. You can revisit any of this later — everything lives in Settings."
+      description="Here's your workspace summary. You can revisit any of this later - everything lives in Settings."
     >
       <div className="space-y-5">
         <ul className="space-y-2.5">

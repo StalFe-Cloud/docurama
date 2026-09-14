@@ -100,7 +100,7 @@ export function UserShell({
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            {/* Mobile menu — the original app had no mobile navigation at all */}
+            {/* Mobile menu - the original app had no mobile navigation at all */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-11 w-11 lg:hidden" aria-label="Open navigation menu">
@@ -129,7 +129,7 @@ export function UserShell({
                   <button
                     type="button"
                     className="hidden rounded-lg px-2 py-1 text-left leading-tight transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring sm:block"
-                    aria-label={`Switch organization — current: ${user.tenantName ?? "Docurama"}`}
+                    aria-label={`Switch organization - current: ${user.tenantName ?? "Docurama"}`}
                   >
                     <span className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
                       {user.tenantName ?? "Docurama"}
@@ -214,7 +214,7 @@ export function UserShell({
 
       <footer className="border-t bg-background">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© 2026 {BRAND_LEGAL_NAME} — {BRAND_ADDRESS} — documents sealed with PAdES and RFC 3161 timestamps.</p>
+          <p>© 2026 {BRAND_LEGAL_NAME} - {BRAND_ADDRESS} - documents sealed with PAdES and RFC 3161 timestamps.</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>EU data residency</span>
             <span aria-hidden>·</span>

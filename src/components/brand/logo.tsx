@@ -1,21 +1,21 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Official Docurama brand assets — rebuilt from the 2026 brand board.
+ * Official Docurama brand assets - rebuilt from the 2026 brand board.
  *
- * Brand mark: a signed document inside a rounded-square ink border —
+ * Brand mark: a signed document inside a rounded-square ink border -
  * three text lines, a purple dog-ear fold and the emerald signature
  * stroke that sweeps across the lower half.
  *
  * Palette: ink #1A1A1A · emerald #0F7A5A · mint #4FD1A1 (dark-mode accent)
  *          dog-ear purple #6B66A3 · line grey #D1D1D1
- * Wordmark: "Docurama" — "Docu" in ink/foreground, "rama" in emerald/mint.
+ * Wordmark: "Docurama" - "Docu" in ink/foreground, "rama" in emerald/mint.
  * Tagline:  "SIGN • SEAL • VERIFY"
  */
 
 export const BRAND_LEGAL_NAME = "Docurama SAS";
 export const BRAND_ADDRESS = "1 Rue Marguerin, 75014 Paris, France";
-export const BRAND_LEGAL_LINE = `${BRAND_LEGAL_NAME} — ${BRAND_ADDRESS}`;
+export const BRAND_LEGAL_LINE = `${BRAND_LEGAL_NAME} - ${BRAND_ADDRESS}`;
 
 /** Icon-only brand mark. Adapts to light/dark via CSS custom properties. */
 export function BrandMark({ className }: { className?: string }) {

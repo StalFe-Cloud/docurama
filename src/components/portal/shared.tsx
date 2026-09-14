@@ -16,7 +16,7 @@
 import { ReactNode, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
-// Convenience re-export — portal views import cn alongside the shared primitives.
+// Convenience re-export - portal views import cn alongside the shared primitives.
 export { cn };
 import {
   Check, Copy, Inbox, RefreshCw, TriangleAlert, ChevronLeft, ChevronRight, Search,
@@ -30,7 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// ── Status vocabulary (colour AND text — WCAG 1.4.1) ───────────────────────
+// ── Status vocabulary (colour AND text - WCAG 1.4.1) ───────────────────────
 
 const STATUS_STYLES: Record<string, string> = {
   // envelope
@@ -170,7 +170,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
   );
 }
 
-// ── Copy affordance (digests, codes, tokens — never truncate-only) ─────────
+// ── Copy affordance (digests, codes, tokens - never truncate-only) ─────────
 
 export function CopyButton({ value, label = "Copy", className }: { value: string; label?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
@@ -200,7 +200,7 @@ export function CopyButton({ value, label = "Copy", className }: { value: string
   );
 }
 
-/** Monospace value with copy — for digests / codes / fingerprints. */
+/** Monospace value with copy - for digests / codes / fingerprints. */
 export function CopyableCode({ value, max = 20, className }: { value: string; max?: number; className?: string }) {
   return (
     <span className={cn("inline-flex max-w-full items-center gap-1", className)}>
@@ -419,7 +419,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   destructive?: boolean;
   // Callers commonly pass `() => mutation.mutateAsync(...)` which resolves to
-  // the mutation payload — accept any resolved value, only void/awaited usage matters.
+  // the mutation payload - accept any resolved value, only void/awaited usage matters.
   onConfirm: (reason: string) => unknown | Promise<unknown>;
   requireReason?: boolean;
   reasonLabel?: string;
@@ -445,7 +445,7 @@ export function ConfirmDialog({
               id="confirm-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder={`Provide a ${reasonLabel.toLowerCase()} — this is recorded in the audit trail`}
+              placeholder={`Provide a ${reasonLabel.toLowerCase()} - this is recorded in the audit trail`}
               aria-required="true"
             />
           </div>
@@ -471,7 +471,7 @@ export function ConfirmDialog({
 // ── Small utilities ────────────────────────────────────────────────────────
 
 export function fmtDate(value: string | null | undefined, withTime = false) {
-  if (!value) return "—";
+  if (!value) return "-";
   const d = new Date(value);
   return d.toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
@@ -480,7 +480,7 @@ export function fmtDate(value: string | null | undefined, withTime = false) {
 }
 
 export function fmtRelative(value: string | null | undefined) {
-  if (!value) return "—";
+  if (!value) return "-";
   const diff = Date.now() - new Date(value).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";

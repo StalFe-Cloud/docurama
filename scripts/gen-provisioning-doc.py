@@ -19,7 +19,7 @@ def md_escape(s: str) -> str:
 lines = []
 w = lines.append
 
-w("# Docurama — DNS & Email Provisioning Guide")
+w("# Docurama: DNS and Email Provisioning Guide")
 w("")
 w(f"**{c['legalName']}** · {c['address']}")
 w("")

@@ -54,7 +54,7 @@ function PendingInvitesCard({ data }: { data: UsersData }) {
           <Mail className="h-4 w-4 text-muted-foreground" aria-hidden /> Pending invitations
         </CardTitle>
         <CardDescription>
-          Tokenized links emailed from notifications@docurama.eu — invitees create their own password at /invite/&lt;token&gt;, so this workspace never handles credentials on their behalf. Re-send by inviting the same address again.
+          Tokenized links emailed from notifications@docurama.eu - invitees create their own password at /invite/&lt;token&gt;, so this workspace never handles credentials on their behalf. Re-send by inviting the same address again.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -149,7 +149,7 @@ function TeamCard({ data }: { data: UsersData }) {
                   <td className="p-3"><StatusBadge status={m.status} /></td>
                   <td className="p-3">
                     <span className={cn("text-xs font-medium", m.totpEnabled ? "text-success" : "text-muted-foreground")}>
-                      {m.totpEnabled ? "Enabled" : "—"}
+                      {m.totpEnabled ? "Enabled" : "-"}
                     </span>
                   </td>
                   <td className="p-3 text-xs text-muted-foreground">{m.lastActiveAt ? fmtDate(m.lastActiveAt) : "never"}</td>

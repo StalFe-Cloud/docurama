@@ -46,7 +46,7 @@ export type SessionUser = {
   workspaceRole: string | null;
   /** Id of the server-side session row backing this request (null for legacy tokens). */
   sessionId: string | null;
-  /** Every organization this account belongs to — powers the workspace switcher. */
+  /** Every organization this account belongs to - powers the workspace switcher. */
   orgs: SessionOrg[];
 };
 
@@ -54,7 +54,7 @@ export type SessionUser = {
  * Resolve the signed-in user from the session cookie (or the
  * `Authorization: Bearer <token>` fallback used in embedding contexts).
  *
- * Tokens are server-side Session rows — revocable, expiring, carrying device
+ * Tokens are server-side Session rows - revocable, expiring, carrying device
  * metadata for Settings → Account → Access security. Legacy tokens that hold
  * a raw user id (issued before the session table existed) keep working.
  */
@@ -85,7 +85,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       await db.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
     }
   } else {
-    // Legacy token (raw user id) — still valid, but no session row to revoke.
+    // Legacy token (raw user id) - still valid, but no session row to revoke.
     user = await loadUser(token);
   }
 
