@@ -1,0 +1,21 @@
+services:
+  docurama:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docurama
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/db/custom.db
+      - STORAGE_DIR=/app/storage
+      - NEXT_PUBLIC_DEMO_MODE=false
+    volumes:
+      - docurama-db:/app/db
+      - docurama-storage:/app/storage
+
+volumes:
+  docurama-db:
+  docurama-storage:
