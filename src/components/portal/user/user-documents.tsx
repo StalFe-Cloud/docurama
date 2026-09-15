@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2 } from "lucide-react";
-import { apiGet, apiPost, ApiError } from "@/lib/client";
+import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2 } from "lucide-react";
+import { apiGet, apiPost, apiUpload, ApiError } from "@/lib/client";
 import {
   Column, ConfirmDialog, CopyableCode, DataTable, PageHeader, StatusBadge, fmtDate, fmtRelative,
 } from "@/components/portal/shared";
@@ -40,6 +40,8 @@ export function UserDocuments() {
   const [status, setStatus] = useState("ALL");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [uploadedDoc, setUploadedDoc] = useState<{ id: string; filename: string; pageCount: number; byteSize: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({ title: "", message: "", recipients: [{ name: "", email: "" }, { name: "", email: "" }] });
   const queryClient = useQueryClient();
 
@@ -67,17 +69,47 @@ export function UserDocuments() {
     onError: (err: ApiError) => toast.error(err.message),
   });
 
+  async function handleFileUpload(file: File) {
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+      toast.error("Only PDF files are supported");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("File exceeds 50 MB limit");
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await apiUpload<{ id: string; filename: string; pageCount: number; byteSize: number }>("/api/workspace/documents", fd);
+      setUploadedDoc(res);
+      if (!form.title.trim()) {
+        const cleanName = file.name.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ");
+        setForm((prev) => ({ ...prev, title: cleanName }));
+      }
+      toast.success(`Uploaded ${res.filename} (${res.pageCount} page${res.pageCount > 1 ? "s" : ""})`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload document");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const send = useMutation({
     mutationFn: () => apiPost<{ ok: boolean; message: string }>("/api/workspace/envelopes", {
       op: "send",
       data: {
-        title: form.title, message: form.message, pages: 3,
+        title: form.title,
+        message: form.message,
+        documentId: uploadedDoc?.id,
         recipients: form.recipients.filter((r) => r.email.trim()),
       },
     }),
     onSuccess: (res) => {
       toast.success(res.message);
       setSendOpen(false);
+      setUploadedDoc(null);
       setForm({ title: "", message: "", recipients: [{ name: "", email: "" }, { name: "", email: "" }] });
       invalidate();
     },
@@ -330,6 +362,59 @@ export function UserDocuments() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Document upload step */}
+            <div className="space-y-1.5">
+              <Label>Document file (PDF)</Label>
+              {uploadedDoc ? (
+                <div className="flex items-center justify-between rounded-lg border bg-card p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{uploadedDoc.filename}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {uploadedDoc.pageCount} page{uploadedDoc.pageCount > 1 ? "s" : ""} · {Math.round(uploadedDoc.byteSize / 1024)} KB
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() => setUploadedDoc(null)}
+                  >
+                    Replace
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed p-4 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="sr-only"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleFileUpload(f);
+                    }}
+                  />
+                  {uploading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span>Ingesting and extracting pages…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadCloud className="h-6 w-6 text-muted-foreground" />
+                      <p className="text-xs font-medium text-foreground">Click to upload or drag & drop</p>
+                      <p className="text-[11px] text-muted-foreground">PDF up to 50 MB</p>
+                    </>
+                  )}
+                </label>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="doc-title">Document title</Label>
               <Input
@@ -393,8 +478,11 @@ export function UserDocuments() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSendOpen(false)}>Cancel</Button>
-            <Button onClick={() => send.mutate()} disabled={!form.title.trim() || validRecipients.length === 0 || send.isPending}>
-              {send.isPending ? "Sending…" : `Send to ${validRecipients.length || 0} recipient${validRecipients.length === 1 ? "" : "s"}`}
+            <Button
+              onClick={() => send.mutate()}
+              disabled={!form.title.trim() || validRecipients.length === 0 || send.isPending || uploading}
+            >
+              {send.isPending ? "Sending…" : validRecipients.length > 0 ? `Send for signature (${validRecipients.length})` : "Send for signature"}
             </Button>
           </DialogFooter>
         </DialogContent>

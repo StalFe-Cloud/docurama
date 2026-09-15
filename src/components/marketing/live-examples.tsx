@@ -89,17 +89,41 @@ export function LiveExamples() {
 
         {/* Tabs */}
         <div role="tablist" aria-label="Document types" className="mt-8 flex flex-wrap gap-2">
-          {EXAMPLES.map((e) => {
+          {EXAMPLES.map((e, idx) => {
             const on = e.id === active;
             return (
               <button
                 key={e.id}
+                id={`tab-${e.id}`}
                 role="tab"
                 aria-selected={on}
+                aria-controls={`panel-${e.id}`}
                 tabIndex={on ? 0 : -1}
                 onClick={() => setActive(e.id)}
+                onKeyDown={(evt) => {
+                  if (evt.key === "ArrowRight") {
+                    evt.preventDefault();
+                    const next = (idx + 1) % EXAMPLES.length;
+                    setActive(EXAMPLES[next].id);
+                    document.getElementById(`tab-${EXAMPLES[next].id}`)?.focus();
+                  } else if (evt.key === "ArrowLeft") {
+                    evt.preventDefault();
+                    const prev = (idx - 1 + EXAMPLES.length) % EXAMPLES.length;
+                    setActive(EXAMPLES[prev].id);
+                    document.getElementById(`tab-${EXAMPLES[prev].id}`)?.focus();
+                  } else if (evt.key === "Home") {
+                    evt.preventDefault();
+                    setActive(EXAMPLES[0].id);
+                    document.getElementById(`tab-${EXAMPLES[0].id}`)?.focus();
+                  } else if (evt.key === "End") {
+                    evt.preventDefault();
+                    const last = EXAMPLES.length - 1;
+                    setActive(EXAMPLES[last].id);
+                    document.getElementById(`tab-${EXAMPLES[last].id}`)?.focus();
+                  }
+                }}
                 className={
-                  "inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors " +
+                  "inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
                   (on
                     ? "border-foreground/20 bg-card text-foreground shadow-sm"
                     : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground")
@@ -113,7 +137,13 @@ export function LiveExamples() {
         </div>
 
         {/* The live demo panel */}
-        <div className="mt-4 overflow-hidden rounded-xl border bg-card shadow-[0_1px_2px_rgba(26,26,26,.05),0_24px_56px_-32px_rgba(26,26,26,.22)]">
+        <div
+          role="tabpanel"
+          id={`panel-${current.id}`}
+          aria-labelledby={`tab-${current.id}`}
+          tabIndex={0}
+          className="mt-4 overflow-hidden rounded-xl border bg-card shadow-[0_1px_2px_rgba(26,26,26,.05),0_24px_56px_-32px_rgba(26,26,26,.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <Current key={current.id} />
         </div>
 

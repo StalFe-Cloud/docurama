@@ -27,15 +27,20 @@ import { HeroDemo } from "@/components/marketing/hero-demo";
 import { TableDemo } from "@/components/marketing/table-demo";
 import { VerifyDemo } from "@/components/marketing/verify-demo";
 import { LiveExamples } from "@/components/marketing/live-examples";
+import { ScrollTop } from "@/components/marketing/scroll-top";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "#product", label: "Product" },
-  { href: "#examples", label: "Examples" },
-  { href: "#compliance", label: "Compliance" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "/developers", label: "Developers" },
-  { href: "#faq", label: "FAQ" },
+  { href: "#product", labelKey: "nav.product", fallback: "Product" },
+  { href: "#examples", labelKey: "nav.examples", fallback: "Examples" },
+  { href: "#compliance", labelKey: "nav.compliance", fallback: "Compliance" },
+  { href: "#pricing", labelKey: "nav.pricing", fallback: "Pricing" },
+  { href: "/modeles-de-contrats", labelKey: "nav.templates", fallback: "Templates" },
+  { href: "/docs", labelKey: "nav.docs", fallback: "Docs" },
+  { href: "/developers", labelKey: "nav.developers", fallback: "Developers" },
+  { href: "#faq", labelKey: "nav.faq", fallback: "FAQ" },
 ];
 
 /** The bento: three feature cells plus two live product demos. */
@@ -160,6 +165,7 @@ const FAQS = [
 
 export function MarketingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { t, locale } = useI18n();
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,14 +178,17 @@ export function MarketingPage() {
           <div className="hidden items-center gap-6 md:flex">
             {NAV.map((n) => (
               <a key={n.href} href={n.href} className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-                {n.label}
+                {t(n.labelKey, n.fallback)}
               </a>
             ))}
           </div>
           <div className="hidden items-center gap-2 md:flex">
-            <Button variant="ghost" size="sm" onClick={() => { window.location.assign("/login"); }}>Sign in</Button>
+            <LanguageSwitcher />
+            <Button variant="ghost" size="sm" onClick={() => { window.location.assign("/login"); }}>
+              {t("nav.signIn", "Sign in")}
+            </Button>
             <Button size="sm" onClick={() => { window.location.assign("/welcome"); }}>
-              Start free trial
+              {t("nav.startTrial", "Start free trial")}
             </Button>
           </div>
           <button
@@ -192,14 +201,21 @@ export function MarketingPage() {
         </nav>
         {menuOpen && (
           <div className="space-y-1 border-t bg-background p-4 md:hidden">
+            <div className="flex justify-end pb-2 border-b">
+              <LanguageSwitcher />
+            </div>
             {NAV.map((n) => (
               <a key={n.href} href={n.href} onClick={() => setMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
-                {n.label}
+                {t(n.labelKey, n.fallback)}
               </a>
             ))}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => { window.location.assign("/login"); }}>Sign in</Button>
-              <Button className="flex-1" onClick={() => { window.location.assign("/welcome"); }}>Start free trial</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { window.location.assign("/login"); }}>
+                {t("nav.signIn", "Sign in")}
+              </Button>
+              <Button className="flex-1" onClick={() => { window.location.assign("/welcome"); }}>
+                {t("nav.startTrial", "Start free trial")}
+              </Button>
             </div>
           </div>
         )}
@@ -211,19 +227,27 @@ export function MarketingPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-10 sm:px-6 sm:py-12">
           <div className="text-center">
             <h1 className="hero-in mx-auto max-w-3xl text-4xl font-semibold leading-[1.06] tracking-tighter sm:text-5xl lg:text-6xl">
-              Sign documents.<br />
-              <span className="text-primary">Prove everything.</span>
+              {locale === "fr" ? (
+                <>
+                  Signez vos documents.<br />
+                  <span className="text-primary">Prouvez l'essentiel.</span>
+                </>
+              ) : (
+                <>
+                  Sign documents.<br />
+                  <span className="text-primary">Prove everything.</span>
+                </>
+              )}
             </h1>
             <p className="hero-in mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg" style={{ animationDelay: ".08s" }}>
-              EU-built eSignatures with cryptographic evidence: X.509 sealing,
-              RFC 3161 timestamps and an audit trail built for review.
+              {t("hero.subtitle", "EU-built eSignatures with cryptographic evidence: X.509 sealing, RFC 3161 timestamps and an audit trail built for review.")}
             </p>
             <div className="hero-in mt-7 flex flex-wrap justify-center gap-3" style={{ animationDelay: ".16s" }}>
               <Button size="lg" onClick={() => { window.location.assign("/welcome"); }}>
-                Start free trial <ArrowRight className="h-4 w-4" aria-hidden />
+                {t("hero.startFree", "Start free trial")} <ArrowRight className="h-4 w-4" aria-hidden />
               </Button>
               <Button size="lg" variant="outline" onClick={() => { window.location.assign("/verify"); }}>
-                Verify a document
+                {t("hero.verifyDoc", "Verify a document")}
               </Button>
             </div>
           </div>
@@ -233,10 +257,7 @@ export function MarketingPage() {
               <HeroDemo />
             </div>
             <figcaption className="mx-auto mt-4 max-w-2xl shrink-0 text-center text-xs leading-relaxed text-muted-foreground">
-              The StålFe demo workspace replayed end to end: a mill certificate
-              goes to the foundry, is signed, sealed and proven with
-              cryptographic evidence. The same flow is live in the{" "}
-              <a className="font-medium underline underline-offset-2 hover:text-foreground" href="/login">demo account</a>.
+              {t("hero.caption", "The StålFe demo workspace replayed end to end: a mill certificate goes to the foundry, is signed, sealed and proven with cryptographic evidence.")}
             </figcaption>
           </figure>
         </div>
@@ -245,9 +266,7 @@ export function MarketingPage() {
       {/* Trust strip: quiet, under the hero */}
       <section aria-label="Trust summary" className="border-b bg-muted/40">
         <p className="mx-auto max-w-6xl px-4 py-4 text-center text-xs leading-relaxed text-muted-foreground sm:px-6">
-          EU data residency. GDPR, eIDAS-aligned and 21 CFR Part 11 workflows.
-          Public status at <a className="font-medium underline underline-offset-2 hover:text-foreground" href="/status">status.docurama.eu</a>,
-          platform security at <a className="font-medium underline underline-offset-2 hover:text-foreground" href="/security">security.docurama.eu</a>.
+          {t("trust.summary", "EU data residency. GDPR, eIDAS-aligned and 21 CFR Part 11 workflows. Public status at status.docurama.eu, platform security at security.docurama.eu.")}
         </p>
       </section>
 
@@ -549,6 +568,8 @@ export function MarketingPage() {
           </p>
         </div>
       </footer>
+
+      <ScrollTop />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { requireUser, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
 import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
+import { foldForSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const { section } = await ctx.params;
     const url = new URL(req.url);
     const q = url.searchParams;
-    const search = (q.get("q") ?? "").toLowerCase().trim();
+    const search = foldForSearch(q.get("q") ?? "");
     const page = Math.max(1, Number(q.get("page") ?? 1));
     const perPage = Math.min(100, Math.max(5, Number(q.get("perPage") ?? 10)));
     const tenantId = me.tenantId;
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const status = q.get("status");
         const where: Record<string, unknown> = { tenantId: tenantId! };
         if (status && status !== "ALL") where.status = status;
-        if (search) where.title = { contains: search };
+        if (search) where.titleLower = { contains: search };
         const [total, rows, myQueue] = await Promise.all([
           db.envelope.count({ where }),
           db.envelope.findMany({
@@ -121,8 +122,22 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           },
         });
         if (!e) return jsonError("Envelope not found in this workspace", 404);
+        // WS9a fix: pick fields explicitly rather than spreading the relation-
+        // loaded row, which would leak recipient accessTokens through iso(e).
         return jsonOk({
-          envelope: { ...iso(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}` },
+          envelope: {
+            id: e.id, publicCode: e.publicCode, title: e.title, status: e.status,
+            message: e.message, pages: e.pages, conformanceLevel: e.conformanceLevel,
+            sha256: e.sha256, documentId: e.documentId,
+            sealedAt: e.sealedAt?.toISOString() ?? null,
+            completedAt: e.completedAt?.toISOString() ?? null,
+            voidedAt: e.voidedAt?.toISOString() ?? null,
+            voidReason: e.voidReason,
+            createdAt: e.createdAt.toISOString(),
+            lastRemindedAt: e.lastRemindedAt?.toISOString() ?? null,
+            autoRemind: e.autoRemind, reminderCount: e.reminderCount,
+            createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
+          },
           tenantName: e.tenant.name,
           recipients: e.recipients.map(publicRecipient),
           events: isos(e.events),
@@ -130,13 +145,20 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
 
       case "templates": {
+        // WS9c: query accent-folded shadow column so "resiliation" matches "résiliation"
+        const templateWhere = search
+          ? { OR: [{ tenantId: tenantId! }, { isBuiltIn: true, tenantId: null }], AND: { OR: [{ nameLower: { contains: search } }, { category: { contains: foldForSearch(undefined) || search /* category is not folded yet, pass raw */ } }] } }
+          : { OR: [{ tenantId: tenantId! }, { isBuiltIn: true, tenantId: null }] };
         const [rows, folders] = await Promise.all([
           db.template.findMany({
-            where: search ? { tenantId: tenantId!, OR: [{ name: { contains: search } }, { category: { contains: search } }] } : { tenantId: tenantId! },
+            where: search
+              ? { OR: [{ tenantId: tenantId! }, { isBuiltIn: true, tenantId: null }], nameLower: { contains: search } }
+              : { OR: [{ tenantId: tenantId! }, { isBuiltIn: true, tenantId: null }] },
             orderBy: { usageCount: "desc" },
           }),
-          db.template.groupBy({ by: ["folder"], where: { tenantId: tenantId! }, _count: true }),
+          db.template.groupBy({ by: ["folder"], where: { OR: [{ tenantId: tenantId! }, { isBuiltIn: true, tenantId: null }] }, _count: true }),
         ]);
+        void templateWhere; // suppress unused - will be removed when category folding is added
         return jsonOk({ rows: isos(rows), folders: folders.map((f) => ({ name: f.folder, count: f._count })) });
       }
 
@@ -206,27 +228,54 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           if (used >= (PLAN_LIMITS[tenant!.planCode] ?? 25)) {
             return jsonError(`Monthly envelope quota reached (${used}/${PLAN_LIMITS[tenant!.planCode]}). Upgrade your plan to send more.`, 402);
           }
-          const code = `DOC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
-          const env = await db.envelope.create({
-            data: {
-              publicCode: code, title, tenantId: tenantId!, createdById: me.id,
-              status: "SENT", message: String(data.message ?? ""), pages: Number(data.pages ?? 3),
-            },
-          });
-          for (const [i, r] of valid.entries()) {
-            await db.recipient.create({
+
+          // WS3: accept documentId for real page count and SHA-256
+          const documentId = typeof data.documentId === "string" ? data.documentId : undefined;
+          let realPageCount = 1;
+          let realSha256: string | undefined;
+          if (documentId) {
+            const doc = await db.document.findFirst({ where: { id: documentId, tenantId: tenantId! } });
+            if (!doc) return jsonError("Document not found in this workspace", 404);
+            realPageCount = doc.pageCount;
+            realSha256 = doc.sha256;
+          }
+
+          const code = `DOC-${randomBytes(4).toString("hex").toUpperCase()}`;
+
+          // WS9e: atomic transaction - a mid-loop failure cannot leave an envelope
+          // in SENT with partial recipients.
+          const env = await db.$transaction(async (tx) => {
+            const envelope = await tx.envelope.create({
               data: {
-                envelopeId: env.id, name: String(r.name ?? r.email), email: String(r.email).toLowerCase(),
-                role: r.role === "CC" ? "CC" : "SIGNER", order: i + 1, status: "PENDING",
-                accessToken: sha(`sign-token-${env.id}-${i}`),
+                publicCode: code, title, titleLower: foldForSearch(title),
+                tenantId: tenantId!, createdById: me.id, documentId,
+                status: "SENT", message: String(data.message ?? ""),
+                pages: realPageCount, sha256: realSha256,
               },
             });
-          }
-          await db.envelopeEvent.createMany({
-            data: [
-              { envelopeId: env.id, actor, action: "CREATED", detail: "Document prepared in Builder" },
-              { envelopeId: env.id, actor: "Docurama", action: "SENT", detail: "Signing invitations delivered via SMTP" },
-            ],
+            // WS9b: signing tokens are cryptographically random, not derived from
+            // the envelope id. Each token is 32 bytes of entropy encoded as base64url.
+            await tx.recipient.createMany({
+              data: valid.map((r, i) => ({
+                envelopeId: envelope.id,
+                name: String(r.name ?? r.email),
+                email: String(r.email).toLowerCase(),
+                role: r.role === "CC" ? "CC" : "SIGNER",
+                order: i + 1,
+                status: "PENDING",
+                accessToken: randomBytes(32).toString("base64url"),
+              })),
+            });
+            // WS9f: record what actually happened. Signing invitations are queued
+            // into MailOutbox when the mail transport is wired; until then the
+            // audit trail must not claim they were delivered via SMTP.
+            await tx.envelopeEvent.createMany({
+              data: [
+                { envelopeId: envelope.id, actor, action: "CREATED", detail: "Document prepared in Builder" },
+                { envelopeId: envelope.id, actor: "Docurama", action: "SENT", detail: `Signing invitations queued for ${valid.length} recipient${valid.length > 1 ? "s" : ""}` },
+              ],
+            });
+            return envelope;
           });
           return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} - code ${code}` });
         }
@@ -263,17 +312,31 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const slug = `t-${sha(name + Date.now()).slice(0, 10)}`;
           await db.template.create({
             data: {
-              tenantId: tenantId!, name, description: String(data.description ?? ""),
+              tenantId: tenantId!, name, nameLower: foldForSearch(name),
+              description: String(data.description ?? ""),
               category: String(data.category ?? "General"), pages: Number(data.pages ?? 1), publicSlug: slug,
             },
           });
-          return jsonOk({ ok: true, message: `Template “${name}” created` });
+          return jsonOk({ ok: true, message: `Template "${name}" created` });
         }
         if (op === "use") {
-          const t = await db.template.findFirst({ where: { id, tenantId: tenantId! } });
+          const t = await db.template.findFirst({
+            where: { id, OR: [{ tenantId: tenantId! }, { isBuiltIn: true }] },
+          });
           if (!t) return jsonError("Template not found", 404);
-          await db.template.update({ where: { id }, data: { usageCount: { increment: 1 }, lastUsedAt: new Date() } });
-          return jsonOk({ ok: true, message: `Starting a new envelope from “${t.name}”` });
+          await db.template.update({ where: { id: t.id }, data: { usageCount: { increment: 1 }, lastUsedAt: new Date() } });
+          return jsonOk({
+            ok: true,
+            message: `Starting a new envelope from “${t.name}”`,
+            template: {
+              id: t.id,
+              name: t.name,
+              category: t.category,
+              pages: t.pages,
+              bodyMarkdown: t.bodyMarkdown,
+              fields: t.fields ? JSON.parse(t.fields) : [],
+            },
+          });
         }
         if (op === "delete") {
           const t = await db.template.findFirst({ where: { id, tenantId: tenantId! } });

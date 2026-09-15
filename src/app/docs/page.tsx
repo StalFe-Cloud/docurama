@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo, BRAND_LEGAL_NAME } from "@/components/brand/logo";
 import { API_REFERENCE } from "@/lib/api-reference";
+import { ScrollTop } from "@/components/marketing/scroll-top";
+import { DocsSearch } from "@/components/docs/docs-search";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
+import { getDocsNav } from "@/lib/docs";
 
 export const metadata: Metadata = {
   title: "Docurama documentation",
@@ -40,12 +44,20 @@ function Code({ children }: { children: React.ReactNode }) {
 }
 
 export default function DocsPage() {
+  const nav = getDocsNav();
+  const searchItems = nav.flatMap((group) =>
+    group.items.map((item) => ({ ...item, group: group.name }))
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <BrandLogo size="sm" />
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+            <DocsSearch items={searchItems} />
+            <LanguageSwitcher />
+            <Link className="hover:text-foreground" href="/docs/legal">Legal</Link>
             <Link className="hover:text-foreground" href="/status">Status</Link>
             <Link className="hover:text-foreground" href="/security">Security</Link>
             <Link className="hover:text-foreground" href="/marketing">Product</Link>
@@ -283,12 +295,18 @@ export default function DocsPage() {
 
           {/* Legal */}
           <section>
-            <H2 id="legal">Legal</H2>
+            <H2 id="legal">Legal & Compliance</H2>
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              The legal pack covers Terms of Service, the Privacy Policy, the
-              Data Processing Agreement and the sub-processor list. Request the
-              current versions from legal@docurama.eu or privacy@docurama.eu.
-              Security disclosures follow the{" "}
+              Docurama publishes its comprehensive governance pack online: consult our{" "}
+              <Link className="font-semibold text-foreground underline underline-offset-2" href="/docs/legal">
+                Legal & Compliance Center (/docs/legal)
+              </Link>{" "}
+              for the Information Security Policy (PSSI), GDPR policies, and eIDAS compliance statements.
+              Explore our ready-to-sign{" "}
+              <Link className="font-semibold text-foreground underline underline-offset-2" href="/modeles-de-contrats">
+                French Legal Templates (/modeles-de-contrats)
+              </Link>.
+              Security disclosures follow our{" "}
               <Link className="underline underline-offset-2" href="/security">security policy</Link>.
             </p>
           </section>
@@ -302,6 +320,8 @@ export default function DocsPage() {
           </footer>
         </main>
       </div>
+      <ScrollTop />
+
     </div>
   );
 }

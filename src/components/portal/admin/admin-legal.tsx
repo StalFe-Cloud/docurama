@@ -163,9 +163,12 @@ export function AdminLegal() {
                         <>
                           <Button
                             size="sm" variant="outline" className="h-11"
-                            onClick={() => toast.info("Export queued - the subject will receive a downloadable archive link.")}
+                            onClick={() => {
+                              window.open(`/api/admin/dsar-export?id=${r.id}`, "_blank");
+                              refetch();
+                            }}
                           >
-                            <FileDown className="h-4 w-4" aria-hidden /> Download
+                            <FileDown className="h-4 w-4" aria-hidden /> Download archive
                           </Button>
                           <Button size="sm" variant="outline" className="h-11 text-destructive hover:text-destructive" onClick={() => act.mutate({ op: "cancel-dsar", id: r.id })}>
                             <X className="h-4 w-4" aria-hidden /> Cancel

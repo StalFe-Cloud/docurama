@@ -473,7 +473,8 @@ export function ConfirmDialog({
 export function fmtDate(value: string | null | undefined, withTime = false) {
   if (!value) return "-";
   const d = new Date(value);
-  return d.toLocaleDateString("en-GB", {
+  const locale = typeof document !== "undefined" && document.documentElement.lang?.startsWith("fr") ? "fr-FR" : "en-GB";
+  return d.toLocaleDateString(locale, {
     day: "numeric", month: "short", year: "numeric",
     ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   });
@@ -483,12 +484,13 @@ export function fmtRelative(value: string | null | undefined) {
   if (!value) return "-";
   const diff = Date.now() - new Date(value).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  const isFr = typeof document !== "undefined" && document.documentElement.lang?.startsWith("fr");
+  if (mins < 1) return isFr ? "à l'instant" : "just now";
+  if (mins < 60) return isFr ? `il y a ${mins} min` : `${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return isFr ? `il y a ${hours} h` : `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return isFr ? `il y a ${days} j` : `${days}d ago`;
   return fmtDate(value);
 }
 

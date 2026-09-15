@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
+import { I18nProvider } from "@/lib/i18n";
 
 // Handwriting signature fonts are bundled locally (no CDN) so that the
 // signature a signer sees is exactly the signature that gets affixed.
@@ -55,9 +56,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-          {children}
-          <Toaster position="bottom-right" richColors closeButton />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <I18nProvider>
+            {children}
+            <Toaster position="bottom-right" richColors closeButton />
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

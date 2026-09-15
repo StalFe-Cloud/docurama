@@ -20,6 +20,7 @@ import { apiPost, clearSessionToken } from "@/lib/client";
 import { toast } from "sonner";
 import type { SessionUser } from "@/lib/auth";
 import { BrandMark, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 
 export const ADMIN_SECTIONS = [
   { key: "overview", label: "Overview", icon: LayoutDashboard, desc: "Platform KPIs, health and activity" },
@@ -176,6 +177,7 @@ export function AdminShell({
           </div>
 
           <div className="flex items-center gap-1.5">
+            <LanguageSwitcher />
             <Button
               variant="ghost" size="icon" aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

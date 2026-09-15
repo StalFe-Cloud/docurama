@@ -199,6 +199,16 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Anchor navigation: the marketing nav (#product, #compliance, #pricing,
+      #faq) and the docs sidebar jumped instantly. Opt in to smooth scrolling,
+      but only where motion is welcome. The scroll-top control makes the same
+      choice in JS, because a programmatic scrollTo overrides this rule. ── */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -56,10 +56,17 @@ export function middleware(req: NextRequest) {
   // Whole-host surfaces.
   const whole = SUBDOMAIN_ROUTES[label];
   if (whole) {
-    if (pathname === whole) return NextResponse.next();
     const url = req.nextUrl.clone();
-    url.pathname = whole;
-    url.search = "";
+    url.search = search;
+    if (pathname === "/" || pathname === "") {
+      url.pathname = whole;
+      return NextResponse.rewrite(url);
+    }
+    if (pathname === whole || pathname.startsWith(whole + "/")) {
+      return NextResponse.next();
+    }
+    // Deep-link rewrite: e.g. docs.docurama.eu/guide -> /docs/guide
+    url.pathname = `${whole}${pathname.startsWith("/") ? "" : "/"}${pathname}`;
     return NextResponse.rewrite(url);
   }
 

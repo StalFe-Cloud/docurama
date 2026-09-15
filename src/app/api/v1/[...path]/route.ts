@@ -103,7 +103,18 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       });
       if (!e) return jsonError("Envelope not found", 404);
       return jsonOk({
-        envelope: iso(e),
+        envelope: {
+          id: e.id, publicCode: e.publicCode, title: e.title, status: e.status,
+          message: e.message, pages: e.pages, conformanceLevel: e.conformanceLevel,
+          sha256: e.sha256, documentId: e.documentId,
+          sealedAt: e.sealedAt?.toISOString() ?? null,
+          completedAt: e.completedAt?.toISOString() ?? null,
+          voidedAt: e.voidedAt?.toISOString() ?? null,
+          voidReason: e.voidReason,
+          createdAt: e.createdAt.toISOString(),
+          lastRemindedAt: e.lastRemindedAt?.toISOString() ?? null,
+          autoRemind: e.autoRemind, reminderCount: e.reminderCount,
+        },
         tenantName: e.tenant.name,
         recipients: e.recipients.map(publicRecipient),
         events: isos(e.events),

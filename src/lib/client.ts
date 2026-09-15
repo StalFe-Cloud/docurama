@@ -78,3 +78,14 @@ export async function apiPost<T>(path: string, body: { op: string; id?: string; 
   });
   return handle<T>(res);
 }
+
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    credentials: "same-origin",
+    body: formData,
+  });
+  return handle<T>(res);
+}
+

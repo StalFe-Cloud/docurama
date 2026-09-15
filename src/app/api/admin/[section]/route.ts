@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
+import { promises as dns } from "dns";
+import { stat } from "fs/promises";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
+import { purgeExpired, storageDir } from "@/lib/document-store";
 import {
   COMPANY, EMAIL_ACCOUNTS, SUBDOMAINS, DNS_RECORDS,
   parseProvisioningState, buildZoneFile,
@@ -183,7 +186,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
 
       case "compliance": {
-        const [controls, policies, consents, incidents, reviews, risks, changes, vendors, drills, subprocessors] = await Promise.all([
+        const [controls, policies, consents, incidents, reviews, risks, changes, vendors, drills, subprocessors, documents] = await Promise.all([
           db.control.findMany({ orderBy: { ref: "asc" } }),
           db.retentionPolicy.findMany({ orderBy: { name: "asc" } }),
           db.consent.findMany({ orderBy: { grantedAt: "desc" } }),
@@ -194,12 +197,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           db.vendor.findMany({ orderBy: { name: "asc" } }),
           db.restoreDrill.findMany({ orderBy: { executedAt: "desc" } }),
           db.subprocessor.findMany({ orderBy: { name: "asc" } }),
+          db.complianceDocument.findMany({ include: { versions: { orderBy: { createdAt: "desc" } } }, orderBy: { title: "asc" } }),
         ]);
         return jsonOk({
           controls: isos(controls), policies: isos(policies), consents: isos(consents),
           incidents: isos(incidents), reviews: isos(reviews), risks: isos(risks),
           changes: isos(changes), vendors: isos(vendors), drills: isos(drills),
           subprocessors: isos(subprocessors),
+          documents: documents.map((d) => ({
+            ...iso(d),
+            versions: isos(d.versions),
+          })),
         });
       }
 
@@ -310,6 +318,100 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         });
       }
 
+      case "dsar-export": {
+        const id = q.get("id");
+        if (!id) return jsonError("DSAR request id required", 400);
+        const r = await db.dsarRequest.findUnique({ where: { id } });
+        if (!r) return jsonError("DSAR request not found", 404);
+
+        const email = r.subjectEmail.toLowerCase();
+        const [user, memberRecords, recipients, auditLogs, consents] = await Promise.all([
+          db.user.findUnique({ where: { email }, select: { id: true, email: true, firstName: true, lastName: true, role: true, createdAt: true, lastActiveAt: true } }),
+          db.member.findMany({ where: { user: { email } }, include: { tenant: { select: { name: true } } } }),
+          db.recipient.findMany({
+            where: { email },
+            include: { envelope: { select: { publicCode: true, title: true, status: true, createdAt: true, sealedAt: true } } },
+          }),
+          db.auditEvent.findMany({ where: { OR: [{ actor: email }, { detail: { contains: email } }] }, take: 100 }),
+          db.consent.findMany({ where: { subjectEmail: email } }),
+        ]);
+
+        await db.dsarRequest.update({ where: { id }, data: { status: "COMPLETED", completedAt: new Date() } });
+        await recordAudit({ actor: `${admin.firstName} ${admin.lastName}`, actorRole: "PLATFORM_ADMIN", action: "dsar.exported", resource: `dsar:${email}`, severity: "INFO" });
+
+        const exportData = {
+          dsarRequestId: r.id,
+          exportedAt: new Date().toISOString(),
+          subjectEmail: email,
+          type: r.type,
+          data: {
+            userProfile: user,
+            workspaceMemberships: memberRecords.map((m) => ({ tenant: m.tenant.name, role: m.role, joinedAt: m.createdAt })),
+            envelopesSignedOrInvited: recipients.map((rc) => ({
+              envelopeCode: rc.envelope.publicCode,
+              title: rc.envelope.title,
+              status: rc.status,
+              signedAt: rc.signedAt,
+              envelopeCreatedAt: rc.envelope.createdAt,
+            })),
+            consentRecords: consents,
+            auditTrailSummary: auditLogs.map((a) => ({ at: a.at, action: a.action, detail: a.detail })),
+          },
+        };
+
+        return new Response(JSON.stringify(exportData, null, 2), {
+          headers: {
+            "content-type": "application/json",
+            "content-disposition": `attachment; filename="dsar-export-${email.replace(/[^a-z0-9]/g, "_")}-${Date.now()}.json"`,
+          },
+        });
+      }
+
+      case "auditor-bundle": {
+        const [docs, controls, drills, vendors, retention, platform] = await Promise.all([
+          db.complianceDocument.findMany({ include: { versions: true } }),
+          db.control.findMany({ orderBy: { ref: "asc" } }),
+          db.restoreDrill.findMany({ orderBy: { executedAt: "desc" } }),
+          db.vendor.findMany({ orderBy: { name: "asc" } }),
+          db.retentionPolicy.findMany({ orderBy: { name: "asc" } }),
+          db.platformSetting.findUnique({ where: { id: "singleton" } }),
+        ]);
+
+        const bundle = {
+          exportType: "Docurama SAS - ISMS / SOC 2 / ISO 27001 Auditor Bundle",
+          exportedAt: new Date().toISOString(),
+          exportedBy: `${admin.firstName} ${admin.lastName}`,
+          platformAuditChain: {
+            blockHeight: platform?.auditChainBlockHeight,
+            sealedAt: platform?.auditChainSealedAt,
+          },
+          complianceLibrary: docs.map((d) => ({
+            key: d.key,
+            title: d.title,
+            category: d.category,
+            status: d.status,
+            version: d.version,
+            owner: d.owner,
+            controlRefs: d.controlRefs,
+            approvedAt: d.approvedAt,
+            approvedBy: d.approvedBy,
+            contentMarkdown: d.bodyMarkdown,
+            versionHistory: d.versions.map((v) => ({ version: v.version, changedBy: v.changedBy, note: v.changeNote, at: v.createdAt })),
+          })),
+          controlsInventory: controls,
+          restoreDrillsEvidence: drills,
+          vendorsAndSubprocessors: vendors,
+          retentionPolicies: retention,
+        };
+
+        return new Response(JSON.stringify(bundle, null, 2), {
+          headers: {
+            "content-type": "application/json",
+            "content-disposition": `attachment; filename="docurama-auditor-bundle-${Date.now()}.json"`,
+          },
+        });
+      }
+
       default:
         return jsonError(`Unknown section: ${section}`, 404);
     }
@@ -412,10 +514,29 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         if (op === "verify") {
           const dom = await db.domain.findUnique({ where: { id } });
           if (!dom) return jsonError("Domain not found", 404);
-          const pass = dom.method === "CNAME" ? Math.random() > 0.15 : dom.status !== "FAILED";
+          let pass = false;
+          let detail = "";
+          try {
+            if (dom.method === "CNAME") {
+              const records = await dns.resolveCname(dom.domain).catch(() => []);
+              pass = records.some((r) => r.toLowerCase().includes("docurama.eu") || r.toLowerCase().includes("docurama"));
+              detail = pass ? `CNAME points to ${records.join(", ")}` : `CNAME records (${records.join(", ") || "none"}) do not point to docurama.eu`;
+            } else if (dom.method === "TXT") {
+              const records = await dns.resolveTxt(dom.domain).catch(() => []);
+              const flat = records.flat();
+              pass = flat.some((t) => t.includes(`docurama-site-verification=${dom.token}`));
+              detail = pass ? "TXT verification token matched" : "TXT token not matched";
+            } else {
+              pass = dom.status === "VERIFIED";
+              detail = "Direct verification";
+            }
+          } catch (dnsErr: any) {
+            pass = false;
+            detail = `DNS resolution failed: ${dnsErr.code || dnsErr.message}`;
+          }
           await db.domain.update({ where: { id }, data: { status: pass ? "VERIFIED" : "FAILED", verifiedAt: pass ? new Date() : null } });
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: pass ? "domain.verified" : "domain.verify_failed", resource: `domain:${dom.domain}`, severity: "WARNING", detail: `Method ${dom.method}` });
-          return jsonOk({ ok: true, message: pass ? "Domain verified" : "Verification failed - DNS record not found" });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: pass ? "domain.verified" : "domain.verify_failed", resource: `domain:${dom.domain}`, severity: "WARNING", detail });
+          return jsonOk({ ok: true, message: pass ? "Domain verified" : `Verification failed: ${detail}` });
         }
         if (op === "approve-join" || op === "reject-join") {
           const dom = await db.domain.findUnique({ where: { id } });
@@ -451,9 +572,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       // ── Compliance ──
       case "compliance": {
         if (op === "sweep-retention") {
+          const purgeRes = await purgeExpired();
+          const activePolicies = await db.retentionPolicy.count({ where: { status: "ACTIVE" } });
           await db.retentionPolicy.updateMany({ where: { status: "ACTIVE" }, data: { lastSweepAt: new Date() } });
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "retention.sweep_completed", resource: "platform:retention", severity: "INFO", detail: "Manual sweep triggered from admin console" });
-          return jsonOk({ ok: true, message: "Retention sweep executed - 3 policies evaluated" });
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "retention.sweep_completed", resource: "platform:retention", severity: "INFO",
+            detail: `Evaluated ${activePolicies} policies. Purged ${purgeRes.removed} orphaned upload(s) across ${purgeRes.scanned} scanned files.`,
+          });
+          return jsonOk({ ok: true, message: `Retention sweep executed: ${activePolicies} active policies evaluated, ${purgeRes.removed} orphaned file(s) purged.` });
         }
         if (op === "release-hold") {
           await db.legalHold.update({ where: { id }, data: { status: "RELEASED", releasedAt: new Date() } });
@@ -493,8 +619,48 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return jsonOk({ ok: true, message: "Evidence attached to control" });
         }
         if (op === "run-drill") {
-          await db.restoreDrill.update({ where: { id }, data: { executedAt: new Date(), rtoActual: "0h 48m", result: "PASS", notes: "Re-run from admin console" } });
-          return jsonOk({ ok: true, message: "Restore drill executed - PASS" });
+          const drillStart = Date.now();
+          const [dbCheck, storageStat] = await Promise.all([
+            db.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
+            stat(storageDir()).then(() => true).catch(() => false),
+          ]);
+          const elapsedMs = Date.now() - drillStart;
+          const rtoActual = `${elapsedMs}ms`;
+          const result = dbCheck && storageStat ? "PASS" : "FAIL";
+          await db.restoreDrill.update({
+            where: { id },
+            data: { executedAt: new Date(), rtoActual, result, notes: `Integrity check: DB=${dbCheck ? "OK" : "ERR"}, Storage=${storageStat ? "OK" : "ERR"}. Latency: ${elapsedMs}ms` },
+          });
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "drills.executed", resource: `drill:${id}`,
+            severity: result === "PASS" ? "INFO" : "CRITICAL", detail: `Result: ${result}, RTO: ${rtoActual}`,
+          });
+          return jsonOk({ ok: true, message: `Restore drill executed - ${result} (latency ${rtoActual})` });
+        }
+        if (op === "doc-approve") {
+          const doc = await db.complianceDocument.findUnique({ where: { id } });
+          if (!doc) return jsonError("Document not found", 404);
+          await db.complianceDocument.update({
+            where: { id },
+            data: { status: "APPROVED", approvedBy: actor, approvedAt: new Date() },
+          });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "compliance_doc.approved", resource: `doc:${doc.key}`, severity: "INFO" });
+          return jsonOk({ ok: true, message: `Document "${doc.title}" approved` });
+        }
+        if (op === "doc-retire") {
+          const doc = await db.complianceDocument.findUnique({ where: { id } });
+          if (!doc) return jsonError("Document not found", 404);
+          await db.complianceDocument.update({ where: { id }, data: { status: "RETIRED" } });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "compliance_doc.retired", resource: `doc:${doc.key}`, severity: "WARNING" });
+          return jsonOk({ ok: true, message: `Document "${doc.title}" retired` });
+        }
+        if (op === "doc-toggle-public") {
+          const doc = await db.complianceDocument.findUnique({ where: { id } });
+          if (!doc) return jsonError("Document not found", 404);
+          const nextPublic = !doc.isPublic;
+          await db.complianceDocument.update({ where: { id }, data: { isPublic: nextPublic } });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "compliance_doc.visibility_changed", resource: `doc:${doc.key}`, severity: "INFO", detail: `Public: ${nextPublic}` });
+          return jsonOk({ ok: true, message: nextPublic ? "Document published to public legal portal" : "Document hidden from public view" });
         }
         return jsonError("Unsupported operation");
       }

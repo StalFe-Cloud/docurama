@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { apiPost, clearSessionToken } from "@/lib/client";
 import type { SessionUser } from "@/lib/auth";
 import { BrandMark, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 
 export const USER_SECTIONS = [
   { key: "home", label: "Home", icon: Home },
@@ -165,6 +166,7 @@ export function UserShell({
           <nav aria-label="Workspace sections" className="hidden items-center gap-1 lg:flex">{links}</nav>
 
           <div className="flex items-center gap-1.5">
+            <LanguageSwitcher />
             <Button
               variant="ghost" size="icon" className="h-11 w-11"
               aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}

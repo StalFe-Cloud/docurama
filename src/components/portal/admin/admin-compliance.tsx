@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ShieldCheck, Paperclip, Trash2, RotateCcw, Play, Pause, ShieldAlert,
   Check, X, FileCheck, UserCheck, Wrench, Server, Database, ClipboardList,
+  FileDown, Globe, Lock, BookOpen,
 } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import { ErrorState, KpiCard, PageHeader, StatusBadge, fmtDate, fmtRelative } from "@/components/portal/shared";
@@ -13,6 +14,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+
+type ComplianceDocumentItem = {
+  id: string;
+  key: string;
+  title: string;
+  category: string;
+  owner: string;
+  status: string;
+  version: string;
+  locale: string;
+  summary: string | null;
+  isPublic: boolean;
+  controlRefs: string;
+  bodyMarkdown: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  versions: { id: string; version: string; changedBy: string; changeNote: string | null; createdAt: string }[];
+};
 
 type ComplianceData = {
   controls: { id: string; ref: string; title: string; framework: string; category: string; status: string; owner: string; evidenceCount: number; lastReviewedAt: string | null }[];
@@ -25,10 +47,12 @@ type ComplianceData = {
   vendors: { id: string; name: string; service: string; riskLevel: string; dpdSigned: boolean; lastAuditAt: string | null; status: string }[];
   drills: { id: string; scope: string; rtoTarget: string; rtoActual: string | null; result: string; executedAt: string; notes: string | null }[];
   subprocessors: { id: string; name: string; purpose: string; location: string; dpaSigned: boolean; transferMechanism: string }[];
+  documents?: ComplianceDocumentItem[];
 };
 
 export function AdminCompliance() {
-  const [tab, setTab] = useState("controls");
+  const [tab, setTab] = useState("documents");
+  const [selectedDoc, setSelectedDoc] = useState<ComplianceDocumentItem | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -69,9 +93,18 @@ export function AdminCompliance() {
         title="Compliance"
         description="SOC 2 / ISO 27001 / GDPR control plane: evidence, retention, legal holds, incidents, risks and recovery drills."
         actions={
-          <Button size="sm" className="h-11" onClick={() => act.mutate({ op: "sweep-retention" })} disabled={act.isPending}>
-            <Trash2 className="h-4 w-4" aria-hidden /> Run retention sweep
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => window.open("/api/admin/auditor-bundle", "_blank")}
+            >
+              <FileDown className="h-4 w-4" aria-hidden /> Export Auditor Bundle
+            </Button>
+            <Button size="sm" className="h-11" onClick={() => act.mutate({ op: "sweep-retention" })} disabled={act.isPending}>
+              <Trash2 className="h-4 w-4" aria-hidden /> Run retention sweep
+            </Button>
+          </div>
         }
       />
 
@@ -85,13 +118,89 @@ export function AdminCompliance() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-11 flex-wrap">
           {[
-            ["controls", "Controls"], ["retention", "Retention"], ["consents", "Consents"],
+            ["documents", "Compliance Library"], ["controls", "Controls"], ["retention", "Retention"], ["consents", "Consents"],
             ["incidents", "Incidents"], ["reviews", "Access reviews"], ["risks", "Risk register"],
             ["changes", "Change control"], ["vendors", "Vendors"], ["drills", "Restore drills"], ["subprocessors", "Subprocessors"],
           ].map(([k, label]) => (
             <TabsTrigger key={k} value={k} className="min-h-9">{label}</TabsTrigger>
           ))}
         </TabsList>
+
+        {/* Compliance Library Documents */}
+        <TabsContent value="documents">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base">ISMS & Compliance Document Catalogue</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  12 internal governance policies, procedures, and registers. Documents flagged public appear on /docs/legal.
+                </p>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(!data.documents || data.documents.length === 0) ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">No compliance documents found in database.</div>
+              ) : (
+                <ul className="divide-y">
+                  {data.documents.map((doc) => (
+                    <li key={doc.id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-sm text-foreground">{doc.title}</span>
+                          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-mono font-medium text-primary">v{doc.version}</span>
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{doc.category}</span>
+                          {doc.isPublic ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-primary font-medium">
+                              <Globe className="h-3 w-3" /> Public (/docs/legal)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <Lock className="h-3 w-3" /> Internal only
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{doc.summary || doc.title}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Owner: {doc.owner} · Controls: {doc.controlRefs || "General"} · Status: {doc.status}
+                          {doc.approvedAt && ` · Approved ${fmtDate(doc.approvedAt)} by ${doc.approvedBy}`}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9"
+                          onClick={() => setSelectedDoc(doc)}
+                        >
+                          <BookOpen className="h-3.5 w-3.5" aria-hidden /> View Policy
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 text-xs"
+                          onClick={() => act.mutate({ op: "doc-toggle-public", id: doc.id })}
+                        >
+                          {doc.isPublic ? "Unpublish" : "Publish"}
+                        </Button>
+                        {doc.status !== "APPROVED" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 text-xs text-primary"
+                            onClick={() => act.mutate({ op: "doc-approve", id: doc.id })}
+                          >
+                            Approve
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Controls */}
         <TabsContent value="controls">
@@ -409,6 +518,45 @@ export function AdminCompliance() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Document Viewer Modal */}
+      <Dialog open={!!selectedDoc} onOpenChange={(v) => !v && setSelectedDoc(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          {selectedDoc && (
+            <div className="space-y-4">
+              <DialogHeader>
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-mono font-semibold text-primary">v{selectedDoc.version}</span>
+                  <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{selectedDoc.category}</span>
+                </div>
+                <DialogTitle className="text-xl mt-1">{selectedDoc.title}</DialogTitle>
+                <DialogDescription>
+                  Owner: {selectedDoc.owner} · Controls: {selectedDoc.controlRefs || "General"}
+                  {selectedDoc.approvedAt && ` · Approved by ${selectedDoc.approvedBy} on ${fmtDate(selectedDoc.approvedAt)}`}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="rounded-lg border bg-muted/20 p-4 prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans text-xs sm:text-sm">
+                {selectedDoc.bodyMarkdown}
+              </div>
+
+              {selectedDoc.versions && selectedDoc.versions.length > 0 && (
+                <div className="space-y-1.5 border-t pt-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</h4>
+                  <ul className="text-xs space-y-1 text-muted-foreground">
+                    {selectedDoc.versions.map((v) => (
+                      <li key={v.id} className="flex items-center justify-between">
+                        <span>v{v.version} — {v.changeNote || "Revision"}</span>
+                        <span>{v.changedBy} · {fmtDate(v.createdAt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -10,6 +10,19 @@ import { Label } from "@/components/ui/label";
 import { ApiError, setSessionToken } from "@/lib/client";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 
+/**
+ * One-click sign-in for the QA dataset. These are working credentials printed
+ * in plain text, so the block is gated behind an explicit opt-in rather than
+ * shipped by default: PRODUCTION-PLAN.md carries "demo accounts removed or
+ * rotated" as a go-live item, and a login page that advertises a platform
+ * administrator password is the sort of thing that survives to production by
+ * accident. Unset or "false" in any real deployment.
+ *
+ * NEXT_PUBLIC_* is inlined at build time, so a production build with the flag
+ * unset drops this code path entirely rather than merely hiding it.
+ */
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
 const DEMO_ACCOUNTS = [
   {
     label: "Platform Admin - Docurama SAS",
@@ -227,7 +240,7 @@ export function SignIn() {
             </p>
           )}
 
-          {!challenge && (
+          {DEMO_MODE && !challenge && (
             <div className="space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Demo accounts - one click to enter

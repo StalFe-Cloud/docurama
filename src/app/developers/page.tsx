@@ -6,6 +6,7 @@ import {
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 import { CodeTabs } from "@/components/marketing/code-tabs";
 import { API_REFERENCE } from "@/lib/api-reference";
+import { ScrollTop } from "@/components/marketing/scroll-top";
 
 export const metadata: Metadata = {
   title: "Developers · Docurama",
@@ -199,6 +200,8 @@ export default function DevelopersPage() {
           </nav>
         </div>
       </footer>
+
+      <ScrollTop />
     </div>
   );
 }
