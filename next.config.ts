@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  async redirects() {
+    return [
+      { source: "/sign_up", destination: "/login", permanent: false },
+      { source: "/signup", destination: "/login", permanent: false },
+      { source: "/sign", destination: "/documents", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;
