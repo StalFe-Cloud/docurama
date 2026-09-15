@@ -44,7 +44,10 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "docurama/**"]
+  // "Archieve - Do not touch" is a dead, separately-versioned app kept for
+  // reference only. It is not built or deployed, and 773 of its warnings
+  // drowned out the live code, which made the lint gate useless.
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "docurama/**", "Archieve - Do not touch/**"]
 }];
 
 export default eslintConfig;

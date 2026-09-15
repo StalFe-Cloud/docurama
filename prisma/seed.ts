@@ -1,6 +1,7 @@
 /* Docurama portal seed · realistic demo dataset */
 import { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
+import { foldForSearch } from "../src/lib/search";
 
 const db = new PrismaClient();
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -142,9 +143,10 @@ async function main() {
     const done = ["COMPLETED"].includes(status);
     const sealedAt = done ? d((i % 30) + 0.2) : null;
     const code = `DOC-${(824100 + i * 37).toString(36).toUpperCase().padStart(6, "0")}${i}`;
+    const envTitle = pick(envTitles, i) + (i >= envTitles.length ? ` (v${Math.floor(i / envTitles.length) + 1})` : "");
     const env = await db.envelope.create({
       data: {
-        publicCode: code, title: pick(envTitles, i) + (i >= envTitles.length ? ` (v${Math.floor(i / envTitles.length) + 1})` : ""),
+        publicCode: code, title: envTitle, titleLower: foldForSearch(envTitle),
         tenantId: tenants[slug], createdById: users[pick(creatorPool, i)], status,
         message: "Please review and sign at your earliest convenience.",
         pages: 2 + (i % 12), createdAt: created,
@@ -216,7 +218,7 @@ async function main() {
     for (const slug of ["stalfe", "aurora-legal", "helios-energy"]) {
       await db.template.create({
         data: {
-          tenantId: tenants[slug], name, description: desc, category: cat, pages,
+          tenantId: tenants[slug], name, nameLower: foldForSearch(name), description: desc, category: cat, pages,
           usageCount: Math.floor(Math.random() * 40), lastUsedAt: d(Math.random() * 20),
           publicSlug: `t-${sha(name + slug).slice(0, 10)}`,
         },

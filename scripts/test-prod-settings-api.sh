@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Production-settings API test suite (run against the dev server on :3000)
 set -u
-BASE="http://localhost:3000"
+# The inline python helpers print check marks. Windows consoles default to
+# cp1252, which cannot encode them, and the traceback was being counted as a
+# product failure. Harmless everywhere else.
+export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
+BASE="${BASE:-http://localhost:3000}"
 PASS=0; FAIL=0
 
 check() { # name, expected, actual

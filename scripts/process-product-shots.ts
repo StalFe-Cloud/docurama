@@ -3,6 +3,7 @@
  * Resizes to the dimensions the marketing page declares and optimizes PNGs.
  */
 import sharp from "sharp";
+import { statSync } from "node:fs";
 
 async function run(src: string, dest: string, width: number, height: number) {
   const img = sharp(src);
@@ -12,7 +13,7 @@ async function run(src: string, dest: string, width: number, height: number) {
     .png({ compressionLevel: 9, palette: true })
     .toFile(dest);
   const out = await sharp(dest).metadata();
-  console.log(`${dest}: ${meta.width}x${meta.height} -> ${out.width}x${out.height} (${(require("node:fs").statSync(dest).size / 1024).toFixed(0)} KB)`);
+  console.log(`${dest}: ${meta.width}x${meta.height} -> ${out.width}x${out.height} (${(statSync(dest).size / 1024).toFixed(0)} KB)`);
 }
 
 async function main() {

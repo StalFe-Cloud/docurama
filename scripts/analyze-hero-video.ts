@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 async function main() {
   const zai = await ZAI.create();
   const b64 = readFileSync("download/hero-qa/hero-loop.mp4").toString("base64");
-  const response = await zai.chat.completions.createVision({
+  // The SDK's CreateChatCompletionVisionBody type models neither video_url
+  // content parts nor the `thinking` switch, though the endpoint accepts both.
+  // Cast at the call boundary rather than reshaping a request that works.
+  const visionBody = {
     messages: [
       {
         role: "user",
@@ -25,7 +28,10 @@ async function main() {
       },
     ],
     thinking: { type: "disabled" },
-  });
+  };
+  const response = await zai.chat.completions.createVision(
+    visionBody as unknown as Parameters<typeof zai.chat.completions.createVision>[0],
+  );
   console.log(response.choices[0]?.message?.content ?? "NO CONTENT");
 }
 

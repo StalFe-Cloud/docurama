@@ -5,7 +5,11 @@
 # invitation accept (new user via inviteToken), email-mismatch rejection,
 # and the outbox/audit ledgers.
 set -u
-BASE="http://localhost:3000"
+# The inline python helpers print check marks. Windows consoles default to
+# cp1252, which cannot encode them, and the traceback was being counted as a
+# product failure. Harmless everywhere else.
+export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
+BASE="${BASE:-http://localhost:3000}"
 TS=$(date +%s)
 EMAIL="onboard.$TS@example.com"
 TEAMMATE="teammate.$TS@example.com"
