@@ -66,3 +66,6 @@ server.log
 # Reference copy of the retired Python/Vite app. Kept locally for porting
 # (OCR + document intelligence), never part of this repo.
 Archieve - Do not touch/
+
+# Runtime document storage (STORAGE_DIR). Uploaded PDFs never belong in git.
+/storage/
