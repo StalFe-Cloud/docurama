@@ -1,0 +1,26 @@
+# Marketing homepage — hero, nav, footer and primary CTA routing.
+url: ${MAESTRO_BASE_URL}/
+name: Marketing home renders and CTA routes to signup
+tags:
+  - e2e
+  - public
+---
+- launchApp
+
+# Hero fold (extended wait: this page cold-compiles slowly and the hero
+# animates in — a bare assertVisible can race the first paint)
+- extendedWaitUntil:
+    visible: "Sign documents.*"
+    timeout: 20000
+- assertVisible: Prove everything.
+
+# Top navigation exposes the main sections
+- assertVisible: Product
+- assertVisible: Pricing
+- assertVisible: Documentation
+
+# Primary CTA routes anonymous traffic to /welcome
+- tapOn: " ?Start free trial ?"
+- extendedWaitUntil:
+    visible: Welcome to Docurama
+    timeout: 10000

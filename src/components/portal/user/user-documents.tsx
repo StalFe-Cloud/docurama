@@ -30,6 +30,8 @@ type EnvelopeRow = {
 };
 type EnvelopeDetail = {
   envelope: EnvelopeRow;
+  recipients: Recipient[];
+  tenantName?: string;
   events: { id: string; at: string; actor: string; action: string; detail: string | null; ipHash: string | null }[];
 };
 
@@ -179,10 +181,13 @@ export function UserDocuments() {
       key: "actions", header: <span className="sr-only">Actions</span>, className: "w-36",
       render: (e) => (
         <div className="flex justify-end gap-1">
+          {/* Row actions stop propagation: without it, the click bubbles to
+              the row's onRowClick and opens the detail sheet UNDERNEATH the
+              action's own dialog (two Radix overlays fighting for focus). */}
           <Button
             variant="ghost" size="icon" className="h-11 w-11"
             aria-label={`Open details for ${e.title}`} title="Details"
-            onClick={() => setDetailId(e.id)}
+            onClick={(ev) => { ev.stopPropagation(); setDetailId(e.id); }}
           >
             <Eye className="h-4 w-4" aria-hidden />
           </Button>
@@ -191,7 +196,7 @@ export function UserDocuments() {
               variant="ghost" size="icon" className="h-11 w-11"
               aria-label={`Send reminder for ${e.title}`} title="Send reminder"
               disabled={act.isPending}
-              onClick={() => act.mutate({ op: "remind", id: e.id })}
+              onClick={(ev) => { ev.stopPropagation(); act.mutate({ op: "remind", id: e.id }); }}
             >
               <Bell className="h-4 w-4" aria-hidden />
             </Button>
@@ -199,7 +204,11 @@ export function UserDocuments() {
           {["SENT", "PARTIALLY_SIGNED", "DRAFT"].includes(e.status) && (
             <ConfirmDialog
               trigger={
-                <Button variant="ghost" size="icon" className="h-11 w-11 text-destructive" aria-label={`Void ${e.title}`} title="Void envelope">
+                <Button
+                  variant="ghost" size="icon" className="h-11 w-11 text-destructive"
+                  aria-label={`Void ${e.title}`} title="Void envelope"
+                  onClick={(ev) => ev.stopPropagation()}
+                >
                   <Ban className="h-4 w-4" aria-hidden />
                 </Button>
               }
@@ -324,7 +333,9 @@ export function UserDocuments() {
               <section aria-labelledby="signers">
                 <h3 id="signers" className="mb-2 text-sm font-semibold">Signers</h3>
                 <ol className="space-y-1.5">
-                  {env.recipients.map((r) => (
+                  {/* recipients live at the top level of the detail response
+                      (WS9a moved them out of the envelope object) */}
+                  {(detail.data?.recipients ?? []).map((r) => (
                     <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary" aria-hidden>
@@ -491,6 +502,7 @@ export function UserDocuments() {
               {form.recipients.map((r, i) => (
                 <div key={i} className="flex gap-2">
                   <Input
+                    id={`recipient-${i + 1}-name`}
                     aria-label={`Recipient ${i + 1} name`}
                     value={r.name} placeholder="Name"
                     onChange={(e) => {
@@ -501,6 +513,7 @@ export function UserDocuments() {
                     className="h-11"
                   />
                   <Input
+                    id={`recipient-${i + 1}-email`}
                     aria-label={`Recipient ${i + 1} email`}
                     type="email" value={r.email} placeholder="name@company.com"
                     onChange={(e) => {

@@ -197,3 +197,24 @@ Work Log:
 
 Stage Summary:
 - Every product shot on the docurama.eu homepage is now live: the hero movie (mill certificate), the bento table and verify demos, and a cursor.com/product-style tabbed section with five more StålFe document flows (quotation, NDA, change control, CAD approval, supply agreement), all using the real StålFe logo, spring-cursor physics, human typing cadence and self-drawing signatures. All demos fit the viewport, hold a readability floor on phones, pause offscreen and degrade to static tableaus under prefers-reduced-motion. The developer story moved to its own /developers page driven by the live API catalogue, and the last Northwind remnants in user-facing strings are gone.
+
+---
+Task ID: 11
+Agent: Super Z (main)
+Task: "pull from quality and work from there, start a new improvement plan" + "use Maestro to perform end-to-end" — build a Maestro E2E suite on a branch off quality, fix what it finds.
+
+Work Log:
+- Pulled quality (298ce1d), booted the dev server; diagnosed and fixed a sandbox-specific failure where an inherited DATABASE_URL overrode .env and 500'd every DB route (pinned in e2e/run.sh; documented).
+- Validated Maestro 2.10.0 web mode headless in this container (no KVM/X): Playwright Chrome-for-Testing + a --no-sandbox wrapper on PATH; confirmed ${MAESTRO_*} substitution works in the url: header (probe against example.com).
+- Wrote docs/IMPROVEMENT-PLAN.md (objectives, coverage matrix, findings log, DoD) and built e2e/: seed.ts (idempotent "E2E Testing" tenant, e2e@/e2e-admin@ users, fixed-code fixtures DOC-E2E0001/0002), run.sh (env guard → server → seed → maestro loop), 18 flows across public/auth/workspace/admin, README with selector conventions.
+- Selector R&D that shaped the flows: Maestro full-string-regex text matching (icon buttons carry a leading space → " ?Label ?" patterns); id: resolves to id/aria-label/label[for] (labels can shadow inputs); per-char sendKeys builds an XPath from document.activeElement — class-based without position index for id-less inputs, which made recipient emails land in the name field → gave recipient inputs stable ids (B4).
+- Bugs found by the suite and fixed:
+  * B1 CRITICAL: envelope detail sheet white-screened the client (env.recipients undefined since WS9a moved recipients out of the envelope payload) — reproduced with a Playwright console probe, fixed in user-documents.tsx.
+  * B2: row-action buttons didn't stopPropagation — void/remind/details clicks also opened the detail sheet underneath (two Radix overlays fighting over focus); fixed on all three buttons, verified with an overlay-state Playwright probe.
+  * B3: ConfirmDialog with a required reason auto-focused Cancel instead of the input; ConfirmDialog now owns onOpenAutoFocus and focuses #confirm-reason (also better keyboard UX).
+- Maestro quirks documented in e2e/README.md: per-char sendKeys(" ") throws "element not interactable" inside Radix dialogs (flows use hyphenated strings); TAB/ESC keys unsupported on web; occlusion-unaware assertVisible; marketing page needs an extendedWaitUntil on cold compile.
+- Wired package.json (test:e2e, test:e2e:seed) and .github/workflows/e2e.yml (bun install → prisma → seed → maestro --headless → artifacts on failure).
+- Final state: 18/18 flows green via `bun run test:e2e`; tsc --noEmit and eslint clean on the touched components.
+
+Stage Summary:
+- Branch e2e/maestro-suite carries the full Maestro browser E2E program: docs/IMPROVEMENT-PLAN.md, e2e/{seed.ts,run.sh,README.md,flows/**}, CI workflow, package scripts, plus three product bug fixes (detail-sheet crash, row-action propagation, dialog autofocus) and stable form-input ids. The suite is self-contained (own tenant/users/fixtures, wipes its writes, order-independent flows) and portable via MAESTRO_BASE_URL.
