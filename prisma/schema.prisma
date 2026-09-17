@@ -185,6 +185,7 @@ model Tenant {
   notificationSettings NotificationSettings?
   smsGateway    SmsGateway?
   mcpConfig     McpConfig?
+  evidenceKey   EvidenceKey?
 }
 
 // ─── Documents & Signing ──────────────────────────────────────────────────────
@@ -214,6 +215,10 @@ model Envelope {
   lastRemindedAt    DateTime?
   autoRemind        Boolean   @default(false) // per-envelope reminder job (user-enabled)
   reminderCount     Int       @default(0)
+  // ── Evidence federation (roadmap #1 + self-hosted attestation) ──
+  verifiedSenderDomain String? // sender email domain was DNS-TXT-verified at seal time
+  attestedAt        DateTime? // when the minimal fingerprint was pushed to the public portal
+  attestStatus      String?   // PUSHED | FAILED | SKIPPED
 
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy  User      @relation("createdDocs", fields: [createdById], references: [id])
@@ -357,6 +362,67 @@ model Domain {
   lastCheckNote  String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Evidence federation ──────────────────────────────────────────────────────
+// The per-tenant evidence key signs evidence-pack manifests and public-portal
+// attestations. It is a real RSA-2048 key pair with a self-signed X.509
+// certificate; when the tenant has a DNS-TXT-verified sending domain, that
+// domain is embedded as a subjectAltName so the certificate carries the
+// domain-control proof (checked at issuance) with it.
+model EvidenceKey {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  keyId          String   @unique // stable public identifier, ek_<hex>
+  algorithm      String   @default("RSA-2048")
+  certificatePem String
+  publicKeyPem   String
+  privateKeyPem  String // instance-held only; lives in the operator's own database file
+  thumbprint     String // SHA-256 of the certificate DER, lowercase hex
+  sanDomain      String? // DNS-verified sending domain embedded as SAN at issuance
+  createdAt      DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// Portal side (the public verification portal's registry). An "instance" is any
+// Docurama deployment - cloud or self-hosted - that pushed attestations.
+// Registration is trust-on-first-use: the first key that claims an identity is
+// pinned; a different key presenting the same thumbprint is rejected.
+model PortalInstance {
+  id              String   @id @default(cuid())
+  keyThumbprint   String   @unique
+  label           String
+  verifiedDomain  String?
+  certificatePem  String
+  publicKeyPem    String
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  attestationCount Int     @default(0)
+
+  attestations PortalAttestation[]
+}
+
+// Portal side: the minimal fingerprint pushed for public verification.
+// Deliberately free of personal data - no signer names, no emails, no tenant
+// names, no document bytes. The document itself never leaves the instance.
+model PortalAttestation {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  sha256             String
+  sealedAt           DateTime
+  completedAt        DateTime?
+  conformance        String?
+  pages              Int      @default(1)
+  signerCount        Int      @default(0)
+  verifiedDomain     String?
+  instanceThumbprint String
+  receivedAt         DateTime @default(now())
+  rawPayload         String // exact canonical JSON as received, for audit
+
+  instance PortalInstance @relation(fields: [instanceThumbprint], references: [keyThumbprint], onDelete: Cascade)
+
+  @@index([instanceThumbprint])
 }
 
 // ─── Production settings: eSign, notifications, SMS, MCP ──────────────────────

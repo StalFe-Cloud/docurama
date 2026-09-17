@@ -32,6 +32,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
           tenant: { select: { name: true } },
           template: { select: { bodyMarkdown: true, sourceNotes: true } },
           document: { select: { filename: true, pageCount: true, sha256: true } },
+          createdBy: { select: { email: true } },
         },
       },
     },
@@ -73,6 +74,17 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         tenantName: env.tenant.name, aheadName: ahead.name,
       };
     } else {
+      // Anti-phishing trust signal: when the sender's email domain is
+      // DNS-TXT-verified for this workspace, the signer sees it next to the
+      // sender identity. The lookup is cheap (indexed) and only shown when
+      // it is actually true — never a generic “trusted sender” badge.
+      const senderDomain = env.createdBy?.email?.split("@")?.[1]?.toLowerCase() ?? null;
+      const verifiedDomain = senderDomain
+        ? await db.domain.findFirst({
+            where: { tenantId: env.tenantId, domain: senderDomain, purpose: "SENDING", status: "VERIFIED" },
+            select: { domain: true },
+          })
+        : null;
       state = {
         phase: "active",
         title: env.title, code: env.publicCode,
@@ -80,6 +92,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         message: env.message || null,
         pages: env.pages,
         senderName: env.tenant.name,
+        senderDomainVerified: verifiedDomain?.domain ?? null,
         recipientName: recipient.name, recipientEmail: recipient.email,
         signers: signers.map((r) => ({ name: r.name, email: r.email, status: r.status, order: r.order })),
         bodyMarkdown: env.template?.bodyMarkdown || null,

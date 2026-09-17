@@ -136,6 +136,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             createdAt: e.createdAt.toISOString(),
             lastRemindedAt: e.lastRemindedAt?.toISOString() ?? null,
             autoRemind: e.autoRemind, reminderCount: e.reminderCount,
+            attestedAt: e.attestedAt?.toISOString() ?? null,
+            attestStatus: e.attestStatus,
+            verifiedSenderDomain: e.verifiedSenderDomain,
             createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
           },
           tenantName: e.tenant.name,
@@ -180,7 +183,33 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           include: { recipients: true, tenant: { select: { name: true } } },
         });
         // Honest verification states - never present an unsigned document as verified.
-        if (!e) return jsonOk({ result: "NOT_FOUND", code });
+        if (!e) {
+          // Self-hosted attestation fallback — same engine as the public portal.
+          const att = await db.portalAttestation.findUnique({
+            where: { code },
+            include: { instance: true },
+          });
+          if (att) {
+            return jsonOk({
+              result: "VERIFIED_ATTESTED", code,
+              attestation: {
+                sha256: att.sha256,
+                sealedAt: att.sealedAt.toISOString(),
+                completedAt: att.completedAt?.toISOString() ?? null,
+                conformance: att.conformance,
+                pages: att.pages,
+                signerCount: att.signerCount,
+                verifiedDomain: att.verifiedDomain,
+                instance: {
+                  label: att.instance.label,
+                  firstSeenAt: att.instance.firstSeenAt.toISOString(),
+                  attestationCount: att.instance.attestationCount,
+                },
+              },
+            });
+          }
+          return jsonOk({ result: "NOT_FOUND", code });
+        }
         if (e.status === "VOIDED") return jsonOk({ result: "VOIDED", code, voidedAt: e.voidedAt?.toISOString() ?? null, voidReason: e.voidReason });
         if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
           return jsonOk({ result: "NOT_SEALED", code, title: e.title, status: e.status });
@@ -192,6 +221,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             completedAt: e.completedAt?.toISOString() ?? null,
             conformance: e.conformanceLevel, sha256: e.sha256,
             tenantName: e.tenant.name, pages: e.pages,
+            verifiedSenderDomain: e.verifiedSenderDomain,
             signers: e.recipients.filter((r) => r.status === "SIGNED").map(publicRecipient),
           },
         });

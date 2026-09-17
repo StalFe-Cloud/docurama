@@ -177,10 +177,66 @@ the first two next-cycle items:
 3. **Visual regression** (screenshot diffing) for marketing surfaces.
 4. ~~Remove `ignoreBuildErrors` (F3) and add `tsc --noEmit` gate to CI.~~ **Done** (cycle 2).
 5. Performance budget: LCP check on `/` and `/marketing` in CI.
-6. **Evidence pack export** (roadmap #1): one-click ZIP per completed
-   envelope (sealed document, ledger CSV, signed manifest).
+6. ~~**Evidence pack export** (roadmap #1): one-click ZIP per completed
+   envelope (sealed document, ledger CSV, signed manifest).~~ **Done** (cycle 3,
+   `docs/EVIDENCE-PACK.md` — plus bilingual certificate, offline verifier,
+   X.509 evidence key with DNS SAN, and full byte-level test coverage).
 7. **PDF embedding in the signer portal** for uploaded-document envelopes
    (currently a document card with integrity digest).
+8. ~~Public verification for self-hosted / on-prem instances~~ **Done** (cycle 3,
+   attestation protocol — `docs/SELF-HOSTED-ATTESTATION.md`, receiver at
+   `/api/attestations`, `VERIFIED_ATTESTED` result in the verify engine).
+9. ~~DNS verification beyond SMTP: verified-domain badge on signer portal and
+   verify results, SPF/DMARC posture check, domain-bound seals~~ **Done**
+   (cycle 3 — `verifiedSenderDomain` recorded at seal time, SAN in the
+   evidence-key certificate, `domain.posture` op in settings).
+
+## 7b. Cycle 3 — Evidence pack + self-hosted attestation (2026-09-17)
+
+Branch `feat/evidence-pack` off `quality`. Everything below is shipped with
+tests and docs:
+
+- **Evidence pack** (roadmap #1): ZIP per completed envelope — sealed document
+  (byte-exact, STORE-method ZIP written in-house, zero deps), event-ledger
+  CSV, machine-readable envelope record, bilingual print-ready certificate,
+  README, and a **signed manifest** (RSA-SHA-256 over canonical JSON). Export
+  surfaces: envelope detail button (`/api/evidence-pack/{id}`, session) and
+  `GET /api/v1/envelopes/{idOrCode}/evidence-pack` (API key). Every export is
+  ledger-recorded (`EVIDENCE_EXPORTED`).
+- **Offline verifier** (`verify.html` inside every pack): browser-only,
+  zero-network re-verification of the manifest signature (WebCrypto) and of
+  every artifact's SHA-256. Proven in real Chromium by
+  `scripts/verify-offline-check.ts` — banner VALID, 7/7 artifacts OK.
+- **Evidence key** (`src/lib/evidence-key.ts`): per-tenant RSA-2048 key with a
+  self-signed X.509 certificate via system OpenSSL; when the tenant has a
+  DNS-TXT-verified sending domain it is embedded as `subjectAltName DNS:` —
+  the "DNS verification → verified certificate" chain.
+- **Self-hosted attestation** (roadmap #13 groundwork): `EVIDENCE_PORTAL_URL`
+  makes an instance push a signed minimal fingerprint at seal time
+  (GDPR-minimal: code, digest, dates, conformance, signer count — zero
+  personal data). Receiver `/api/attestations` with TOFU key pinning,
+  thumbprint/certificate binding, per-code ownership (409), idempotent
+  re-push. Verify engine fallback: local envelopes first, then
+  `VERIFIED_ATTESTED` with instance registry facts, rendered distinctly in
+  the public and in-app verify UIs.
+- **Sender-domain trust chain**: seals record `verifiedSenderDomain` when the
+  sender's email domain is DNS-verified; the signer portal shows the badge
+  (anti-phishing), verify results cite it, evidence packs and attestations
+  carry it.
+- **Email posture** (`domain.posture`): SPF/DMARC record checks (generic,
+  honest) + best-effort DKIM probe, with chips in Settings → Domains.
+- **Schema**: `EvidenceKey`, `PortalInstance`, `PortalAttestation` models;
+  envelope gains `verifiedSenderDomain`, `attestedAt`, `attestStatus`.
+- **Tests**: `e2e/evidence.test.ts` (14 tests — pack byte-level verification
+  from raw HTTP bytes, receiver loopback incl. all rejection paths, DNS
+  posture parsers), 2 new Maestro flows (`evidence-pack-export`,
+  `verify-attested`) → suite now 24 flows. Seed: attested fixture
+  DOC-E2EATST + realistic remote-instance registry row + portal-table sweep
+  for determinism.
+- **Docs**: `docs/EVIDENCE-PACK.md` (format spec v1), 
+  `docs/SELF-HOSTED-ATTESTATION.md` (protocol + honest trust limits +
+  upgrade paths), API reference updated (evidence-pack + attestation
+  endpoints, `VERIFIED_ATTESTED`).
 
 ## 6b. Re-validation & hardening (second pass, fresh environment)
 

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { jsonError, jsonOk } from "@/lib/serializers";
 import { computeEnvelopeDigest } from "@/lib/esign";
+import { pushAttestationForEnvelope } from "@/lib/attestation";
 
 /**
  * Public signing endpoint — the engine behind /sign/{token}.
@@ -38,7 +39,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     const recipient = await db.recipient.findUnique({
       where: { accessToken: token },
-      include: { envelope: { include: { recipients: true, events: true, tenant: { select: { name: true } } } } },
+      include: {
+        envelope: {
+          include: {
+            recipients: true,
+            events: true,
+            tenant: { select: { name: true } },
+            createdBy: { select: { email: true } },
+          },
+        },
+      },
     });
     if (!recipient) return jsonError("This signing link is not valid. Check the link in your invitation email.", 404);
     const env = recipient.envelope;
@@ -113,11 +123,22 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           createdAt: env.createdAt, documentSha256: env.sha256,
           recipients: all, events,
         });
+        // Sender-domain proof: if the sender's email domain is DNS-TXT-verified
+        // for this tenant, the seal carries it (evidence packs + verify portal
+        // cite it as the sender-authenticity chain).
+        const senderDomain = env.createdBy?.email?.split("@")?.[1]?.toLowerCase() ?? null;
+        const verifiedDomain = senderDomain
+          ? await tx.domain.findFirst({
+              where: { tenantId: env.tenantId, domain: senderDomain, purpose: "SENDING", status: "VERIFIED" },
+              select: { domain: true },
+            })
+          : null;
         const sealedEnv = await tx.envelope.update({
           where: { id: env.id },
           data: {
             status: "COMPLETED", completedAt: signedAt, sealedAt: signedAt,
             sha256: digest, conformanceLevel: env.conformanceLevel ?? "B-T",
+            verifiedSenderDomain: verifiedDomain?.domain ?? null,
           },
         });
         await tx.envelopeEvent.create({
@@ -128,6 +149,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         });
         return { envelope: sealedEnv, sealed: true };
       });
+
+      // Federation: if this instance is configured to publish fingerprints to
+      // a public verification portal (self-hosted setups), push the minimal
+      // attestation now. Non-fatal by design — a portal outage never blocks
+      // the signer's success screen, and only a successful push is recorded.
+      if (updated.sealed) {
+        const attest = await pushAttestationForEnvelope(env.id).catch(() => ({ pushed: false, note: "attestation push crashed" }));
+        if (!attest.pushed && process.env.EVIDENCE_PORTAL_URL) {
+          console.warn(`[sign] attestation not pushed for ${env.publicCode}: ${attest.note}`);
+        }
+      }
 
       return jsonOk({
         ok: true,

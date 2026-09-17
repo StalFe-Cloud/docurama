@@ -9,7 +9,7 @@ import { jsonError, jsonOk, iso, isos } from "@/lib/serializers";
 import { generateTotpSecret, verifyTotp, otpauthUri, generateRecoveryCodes } from "@/lib/totp";
 import { issueSigningCertificate, shortThumbprint } from "@/lib/certificates";
 import { validateFilenameFormat } from "@/lib/esign";
-import { verifySendingDomain } from "@/lib/dns-check";
+import { verifySendingDomain, checkEmailPosture } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
 import { createInvitation, requestOrigin } from "@/lib/onboarding";
@@ -487,6 +487,20 @@ export async function postSettingsOp(
       data: { tenantId, domain, purpose: "SENDING", token, status: "PENDING", method: "TXT" },
     });
     return jsonOk({ ok: true, message: `Domain ${domain} added - publish the TXT record below, then verify`, id: row.id, token });
+  }
+
+  // Email deliverability posture (SPF / DMARC / best-effort DKIM) for a
+  // sending domain — read-only DNS queries, distinct from ownership
+  // verification (domain.verify proves control; posture shows whether mail
+  // from the domain will authenticate).
+  if (op === "domain.posture") {
+    const d = await db.domain.findFirst({ where: { id, tenantId, purpose: "SENDING" } });
+    if (!d) return jsonError("Domain not found", 404);
+    const posture = await checkEmailPosture(d.domain);
+    const summary =
+      `SPF ${posture.spf.found ? `present (${posture.spf.policy})` : "absent"} · ` +
+      `DMARC ${posture.dmarc.found ? `present (p=${posture.dmarc.policy ?? "none"})` : "absent"}`;
+    return jsonOk({ ok: true, message: `Email posture for ${d.domain}: ${summary}`, posture });
   }
 
   if (op === "domain.verify") {
