@@ -254,7 +254,7 @@ model EnvelopeEvent {
   envelopeId String
   at         DateTime @default(now())
   actor      String
-  action     String // CREATED | SENT | VIEWED | DELIVERED | REMINDED | SIGNED | DECLINED | VOIDED | SEALED | DELEGATED | CORRECTION_REQUESTED
+  action     String // CREATED | SENT | VIEWED | DELIVERED | DOCUMENT_VIEWED | REMINDED | SIGNED | DECLINED | VOIDED | SEALED | DELEGATED | CORRECTION_REQUESTED
   detail     String?
   ipHash     String?
 

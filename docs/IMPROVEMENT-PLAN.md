@@ -311,3 +311,57 @@ proofs + fingerprint UX; AATL/eIDAS documented as paid upgrade paths"):
   claim + portal-log witnessing; `verify-attested.yaml` asserts the registry
   lines. Full gates: tsc/eslint/build clean, 24/24 Maestro flows, 39/39
   tests, offline verifier PASS in Chromium.
+
+## 7d. Cycle 5 — Signer document preview (2026-09-17)
+
+Branch `feat/signer-pdf-preview` off `quality`. Closes the last signer-portal
+gap from the competitive teardown: signers could sign an uploaded PDF they
+had never seen (legal weak point — eIDAS consent quality; DocuSign/ Dropbox
+both show the document).
+
+- **Token-gated page renderer** (`/api/sign/{token}/pages/{n}`): reuses the
+  workspace pdfium + napi-canvas pipeline, but authenticates with the
+  recipient's 32-byte signing token — no account, no session, same trust
+  model as `/api/sign/{token}`. SENT/PARTIALLY_SIGNED only (sealed/voided →
+  409), CC recipients → 403 (they get the completed copy, not a preview),
+  page-range + dpi clamped server-side.
+- **`DOCUMENT_VIEWED` evidence event**: every signer's first successful page
+  render lands one idempotent ledger event (detail carries the email = the
+  idempotency key) — evidence the document was actually *shown*, not just
+  that the link was opened. Exported in evidence packs with the rest of the
+  ledger.
+- **Embedded pager in the signer portal** (`SignDocumentPreview`): one-page
+  philosophy kept — review, adopt, sign on one screen. Bounded 60vh reader
+  pane, prev/next + arrow keys, loading overlay, graceful degradation (a
+  render failure never blocks signing; the SHA-256 card remains). Rendered
+  in the active, wait and signed (pre-seal) phases; template-sent envelopes
+  keep their markdown text.
+- **Product bugs found while hardening** (all fixed + locked):
+  - **SSR hydration race in the preview**: the server-rendered `<img>` can
+    finish loading before React attaches `onLoad` — the load event is then
+    lost forever and the overlay spins eternally. Fixed with an
+    attach-time `complete` check (ref callback); this was the real cause
+    behind the "dead page" suite flakes, not Turbopack recompiles.
+  - Revisiting a sealed signing link showed "other signers still pending"
+    (the local `sealed` flag never initialised from the server snapshot).
+  - CC recipients leaked owner-visible `signLink`s in the envelope detail
+    (nothing to sign for a CC).
+  - Marketing CTAs were JS-only (`window.location.assign` in onClick) —
+    dead before hydration, no anchor semantics for a11y; now real
+    `next/link` anchors via `asChild` (client-side transitions once
+    hydrated).
+  - Signer portal CTAs converted to `next/link` (instant, no full reload).
+- **E2E isolation fix** (`e2e/run.sh`): the suite now runs against a
+  **/tmp copy** of the committed db (E2E_DATABASE_URL still wins; a foreign
+  dev server still gets the repo db). Suite writes no longer churn
+  `db/custom.db` inside the repo tree (Turbopack's dev watcher reacts to
+  every write) and the committed db stays pristine. Dynamic-route warm-up
+  extended (`/sign/{token}` compiles before the flows).
+- **Tests**: seed now generates real multi-page PDFs (hand-crafted minimal
+  PDFs, no new deps) for DOC-E2E0001 (3p) + DOC-E2E0004 (4p) and a fixed CC
+  recipient; `e2e/api.test.ts` +6 (PNG magic/size, page bounds, dpi clamp,
+  404/403 paths, DOCUMENT_VIEWED idempotency via direct DB count); new
+  `signer-verify-seal.yaml` (the envelope sealed moments ago by
+  signer-journey verifies on the public portal); signer-journey drives the
+  pager. Gates: tsc/eslint clean, **25/25 flows**, 45/45 tests across 3
+  files.

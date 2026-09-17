@@ -149,6 +149,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           recipients: e.recipients.map((r) => ({
             ...publicRecipient(r),
             signLink:
+              r.role !== "CC" && // a CC receives the completed copy — there is nothing to sign
               ["SENT", "PARTIALLY_SIGNED"].includes(e.status) && ["PENDING", "DELIVERED"].includes(r.status)
                 ? `/sign/${r.accessToken}`
                 : null,

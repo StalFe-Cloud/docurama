@@ -29,13 +29,86 @@ import {
   commitmentHash, chainEntryHash, appendPortalLogEntry,
   GENESIS_HEAD, TRANSPARENCY_FORMAT,
 } from "../src/lib/transparency";
+import { storeUpload } from "../src/lib/document-store";
 
 const run = promisify(execFile);
 
 const E2E_SIGNER_TOKEN = "e2e-fixed-signer-token-0000000000000001";
 const E2E_DECLINE_TOKEN = "e2e-fixed-decline-token-0000000000000001";
 const E2E_JOURNEY_TOKEN = "e2e-fixed-journey-token-0000000000000001";
+const E2E_CC_TOKEN = "e2e-fixed-cc-token-0000000000000001";
 const E2E_API_KEY_SECRET = "dk_e2e_0000000000000000000000000000000000000000";
+
+// Fixed doc ids (doc_ + 32 hex, per DOC_ID_RE) so re-seeds overwrite the same
+// storage keys instead of accumulating files.
+const E2E_DOC_NDA = `doc_${"e2e" + "0".repeat(28)}1`;
+const E2E_DOC_SERVICE = `doc_${"e2e" + "0".repeat(28)}2`;
+
+/**
+ * Minimal valid multi-page PDF (standard Helvetica, no embedded fonts) —
+ * enough for pdfium to render real pages, so the signer portal's preview
+ * and its E2E flows exercise the actual render pipeline, not a stub.
+ */
+function minimalPdf(pageLabels: string[]): Buffer {
+  const objects: string[] = [];
+  const pageIds: number[] = [];
+  const firstPage = 4; // 1 catalog, 2 pages, 3 font; then page/content pairs
+  pageLabels.forEach((_, i) => pageIds.push(firstPage + i * 2));
+
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageLabels.length} >>`;
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+
+  pageLabels.forEach((label, i) => {
+    const pageId = pageIds[i];
+    const contentId = pageId + 1;
+    objects[pageId] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ` +
+      `/Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`;
+    const text = `Docurama E2E fixture - ${label}`;
+    const escaped = text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+    const stream = `BT /F1 24 Tf 72 770 Td (${escaped}) Tj 0 -40 Td (${pageLabels.length} page document) Tj ET`;
+    objects[contentId] = `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`;
+  });
+
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  for (let id = 1; id < objects.length; id++) {
+    if (!objects[id]) throw new Error(`missing object ${id}`);
+    offsets[id] = Buffer.byteLength(out);
+    out += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xrefStart = Buffer.byteLength(out);
+  out += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id++) {
+    out += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  }
+  out += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+/** Seed a Document row + its bytes on disk (overwrites a prior seed run). */
+async function seedDocument(
+  docId: string,
+  filename: string,
+  pageLabels: string[],
+  tenantId: string,
+  uploadedById: string,
+) {
+  const pdf = minimalPdf(pageLabels);
+  const stored = await storeUpload(
+    (async function* () { yield pdf; })(),
+    tenantId,
+    docId,
+  );
+  return db.document.create({
+    data: {
+      id: docId, tenantId, uploadedById, filename,
+      storageKey: stored.storageKey, byteSize: stored.byteSize,
+      pageCount: pageLabels.length, sha256: stored.sha256,
+    },
+  });
+}
 
 // Fixtures for the attested-verification flow (public portal result for a
 // code sealed on a "remote self-hosted instance" — seeded directly as if the
@@ -70,6 +143,7 @@ async function main() {
   /* ── Wipe prior E2E run artifacts (envelopes cascade to recipients/events) ── */
   const wiped = await db.envelope.deleteMany({ where: { tenantId: tenant.id } });
   await db.template.deleteMany({ where: { tenantId: tenant.id } });
+  await db.document.deleteMany({ where: { tenantId: tenant.id } }); // envelopes are gone, no FK left
   console.log(`wiped ${wiped.count} prior E2E envelope(s)`);
 
   /* ── Users ───────────────────────────────────────────────────────── */
@@ -122,11 +196,28 @@ async function main() {
   });
   console.log(`users: ${E2E_USER_EMAIL} (tenant scoped), ${E2E_ADMIN_EMAIL} (platform admin)`);
 
+  /* ── Fixture documents (real PDFs on disk for the signer preview) ── */
+  const ndaDoc = await seedDocument(
+    E2E_DOC_NDA, "mutual-nda-e2e.pdf",
+    ["Mutual NDA - page 1 of 3", "Mutual NDA - page 2 of 3", "Mutual NDA - page 3 of 3"],
+    tenant.id, wsUser.id,
+  );
+  const serviceDoc = await seedDocument(
+    E2E_DOC_SERVICE, "service-agreement-e2e.pdf",
+    [
+      "Service Agreement - page 1 of 4", "Service Agreement - page 2 of 4",
+      "Service Agreement - page 3 of 4", "Service Agreement - page 4 of 4",
+    ],
+    tenant.id, wsUser.id,
+  );
+  console.log(`documents: ${ndaDoc.filename} (3 pages) + ${serviceDoc.filename} (4 pages)`);
+
   /* ── Fixture envelopes (deterministic verify-portal targets) ─────── */
   // SENT, one pending recipient — verify portal must report NOT_SEALED.
   await db.envelope.create({
     data: {
       publicCode: "DOC-E2E0001",
+      documentId: ndaDoc.id,
       title: "E2E Fixture — Mutual NDA (sent)",
       titleLower: "e2e fixture — mutual nda (sent)",
       tenantId: tenant.id,
@@ -143,6 +234,14 @@ async function main() {
             order: 1,
             status: "PENDING",
             accessToken: E2E_SIGNER_TOKEN,
+          },
+          {
+            name: "Fixture CC",
+            email: "fixture-cc@example.com",
+            role: "CC",
+            order: 2,
+            status: "PENDING",
+            accessToken: E2E_CC_TOKEN,
           },
         ],
       },
@@ -230,11 +329,13 @@ async function main() {
   });
 
   // SENT, one pending recipient — the signer-portal happy path: the flow opens
-  // the link, adopts a signature, signs, and the envelope seals (COMPLETED).
-  // Its own fixture so sealing never breaks the NOT_SEALED assertions on 0001.
+  // the link, reviews the embedded document preview, adopts a signature, signs,
+  // and the envelope seals (COMPLETED). Its own fixture so sealing never breaks
+  // the NOT_SEALED assertions on 0001.
   await db.envelope.create({
     data: {
       publicCode: "DOC-E2E0004",
+      documentId: serviceDoc.id,
       title: "E2E Fixture — Service Agreement (signer journey)",
       titleLower: "e2e fixture — service agreement (signer journey)",
       tenantId: tenant.id,
