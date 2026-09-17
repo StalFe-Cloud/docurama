@@ -139,7 +139,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
           },
           tenantName: e.tenant.name,
-          recipients: e.recipients.map(publicRecipient),
+          // Owner-only: personal signing links for pending signers. The list
+          // endpoints keep publicRecipient (tokens stripped); only the
+          // envelope owner — this query is tenant-scoped — sees these, so
+          // they can re-share a link or hand it off via QR.
+          recipients: e.recipients.map((r) => ({
+            ...publicRecipient(r),
+            signLink:
+              ["SENT", "PARTIALLY_SIGNED"].includes(e.status) && ["PENDING", "DELIVERED"].includes(r.status)
+                ? `/sign/${r.accessToken}`
+                : null,
+          })),
           events: isos(e.events),
         });
       }
@@ -254,6 +264,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
           const code = `DOC-${randomBytes(4).toString("hex").toUpperCase()}`;
 
+          // Signing links are absolute; derive the public origin from the
+          // request so invitations carry the right host in any deployment.
+          const origin = req.nextUrl.origin;
+
           // WS9e: atomic transaction - a mid-loop failure cannot leave an envelope
           // in SENT with partial recipients.
           const env = await db.$transaction(async (tx) => {
@@ -261,12 +275,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
               data: {
                 publicCode: code, title, titleLower: foldForSearch(title),
                 tenantId: tenantId!, createdById: me.id, documentId,
+                templateId, // evidence chain: which template produced this envelope
                 status: "SENT", message: String(data.message ?? ""),
                 pages: realPageCount, sha256: realSha256,
               },
             });
             // WS9b: signing tokens are cryptographically random, not derived from
             // the envelope id. Each token is 32 bytes of entropy encoded as base64url.
+            const tokens = valid.map(() => randomBytes(32).toString("base64url"));
             await tx.recipient.createMany({
               data: valid.map((r, i) => ({
                 envelopeId: envelope.id,
@@ -275,12 +291,28 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 role: r.role === "CC" ? "CC" : "SIGNER",
                 order: i + 1,
                 status: "PENDING",
-                accessToken: randomBytes(32).toString("base64url"),
+                accessToken: tokens[i],
               })),
             });
-            // WS9f: record what actually happened. Signing invitations are queued
-            // into MailOutbox when the mail transport is wired; until then the
-            // audit trail must not claim they were delivered via SMTP.
+            // Signing invitations into the mail outbox, each carrying the
+            // recipient's unique signing link (/sign/{token}). While the SMTP
+            // transport is not wired the messages stay QUEUED and inspectable
+            // in the admin console - the audit trail below says exactly that.
+            await tx.mailOutbox.createMany({
+              data: valid.map((r, i) => ({
+                toEmail: String(r.email).toLowerCase(),
+                template: "SIGN_INVITE",
+                subject: `${actor} asks for your signature: ${title}`,
+                bodyText:
+                  `Hello ${String(r.name ?? r.email)},\n\n` +
+                  `${actor} sent you "${title}" for electronic signature via Docurama.\n\n` +
+                  `Open your personal signing link (unique to you, do not forward):\n${origin}/sign/${tokens[i]}\n\n` +
+                  `Verification code once completed: ${code}\n`,
+                linkUrl: `${origin}/sign/${tokens[i]}`,
+              })),
+            });
+            // WS9f: record what actually happened — invitations are queued in
+            // the outbox; the ledger does not claim SMTP delivery.
             await tx.envelopeEvent.createMany({
               data: [
                 { envelopeId: envelope.id, actor, action: "CREATED", detail: "Document prepared in Builder" },

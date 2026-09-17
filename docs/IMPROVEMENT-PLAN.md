@@ -121,8 +121,8 @@ e2e/
 |---|-------|--------|
 | F1 | `DATABASE_URL` env collision: inherited shell env silently overrides `.env`, all DB routes 500 | Fixed in `e2e/run.sh` + `.env.example` note |
 | F2 | `/modeles-de-contrats` 500s when the DB path is wrong (see F1) — page itself has no try/catch around Prisma | **Fixed**: try/catch + French empty-state card; same class fixed on `/docs/legal` (verified 200 + empty state with a broken `DATABASE_URL`) |
-| F3 | `next.config.ts` has `typescript.ignoreBuildErrors: true` | Out of scope this cycle (tsc currently clean; tracked for next cycle) |
-| F4 | No public signer-facing signing page yet (recipients get queued mail only) — limits E2E to send/void/verify, no sign-step | Logged as product gap, next cycle |
+| F3 | `next.config.ts` has `typescript.ignoreBuildErrors: true` | **Fixed**: flag removed; `tsc --noEmit` gate runs in `e2e/run.sh` (step 2b) before every suite and fails the run; production build now enforces types |
+| F4 | No public signer-facing signing page yet (recipients get queued mail only) — limits E2E to send/void/verify, no sign-step | **Fixed**: full signer portal shipped (`/sign/{token}`) — see §7 below |
 
 ## 6. Bugs Surfaced by the Suite
 
@@ -140,14 +140,47 @@ Tooling quirks documented (not app bugs): Maestro's per-char `sendKeys`
 chokes on **spaces** inside Radix dialogs ("element not interactable") —
 flows use hyphenated strings; see `e2e/README.md`.
 
+## 6c. Cycle 2 — signer portal & platform hardening (executed)
+
+The gap that kept Docurama behind every competitor (F4) is closed, plus
+the first two next-cycle items:
+
+- **Public signer portal** (`/sign/{token}`, `sign.docurama.eu`): the 32-byte
+  per-recipient token is the authentication. One-page signing experience —
+  document card, sender message, signers rail, contract text for
+  template-sent envelopes, adopt-signature (typed, 3 handwriting fonts),
+  eIDAS consent, sign/decline. Turn order enforced; final signature seals
+  the envelope (COMPLETED, SHA-256 via `computeEnvelopeDigest`, B-T) and
+  writes SIGNED/SEALED/DECLINED/VIEWED events to the ledger.
+- **Invitation emails now carry the personal link**: the send op queues one
+  MailOutbox row per recipient (template SIGN_INVITE) with the /sign/{token}
+  link — inspectable in the admin console.
+- **QR handoff** (roadmap #2): the envelope-detail sheet shows, per pending
+  signer, a copy-link button and a QR popover for phone handoff.
+- **Signer journey E2E** (next-cycle #1): 4 new flows — sign→seal→public
+  verify, decline-with-reason, invalid link, QR/link handoff — plus 2 new
+  fixtures (DOC-E2E0003/0004) with deterministic tokens.
+- **API-layer suite** (next-cycle #2): `e2e/api.test.ts` (bun test) — key
+  auth, scope 403s, verify-engine states, detail reads, sign-endpoint
+  validation, and a regression lock that recipient tokens never leak in v1
+  payloads. Runs inside `e2e/run.sh`.
+- **F3 closed**: `ignoreBuildErrors` removed; tsc gate in the runner + CI.
+- **Evidence chain groundwork**: Envelope now carries `templateId` — which
+  template produced the signed document is answerable (roadmap #12 base).
+- Verify portal accepts `?code=` prefill — the signer success screen links
+  straight into the proof ("Verify the seal" button).
+
 ## 7. Next-Cycle Candidates
 
-1. **Signer journey E2E** once the recipient signing page ships (F4).
-2. **API-level Maestro or supertest layer** for v1/MCP endpoints (keys,
-   scopes, quota 402s) — currently only curl'd manually.
+1. ~~Signer journey E2E once the recipient signing page ships (F4).~~ **Done** (cycle 2).
+2. ~~API-level layer for v1 endpoints~~ **Done** (cycle 2, `e2e/api.test.ts`). Remaining: MCP endpoint tests, quota-402 test with a spent-plan key.
 3. **Visual regression** (screenshot diffing) for marketing surfaces.
-4. Remove `ignoreBuildErrors` (F3) and add `tsc --noEmit` gate to CI.
+4. ~~Remove `ignoreBuildErrors` (F3) and add `tsc --noEmit` gate to CI.~~ **Done** (cycle 2).
 5. Performance budget: LCP check on `/` and `/marketing` in CI.
+6. **Evidence pack export** (roadmap #1): one-click ZIP per completed
+   envelope (sealed document, ledger CSV, signed manifest).
+7. **PDF embedding in the signer portal** for uploaded-document envelopes
+   (currently a document card with integrity digest).
 
 ## 6b. Re-validation & hardening (second pass, fresh environment)
 

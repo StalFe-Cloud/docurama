@@ -27,6 +27,7 @@ const SUBDOMAIN_ROUTES: Record<string, string> = {
 const ROOT_ROUTES: Record<string, string> = {
   "verify": "/verify",
   "mail": "/mail",
+  "sign": "/sign",
 };
 
 function subdomain(host: string): string {

@@ -27,18 +27,29 @@ e2e/
   seed.ts        Idempotent Prisma seed. Dedicated "E2E Testing" tenant,
                  e2e@docurama.eu / e2ePass1234! (workspace) and
                  e2e-admin@docurama.eu / e2eAdmin1234! (platform admin),
-                 plus fixed-code fixtures DOC-E2E0001 (SENT) and
-                 DOC-E2E0002 (COMPLETED + sealed). Wipes the tenant's
-                 envelopes on every run — demo data is never touched.
-  run.sh         Orchestrator: env guard → server → warm-up → seed → maestro →
-                 report. Accepts zero or more flow paths (default: all).
+                 fixed-code fixtures DOC-E2E0001 (SENT), DOC-E2E0002
+                 (COMPLETED + sealed), DOC-E2E0003 (decline flow) and
+                 DOC-E2E0004 (signer journey), fixed signing tokens for the
+                 signer-portal flows, and an API key (ENVELOPES scope) for
+                 the API-layer tests. Wipes its own fixtures on every run —
+                 demo data is never touched.
+  api.test.ts    API-layer suite (bun test): X-API-Key auth, scope 403s,
+                 verify-engine states, list/detail reads, sign-endpoint
+                 validation, and a leak check that signing tokens never
+                 appear in v1 payloads.
+  run.sh         Orchestrator: env guard → server → warm-up → seed → tsc
+                 gate → API tests → maestro → report. Accepts zero or more
+                 flow paths (default: all).
   flows/
     public/      No-auth surfaces: marketing, French catalog, verify portal
-                 (NOT_FOUND + seeded VERIFIED), docs/developers/status.
+                 (NOT_FOUND + seeded VERIFIED), docs/developers/status,
+                 signer-portal invalid-link state.
     auth/        Typed sign-in, demo one-click buttons, wrong password,
                  forgot password, sign-out.
     workspace/   Documents table, templates catalog, template→send→SENT
-                 journey, envelope detail→void, in-app verify.
+                 journey, envelope detail→void, in-app verify, per-signer
+                 link copy + QR handoff, and the signer journeys:
+                 sign→seal→public-verify and decline-with-reason.
     admin/       Platform overview, users directory, platform settings.
 ```
 
@@ -61,6 +72,15 @@ rules follow from that:
    (Found live; fixed by adding ids to the recipient inputs — see
    docs/IMPROVEMENT-PLAN.md §6.)
 
+3. **Icon-only buttons are addressable only through `id:`** — their
+   accessible name comes from `aria-label`, which text selectors do not see.
+   `id:` resolves against `aria-label`, so `tapOn: { id: "Copy signing link
+   for Fixture Signer" }` works where `tapOn: "Copy signing link…"` finds
+   nothing. (Found while testing the QR handoff buttons.)
+4. **Text containing parentheses is a regex trap** — `Name (sent)` as a
+   selector string silently becomes a capture group and never full-matches.
+   Use a prefix regex (`"E2E Fixture — Mutual NDA.*"`) or `id:`.
+
 Other lessons baked into the flows:
 
 - **Viewport**: run with `--screen-size 1440x1000` (the runner default). On
@@ -80,6 +100,10 @@ Other lessons baked into the flows:
   `onOpenAutoFocus` (see `ConfirmDialog` in `src/components/portal/shared.tsx`)
   and row-action buttons must `stopPropagation()` — both were real UX bugs
   found by this suite, not test-only issues.
+- **Below-the-fold elements are invisible to Maestro**: the a11y tree only
+  contains the viewport, so a button past the fold is "not found", not
+  "not visible". `scrollUntilVisible` (direction: DOWN) before interacting —
+  the signer flows use it for the consent row and action bar.
 - **Cold-boot compile race**: in dev mode every route compiles on first hit,
   and a flow that navigates right after a cold server boot can race the
   compiler (seen live: the marketing CTA → `/welcome` exceeded a 10s wait on

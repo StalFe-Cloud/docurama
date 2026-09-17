@@ -68,7 +68,7 @@ trap cleanup EXIT
 # straight after a cold boot can race the compiler (seen on the marketing
 # CTA → /welcome). Touching the public surfaces once here removes that race
 # for every flow. Non-fatal: warming only triggers compilation.
-for route in / /login /welcome /modeles-de-contrats /verify /docs; do
+for route in / /login /welcome /modeles-de-contrats /verify /docs /sign; do
   curl -s -o /dev/null --max-time 180 "$BASE_URL$route" || true
 done
 echo "── e2e: public routes warmed"
@@ -79,12 +79,28 @@ if [[ "${E2E_SKIP_SEED:-0}" != "1" ]]; then
   bun e2e/seed.ts
 fi
 
+# ── 2b. Type gate (F3: the build must never ignore type errors again) ─────────
+if [[ "${E2E_SKIP_TSC:-0}" != "1" ]]; then
+  echo "── e2e: type-checking (tsc --noEmit)"
+  bunx tsc --noEmit || { echo "!! tsc failed — fix type errors first"; exit 1; }
+fi
+
+# ── 2c. API-layer suite (auth, scopes, verify engine, sign endpoint) ─────────
+if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
+  echo "── e2e: API-layer tests"
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts || { echo "!! API tests failed"; exit 1; }
+fi
+
 # ── 3. Discover flows and run them ────────────────────────────────────────────
 export MAESTRO_BASE_URL="$BASE_URL"
 export MAESTRO_CLI_NO_ANALYTICS=1
 export PATH="$HOME/.maestro/bin:$PATH"
 
 if ! command -v maestro >/dev/null 2>&1; then
+  if [[ "${E2E_SKIP_MAESTRO:-0}" == "1" ]]; then
+    echo "── e2e: maestro skipped (E2E_SKIP_MAESTRO=1)"
+    exit 0
+  fi
   echo "!! maestro not found — install with: curl -Ls 'https://get.maestro.mobile.dev' | bash"
   exit 1
 fi

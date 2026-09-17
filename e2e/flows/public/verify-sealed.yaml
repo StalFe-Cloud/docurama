@@ -18,5 +18,5 @@ tags:
 
 - extendedWaitUntil:
     visible: " ?Verified - cryptographic evidence found ?"
-    timeout: 10000
+    timeout: 20000
 - assertVisible: E2E Fixture — Supply Agreement (sealed)

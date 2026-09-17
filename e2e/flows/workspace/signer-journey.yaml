@@ -1,0 +1,51 @@
+# Signer journey — the recipient-side happy path: open the personal signing
+# link, review, adopt a signature, sign, envelope seals, verify publicly.
+# Uses the seeded DOC-E2E0004 fixture (single signer => signing seals it).
+url: ${MAESTRO_BASE_URL}/sign/e2e-fixed-journey-token-0000000000000001
+name: Signer journey signs and seals an envelope end to end
+tags:
+  - e2e
+  - workspace
+  - signer
+---
+- launchApp
+
+# The signing page (no account, no login - the token is the auth).
+# Icon-adjacent text nodes carry a leading space — tolerant regexes
+# (convention: e2e/README.md, selector rules).
+- extendedWaitUntil:
+    visible: " ?Document for your signature ?"
+    timeout: 20000
+- assertVisible: ".*Service Agreement.*"
+- assertVisible: Signing now
+- assertVisible: " ?Adopt your signature ?"
+
+# Name comes prefilled from the invitation; pick a signature style
+- tapOn:
+    id: font-great-vibes
+
+# The consent row and action bar sit below the fold — scroll them in
+# (the a11y tree only contains the viewport; e2e/README.md)
+- scrollUntilVisible:
+    element:
+      id: consent
+    direction: DOWN
+    timeout: 10000
+
+# Consent, then sign
+- tapOn:
+    id: consent
+- tapOn: " ?Sign document ?"
+
+# Single signer => envelope seals immediately
+- extendedWaitUntil:
+    visible: Document signed
+    timeout: 15000
+- assertVisible: " ?Envelope sealed ?"
+- assertVisible: DOC-E2E0004
+
+# The seal is publicly provable right from the success screen
+- tapOn: " ?Verify the seal ?"
+- extendedWaitUntil:
+    visible: " ?Verified - cryptographic evidence found ?"
+    timeout: 20000
