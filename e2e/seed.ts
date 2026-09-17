@@ -38,6 +38,14 @@ const E2E_DECLINE_TOKEN = "e2e-fixed-decline-token-0000000000000001";
 const E2E_JOURNEY_TOKEN = "e2e-fixed-journey-token-0000000000000001";
 const E2E_CC_TOKEN = "e2e-fixed-cc-token-0000000000000001";
 const E2E_API_KEY_SECRET = "dk_e2e_0000000000000000000000000000000000000000";
+const E2E_MCP_RATE_KEY_SECRET = "dk_e2e_mcp_rate_0000000000000000000000000000001";
+
+// Quota fixture: a STARTER tenant whose monthly envelope allowance (25) is
+// fully spent, so the send path's 402 can be exercised deterministically.
+const E2E_QUOTA_TENANT_SLUG = "e2e-quota";
+const E2E_QUOTA_USER_EMAIL = "e2e-quota@docurama.eu";
+const E2E_QUOTA_USER_PASSWORD = "e2eQuota1234!";
+const E2E_QUOTA_FILLER = 25; // == PLAN_LIMITS.STARTER in the workspace route
 
 // Fixed doc ids (doc_ + 32 hex, per DOC_ID_RE) so re-seeds overwrite the same
 // storage keys instead of accumulating files.
@@ -380,7 +388,106 @@ async function main() {
       createdBy: wsUser.id,
     },
   });
-  console.log("api key: E2E Suite Key (ENVELOPES scope) for the API-layer tests");
+  // A second key reserved for the MCP rate-limit test: its in-server rate
+  // bucket starts cold, so a temporarily lowered limit produces a crisp 429
+  // on exactly the third request (see e2e/mcp.test.ts).
+  await db.apiKey.deleteMany({ where: { name: "E2E MCP Rate Key" } });
+  await db.apiKey.create({
+    data: {
+      tenantId: tenant.id,
+      name: "E2E MCP Rate Key",
+      prefix: "dk_e2e_mcp_rate_",
+      secretHash: createHash("sha256").update(E2E_MCP_RATE_KEY_SECRET).digest("hex"),
+      scope: "READONLY",
+      status: "ACTIVE",
+      createdBy: wsUser.id,
+    },
+  });
+  console.log("api keys: E2E Suite Key (ENVELOPES) + E2E MCP Rate Key (READONLY)");
+
+  /* ── MCP configuration + template fixture (e2e/mcp.test.ts) ────── */
+  await db.mcpConfig.upsert({
+    where: { tenantId: tenant.id },
+    create: {
+      tenantId: tenant.id,
+      enabled: true,
+      allowedTools: "envelope_list,envelope_detail,document_verify,template_list",
+      rateLimitPerMin: 120, // high enough that the functional tests never trip it
+    },
+    update: { enabled: true, allowedTools: "envelope_list,envelope_detail,document_verify,template_list", rateLimitPerMin: 120 },
+  });
+  await db.template.create({
+    data: {
+      tenantId: tenant.id,
+      name: "E2E Clause Library",
+      nameLower: "e2e clause library",
+      category: "Fixture",
+      folder: "E2E",
+      pages: 2,
+      usageCount: 7,
+      publicSlug: "e2e-clause-library",
+      bodyMarkdown: "Fixture template body.",
+    },
+  });
+  console.log("mcp: enabled for the E2E tenant (4 tools, 120/min) + template fixture");
+
+  /* ── Quota fixture: a STARTER tenant with its month fully spent ── */
+  {
+    const quotaTenant =
+      (await db.tenant.findUnique({ where: { slug: E2E_QUOTA_TENANT_SLUG } })) ??
+      (await db.tenant.create({
+        data: { name: "E2E Quota", slug: E2E_QUOTA_TENANT_SLUG, planCode: "STARTER", status: "ACTIVE" },
+      }));
+
+    const existing = await db.user.findUnique({ where: { email: E2E_QUOTA_USER_EMAIL } });
+    const quotaUser = existing
+      ? await db.user.update({
+          where: { id: existing.id },
+          data: {
+            passwordHash: hashPassword(E2E_QUOTA_USER_PASSWORD),
+            status: "ACTIVE",
+            activeTenantId: quotaTenant.id,
+          },
+        })
+      : await db.user.create({
+          data: {
+            email: E2E_QUOTA_USER_EMAIL,
+            passwordHash: hashPassword(E2E_QUOTA_USER_PASSWORD),
+            firstName: "Quinn",
+            lastName: "Quota",
+            role: "WORKSPACE_ADMIN",
+            status: "ACTIVE",
+            activeTenantId: quotaTenant.id,
+          },
+        });
+    await db.member.upsert({
+      where: { userId_tenantId: { userId: quotaUser.id, tenantId: quotaTenant.id } },
+      create: { userId: quotaUser.id, tenantId: quotaTenant.id, role: "OWNER" },
+      update: { role: "OWNER" },
+    });
+
+    // Refill the spent month on every seed run (createdAt defaults to now,
+    // which is inside the current billing month the route counts).
+    await db.envelope.deleteMany({ where: { tenantId: quotaTenant.id } });
+    for (let i = 1; i <= E2E_QUOTA_FILLER; i++) {
+      const n = String(i).padStart(3, "0");
+      await db.envelope.create({
+        data: {
+          publicCode: `DOC-E2EQF${n}`,
+          title: `Quota filler ${n}`,
+          titleLower: `quota filler ${n}`,
+          tenantId: quotaTenant.id,
+          createdById: quotaUser.id,
+          status: "SENT",
+          message: "Fixture that spends the monthly quota.",
+          pages: 1,
+        },
+      });
+    }
+    console.log(
+      `quota fixture: ${E2E_QUOTA_USER_EMAIL} (STARTER, ${E2E_QUOTA_FILLER}/${E2E_QUOTA_FILLER} envelopes sent this month)`,
+    );
+  }
 
   /* ── Attested-verification fixture (remote "self-hosted instance") ── */
   // Simulates what the portal receiver stores after a real self-hosted push:

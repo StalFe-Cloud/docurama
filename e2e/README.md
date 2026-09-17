@@ -30,8 +30,13 @@ e2e/
                  fixed-code fixtures DOC-E2E0001 (SENT), DOC-E2E0002
                  (COMPLETED + sealed), DOC-E2E0003 (decline flow) and
                  DOC-E2E0004 (signer journey), fixed signing tokens for the
-                 signer-portal flows, an API key (ENVELOPES scope) for the
-                 API-layer tests, and an attested-verification fixture
+                 signer-portal flows, an API key (ENVELOPES scope) plus a
+                 cold-bucket MCP rate key for the API-layer tests, an MCP
+                 config (enabled, all 4 tools, 120/min) + a workspace
+                 template fixture for the MCP suite, a spent "E2E Quota"
+                 STARTER tenant (25/25 envelopes this month,
+                 e2e-quota@docurama.eu / e2eQuota1234!) for the 402 test,
+                 and an attested-verification fixture
                  DOC-E2EATST (remote "self-hosted instance" registry row
                  with a real openssl key, a real transparency chain claim,
                  and a portal-log witnessing entry). Wipes its own fixtures
@@ -40,7 +45,10 @@ e2e/
   api.test.ts    API-layer suite (bun test): X-API-Key auth, scope 403s,
                  verify-engine states, list/detail reads, sign-endpoint
                  validation, and a leak check that signing tokens never
-                 appear in v1 payloads.
+                 appear in v1 payloads. Also: the signer-preview watermark
+                 (unit ink-bounds + an owner-vs-signer pixel diff that locks
+                 the watermark into the rendered page) and the spent-plan
+                 quota 402 (a STARTER tenant whose month the seed fills).
   evidence.test.ts  Evidence-layer suite (bun test): downloads an evidence
                  pack over the v1 API, parses the raw ZIP itself, re-verifies
                  the manifest signature + every artifact hash (what
@@ -57,6 +65,16 @@ e2e/
                  400), **chain rewrite detection 409**, idempotent no-grow,
                  signed checkpoint verification, and inclusion proofs for the
                  seeded fixture (incl. a tamper path).
+  mcp.test.ts    MCP server suite (bun test): JSON-RPC handshake, tools/list
+                 with the tenant allowlist, real tool calls against the
+                 seeded fixtures, 401/403 gates, RPC error codes, and the
+                 per-key rate limit (429) — config mutations always restore.
+  visual.test.ts Visual-regression smoke (bun test + Playwright): every
+                 public route screenshotted in a frozen context (fixed
+                 viewport, reduced motion, animations finished, dev overlay
+                 hidden) and diffed against e2e/baselines/. Also measures
+                 LCP on / and /templates with a generous dev-mode budget.
+  baselines/     Committed PNG baselines for visual.test.ts (see below).
   run.sh         Orchestrator: env guard → server → warm-up → seed → tsc
                  gate → API + evidence + transparency tests → maestro →
                  report. Accepts zero or more flow paths (default: all).
@@ -145,6 +163,30 @@ Other lessons baked into the flows:
 uploading Maestro debug artifacts when flows fail. The CI image needs a
 `chromium` wrapper that injects `--no-sandbox --disable-dev-shm-usage` (the
 workflow creates one).
+
+## Visual baselines (e2e/visual.test.ts)
+
+The visual suite screenshots the public routes in a deterministic context and
+compares against the committed baselines (`e2e/baselines/*.png`): per-pixel
+tolerance 25, at most 1.5% of pixels may differ. The marketing surfaces use
+Geist via next/font (self-hosted webfont), so rendering does not depend on
+system fonts and the threshold has ample headroom for antialiasing noise —
+its job is to catch layout catastrophes (blank page, missing hero), not
+subpixel drift.
+
+- A route without a baseline is baselined and passes (fail-only-on-drift).
+- After an intentional redesign: `UPDATE_BASELINES=1 bun test e2e/visual.test.ts`,
+  then commit the new PNGs. Never edit baselines by hand.
+- Chromium discovery: `CHROME_BIN` env → the ms-playwright cache →
+  `google-chrome`/`chromium` on PATH. CI exports `CHROME_BIN`.
+- No Chromium in an environment? `E2E_SKIP_VISUAL=1` skips the file honestly
+  (an honest skip, not a silent pass).
+- LCP is measured on every route and gated (<6s, dev-server budget) on `/`
+  and `/templates` — the gate catches catastrophic asset regressions, it
+  does not benchmark (dev-mode compile inflates the number).
+- The suite always runs right after the seed and before the Maestro flows —
+  pages that render DB counts (e.g. `/status`) are deterministic at that
+  point in the pipeline.
 
 ## Writing new flows
 

@@ -54,6 +54,8 @@ jobs:
           EOF
           chmod +x "$HOME/.local/bin/chromium"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          # The visual-regression suite drives the same binary via Playwright.
+          echo "CHROME_BIN=$CHROME_BIN" >> "$GITHUB_ENV"
 
       - name: Run E2E suite
         run: bash e2e/run.sh

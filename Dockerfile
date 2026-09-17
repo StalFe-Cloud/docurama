@@ -23,6 +23,14 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Fonts for everything that rasterises text in production: the signer
+# preview's per-recipient watermark, and pdfjs rendering of PDFs that rely on
+# system fonts. Debian slim ships none, so a missing package here would
+# silently degrade both to textless output.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/db ./db
