@@ -11,6 +11,10 @@ tags:
 ---
 - launchApp
 
+- extendedWaitUntil:
+    visible: Sign in to your portal
+    timeout: 30000
+
 - tapOn:
     id: email
 - inputText: e2e@docurama.eu

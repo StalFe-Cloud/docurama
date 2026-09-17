@@ -7,7 +7,9 @@ tags:
 ---
 - launchApp
 
-- assertVisible: Sign in to your portal
+- extendedWaitUntil:
+    visible: Sign in to your portal
+    timeout: 30000
 
 - tapOn:
     id: email
