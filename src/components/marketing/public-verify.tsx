@@ -10,7 +10,8 @@
  * VOIDED / VERIFIED - never dressing an unsigned document up as verified.
  */
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, ShieldX, FileQuestion, Search, ShieldCheck, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,14 +38,22 @@ type VerifyResult =
 export function PublicVerify() {
   return (
     <PortalProviders>
-      <VerifyInner />
+      <Suspense fallback={null}>
+        <VerifyInner />
+      </Suspense>
     </PortalProviders>
   );
 }
 
 function VerifyInner() {
-  const [code, setCode] = useState("");
-  const [submitted, setSubmitted] = useState("");
+  const params = useSearchParams();
+  // ?code=DOC-XXXX prefills and auto-runs the verification — the signer
+  // portal success screen links here with the envelope's code. Derived state
+  // (no effect): the URL prefill applies until the visitor submits their own.
+  const prefill = params.get("code");
+  const [code, setCode] = useState(() => (prefill ?? "").trim().toUpperCase());
+  const [manual, setManual] = useState<string | null>(null);
+  const submitted = manual ?? (prefill ? prefill.trim().toUpperCase() : "");
 
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["public-verify", submitted],
@@ -60,7 +69,7 @@ function VerifyInner() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) return;
-    setSubmitted(code.trim().toUpperCase());
+    setManual(code.trim().toUpperCase());
     refetch();
   };
 

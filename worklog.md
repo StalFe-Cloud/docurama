@@ -237,3 +237,30 @@ Work Log:
 
 Stage Summary:
 - e2e/maestro-suite is go-live ready on real quality code: 18/18 green re-validated from a cold environment, F2 fixed (+docs/legal same class), cold-boot flake hardened away, runner and docs improved. Ready to merge into quality via PR.
+
+---
+Task ID: 13
+Agent: Super Z (main)
+Task: "Execute all recommended and pending steps, fix issues, Docurama should be the best e-signing platform" — close F3/F4 + next-cycle items, ship the signer portal
+
+Work Log:
+- Merged PR #1 into quality (CI had passed on GitHub Actions: the Maestro suite ran green on real runners); quality now at 2aa044a.
+- Branched feat/signer-portal off quality.
+- F4 CLOSED — public signer portal shipped:
+  * Schema: Envelope.templateId (+ Template back-relation) pushed; evidence chain to the source template.
+  * src/lib/esign.ts: computeEnvelopeDigest() — document SHA-256 when a real file is attached, else a canonical digest over code/title/pages/created + recipients (order, email, status, signedAt) + full event ledger; any mutation changes the digest.
+  * /api/sign/[token]: view (PENDING→DELIVERED + VIEWED event), sign (name/font/consent → SIGNED; turn-order enforcement; final signer seals: COMPLETED, sealedAt, sha256, B-T, SEALED event), decline (reason → DECLINED on recipient + envelope + event).
+  * /sign/[token] page + PublicSign component: one-page experience (document card, sender message, signers rail with live status, contract text via react-markdown for template-sent envelopes, adopt-signature with 3 handwriting fonts + live signature-line preview, eIDAS consent, sign/decline); phases: invalid / terminal / cc / signed / completed / wait / active; VIEWED ping on open.
+  * /sign landing for bare host visits; middleware maps sign.docurama.eu → /sign; removed the legacy /sign→/documents redirect that would have hijacked the portal.
+  * Send op: pre-generates tokens, queues one MailOutbox SIGN_INVITE per recipient with the personal /sign/{token} link (inspectable in admin), stores templateId.
+  * QR handoff (roadmap #2): envelope-detail API returns owner-scoped signLink per pending signer; detail sheet renders copy-link + QR popover (qrcode → data URL) per signer.
+  * Verify portal accepts ?code= prefill (Suspense-wrapped; derived state, no effect) — signer success screen links straight into the proof.
+- F3 CLOSED: typescript.ignoreBuildErrors removed from next.config.ts; tsc --noEmit gate added to e2e/run.sh (step 2b); production build enforces types and passes with the new routes.
+- E2E growth 18 → 22 flows: signer-journey (sign→seal→public VERIFIED), signer-decline, sign-invalid-token, sign-link-handoff; seed gained DOC-E2E0003 (decline) + DOC-E2E0004 (journey) fixtures with deterministic tokens, and an E2E API key (ENVELOPES scope).
+- API-layer suite e2e/api.test.ts (bun test, wired into run.sh step 2c): key auth 401s, scope 403 (ENVELOPES key vs TEMPLATES), verify-engine VERIFIED/NOT_SEALED/NOT_FOUND, detail-by-code, sign-endpoint validation, and a security regression lock that recipient accessTokens never leak in v1 payloads.
+- Maestro lessons (all documented in e2e/README.md): icon-adjacent text nodes carry leading spaces (tolerant regexes); icon-only buttons are reachable only via id: on their aria-label; parenthesized text is a regex trap (prefix .* instead); below-the-fold elements are absent from the a11y tree (scrollUntilVisible first); below-fold consent/action bar needed scrolling at 1440x1000.
+- Verification: 22/22 flows green in chunked foreground runs (sandbox reaper note from Task 12 still applies); bun test api suite green; tsc clean; eslint clean; production build green with /sign + /sign/[token] routes.
+- Docs: e2e/README.md (new layout, selector rules 3+4, scroll lesson), docs/IMPROVEMENT-PLAN.md (F3/F4 closed, §6c cycle-2 log, refreshed §7), docs/COMPETITIVE-STRATEGY.md (roadmap #2 marked SHIPPED with detail, #1 annotated as next).
+
+Stage Summary:
+- The core product loop is now complete and competitor-grade: send → personal link → one-page sign → seal → public proof, all audit-trailed, all E2E-locked (22 flows + API suite + tsc gate in CI). Quality branch gains it via PR from feat/signer-portal.

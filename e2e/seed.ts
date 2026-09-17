@@ -9,12 +9,22 @@
  *  - Re-running wipes the tenant's envelopes/templates first, so every
  *    `maestro test` cycle starts from the same state.
  *  - Passwords use the same sha256 scheme as src/lib/auth.ts (hashPassword).
- *  - Fixed publicCodes (DOC-E2E0001/0002) make verify-portal flows
+ *  - Fixed publicCodes (DOC-E2E0001/0002/0003) make verify-portal flows
  *    deterministic without scraping codes out of the UI.
+ *  - Fixed signing tokens (E2E_SIGNER_TOKEN / E2E_DECLINE_TOKEN) make the
+ *    signer-portal flows deterministic — in production tokens are 32 random
+ *    bytes, the seed pins two so Maestro can open /sign/{token} directly.
+ *  - An API key fixture (known secret, ENVELOPES scope) drives the API-layer
+ *    test suite (e2e/api.test.ts).
  */
 
 import { PrismaClient } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
+
+const E2E_SIGNER_TOKEN = "e2e-fixed-signer-token-0000000000000001";
+const E2E_DECLINE_TOKEN = "e2e-fixed-decline-token-0000000000000001";
+const E2E_JOURNEY_TOKEN = "e2e-fixed-journey-token-0000000000000001";
+const E2E_API_KEY_SECRET = "dk_e2e_0000000000000000000000000000000000000000";
 
 const db = new PrismaClient();
 
@@ -115,7 +125,40 @@ async function main() {
             role: "SIGNER",
             order: 1,
             status: "PENDING",
-            accessToken: randomBytes(32).toString("base64url"),
+            accessToken: E2E_SIGNER_TOKEN,
+          },
+        ],
+      },
+      events: {
+        create: [
+          { actor: "Ella Tester", action: "CREATED", detail: "Seeded fixture" },
+          { actor: "Docurama", action: "SENT", detail: "Seeded fixture" },
+        ],
+      },
+    },
+  });
+
+  // SENT, one pending recipient — the decline flow (see below) needs its own
+  // envelope so signing/declining never disturbs the other flows' fixtures.
+  await db.envelope.create({
+    data: {
+      publicCode: "DOC-E2E0003",
+      title: "E2E Fixture — Consultant Agreement (decline)",
+      titleLower: "e2e fixture — consultant agreement (decline)",
+      tenantId: tenant.id,
+      createdById: wsUser.id,
+      status: "SENT",
+      message: "Fixture envelope seeded for the decline flow.",
+      pages: 2,
+      recipients: {
+        create: [
+          {
+            name: "Fixture Decliner",
+            email: "fixture-decliner@example.com",
+            role: "SIGNER",
+            order: 1,
+            status: "PENDING",
+            accessToken: E2E_DECLINE_TOKEN,
           },
         ],
       },
@@ -167,7 +210,58 @@ async function main() {
       },
     },
   });
-  console.log("fixtures: DOC-E2E0001 (SENT) + DOC-E2E0002 (COMPLETED/sealed)");
+
+  // SENT, one pending recipient — the signer-portal happy path: the flow opens
+  // the link, adopts a signature, signs, and the envelope seals (COMPLETED).
+  // Its own fixture so sealing never breaks the NOT_SEALED assertions on 0001.
+  await db.envelope.create({
+    data: {
+      publicCode: "DOC-E2E0004",
+      title: "E2E Fixture — Service Agreement (signer journey)",
+      titleLower: "e2e fixture — service agreement (signer journey)",
+      tenantId: tenant.id,
+      createdById: wsUser.id,
+      status: "SENT",
+      message: "Please review and sign at your convenience.",
+      pages: 4,
+      recipients: {
+        create: [
+          {
+            name: "Fixture Journey",
+            email: "fixture-journey@example.com",
+            role: "SIGNER",
+            order: 1,
+            status: "PENDING",
+            accessToken: E2E_JOURNEY_TOKEN,
+          },
+        ],
+      },
+      events: {
+        create: [
+          { actor: "Ella Tester", action: "CREATED", detail: "Seeded fixture" },
+          { actor: "Docurama", action: "SENT", detail: "Seeded fixture" },
+        ],
+      },
+    },
+  });
+
+  console.log("fixtures: DOC-E2E0001 (SENT) + DOC-E2E0002 (COMPLETED/sealed) + DOC-E2E0003 (SENT/decline) + DOC-E2E0004 (SENT/signer-journey)");
+
+  /* ── API key fixture (e2e/api.test.ts) ───────────────────────── */
+  const secretHash = createHash("sha256").update(E2E_API_KEY_SECRET).digest("hex");
+  await db.apiKey.deleteMany({ where: { name: "E2E Suite Key" } });
+  await db.apiKey.create({
+    data: {
+      tenantId: tenant.id,
+      name: "E2E Suite Key",
+      prefix: "dk_e2e_",
+      secretHash,
+      scope: "ENVELOPES",
+      status: "ACTIVE",
+      createdBy: wsUser.id,
+    },
+  });
+  console.log("api key: E2E Suite Key (ENVELOPES scope) for the API-layer tests");
 
   /* ── Summary ─────────────────────────────────────────────────────── */
   const envelopes = await db.envelope.count({ where: { tenantId: tenant.id } });

@@ -200,6 +200,7 @@ model Envelope {
   tenantId          String
   createdById       String
   documentId        String?   // the signed artefact; null while an envelope is a DRAFT
+  templateId        String?   // template the envelope was sent from (signer preview + evidence chain)
   status            String    @default("DRAFT") // DRAFT | SENT | PARTIALLY_SIGNED | COMPLETED | VOIDED | DECLINED | EXPIRED
   message           String?
   pages             Int       @default(1)
@@ -217,6 +218,7 @@ model Envelope {
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy  User      @relation("createdDocs", fields: [createdById], references: [id])
   document   Document? @relation("envelopeDocument", fields: [documentId], references: [id])
+  template  Template? @relation("envelopeTemplate", fields: [templateId], references: [id])
   recipients Recipient[]
   events     EnvelopeEvent[]
 
@@ -278,6 +280,7 @@ model Template {
   fields       String? // JSON: placeholder schema [{ key, label, type, required }]
   libraryKey   String? @unique // stable id from src/lib/templates/**, drives idempotent sync
   isBuiltIn    Boolean @default(false)
+  envelopes    Envelope[] @relation("envelopeTemplate")
   version      String  @default("1.0.0")
   sourceNotes  String? // JSON: statutory references and last legal review date
 

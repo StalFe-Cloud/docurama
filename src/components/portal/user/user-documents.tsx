@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2, Scale } from "lucide-react";
+import QRCode from "qrcode";
+import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2, Scale, Link2, QrCode } from "lucide-react";
 import { apiGet, apiPost, apiUpload, ApiError } from "@/lib/client";
 import {
   Column, ConfirmDialog, CopyableCode, DataTable, PageHeader, StatusBadge, fmtDate, fmtRelative,
@@ -20,8 +21,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 
-type Recipient = { id: string; name: string; email: string; role: string; status: string; order: number; authMethod: string; signedAt: string | null };
+type Recipient = { id: string; name: string; email: string; role: string; status: string; order: number; authMethod: string; signedAt: string | null; signLink?: string | null };
 type EnvelopeRow = {
   id: string; publicCode: string; title: string; status: string; createdAt: string;
   createdBy: string; sealedAt: string | null; conformanceLevel: string | null; sha256: string | null;
@@ -36,6 +40,42 @@ type EnvelopeDetail = {
 };
 
 const STATUS_TABS = ["ALL", "SENT", "PARTIALLY_SIGNED", "COMPLETED", "VOIDED", "DECLINED", "EXPIRED"];
+
+/**
+ * QR handoff for a pending signer: renders the personal signing link as a
+ * scannable code so the envelope owner can hand the phone/tablet (or the
+ * link itself) to the signer in the room. Roadmap item #2 — removes the
+ * "I'll do it at my desk" failure mode.
+ */
+function SignLinkQr({ name, path }: { name: string; path: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    QRCode.toDataURL(`${window.location.origin}${path}`, {
+      width: 220, margin: 1, color: { dark: "#0f172a", light: "#ffffff" },
+    }).then(setDataUrl).catch(() => setDataUrl(null));
+  }, [path]);
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Show signing QR for ${name}`} title="QR handoff">
+          <QrCode className="h-4 w-4" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-4" align="end">
+        <div className="space-y-2 text-center">
+          {dataUrl ? (
+            <img src={dataUrl} alt={`Signing link QR for ${name}`} width={220} height={220} className="rounded-md border" />
+          ) : (
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+          )}
+          <p className="max-w-[220px] text-xs text-muted-foreground">
+            {name} scans this to open their personal signing page on their phone.
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function UserDocuments() {
   const [page, setPage] = useState(1);
@@ -348,8 +388,27 @@ export function UserDocuments() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-0.5">
-                        <StatusBadge status={r.status} />
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <div className="flex items-center gap-1.5">
+                          {r.signLink && (
+                            <>
+                              <Button
+                                variant="ghost" size="icon" className="h-8 w-8"
+                                aria-label={`Copy signing link for ${r.name}`} title="Copy signing link"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}${r.signLink}`).then(
+                                    () => toast.success("Signing link copied — it opens as this signer"),
+                                    () => toast.error("Could not copy the link"),
+                                  );
+                                }}
+                              >
+                                <Link2 className="h-4 w-4" aria-hidden />
+                              </Button>
+                              <SignLinkQr name={r.name} path={r.signLink} />
+                            </>
+                          )}
+                          <StatusBadge status={r.status} />
+                        </div>
                         {r.signedAt && <span className="text-[11px] text-muted-foreground">{fmtDate(r.signedAt, true)}</span>}
                       </div>
                     </li>

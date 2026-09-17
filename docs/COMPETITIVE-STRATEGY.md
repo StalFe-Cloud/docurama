@@ -128,11 +128,16 @@ modern console, a real REST API, webhooks and an MCP server for agents.
 1. **Evidence pack export.** One-click ZIP per completed envelope: sealed
    document, certificate, timestamp tokens, event ledger CSV and a signed
    manifest. This makes Docurama evidence portable into customer matter
-   management systems, which no challenger does well.
+   management systems, which no challenger does well. *(Next up — the
+   envelope ledger, digests and template chain are already in place.)*
 2. **QR handoff for signing.** Every signer email and the in-app document
    view gets a QR code that opens the signing page on the signer's phone.
    Removes the "I'll do it at my desk" failure mode that stalls completion
-   rates.
+   rates. **SHIPPED (Sept 2026)**: the public signer portal `/sign/{token}`
+   is live — one-page adopt-signature (typed, three handwriting fonts),
+   eIDAS consent, sign/decline with turn order, automatic sealing (SHA-256,
+   B-T) on the final signature — invitations carry the personal link, and
+   the in-app envelope detail offers per-signer link copy + QR handoff.
 3. **Bulk send with CSV merge fields.** Upload a template plus a CSV, one
    envelope per row. HR and property management workflows live on this.
 4. **Notarization-style witness flows.** Add a witness recipient type and
