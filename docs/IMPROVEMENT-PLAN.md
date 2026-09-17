@@ -460,3 +460,72 @@ next-cycle items, all €0 code work — executed as one hardening cycle:
   Maestro flows**, visual determinism proven by two consecutive 0.00%
   runs. run.sh wires the two new suites; `.github/workflows/e2e.yml`
   exports `CHROME_BIN`.
+
+## 7g. Cycle 8 — Deployment readiness: health, mail delivery, webhooks, hardening (2026-09-18)
+
+Gap analysis against four deployment targets (cloud multitenant SaaS,
+private cloud, public cloud, self-hosted enterprise) surfaced six universal
+blockers; the €0 subset ships in this cycle:
+
+- **`/api/health` (new)** — DB round-trip, storage-writability probe, mail
+  mode + queue depth, webhook endpoint health, Rekor witnessing posture,
+  version + uptime. 200 ok / 503 unready on critical failures. The runbook
+  (§3/§8), the Docker `HEALTHCHECK` and both Helm probes target it — before
+  this cycle the runbook monitored an endpoint that 404'd.
+- **Real mail delivery (`src/lib/mail.ts`)** — nodemailer transport behind
+  `SMTP_URL` (`smtp://` STARTTLS-opportunistic / `smtps://` / `?tls=off` for
+  local relays). Unset = the previous behaviour, honestly named outbox-only:
+  rows stay QUEUED and inspectable. Attempts + exponential backoff (30s → 30m
+  cap, 5 attempts) survive restarts in the `MailOutbox` row itself.
+- **Webhook dispatcher (`src/lib/webhooks.ts`)** — the WebhookEndpoint model
+  finally delivers: HMAC-SHA256 `X-Docurama-Signature` over the raw body
+  (`whsec_…` secret, revealed once at creation, stored retrievable but never
+  re-served), `X-Docurama-Event`/`X-Docurama-Delivery` headers, payload
+  snapshot per delivery so retries are byte-identical (receivers verify one
+  stable HMAC), backoff 1m/5m/15m/30m × 5 attempts, endpoint health
+  (successRate over last 20, FAILING on 5-streak, PAUSED untouched).
+  All 7 documented events fire from the real lifecycle paths
+  (send/remind/void/view/sign/seal/decline), post-commit and non-fatal by
+  the same policy as the transparency append.
+- **Webhook management UI** — Settings → API's static info card became a
+  full endpoint manager (register with event picker + secret one-time
+  reveal, pause/resume, delete, recent deliveries). API: `settings-webhooks`
+  section + `webhook.create/delete/toggle` ops, admin-gated, audited.
+- **Background worker (`src/instrumentation.ts`)** — 30s loop drains mail
+  + retries failed webhooks. Single-instance by design and documented:
+  `DOCURAMA_WORKER=off` for replicas or external cron; both passes are
+  self-contained DB-only functions.
+- **ROOT_DOMAIN env** — middleware's hard-coded `docurama.eu` became
+  configurable; default unchanged. Self-hosted/white-label deployments get
+  the vanity sub-domain routing on their own zone.
+- **Hardened packaging** — Dockerfile: non-root uid 10001, `HEALTHCHECK`,
+  demo mode off by default, no baked dev DB, entrypoint applies additive
+  schema on boot (prisma CLI + engines carried deliberately);
+  docker-compose: named volumes, compose healthcheck, documented scale-out
+  knobs. **Helm chart** (`deploy/helm/docurama`): probes on /api/health,
+  single RWO PVC (db + storage subPaths), Recreate strategy, SMTP from
+  existing Secret, ROOT_DOMAIN derived from the ingress host, securityContext
+  throughout. **`scripts/backup.sh`**: sqlite3 `.backup` snapshot + storage
+  tarball, retention, optional GPG + off-site rsync, restore instructions.
+- **Postgres portability gate** — new `postgres-portability` CI job applies
+  the schema (provider-swapped, the only edit) to PostgreSQL 16 on every
+  push: §9's "flip DATABASE_URL" claim is now continuously tested instead
+  of aspirational.
+- **Bug found by the new tests**: the first webhook backoff implementation
+  (5^n progression) produced 25m at attempt 3 where the docs promised 15m —
+  replaced with the explicit documented schedule table.
+- **E2E growth 82 → 97 tests / 25 flows**: new `webhooks.test.ts` (signed
+  delivery + HMAC verification, subscription filtering, 500 → byte-identical
+  retry recovery, full path through the real dev server) and `mail.test.ts`
+  (hermetic fake SMTP relay over node:net: delivery, backoff, deferral,
+  terminal FAILED at 5 attempts, outbox-only no-op, URL parsing), plus 2
+  health assertions in api.test.ts. mail.test.ts runs in its own process
+  (it owns DATABASE_URL + SMTP_URL); the dev server in the suite runs with
+  `DOCURAMA_WORKER=off` so retry passes are explicit, not raced.
+- **Sandbox lesson (third reaper incident)**: `bun add` rewrote node_modules
+  and invalidated the Turbopack cache — cold recompiles pushed a full
+  run.sh invocation past the ~5-minute background-process harvest window
+  mid-test. Pre-warming the route cache in short windows (then ~15s boots)
+  + chunked foreground flow groups keeps every invocation inside the limit.
+  Locally verified: **97/97 tests, 25/25 flows** (public 7, auth 5, admin 3,
+  workspace 10), tsc/eslint clean.

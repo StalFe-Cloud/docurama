@@ -62,7 +62,13 @@ if [[ "${E2E_START_SERVER:-1}" == "1" ]]; then
     # (the lazy checkpoint witness would otherwise depend on external
     # reachability and leak test keys into the public log). rekor.test.ts
     # drives the witness code paths in-process against a local mock.
+    # DEMO_MODE is forced on: login-demo.yaml drives the demo buttons, and
+    # .env.example now ships the safe production default (false).
+    # The background worker is off: retry passes (mail, webhooks) are driven
+    # explicitly by webhooks.test.ts / mail.test.ts — no 30s-timer races.
     REKOR_WITNESS="${E2E_REKOR_WITNESS:-off}" \
+      NEXT_PUBLIC_DEMO_MODE="${E2E_DEMO_MODE:-true}" \
+      DOCURAMA_WORKER="${E2E_DOCURAMA_WORKER:-off}" \
       bun run dev > /tmp/docurama-e2e-dev.log 2>&1 &
     SERVER_PID=$!
     for i in $(seq 1 60); do
@@ -111,7 +117,13 @@ fi
 # ── 2c. API-layer + evidence-layer + transparency-layer + MCP + visual suites ──
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
   echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + visual tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/mcp.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/MCP/visual tests failed"; exit 1; }
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/mcp.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/MCP/webhooks/visual tests failed"; exit 1; }
+fi
+
+# ── 2d. Mail delivery engine (own process: it owns DATABASE_URL + SMTP_URL) ───
+if [[ "${E2E_SKIP_MAIL:-0}" != "1" ]]; then
+  echo "── e2e: mail delivery engine (fake SMTP relay)"
+  bun test e2e/mail.test.ts || { echo "!! mail delivery tests failed"; exit 1; }
 fi
 
 # ── 3. Discover flows and run them ────────────────────────────────────────────

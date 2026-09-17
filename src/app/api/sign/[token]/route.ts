@@ -4,6 +4,7 @@ import { jsonError, jsonOk } from "@/lib/serializers";
 import { computeEnvelopeDigest } from "@/lib/esign";
 import { pushAttestationForEnvelope } from "@/lib/attestation";
 import { appendSealCommitment } from "@/lib/transparency";
+import { dispatchEnvelopeEvent } from "@/lib/webhooks";
 
 /**
  * Public signing endpoint — the engine behind /sign/{token}.
@@ -74,6 +75,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             },
           }),
         ]);
+        void dispatchEnvelopeEvent(env.tenantId, "envelope.viewed", {
+          code: env.publicCode, title: env.title, status: env.status,
+          recipient: { name: recipient.name, email: recipient.email },
+        }).catch(() => undefined);
       }
       return jsonOk({ ok: true, status: "DELIVERED" });
     }
@@ -185,6 +190,24 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
       }
 
+      // Lifecycle webhooks, post-commit and non-fatal by the same policy as
+      // the transparency append: a customer endpoint can never break signing.
+      void dispatchEnvelopeEvent(env.tenantId, "envelope.signed", {
+        code: env.publicCode, title: env.title,
+        status: updated.envelope.status,
+        recipient: { name: recipient.name, email: recipient.email },
+        sealed: updated.sealed,
+      }).catch(() => undefined);
+      if (updated.sealed) {
+        void dispatchEnvelopeEvent(env.tenantId, "envelope.completed", {
+          code: env.publicCode, title: env.title, status: "COMPLETED",
+          sha256: updated.envelope.sha256,
+          sealedAt: (updated.envelope.sealedAt ?? signedAt).toISOString(),
+          conformance: updated.envelope.conformanceLevel,
+          signerCount: updated.signerCount,
+        }).catch(() => undefined);
+      }
+
       return jsonOk({
         ok: true,
         status: "SIGNED",
@@ -212,6 +235,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           },
         }),
       ]);
+      void dispatchEnvelopeEvent(env.tenantId, "envelope.declined", {
+        code: env.publicCode, title: env.title, status: "DECLINED",
+        recipient: { name: recipient.name, email: recipient.email }, reason,
+      }).catch(() => undefined);
       return jsonOk({ ok: true, status: "DECLINED", envelopeStatus: "DECLINED" });
     }
 

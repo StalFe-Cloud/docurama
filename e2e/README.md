@@ -69,14 +69,30 @@ e2e/
                  with the tenant allowlist, real tool calls against the
                  seeded fixtures, 401/403 gates, RPC error codes, and the
                  per-key rate limit (429) — config mutations always restore.
+  webhooks.test.ts  Webhook dispatcher suite (bun test, in-process lib + real
+                 server): signed delivery with HMAC-SHA256 verification over
+                 the raw body, subscription filtering, a 500 → retry-pass
+                 recovery that must be byte-identical (same payload snapshot,
+                 same HMAC), the documented backoff schedule, and one
+                 full-path check — an envelope sent over the workspace API
+                 produces a signed envelope.sent webhook at the receiver.
+  mail.test.ts   Mail delivery engine suite (bun test, own process — it owns
+                 DATABASE_URL + SMTP_URL): a miniature SMTP relay over
+                 node:net captures real dialogs. Covers outbox-only mode,
+                 delivery + SENT transitions, temporary-failure backoff and
+                 deferral of not-due rows, recovery on retry, terminal FAILED
+                 at 5 attempts, and SMTP_URL parsing (tls=off, garbage
+                 degrades to outbox-only).
   visual.test.ts Visual-regression smoke (bun test + Playwright): every
                  public route screenshotted in a frozen context (fixed
                  viewport, reduced motion, animations finished, dev overlay
                  hidden) and diffed against e2e/baselines/. Also measures
                  LCP on / and /templates with a generous dev-mode budget.
   baselines/     Committed PNG baselines for visual.test.ts (see below).
-  run.sh         Orchestrator: env guard → server → warm-up → seed → tsc
-                 gate → API + evidence + transparency tests → maestro →
+  run.sh         Orchestrator: env guard → server (DOCURAMA_WORKER=off so
+                 retry passes are explicit, not raced with the 30s worker) →
+                 warm-up → seed → tsc gate → API + evidence + transparency +
+                 MCP + webhooks tests → mail suite (own process) → maestro →
                  report. Accepts zero or more flow paths (default: all).
   flows/
     public/      No-auth surfaces: marketing, French catalog, verify portal

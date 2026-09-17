@@ -264,3 +264,28 @@ Work Log:
 
 Stage Summary:
 - The core product loop is now complete and competitor-grade: send → personal link → one-page sign → seal → public proof, all audit-trailed, all E2E-locked (22 flows + API suite + tsc gate in CI). Quality branch gains it via PR from feat/signer-portal.
+
+---
+Task ID: 14
+Agent: Super Z (main)
+Task: "What else needs to be fixed for cloud multitenant / private cloud / public cloud / self-hosted enterprise" — gap analysis + Cycle 8 (€0 deployment readiness)
+
+Work Log:
+- Gap analysis against the four deployment targets, grounded in the code: found 6 universal blockers — no real mail delivery (MailOutbox stays QUEUED, comment admits "transport is not wired"), /api/health referenced by the runbook but nonexistent (404), WebhookEndpoint/WebhookDelivery models with no dispatcher, no background worker, SQLite+local-disk only, secrets in DB. Per-target: hard-coded docurama.eu in middleware (white-label), no SSO/billing rails (SaaS), no Helm/IaC (private/public cloud), db push instead of migrate + prose-only backups (enterprise).
+- Schema (additive, house style — nullable columns only): MailOutbox += attempts/lastError/nextAttemptAt (+status,nextAttemptAt index); WebhookEndpoint += secret (retrievable for HMAC, never re-served); WebhookDelivery += payload snapshot/attempts/nextAttemptAt (+retry index).
+- src/lib/mail.ts: nodemailer behind SMTP_URL (smtp/smtps, ?tls=off for local relays); unset = outbox-only (previous behaviour, honestly named). Backoff 30s×4^n capped 30m, 5 attempts, journal-through-table so restarts resume.
+- src/lib/webhooks.ts: dispatchEnvelopeEvent + retryFailedDeliveries; HMAC-SHA256 X-Docurama-Signature over raw body, X-Docurama-Event/Delivery headers, byte-identical retries via payload snapshot, backoff table 1m/5m/15m/30m, endpoint health (successRate/FAILING/PAUSED-untouched). All 7 documented events wired into send/remind/void/view/sign/seal/decline, post-commit non-fatal.
+- src/instrumentation.ts: 30s background worker (mail drain + webhook retries), DOCURAMA_WORKER=off escape, documented single-instance rule for the scale-out tier.
+- /api/health: DB + storage-writable + mail mode/queue + webhooks + Rekor posture + version/uptime; 503 on critical failure. Fixes the runbook 404; Docker HEALTHCHECK + Helm probes target it.
+- Settings API + UI: settings-webhooks section, webhook.create/delete/toggle ops (audited, https-only with loopback exception, secret revealed once), WebhooksCard rewritten from static info card to full endpoint manager with deliveries feed.
+- middleware: ROOT_DOMAIN env replaces hard-coded docurama.eu (default unchanged).
+- Packaging: Dockerfile non-root uid 10001 + HEALTHCHECK + entrypoint prisma db push (CLI+engines carried) + no baked dev DB + DEMO off; docker-compose named volumes + healthcheck; deploy/helm/docurama chart (probes, RWO PVC, Recreate, SMTP secret, ROOT_DOMAIN from ingress host); scripts/backup.sh (sqlite3 .backup + storage tar + retention + GPG/rsync options, smoke-tested).
+- CI: postgres-portability job — provider-swapped schema applies to PostgreSQL 16 every push (§9 claim now continuously tested).
+- .env.example: DEMO_MODE=false default, SMTP_URL/ROOT_DOMAIN/DOCURAMA_WORKER documented; run.sh forces DEMO_MODE=true for the suite + boots the server with DOCURAMA_WORKER=off (no worker/test races).
+- E2E 82 → 97 tests: webhooks.test.ts (6 — HMAC contract, filtering, byte-identical retry recovery, full path through the real server) and mail.test.ts (7 — hermetic node:net SMTP relay: delivery/backoff/deferral/terminal-FAILED/parsing) + 2 health assertions in api.test.ts.
+- Bug caught by the new tests: first webhook backoff impl (5^n) gave 25m at attempt 3 vs the documented 15m — replaced with the explicit schedule table.
+- Sandbox reaper incident #3: bun add rewrote node_modules → Turbopack cache invalidated → cold compiles pushed run.sh past the ~5-min background harvest window. Recovery: pre-warm route cache in short windows (boot drops to ~15s), then chunked foreground validation.
+- Final validation: tsc/eslint clean; 97/97 bun tests (api 26, evidence 14, transparency 12, rekor 10, mcp 15, webhooks 6, visual 7, mail 7) and 25/25 Maestro flows (public 7, auth 5, admin 3, workspace 10), visual diffs 0.00%.
+
+Stage Summary:
+- Docurama is now honestly deployable on all four targets' €0 axes: health-probed containers (Docker+Helm), real SMTP delivery with retry ledger, signed+retried webhooks with management UI, configurable base domain, backup tooling, CI-gated Postgres portability. Remaining (paid/trigger-gated): SSO (OIDC/SAML), billing rails, S3 object storage, KMS/HSM, multi-region. Quality branch gains this via PR from feat/deploy-readiness.

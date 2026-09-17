@@ -378,3 +378,30 @@ describe("monthly envelope quota (402, spent STARTER plan)", () => {
     }
   });
 });
+
+describe("operational health endpoint (/api/health)", () => {
+  // The runbook (PRODUCTION-PLAN §3/§8), the Docker HEALTHCHECK and the Helm
+  // probes all target this endpoint — it must answer 200 with the critical
+  // checks green on a healthy dev server.
+
+  test("answers 200 with database and storage checks green", async () => {
+    const res = await fetch(`${BASE}/api/health`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      status: string;
+      version: string;
+      checks: { database?: { ok?: boolean }; storage?: { ok?: boolean }; mail?: { mode?: string } };
+    };
+    expect(body.status).toBe("ok");
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(body.checks.database?.ok).toBe(true);
+    expect(body.checks.storage?.ok).toBe(true);
+  });
+
+  test("reports the mail mode honestly (outbox-only in the suite)", async () => {
+    const res = await fetch(`${BASE}/api/health`);
+    const body = (await res.json()) as { checks: { mail?: { mode?: string } } };
+    // The E2E server runs without SMTP_URL — outbox-only is the truth.
+    expect(body.checks.mail?.mode).toBe("outbox-only");
+  });
+});

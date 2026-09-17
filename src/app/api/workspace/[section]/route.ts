@@ -5,6 +5,8 @@ import { requireUser, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
 import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
 import { foldForSearch } from "@/lib/search";
+import { dispatchEnvelopeEvent } from "@/lib/webhooks";
+import { processOutbox } from "@/lib/mail";
 
 export const dynamic = "force-dynamic";
 
@@ -25,15 +27,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     // Workspace context requires a tenant membership.
     if (
-      ["envelopes", "templates", "settings", "overview", "settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp"].includes(section) &&
+      ["envelopes", "templates", "settings", "overview", "settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp", "settings-webhooks"].includes(section) &&
       !tenantId
     ) {
       return jsonError("No workspace membership for this account", 403);
     }
 
     // Production settings sections (account security, eSign, notifications,
-    // SMS gateway, MCP) are served by the dedicated handlers module.
-    if (["settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp"].includes(section)) {
+    // SMS gateway, MCP, webhooks) are served by the dedicated handlers module.
+    if (["settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp", "settings-webhooks"].includes(section)) {
       return getSettingsSection(section, me);
     }
 
@@ -358,6 +360,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             });
             return envelope;
           });
+
+          // Webhooks + mail are post-commit side effects: the envelope send
+          // itself never depends on an SMTP relay or a customer endpoint
+          // being up (same policy as the transparency append).
+          void dispatchEnvelopeEvent(tenantId!, "envelope.sent", {
+            code, title, status: "SENT",
+            recipientCount: valid.length,
+            recipients: valid.map((r) => ({ name: String(r.name ?? r.email), email: String(r.email).toLowerCase(), role: r.role === "CC" ? "CC" : "SIGNER" })),
+          }).catch(() => undefined);
+          void processOutbox(20).catch(() => undefined);
+
           return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} - code ${code}` });
         }
         if (op === "remind") {
@@ -370,6 +383,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           }
           await db.envelope.update({ where: { id }, data: { lastRemindedAt: new Date() } });
           await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "REMINDED", detail: "Reminder email dispatched" } });
+          void dispatchEnvelopeEvent(tenantId!, "reminder.sent", { code: e.publicCode, title: e.title, status: e.status }).catch(() => undefined);
+          void processOutbox(20).catch(() => undefined);
           return jsonOk({ ok: true, message: "Reminder sent" });
         }
         if (op === "void") {
@@ -381,6 +396,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           await db.envelope.update({ where: { id }, data: { status: "VOIDED", voidedAt: new Date(), voidReason: reason } });
           await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "VOIDED", detail: reason } });
           await recordAudit({ actor, actorRole: me.role, action: "envelope.voided", resource: `envelope:${e.publicCode}`, severity: "WARNING", tenantName: me.tenantName, detail: reason });
+          void dispatchEnvelopeEvent(tenantId!, "envelope.voided", { code: e.publicCode, title: e.title, status: "VOIDED", reason }).catch(() => undefined);
           return jsonOk({ ok: true, message: "Envelope voided" });
         }
         return jsonError("Unsupported operation");
