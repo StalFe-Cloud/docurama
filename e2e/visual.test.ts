@@ -153,7 +153,9 @@ describe("visual regression smoke (marketing surfaces)", () => {
       executablePath,
       args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     });
-  });
+  }, 90_000); // cold Chromium start on a loaded shared runner can far exceed
+  // bun:test's 5s default hook timeout (observed as a flaky beforeAll abort
+  // on GitHub runners — the suite itself then "fails" unnamed).
 
   afterAll(async () => {
     if (browser) {
