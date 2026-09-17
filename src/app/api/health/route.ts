@@ -1,7 +1,5 @@
-import { writeFile, rm, mkdir } from "fs/promises";
-import path from "path";
 import { db } from "@/lib/db";
-import { storageDir } from "@/lib/document-store";
+import { storageHealthProbe } from "@/lib/document-store";
 import { smtpMode, outboxStats } from "@/lib/mail";
 import { rekorWitnessingEnabled, getPortalKeyWitness } from "@/lib/rekor";
 
@@ -38,16 +36,16 @@ export async function GET() {
   }
   if (dbOk) checks.database = { ok: true, latencyMs: dbLatencyMs };
 
-  // Critical: storage tree writable (uploads and page renders land here).
-  try {
-    const dir = storageDir();
-    const probe = path.join(dir, ".health-probe");
-    await mkdir(dir, { recursive: true });
-    await writeFile(probe, `${Date.now()}\n`);
-    await rm(probe, { force: true });
-    checks.storage = { ok: true };
-  } catch (err) {
-    checks.storage = { ok: false, error: err instanceof Error ? err.message : "not writable" };
+  // Critical: document storage writable (local filesystem or S3 backend —
+  // the probe round-trips bytes through whichever is configured).
+  const storage = await storageHealthProbe();
+  checks.storage = storage.ok
+    ? { ok: true, backend: storage.backend }
+    : { ok: false, backend: storage.backend, error: storage.error };
+  if (!storage.ok) {
+    // Surface a clear line for operators: a half-configured S3 backend or an
+    // unreachable bucket is the #1 misconfiguration class on this path.
+    console.warn(`[health] storage probe failed (${storage.backend}): ${storage.error}`);
   }
 
   // Informational: mail delivery mode + queue depth.

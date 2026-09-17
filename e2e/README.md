@@ -178,7 +178,10 @@ Other lessons baked into the flows:
 `main`: bun install → prisma generate → seed → `maestro test --headless`,
 uploading Maestro debug artifacts when flows fail. The CI image needs a
 `chromium` wrapper that injects `--no-sandbox --disable-dev-shm-usage` (the
-workflow creates one).
+workflow creates one), and downloads the **SeaweedFS** binary so
+`e2e/s3-seaweed.test.ts` exercises the S3 storage backend against a real
+`weed server -s3` (skipped locally when no `weed` is on PATH — set `WEED_BIN`
+to enable it, `E2E_SKIP_S3=1` to force off).
 
 ## Visual baselines (e2e/visual.test.ts)
 

@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
-import { readFile } from "fs/promises";
 import { db } from "@/lib/db";
 import { jsonError } from "@/lib/serializers";
-import { documentPath } from "@/lib/document-store";
+import { readDocumentBytes } from "@/lib/document-store";
 import { renderPage, clampDpi } from "@/lib/docintel/text-extract";
 import { drawPreviewWatermark, watermarkFor } from "@/lib/preview-watermark";
 
@@ -70,10 +69,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const url = new URL(req.url);
     const dpi = clampDpi(Number(url.searchParams.get("dpi") ?? 150));
 
-    const filePath = documentPath(doc.id, doc.tenantId);
     let fileBytes: Buffer;
     try {
-      fileBytes = await readFile(filePath);
+      fileBytes = await readDocumentBytes(doc.id, doc.tenantId);
     } catch (err) {
       console.error("[sign page render file read error]", err);
       return jsonError("Document file not found on storage", 404);

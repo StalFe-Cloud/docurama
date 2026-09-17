@@ -1,10 +1,9 @@
 import { NextRequest } from "next/server";
 import { promises as dns } from "dns";
-import { stat } from "fs/promises";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
-import { purgeExpired, storageDir } from "@/lib/document-store";
+import { purgeExpired, storageHealthProbe } from "@/lib/document-store";
 import {
   COMPANY, EMAIL_ACCOUNTS, SUBDOMAINS, DNS_RECORDS,
   parseProvisioningState, buildZoneFile,
@@ -725,7 +724,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const drillStart = Date.now();
           const [dbCheck, storageStat] = await Promise.all([
             db.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
-            stat(storageDir()).then(() => true).catch(() => false),
+            storageHealthProbe().then((r) => r.ok).catch(() => false),
           ]);
           const elapsedMs = Date.now() - drillStart;
           const rtoActual = `${elapsedMs}ms`;

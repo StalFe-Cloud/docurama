@@ -86,8 +86,14 @@ fi
 cleanup() {
   if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "── e2e: stopping dev server"
+    # Kill the whole tree, not just the `bun run dev` wrapper: the next-server
+    # child survives the wrapper and holds :3000, which a later run then
+    # reuses/hits with a stale database binding (observed as phantom MCP/rekor
+    # failures across consecutive runs on a busy host).
+    pkill -TERM -P "$SERVER_PID" 2>/dev/null || true
     kill "$SERVER_PID" 2>/dev/null || true
     wait "$SERVER_PID" 2>/dev/null || true
+    pkill -KILL -P "$SERVER_PID" 2>/dev/null || true
   fi
 }
 trap cleanup EXIT
@@ -124,6 +130,20 @@ fi
 if [[ "${E2E_SKIP_MAIL:-0}" != "1" ]]; then
   echo "── e2e: mail delivery engine (fake SMTP relay)"
   bun test e2e/mail.test.ts || { echo "!! mail delivery tests failed"; exit 1; }
+fi
+
+# ── 2e. S3 storage backend (own process: spawns a REAL SeaweedFS `weed
+#        server -s3` on scratch ports). Requires the weed binary — skipped
+#        honestly when absent so CI without it stays green.
+#        E2E_SKIP_S3=1 force-off · WEED_BIN=/path/to/weed to point at one. ──
+if [[ "${E2E_SKIP_S3:-0}" != "1" ]]; then
+  WEED_BIN="${WEED_BIN:-$(command -v weed || true)}"
+  if [[ -n "$WEED_BIN" ]]; then
+    echo "── e2e: S3 storage backend (real SeaweedFS: $WEED_BIN)"
+    S3_E2E=1 WEED_BIN="$WEED_BIN" bun test e2e/s3-seaweed.test.ts || { echo "!! S3 storage tests failed"; exit 1; }
+  else
+    echo "── e2e: S3 storage suite skipped (no weed binary on PATH; set WEED_BIN to enable)"
+  fi
 fi
 
 # ── 3. Discover flows and run them ────────────────────────────────────────────
