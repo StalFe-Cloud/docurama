@@ -107,7 +107,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://docurama:docurama@localhost:5432/docurama_test
 
-      - name: Smoke: tables exist
+      - name: "Smoke: tables exist"
         run: |
           docker exec ${{ job.services.postgres.id }} psql -U docurama -d docurama_test -c "\dt" | tee /dev/stderr | grep -q "Envelope"
           docker exec ${{ job.services.postgres.id }} psql -U docurama -d docurama_test -c "\dt" | grep -q "TransparencyEntry"
