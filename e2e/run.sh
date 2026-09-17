@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Docurama E2E runner — one command to a green (or red) Maestro suite.
 #
-#   bash e2e/run.sh                 # full suite against a local dev server
-#   bash e2e/run.sh <flow.yaml>     # a single flow
+#   bash e2e/run.sh                          # full suite against a local dev server
+#   bash e2e/run.sh <flow.yaml> [more.yaml…] # one or more specific flows
 #
 # Environment:
 #   MAESTRO_BASE_URL   target origin (default http://127.0.0.1:3000)
@@ -63,6 +63,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# ── 1b. Warm the public routes ────────────────────────────────────────────────
+# In dev mode every route compiles on first hit; a flow that navigates
+# straight after a cold boot can race the compiler (seen on the marketing
+# CTA → /welcome). Touching the public surfaces once here removes that race
+# for every flow. Non-fatal: warming only triggers compilation.
+for route in / /login /welcome /modeles-de-contrats /verify /docs; do
+  curl -s -o /dev/null --max-time 180 "$BASE_URL$route" || true
+done
+echo "── e2e: public routes warmed"
+
 # ── 2. Seed the deterministic fixtures ────────────────────────────────────────
 if [[ "${E2E_SKIP_SEED:-0}" != "1" ]]; then
   echo "── e2e: seeding fixtures"
@@ -80,7 +90,7 @@ if ! command -v maestro >/dev/null 2>&1; then
 fi
 
 if [[ $# -gt 0 ]]; then
-  FLOWS=("$1")
+  FLOWS=("$@")
 else
   mapfile -t FLOWS < <(find "$FLOWS_DIR" -name '*.yaml' | sort)
 fi

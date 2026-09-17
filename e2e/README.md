@@ -9,7 +9,11 @@ via CDP/Selenium.
 ```bash
 bun run test:e2e            # boots a dev server (if needed), seeds, runs all flows
 bash e2e/run.sh e2e/flows/auth/login.yaml   # one flow
+bash e2e/run.sh e2e/flows/public/*.yaml     # a group of flows
 ```
+
+The runner accepts any number of flow paths; with no arguments it runs the
+whole suite. Flow order never matters — every flow is self-contained.
 
 Requirements: `bun`, `maestro` on PATH
 (`curl -Ls 'https://get.maestro.mobile.dev' | bash`), and a Chrome/Chromium
@@ -26,7 +30,8 @@ e2e/
                  plus fixed-code fixtures DOC-E2E0001 (SENT) and
                  DOC-E2E0002 (COMPLETED + sealed). Wipes the tenant's
                  envelopes on every run — demo data is never touched.
-  run.sh         Orchestrator: env guard → server → seed → maestro → report.
+  run.sh         Orchestrator: env guard → server → warm-up → seed → maestro →
+                 report. Accepts zero or more flow paths (default: all).
   flows/
     public/      No-auth surfaces: marketing, French catalog, verify portal
                  (NOT_FOUND + seeded VERIFIED), docs/developers/status.
@@ -75,6 +80,12 @@ Other lessons baked into the flows:
   `onOpenAutoFocus` (see `ConfirmDialog` in `src/components/portal/shared.tsx`)
   and row-action buttons must `stopPropagation()` — both were real UX bugs
   found by this suite, not test-only issues.
+- **Cold-boot compile race**: in dev mode every route compiles on first hit,
+  and a flow that navigates right after a cold server boot can race the
+  compiler (seen live: the marketing CTA → `/welcome` exceeded a 10s wait on
+  a cold sandbox server). The runner now warms the public routes once after
+  boot, and first-navigation asserts use `extendedWaitUntil` with 30s
+  timeouts.
 - **Base URL**: flows reference `${MAESTRO_BASE_URL}`; the runner exports it
   (default `http://127.0.0.1:3000`), so the same suite can target staging or
   production smoke runs: `MAESTRO_BASE_URL=https://staging.example.com bun run test:e2e`.

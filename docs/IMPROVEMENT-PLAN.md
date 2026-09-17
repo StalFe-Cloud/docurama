@@ -120,7 +120,7 @@ e2e/
 | # | Issue | Status |
 |---|-------|--------|
 | F1 | `DATABASE_URL` env collision: inherited shell env silently overrides `.env`, all DB routes 500 | Fixed in `e2e/run.sh` + `.env.example` note |
-| F2 | `/modeles-de-contrats` 500s when the DB path is wrong (see F1) — page itself has no try/catch around Prisma | To fix: graceful empty-state instead of 500 |
+| F2 | `/modeles-de-contrats` 500s when the DB path is wrong (see F1) — page itself has no try/catch around Prisma | **Fixed**: try/catch + French empty-state card; same class fixed on `/docs/legal` (verified 200 + empty state with a broken `DATABASE_URL`) |
 | F3 | `next.config.ts` has `typescript.ignoreBuildErrors: true` | Out of scope this cycle (tsc currently clean; tracked for next cycle) |
 | F4 | No public signer-facing signing page yet (recipients get queued mail only) — limits E2E to send/void/verify, no sign-step | Logged as product gap, next cycle |
 
@@ -148,6 +148,23 @@ flows use hyphenated strings; see `e2e/README.md`.
 3. **Visual regression** (screenshot diffing) for marketing surfaces.
 4. Remove `ignoreBuildErrors` (F3) and add `tsc --noEmit` gate to CI.
 5. Performance budget: LCP check on `/` and `/marketing` in CI.
+
+## 6b. Re-validation & hardening (second pass, fresh environment)
+
+The suite was re-validated from scratch in a clean sandbox (fresh `bun
+install`, committed `db/custom.db`, cold dev server):
+
+- **18/18 flows green**, including the previously flaky marketing flow.
+- Flake fixed for good: on a cold server the first navigation to a route
+  races the dev compiler (marketing CTA → `/welcome` once exceeded its 10s
+  wait). `e2e/run.sh` now warms the public routes after boot and
+  first-navigation waits are 30s.
+- Runner improvements: `run.sh` accepts multiple flow paths (run a group:
+  `bash e2e/run.sh e2e/flows/public/*.yaml`); same seed/warm-up/report
+  behavior as a full run.
+- Environment lesson (sandbox, not product): background process groups are
+  reaped ~5 minutes after spawn, which masqueraded as a hung flow. Run the
+  suite in the foreground (the normal `bun run test:e2e` path) or in chunks.
 
 ## 8. Definition of Done (this cycle)
 

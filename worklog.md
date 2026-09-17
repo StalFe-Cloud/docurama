@@ -218,3 +218,22 @@ Work Log:
 
 Stage Summary:
 - Branch e2e/maestro-suite carries the full Maestro browser E2E program: docs/IMPROVEMENT-PLAN.md, e2e/{seed.ts,run.sh,README.md,flows/**}, CI workflow, package scripts, plus three product bug fixes (detail-sheet crash, row-action propagation, dialog autofocus) and stable form-input ids. The suite is self-contained (own tenant/users/fixtures, wipes its writes, order-independent flows) and portable via MAESTRO_BASE_URL.
+
+---
+Task ID: 12
+Agent: Super Z (main)
+Task: Resume go-live on real code — user re-provided repo access; "use only the version from quality to continue your work for e2e/maestro-suite"
+
+Work Log:
+- Re-cloned the real repo with the user's PAT; verified branch e2e/maestro-suite sits directly on quality @ 298ce1d (the reconstruction incident never touched the remote: no pushes, no code changes — app code diff vs quality is only the suite's three bug fixes).
+- Rebuilt the environment from scratch in a fresh sandbox: bun install (874 pkgs), prisma generate, .env from .env.example, committed db/custom.db.
+- Diagnosed a false "hung flow": a stale production server from an earlier unrelated session was still answering on :3000 and the runner correctly reused it — flows were driving the wrong app. Killed it; run.sh then booted the real dev server.
+- Second failure mode found: this sandbox reaps backgrounded process groups ~5 minutes after spawn (logs stop mid-step, zero errors, no OOM). Reran the suite in supervised foreground chunks instead; the normal `bun run test:e2e` path is unaffected.
+- Full re-validation: 18/18 flows green on cold dev servers (admin 3, auth 5, public 5, workspace 5).
+- Caught and hardened one real flake: on a cold server the marketing CTA tap navigates to /welcome which cold-compiles; the 10s extendedWaitUntil raced it once. run.sh now warms the public routes after boot; first-navigation waits bumped to 30s; marketing flow re-verified green on cold boots.
+- Fixed improvement-plan item F2: /modeles-de-contrats had no try/catch around Prisma and 500'd on a DB hiccup; now degrades to a French empty-state card. Same class fixed on /docs/legal. Verified with a deliberately broken DATABASE_URL: both pages 200 + empty state; DB-bound API routes still fail honestly.
+- Runner upgrade: run.sh accepts multiple flow paths (bash e2e/run.sh e2e/flows/public/*.yaml) for grouped/chunked runs.
+- Docs updated: e2e/README.md (multi-flow usage, warm-up, cold-compile lesson), docs/IMPROVEMENT-PLAN.md (F2 fixed, §6b re-validation log). tsc --noEmit and eslint clean on all touched files.
+
+Stage Summary:
+- e2e/maestro-suite is go-live ready on real quality code: 18/18 green re-validated from a cold environment, F2 fixed (+docs/legal same class), cold-boot flake hardened away, runner and docs improved. Ready to merge into quality via PR.
