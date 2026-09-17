@@ -13,7 +13,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, ShieldX, FileQuestion, Search, ShieldCheck, Clock, ServerCog, Globe } from "lucide-react";
+import { BadgeCheck, ShieldX, FileQuestion, Search, ShieldCheck, Clock, ServerCog, Globe, ListTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ type VerifyResult =
         sha256: string; sealedAt: string; completedAt: string | null; conformance: string | null;
         pages: number; signerCount: number; verifiedDomain: string | null;
         instance: { label: string; firstSeenAt: string; attestationCount: number };
+        transparency?: { chainSeq: number | null; chainEntryHash: string | null; proof: string; checkpoint: string } | null;
       };
     };
 
@@ -181,6 +182,12 @@ function ResultPanel({ result }: { result: VerifyResult }) {
           <div><dt className="text-xs text-muted-foreground">Conformance</dt><dd className="font-medium">{att.conformance ?? "-"}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Signers on record</dt><dd className="font-medium">{att.signerCount}</dd></div>
           <div><dt className="text-xs text-muted-foreground">Attestations from this instance</dt><dd className="font-medium">{att.instance.attestationCount}</dd></div>
+          {att.transparency?.chainSeq != null && (
+            <div>
+              <dt className="text-xs text-muted-foreground">Transparency registry</dt>
+              <dd className="font-medium">Entry #{att.transparency.chainSeq} in the public append-only log</dd>
+            </div>
+          )}
           <div className="sm:col-span-2">
             <dt className="text-xs text-muted-foreground">SHA-256 digest (as attested)</dt>
             <dd className="break-all font-mono text-xs">{att.sha256}</dd>
@@ -189,6 +196,13 @@ function ResultPanel({ result }: { result: VerifyResult }) {
         {att.verifiedDomain && (
           <p className="flex items-center gap-2 text-xs font-medium text-primary-deep">
             <Globe className="h-3.5 w-3.5" aria-hidden /> Sender domain verified via DNS TXT: {att.verifiedDomain}
+          </p>
+        )}
+        {att.transparency?.chainSeq != null && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ListTree className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+            Witnessed in the append-only transparency log — inclusion proof and signed
+            checkpoint at <span className="font-mono">/api/transparency/proof/{result.code}</span>
           </p>
         )}
         <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">

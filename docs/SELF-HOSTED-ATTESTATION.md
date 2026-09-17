@@ -87,10 +87,19 @@ checks attestations:
   "attestation": {
     "sha256": "…", "sealedAt": "…", "completedAt": "…", "conformance": "B-T",
     "pages": 5, "signerCount": 2, "verifiedDomain": "mail.company.com",
-    "instance": { "label": "Company SAS", "firstSeenAt": "…", "attestationCount": 17 }
+    "instance": { "label": "Company SAS", "firstSeenAt": "…", "attestationCount": 17 },
+    "transparency": {
+      "chainSeq": 12, "chainEntryHash": "…",
+      "proof": "/api/transparency/proof/DOC-XXXXXXXX",
+      "checkpoint": "/api/transparency/checkpoint"
+    }
   }
 }
 ```
+
+The `transparency` block is present whenever the pushing instance carries a
+chain claim (all current instances; `null` only for pushes predating the
+registry) — see `docs/TRANSPARENCY-LOG.md`.
 
 The UI renders it distinctly — "Verified — attested by a self-hosted Docurama
 instance" — and says plainly what the portal holds (the pushed fingerprint)
@@ -115,10 +124,20 @@ and what it does not (the document).
 1. **License-signed keys**: the Enterprise license flow issues
    Docurama-signed attestation keys — the portal verifies a real chain
    instead of TOFU. Natural next step once licensing exists.
-2. **Transparency registry**: append-only public log of registered keys and
-   attestations (certificate-transparency style) — makes TOFU auditable.
+2. **Transparency registry — SHIPPED**: every attestation now carries a chain
+   claim, the receiver refuses re-anchored fingerprints (409 Chain rewrite
+   detected), and the portal runs a public append-only log with signed
+   checkpoints and per-code inclusion proofs
+   (`docs/TRANSPARENCY-LOG.md`). What remains future work is *third-party*
+   witnessing (Sigstore Rekor — free, ~1–2 weeks) and license-signed keys.
 3. **Offline fallback** (already shipped): the evidence pack + `verify.html`
-   needs no portal at all — the firewall-proof path.
+   needs no portal at all — the firewall-proof path, now including the full
+   offline chain verification.
+
+The complete cost ladder (TOFU $0 → Rekor $0 → AATL ~$300–600/yr per cert →
+AATL service ~$10k+/yr → own AATL $50–150k/yr → eIDAS QTSP €100–300k) is
+spelled out in `docs/TRANSPARENCY-LOG.md` — the free tiers are the roadmap
+trust model; the paid tiers are revenue-triggered upgrades, not requirements.
 
 ## Test coverage
 
@@ -126,8 +145,13 @@ and what it does not (the document).
   TOFU registration, idempotent re-push, tampered signature (400), stolen
   thumbprint (400), pinned-key swap (400), cross-instance code claim (409),
   and the verify engine serving `VERIFIED_ATTESTED`.
+- `e2e/transparency.test.ts` covers the registry layer: chain-claim
+  validation, commitment mismatch (400), inconsistent entry hash (400),
+  **chain rewrite detection (409)**, idempotent no-grow, signed checkpoint
+  verification, inclusion proofs for the seeded fixture, and tamper paths.
 - `e2e/seed.ts` fixtures a realistic remote instance ("Acme Corp
-  (self-hosted fixture)", DNS-verified `acme-corp.example`) for the
-  `public/verify-attested.yaml` Maestro flow.
+  (self-hosted fixture)", DNS-verified `acme-corp.example`, real chain claim,
+  witnessed at portal log entry #1) for the `public/verify-attested.yaml`
+  Maestro flow.
 - End-to-end push (seal → sign → POST → registry) is exercised by the
   signer-journey suite when `EVIDENCE_PORTAL_URL` points at the app itself.

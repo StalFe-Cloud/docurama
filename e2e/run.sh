@@ -85,10 +85,10 @@ if [[ "${E2E_SKIP_TSC:-0}" != "1" ]]; then
   bunx tsc --noEmit || { echo "!! tsc failed — fix type errors first"; exit 1; }
 fi
 
-# ── 2c. API-layer + evidence-layer suites ────────────────────────────────────
+# ── 2c. API-layer + evidence-layer + transparency-layer suites ──────────────
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
-  echo "── e2e: API-layer + evidence-layer tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts || { echo "!! API/evidence tests failed"; exit 1; }
+  echo "── e2e: API-layer + evidence-layer + transparency-layer tests"
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts || { echo "!! API/evidence/transparency tests failed"; exit 1; }
 fi
 
 # ── 3. Discover flows and run them ────────────────────────────────────────────

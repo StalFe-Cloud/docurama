@@ -33,3 +33,12 @@ tags:
 # The honest labeling: fingerprint only, no local document claim
 - assertVisible: "Signers on record"
 - assertVisible: "SHA-256 digest (as attested)"
+
+# Transparency registry: the fixture is witnessed in the append-only log
+- assertVisible: "Transparency registry"
+- assertVisible: "Entry #1 in the public append-only log"
+- scrollUntilVisible:
+    element: " ?/api/transparency/proof/DOC-E2EATST ?"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: " ?/api/transparency/proof/DOC-E2EATST ?"

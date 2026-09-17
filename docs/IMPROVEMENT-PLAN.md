@@ -262,3 +262,52 @@ install`, committed `db/custom.db`, cold dev server):
 - [x] All flows green against the dev server in one `bun run test:e2e` (18/18)
 - [x] Findings fixed or logged (§5/§6) — 3 product bugs fixed, tsc + eslint clean
 - [x] Worklog updated; PR ready for review into `quality`
+
+## 7c. Cycle 4 — Transparency registry (2026-09-17)
+
+Branch `feat/transparency-log` off `quality`. Closes the last recommended
+trust-layer item from the cost review ("free tier now: self-CA + transparency
+proofs + fingerprint UX; AATL/eIDAS documented as paid upgrade paths"):
+
+- **Miniature Certificate Transparency, zero external services**
+  (`src/lib/transparency.ts`, `docs/TRANSPARENCY-LOG.md`):
+  - *Instance chain* (`TransparencyEntry`, per tenant): every sealed envelope
+    appends a hash-chained entry committing to its seal fingerprint
+    (code + SHA-256 + sealedAt + conformance + pages + signerCount). Appends
+    at seal time (post-commit — appending inside the seal transaction
+    deadlocks on SQLite's write lock; found and fixed via signer-journey),
+    idempotent per (tenant, envelope, commitment), lazy self-healing for
+    pre-registry envelopes.
+  - *Portal log* (`PortalLogEntry`, global): every accepted attestation is
+    witnessed in the portal's own append-only chain. **Rewrite detection**:
+    same code + same digest at a different chain position → `409 Chain
+    rewrite detected`. Idempotent re-pushes do not grow the log.
+  - *Signed checkpoints* (`PortalKey`): `GET /api/transparency/checkpoint`
+    serves a signed head anyone can monitor (poll, pin keyFingerprint TOFU,
+    keep every checkpoint — a shrinking log is provable). Inclusion proofs at
+    `GET /api/transparency/proof/{code}`.
+- **Claims ride inside signatures**: the chain claim is part of the signed
+  attestation payload, so it cannot be stripped or replayed at another
+  position; the receiver recomputes both the commitment hash and the entry
+  hash (400 on either mismatch).
+- **Evidence packs carry inclusion proofs**: manifest gains a `transparency`
+  block (entry + segment to head + checkpoint signed by the evidence key);
+  `verify.html` section 4 re-hashes the whole chain offline in the browser —
+  including the first segment entry (a rewritten genesis `prevHead` cannot
+  smuggle in a different history). Proven in real Chromium by the extended
+  `scripts/verify-offline-check.ts`: two VALID banners, 7/7 artifacts.
+- **Verify UIs** cite the registry: attested results show "Entry #N in the
+  public append-only log" + proof URL (public portal + in-app tool + v1 API).
+- **Cost ladder documented** (`docs/TRANSPARENCY-LOG.md`): TOFU $0 → this
+  registry $0 → Sigstore Rekor witnessing $0 (~1–2 wks, future) → self-hosted
+  Trillian ~$5–20/mo → AATL cert ~$300–600/yr → AATL service ~$10k+/yr → own
+  AATL $50–150k/yr → eIDAS QTSP €100–300k. Position: the free tiers ARE the
+  trust model; paid tiers are revenue-triggered upgrades.
+- **Tests**: `e2e/transparency.test.ts` (13 tests — pack block verification
+  incl. commitment recompute from manifest-only fields, tampered commitment,
+  rewritten segment link, receiver claim validation, rewrite 409, idempotent
+  no-grow, checkpoint signature, seeded-fixture inclusion proof + tamper);
+  suites now 39 tests across 3 files; seed fixture upgraded with a real chain
+  claim + portal-log witnessing; `verify-attested.yaml` asserts the registry
+  lines. Full gates: tsc/eslint/build clean, 24/24 Maestro flows, 39/39
+  tests, offline verifier PASS in Chromium.

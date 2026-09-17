@@ -57,19 +57,29 @@ async function main() {
 
     await page.setInputFiles("#files", names.map((n) => join(filesDir, n)));
 
-    // 4. Wait for the verdict banner + table
+    // 4. Wait for the verdict banners + table. Two banners are expected:
+    //    the manifest signature, then the transparency-registry chain check.
     await page.waitForSelector(".banner", { timeout: 15000 });
     await page.waitForSelector("table tbody tr", { timeout: 15000 });
-    const bannerText = (await page.textContent(".banner")) ?? "";
+    await page.waitForFunction(
+      () => document.querySelectorAll(".banner").length >= 2,
+      { timeout: 15000 },
+    ).catch(() => undefined); // older packs (pre-registry) have only one
+    const banners = await page.locator(".banner").allTextContents();
+    const bannerText = banners.join("\n");
     const okRows = await page.locator(".tag.ok").count();
     const badRows = await page.locator(".tag.bad").count();
     const rows = await page.locator("table tbody tr").count();
 
-    console.log(`banner: ${bannerText.trim()}`);
+    for (const b of banners) console.log(`banner: ${b.trim()}`);
     console.log(`artifact rows: ${rows} · OK: ${okRows} · BAD: ${badRows}`);
     if (errors.length) console.log("page errors:", errors);
 
-    const pass = bannerText.includes("VALID") && badRows === 0 && okRows === rows && rows > 0 && errors.length === 0;
+    const pass =
+      banners.length >= 2 &&
+      banners.every((b) => b.includes("VALID")) &&
+      bannerText.includes("Registre de transparence VALIDE") &&
+      badRows === 0 && okRows === rows && rows > 0 && errors.length === 0;
     console.log(pass ? "OFFLINE VERIFIER: PASS" : "OFFLINE VERIFIER: FAIL");
     process.exitCode = pass ? 0 : 1;
   } finally {

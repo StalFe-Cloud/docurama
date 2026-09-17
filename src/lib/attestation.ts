@@ -26,6 +26,7 @@
 import { db } from "@/lib/db";
 import { canonicalJson } from "@/lib/canonical-json";
 import { getOrCreateEvidenceKey, signPayload, certThumbprint } from "@/lib/evidence-key";
+import { appendSealCommitment, claimFromEntry, type SealCommitment, type TransparencyClaim } from "@/lib/transparency";
 
 export const ATTESTATION_FORMAT = "docurama-attestation";
 export const ATTESTATION_VERSION = 1;
@@ -46,6 +47,10 @@ export type AttestationPayload = {
   publicKeyPem: string;
   certificatePem: string;
   keyThumbprint: string;
+  /** Chain position of this seal in the tenant's append-only transparency log.
+   *  Null only for pre-registry envelopes pushed before the feature existed —
+   *  today every push carries one (lazily appended if the seal predates it). */
+  transparency: TransparencyClaim | null;
 };
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
@@ -57,6 +62,22 @@ export async function buildAttestation(envelopeId: string): Promise<{ payload: A
     include: { tenant: { select: { name: true } }, recipients: true },
   });
   if (!e || e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) return null;
+
+  const signerCount = e.recipients.filter((r) => r.role === "SIGNER" && r.status === "SIGNED").length;
+
+  // Append-only transparency chain: the seal commitment is chained (idempotently —
+  // same envelope + same fingerprint reuses its entry) BEFORE the payload is
+  // signed, so the signature is bound to the chain position and cannot be
+  // replayed at a different one.
+  const commitment: SealCommitment = {
+    code: e.publicCode,
+    sha256: e.sha256,
+    sealedAt: e.sealedAt.toISOString(),
+    conformance: e.conformanceLevel,
+    pages: e.pages,
+    signerCount,
+  };
+  const entry = await appendSealCommitment({ tenantId: e.tenantId, envelopeId: e.id, commitment });
 
   const key = await getOrCreateEvidenceKey(e.tenantId);
   const payload: AttestationPayload = {
@@ -70,11 +91,12 @@ export async function buildAttestation(envelopeId: string): Promise<{ payload: A
       completedAt: iso(e.completedAt),
       conformance: e.conformanceLevel,
       pages: e.pages,
-      signerCount: e.recipients.filter((r) => r.role === "SIGNER" && r.status === "SIGNED").length,
+      signerCount,
     },
     publicKeyPem: key.publicKeyPem,
     certificatePem: key.certificatePem,
     keyThumbprint: certThumbprint(key.certificatePem),
+    transparency: claimFromEntry(entry),
   };
   return { payload, signature: signPayload(key.privateKeyPem, payload) };
 }
