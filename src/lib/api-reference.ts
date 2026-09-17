@@ -136,23 +136,33 @@ certificate/evidence-key.pem`,
       },
       {
         method: "GET", path: "/api/transparency/checkpoint", auth: "none",
-        summary: "Signed checkpoint of the portal's append-only attestation log — poll it, pin keyFingerprint (TOFU), keep every checkpoint: a shrinking or re-anchored log is provable (see docs/TRANSPARENCY-LOG.md)",
+        summary: "Signed checkpoint of the portal's append-only attestation log — poll it, pin keyFingerprint (TOFU), keep every checkpoint: a shrinking or re-anchored log is provable. When a witness block is present, the portal key's fingerprint is anchored in Sigstore Rekor (neutral third-party log) — verify the statement signature under the checkpoint key (see docs/TRANSPARENCY-LOG.md)",
         response: `{
   "log": { "size": 214, "head": "a1b2…" },
   "checkpoint": { "format": "docurama-transparency-checkpoint", "size": 214, "head": "a1b2…",
-    "at": "2026-09-17T10:00:00Z", "signature": "base64 RSA-SHA-256", "publicKeyPem": "…", "keyFingerprint": "…" }
+    "at": "2026-09-17T10:00:00Z", "signature": "base64 RSA-SHA-256", "publicKeyPem": "…", "keyFingerprint": "…" },
+  "witness": { "rekorUrl": "https://rekor.sigstore.dev", "entryUUID": "…", "entryUrl": "…/log/entries?logIndex=N",
+    "logIndex": 2879324631, "treeSize": 2757420430, "integratedTime": "…",
+    "statement": { "format": "docurama-portal-key-witness-v1", "keyId": "portal", "keyFingerprint": "…", "createdAt": "…" },
+    "statementHash": "…", "signature": "base64 RSA-SHA-256", "inclusionProof": { … } }
 }`,
       },
       {
         method: "GET", path: "/api/transparency/proof/{code}", auth: "none",
-        summary: "Public inclusion proof that a code's attestation is committed in the append-only log: the log entry, the chain segment to the current head, and the signed checkpoint — re-hash it all, trust only the key you pinned",
+        summary: "Public inclusion proof that a code's attestation is committed in the append-only log: the log entry, the chain segment to the current head, the signed checkpoint, and (when present) the Rekor witness block — re-hash it all, trust only the key you pinned",
         response: `{
   "code": "DOC-XXXXXXXX",
   "entry": { "seq": 48, "code": "DOC-XXXXXXXX", "instanceThumbprint": "…", "sha256": "…", "instanceEntryHash": "…", "prevHead": "…", "head": "…", "at": "…" },
   "segment": [ … ],
   "truncated": false,
-  "checkpoint": { "format": "docurama-transparency-checkpoint", "size": 214, "head": "…", "signature": "…", "publicKeyPem": "…" }
+  "checkpoint": { "format": "docurama-transparency-checkpoint", "size": 214, "head": "…", "signature": "…", "publicKeyPem": "…" },
+  "witness": { … }
 }`,
+      },
+      {
+        method: "POST", path: "/api/transparency/witness", auth: "session",
+        summary: "Witness the portal transparency key in Sigstore Rekor now (platform-admin; idempotent per key generation; audited). Firewalled deployments return the reason and keep serving TOFU checkpoints. GET returns the current witness state without triggering anything",
+        response: `{ "ok": true, "witnessed": true, "witness": { "entryUUID": "…", "logIndex": 2879324631, … } }`,
       },
     ],
   },

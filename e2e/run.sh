@@ -55,7 +55,12 @@ if [[ "${E2E_START_SERVER:-1}" == "1" ]]; then
     echo "── e2e: dev server already answering at $BASE_URL — reusing it"
   else
     echo "── e2e: no server at $BASE_URL — starting one"
-    (bun run dev > /tmp/docurama-e2e-dev.log 2>&1) &
+    # Hermetic: the suite's server never egresses to the real Rekor log
+    # (the lazy checkpoint witness would otherwise depend on external
+    # reachability and leak test keys into the public log). rekor.test.ts
+    # drives the witness code paths in-process against a local mock.
+    REKOR_WITNESS="${E2E_REKOR_WITNESS:-off}" \
+      bun run dev > /tmp/docurama-e2e-dev.log 2>&1 &
     SERVER_PID=$!
     for i in $(seq 1 60); do
       if curl -sf -o /dev/null "$BASE_URL/login"; then break; fi
@@ -103,7 +108,7 @@ fi
 # ── 2c. API-layer + evidence-layer + transparency-layer suites ──────────────
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
   echo "── e2e: API-layer + evidence-layer + transparency-layer tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts || { echo "!! API/evidence/transparency tests failed"; exit 1; }
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts || { echo "!! API/evidence/transparency tests failed"; exit 1; }
 fi
 
 # ── 3. Discover flows and run them ────────────────────────────────────────────

@@ -365,3 +365,37 @@ both show the document).
   signer-journey verifies on the public portal); signer-journey drives the
   pager. Gates: tsc/eslint clean, **25/25 flows**, 45/45 tests across 3
   files.
+
+## 7e. Cycle 6 — Rekor witnessing of the portal key (2026-09-17)
+
+Branch `feat/rekor-witnessing` off `quality`. Promotes the "future" rung of
+the trust ladder to shipped, at €0: neutral third-party anchoring of the
+TOFU pin.
+
+- **`src/lib/rekor.ts`**: the portal transparency key signs a statement
+  committing to its own fingerprint
+  (`docurama-portal-key-witness-v1`), the statement is hashed + signed as a
+  `hashedrekord` and submitted to Rekor (public OpenSSF log — free, no
+  account). The entry (UUID, logIndex, integratedTime, inclusion proof,
+  statement, signature) is stored (`RekorWitness`, one row per key
+  generation) and served in a `witness` block from the checkpoint and proof
+  endpoints. A substituted key becomes publicly contradicted. The
+  hashedrekord shape was validated with a live submission to
+  rekor.sigstore.dev (201 + inclusion proof, tree size 2.75B) before wiring.
+- **Zero-config + graceful degradation**: the first checkpoint after boot
+  triggers a rate-limited lazy attempt (in-process cooldown); firewalled or
+  offline deployments keep serving TOFU checkpoints (`pushed:false` with the
+  reason, never a throw). `REKOR_API_URL` points self-hosters at a private
+  log; `REKOR_WITNESS=off` disables entirely. Platform-admin op
+  `POST /api/transparency/witness` (audited) for manual retries; GET reads
+  the state.
+- **Monitor recipe documented** (`docs/TRANSPARENCY-LOG.md`): re-hash the
+  statement, verify the signature under the checkpoint key, check the
+  fingerprint self-commitment, confirm the entry in the cited log.
+- **Tests**: `e2e/rekor.test.ts` (10 — happy path with a full monitor-side
+  re-verification from the submitted hashedrekord, idempotency/no log
+  growth, tampered statement, lazy path, offline degradation, disabled,
+  checkpoint/proof wiring, admin-only op) against a local mock Rekor
+  (`Bun.serve`) — hermetic, no egress; the suite's dev server runs with
+  `REKOR_WITNESS=off`. Suites now 55 tests across 4 files. Gates: tsc/
+  eslint clean, 25/25 flows.
