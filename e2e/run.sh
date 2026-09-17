@@ -23,20 +23,35 @@ BASE_URL="${MAESTRO_BASE_URL:-http://127.0.0.1:3000}"
 SCREEN="${MAESTRO_SCREEN:-1440x1000}"
 FLOWS_DIR="$ROOT/e2e/flows"
 
-# ── 0. Sanity: DATABASE_URL must point at the repo db. ────────────────────────
+# ── 0. Sanity + isolation: the suite runs on a COPY of the committed db. ─────
 # A globally exported DATABASE_URL silently overrides .env and every DB route
-# 500s (found the hard way). Pin it unless the caller overrode E2E_DATABASE_URL.
+# 500s (found the hard way). Beyond pinning, the suite writes a LOT (events,
+# seals, seed cycles) — writing to db/custom.db INSIDE the repo makes
+# Turbopack's dev watcher recompile routes mid-suite, which can tear down an
+# in-flight page's hydration (observed as a dead /sign page ~20 flows in on
+# 2-CPU runners). A db outside the tree is invisible to the watcher, and the
+# committed demo/fixture db stays pristine.
+#
+#   E2E_DATABASE_URL set        → that target, verbatim (CI / custom setups)
+#   foreign dev server running  → the repo db it was booted with
+#   otherwise (normal case)     → fresh /tmp copy of the committed db
+SERVER_ALREADY_UP=0
+curl -sf -o /dev/null "$BASE_URL/login" 2>/dev/null && SERVER_ALREADY_UP=1
 if [[ -n "${E2E_DATABASE_URL:-}" ]]; then
   export DATABASE_URL="$E2E_DATABASE_URL"
-else
+elif [[ "$SERVER_ALREADY_UP" == "1" ]]; then
   export DATABASE_URL="file:$ROOT/db/custom.db"
+else
+  E2E_DB_COPY="/tmp/docurama-e2e.db"
+  cp -f "$ROOT/db/custom.db" "$E2E_DB_COPY"
+  export DATABASE_URL="file:$E2E_DB_COPY"
 fi
-echo "── e2e: DATABASE_URL=$DATABASE_URL"
+echo "── e2e: DATABASE_URL=$DATABASE_URL (server ${SERVER_ALREADY_UP:+already}up: $SERVER_ALREADY_UP)"
 
 # ── 1. Dev server: reuse a running one, or boot a fresh instance ─────────────
 SERVER_PID=""
 if [[ "${E2E_START_SERVER:-1}" == "1" ]]; then
-  if curl -sf -o /dev/null "$BASE_URL/login"; then
+  if [[ "$SERVER_ALREADY_UP" == "1" ]]; then
     echo "── e2e: dev server already answering at $BASE_URL — reusing it"
   else
     echo "── e2e: no server at $BASE_URL — starting one"
@@ -68,7 +83,7 @@ trap cleanup EXIT
 # straight after a cold boot can race the compiler (seen on the marketing
 # CTA → /welcome). Touching the public surfaces once here removes that race
 # for every flow. Non-fatal: warming only triggers compilation.
-for route in / /login /welcome /modeles-de-contrats /verify /docs /sign; do
+for route in / /login /welcome /modeles-de-contrats /verify /docs /sign /sign/e2e-warmup-not-a-real-token; do
   curl -s -o /dev/null --max-time 180 "$BASE_URL$route" || true
 done
 echo "── e2e: public routes warmed"

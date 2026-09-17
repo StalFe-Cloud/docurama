@@ -46,6 +46,12 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
     const signers = env.recipients.filter((r) => r.role === "SIGNER");
     const ahead = signers.find((r) => r.status === "PENDING" || r.status === "DELIVERED");
 
+    // The attached document, when there is one — shown to signers as an
+    // embedded page-by-page preview (they must see what they are signing).
+    const document = env.document
+      ? { filename: env.document.filename, pages: env.document.pageCount, sha256: env.document.sha256 }
+      : null;
+
     if (["VOIDED", "DECLINED", "EXPIRED"].includes(env.status)) {
       state = {
         phase: "terminal", status: env.status,
@@ -62,6 +68,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         phase: "signed", title: env.title, code: env.publicCode,
         tenantName: env.tenant.name, recipientName: recipient.name,
         sealed: env.status === "COMPLETED",
+        document: env.status === "COMPLETED" ? null : document,
       };
     } else if (env.status === "COMPLETED") {
       state = {
@@ -72,6 +79,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
       state = {
         phase: "wait", title: env.title, code: env.publicCode,
         tenantName: env.tenant.name, aheadName: ahead.name,
+        document,
       };
     } else {
       // Anti-phishing trust signal: when the sender's email domain is
@@ -96,9 +104,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         recipientName: recipient.name, recipientEmail: recipient.email,
         signers: signers.map((r) => ({ name: r.name, email: r.email, status: r.status, order: r.order })),
         bodyMarkdown: env.template?.bodyMarkdown || null,
-        document: env.document
-          ? { filename: env.document.filename, pages: env.document.pageCount, sha256: env.document.sha256 }
-          : null,
+        document,
       };
     }
   }

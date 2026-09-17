@@ -17,6 +17,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   ArrowRight, BadgeCheck, BellRing, FileSignature, FileCheck2, Fingerprint,
   Lock, Menu, X, PenTool, ScrollText, ShieldCheck, Timer, MessageSquare,
@@ -189,11 +190,14 @@ export function MarketingPage() {
           </div>
           <div className="hidden items-center gap-2 md:flex">
             <LanguageSwitcher />
-            <Button variant="ghost" size="sm" onClick={() => { window.location.assign("/login"); }}>
-              {t("nav.signIn", "Sign in")}
+            {/* Real links (asChild + Link), not onClick navigations: the CTAs
+                keep working before hydration and for assistive tech, and the
+                in-app transition stays client-side once hydrated. */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/login">{t("nav.signIn", "Sign in")}</Link>
             </Button>
-            <Button size="sm" onClick={() => { window.location.assign("/welcome"); }}>
-              {t("nav.startTrial", "Start free trial")}
+            <Button size="sm" asChild>
+              <Link href="/welcome">{t("nav.startTrial", "Start free trial")}</Link>
             </Button>
           </div>
           <button
@@ -215,11 +219,11 @@ export function MarketingPage() {
               </a>
             ))}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => { window.location.assign("/login"); }}>
-                {t("nav.signIn", "Sign in")}
+              <Button variant="outline" className="flex-1" asChild>
+                <Link href="/login">{t("nav.signIn", "Sign in")}</Link>
               </Button>
-              <Button className="flex-1" onClick={() => { window.location.assign("/welcome"); }}>
-                {t("nav.startTrial", "Start free trial")}
+              <Button className="flex-1" asChild>
+                <Link href="/welcome">{t("nav.startTrial", "Start free trial")}</Link>
               </Button>
             </div>
           </div>
@@ -247,11 +251,13 @@ export function MarketingPage() {
               {t("hero.subtitle", "EU-built eSignatures with cryptographic evidence: X.509 sealing, RFC 3161 timestamps and an audit trail built for review.")}
             </p>
             <div className="hero-in mt-7 flex flex-wrap justify-center gap-3" style={{ animationDelay: ".16s" }}>
-              <Button size="lg" onClick={() => { window.location.assign("/welcome"); }}>
-                {t("hero.startFree", "Start free trial")} <ArrowRight className="h-4 w-4" aria-hidden />
+              <Button size="lg" asChild>
+                <Link href="/welcome">
+                  {t("hero.startFree", "Start free trial")} <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
               </Button>
-              <Button size="lg" variant="outline" onClick={() => { window.location.assign("/verify"); }}>
-                {t("hero.verifyDoc", "Verify a document")}
+              <Button size="lg" variant="outline" asChild>
+                <Link href="/verify">{t("hero.verifyDoc", "Verify a document")}</Link>
               </Button>
             </div>
           </div>
@@ -477,12 +483,10 @@ export function MarketingPage() {
                     </li>
                   ))}
                 </ul>
-                <Button className="mt-6 w-full" variant={p.highlight ? "default" : "outline"}
-                  onClick={() => {
-                    if (p.code === "ENTERPRISE") window.location.assign("mailto:sales@docurama.eu");
-                    else window.location.assign("/welcome");
-                  }}>
-                  {p.code === "ENTERPRISE" ? "Talk to sales" : "Start free trial"}
+                <Button className="mt-6 w-full" variant={p.highlight ? "default" : "outline"} asChild>
+                  {p.code === "ENTERPRISE"
+                    ? <a href="mailto:sales@docurama.eu">Talk to sales</a>
+                    : <Link href="/welcome">Start free trial</Link>}
                 </Button>
               </div>
             ))}
@@ -525,8 +529,10 @@ export function MarketingPage() {
             </p>
           </div>
           <div className="shrink-0">
-            <Button size="lg" onClick={() => { window.location.assign("/welcome"); }}>
-              Start free trial <ArrowRight className="h-4 w-4" aria-hidden />
+            <Button size="lg" asChild>
+              <Link href="/welcome">
+                Start free trial <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
             </Button>
           </div>
         </div>

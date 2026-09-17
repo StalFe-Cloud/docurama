@@ -129,3 +129,84 @@ describe("public signing endpoint (/api/sign)", () => {
     expect(status).toBe(400);
   });
 });
+
+describe("signer document preview (/api/sign/{token}/pages/{n})", () => {
+  // DOC-E2E0001 (SENT, signer PENDING) carries a seeded 3-page PDF.
+  const SIGNER = "e2e-fixed-signer-token-0000000000000001";
+  const CC = "e2e-fixed-cc-token-0000000000000001";
+  const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47]; // ‰PNG
+
+  const fetchPage = async (path: string) => {
+    const res = await fetch(`${BASE}${path}`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return { status: res.status, contentType: res.headers.get("content-type"), buf };
+  };
+
+  test("renders page 1 as a real PNG for a valid signer token", async () => {
+    const { status, contentType, buf } = await fetchPage(`/api/sign/${SIGNER}/pages/1`);
+    expect(status).toBe(200);
+    expect(contentType).toBe("image/png");
+    expect(Array.from(buf.slice(0, 4))).toEqual(PNG_MAGIC);
+    expect(buf.byteLength).toBeGreaterThan(2000); // not a blank render
+  });
+
+  test("renders the last page and clamps an absurd dpi server-side", async () => {
+    const a = await fetchPage(`/api/sign/${SIGNER}/pages/3`);
+    expect(a.status).toBe(200);
+    expect(Array.from(a.buf.slice(0, 4))).toEqual(PNG_MAGIC);
+
+    const b = await fetchPage(`/api/sign/${SIGNER}/pages/1?dpi=99999`);
+    expect(b.status).toBe(200);
+    expect(Array.from(b.buf.slice(0, 4))).toEqual(PNG_MAGIC);
+  });
+
+  test("page out of range 404s, page 0 is invalid", async () => {
+    expect((await fetchPage(`/api/sign/${SIGNER}/pages/4`)).status).toBe(404);
+    expect((await fetchPage(`/api/sign/${SIGNER}/pages/0`)).status).toBe(400);
+  });
+
+  test("invalid token 404s without leaking which part failed", async () => {
+    const { status, buf } = await fetchPage(`/api/sign/definitely-not-a-real-token/pages/1`);
+    expect(status).toBe(404);
+    const body = JSON.parse(new TextDecoder().decode(buf)) as { error?: string };
+    expect(String(body.error ?? "")).toContain("not valid");
+  });
+
+  test("CC recipients cannot preview (403) — they get the completed copy", async () => {
+    const { status } = await fetchPage(`/api/sign/${CC}/pages/1`);
+    expect(status).toBe(403);
+  });
+
+  test("DOCUMENT_VIEWED is recorded once per recipient (evidence, idempotent)", async () => {
+    // First render by a fresh recipient (only the seeded PENDING signer on
+    // DOC-E2E0001) must land exactly one event; a second page flip must not
+    // grow the ledger.
+    const direct = new (await import("@prisma/client")).PrismaClient({
+      datasources: { db: { url: process.env.DATABASE_URL ?? "file:../db/custom.db" } },
+    });
+    try {
+      const countEvents = async () => {
+        const env = await direct.envelope.findUnique({
+          where: { publicCode: "DOC-E2E0001" },
+          select: { id: true },
+        });
+        if (!env) throw new Error("fixture DOC-E2E0001 missing — seed first");
+        return direct.envelopeEvent.count({
+          where: { envelopeId: env.id, action: "DOCUMENT_VIEWED", detail: { contains: "fixture-signer@example.com" } },
+        });
+      };
+
+      const before = await countEvents();
+      if (before > 0) {
+        // A prior suite run already viewed the preview on this db — the
+        // idempotency claim is then: still exactly one event after more hits.
+        expect(before).toBe(1);
+      }
+      expect((await fetchPage(`/api/sign/${SIGNER}/pages/2`)).status).toBe(200);
+      expect((await fetchPage(`/api/sign/${SIGNER}/pages/3`)).status).toBe(200);
+      expect(await countEvents()).toBe(1);
+    } finally {
+      await direct.$disconnect();
+    }
+  });
+});

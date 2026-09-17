@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Markdown from "react-markdown";
 import {
   BadgeCheck, Ban, CheckCircle2, ChevronLeft, Clock, FileSignature, FileText,
@@ -31,15 +32,16 @@ import {
 } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/brand/logo";
 import { PortalProviders } from "@/components/portal/providers";
+import { SignDocumentPreview, type SignDocument } from "@/components/marketing/sign-document-preview";
 import { cn } from "@/lib/utils";
 
 export type SignPageState =
   | { phase: "invalid" }
   | { phase: "terminal"; status: string; title: string; code: string; voidReason: string | null }
   | { phase: "cc"; title: string; code: string; tenantName: string; recipientName: string }
-  | { phase: "signed"; title: string; code: string; tenantName: string; recipientName: string; sealed: boolean }
+  | { phase: "signed"; title: string; code: string; tenantName: string; recipientName: string; sealed: boolean; document: SignDocument | null }
   | { phase: "completed"; title: string; code: string; tenantName: string }
-  | { phase: "wait"; title: string; code: string; tenantName: string; aheadName: string }
+  | { phase: "wait"; title: string; code: string; tenantName: string; aheadName: string; document: SignDocument | null }
   | {
       phase: "active";
       title: string; code: string; tenantName: string;
@@ -72,7 +74,10 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState<"sign" | "decline" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sealed, setSealed] = useState(false);
+  // Sealed starts from the SERVER truth: a signer revisiting their link after
+  // everyone signed must see the sealed state immediately, not a stale
+  // "still pending" (the local flag only flips it earlier for in-session signs).
+  const [sealed, setSealed] = useState(state.phase === "signed" ? state.sealed : false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const viewed = useRef(false);
@@ -201,6 +206,7 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
 
         {/* ── already signed ───────────────────────────────────────────── */}
         {phase === "signed" && signedState && (
+          <div className="space-y-6">
           <Card className="mx-auto max-w-lg text-center">
             <CardContent className="space-y-4 p-8">
               <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
@@ -224,14 +230,20 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                     can confirm the seal on the public portal, no account needed.
                   </p>
                   <Button size="sm" className="mt-3" asChild>
-                    <a href={`/verify?code=${encodeURIComponent(signedState.code)}`}>
+                    {/* Link, not a plain anchor: client-side navigation keeps the
+                        transition instant (no full reload) on the success screen. */}
+                    <Link href={`/verify?code=${encodeURIComponent(signedState.code)}`}>
                       <BadgeCheck className="h-4 w-4" aria-hidden /> Verify the seal
-                    </a>
+                    </Link>
                   </Button>
                 </div>
               )}
             </CardContent>
           </Card>
+          {state.phase === "signed" && state.document && state.document.pages > 0 && (
+            <SignDocumentPreview token={token} document={state.document} />
+          )}
+          </div>
         )}
 
         {/* ── completed by everyone (late visitor) ──────────────────────── */}
@@ -245,7 +257,7 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                 Verify it with code <span className="font-mono">{state.code}</span>.
               </p>
               <Button size="sm" variant="outline" asChild>
-                <a href={`/verify?code=${encodeURIComponent(state.code)}`}>Open the verification portal</a>
+                <Link href={`/verify?code=${encodeURIComponent(state.code)}`}>Open the verification portal</Link>
               </Button>
             </CardContent>
           </Card>
@@ -253,17 +265,22 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
 
         {/* ── waiting for earlier signer ───────────────────────────────── */}
         {state.phase === "wait" && (
-          <Card className="mx-auto max-w-md text-center">
-            <CardContent className="space-y-3 p-8">
-              <Clock className="mx-auto h-10 w-10 text-amber-500" aria-hidden />
-              <h1 className="text-xl font-semibold">It is not your turn to sign yet</h1>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{state.aheadName}</span> signs before you on
-                {" "}<span className="font-medium text-foreground">{state.title}</span>.
-                Keep this link — it becomes active as soon as they have signed.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card className="mx-auto max-w-md text-center">
+              <CardContent className="space-y-3 p-8">
+                <Clock className="mx-auto h-10 w-10 text-amber-500" aria-hidden />
+                <h1 className="text-xl font-semibold">It is not your turn to sign yet</h1>
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">{state.aheadName}</span> signs before you on
+                  {" "}<span className="font-medium text-foreground">{state.title}</span>.
+                  Keep this link — it becomes active as soon as they have signed.
+                </p>
+              </CardContent>
+            </Card>
+            {state.document && state.document.pages > 0 && (
+              <SignDocumentPreview token={token} document={state.document} />
+            )}
+          </div>
         )}
 
         {/* ── active signing experience ────────────────────────────────── */}
@@ -333,6 +350,14 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                 </div>
               </CardContent>
             </Card>
+
+            {/* The document itself — page-by-page preview, so the signer
+                reviews the actual bytes before consenting. The metadata card
+                above stays as the integrity anchor; a rendering failure never
+                blocks signing (graceful degradation inside the component). */}
+            {state.document && state.document.pages > 0 && (
+              <SignDocumentPreview token={token} document={state.document} />
+            )}
 
             {/* Contract text (template-sent envelopes) */}
             {state.bodyMarkdown && (
@@ -469,9 +494,9 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
       <footer className="border-t bg-background">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-muted-foreground sm:px-6">
           <span>Docurama SAS · Paris, France · EU data residency</span>
-          <a href="/verify" className="inline-flex items-center gap-1 hover:text-foreground">
+          <Link href="/verify" className="inline-flex items-center gap-1 hover:text-foreground">
             <ChevronLeft className="h-3 w-3" aria-hidden /> Verify another document
-          </a>
+          </Link>
         </div>
       </footer>
     </div>
