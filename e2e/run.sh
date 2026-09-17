@@ -11,6 +11,9 @@
 #                      recipient row at the screen edge and taps misfire)
 #   E2E_SKIP_SEED=1    skip the seed step (flows need it for fixtures)
 #   E2E_START_SERVER=0 don't boot/stop a dev server (CI or remote targets)
+#   E2E_SKIP_VISUAL=1  skip the visual-regression file (no Chromium available)
+#   CHROME_BIN         explicit Chromium/Chrome path for e2e/visual.test.ts
+#   UPDATE_BASELINES=1 regenerate (don't compare) the visual baselines
 #
 # Exit code: 0 iff every flow passed.
 
@@ -105,10 +108,10 @@ if [[ "${E2E_SKIP_TSC:-0}" != "1" ]]; then
   bunx tsc --noEmit || { echo "!! tsc failed — fix type errors first"; exit 1; }
 fi
 
-# ── 2c. API-layer + evidence-layer + transparency-layer suites ──────────────
+# ── 2c. API-layer + evidence-layer + transparency-layer + MCP + visual suites ──
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
-  echo "── e2e: API-layer + evidence-layer + transparency-layer tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts || { echo "!! API/evidence/transparency tests failed"; exit 1; }
+  echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + visual tests"
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/mcp.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/MCP/visual tests failed"; exit 1; }
 fi
 
 # ── 3. Discover flows and run them ────────────────────────────────────────────

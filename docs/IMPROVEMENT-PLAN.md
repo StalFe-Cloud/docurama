@@ -173,10 +173,10 @@ the first two next-cycle items:
 ## 7. Next-Cycle Candidates
 
 1. ~~Signer journey E2E once the recipient signing page ships (F4).~~ **Done** (cycle 2).
-2. ~~API-level layer for v1 endpoints~~ **Done** (cycle 2, `e2e/api.test.ts`). Remaining: MCP endpoint tests, quota-402 test with a spent-plan key.
-3. **Visual regression** (screenshot diffing) for marketing surfaces.
+2. ~~API-level layer for v1 endpoints~~ **Done** (cycle 2, `e2e/api.test.ts`). ~~Remaining: MCP endpoint tests, quota-402 test with a spent-plan key.~~ **Done** (cycle 7 — `e2e/mcp.test.ts` + the spent-quota 402 in `e2e/api.test.ts`).
+3. ~~**Visual regression** (screenshot diffing) for marketing surfaces.~~ **Done** (cycle 7 — `e2e/visual.test.ts` + committed baselines).
 4. ~~Remove `ignoreBuildErrors` (F3) and add `tsc --noEmit` gate to CI.~~ **Done** (cycle 2).
-5. Performance budget: LCP check on `/` and `/marketing` in CI.
+5. ~~Performance budget: LCP check on `/` and `/marketing` in CI.~~ **Done** (cycle 7 — LCP measured on every public route, gated <6s on `/` and `/templates` inside `e2e/visual.test.ts`; dev-server budget, catches asset catastrophes).
 6. ~~**Evidence pack export** (roadmap #1): one-click ZIP per completed
    envelope (sealed document, ledger CSV, signed manifest).~~ **Done** (cycle 3,
    `docs/EVIDENCE-PACK.md` — plus bilingual certificate, offline verifier,
@@ -399,3 +399,64 @@ TOFU pin.
   (`Bun.serve`) — hermetic, no egress; the suite's dev server runs with
   `REKOR_WITNESS=off`. Suites now 55 tests across 4 files. Gates: tsc/
   eslint clean, 25/25 flows.
+
+## 7f. Cycle 7 — Signer-preview watermark, MCP/quota coverage, visual regression (2026-09-18)
+
+Branch `feat/cycle7-watermark-coverage` off `quality`. Three remaining
+next-cycle items, all €0 code work — executed as one hardening cycle:
+
+- **Per-recipient watermark on every signer-preview page**
+  (`src/lib/preview-watermark.ts`): three faint diagonal tiles carrying
+  "Prepared for {name} <{email}>" + envelope code + render date, drawn onto
+  the pdfium canvas before PNG encode via a new guarded `overlay` hook on
+  `renderPage` (an overlay failure degrades to a clean render, never a
+  failed preview). A leaked screenshot, print or forwarded copy of the
+  preview is now traceable to the exact recipient — pairing with the
+  DOCUMENT_VIEWED ledger event as evidence that *this* person was shown
+  *this* document (same posture as DocuSign). The workspace's own renderer
+  stays pristine; only signer-facing renders are personalised. Aesthetics
+  validated against a real render by a vision model (legible, DocuSign-
+  standard opacity, professional).
+- **Real environment bug found by the suite and fixed**: in environments
+  where fontconfig's generic `sans-serif` resolves to a face without Latin
+  coverage (this sandbox: Noto Color Emoji), @napi-rs/canvas `fillText`
+  **silently no-ops** while `measureText` still returns plausible numbers —
+  a naive watermark ships as nothing (or as the digits-only fragment of an
+  emoji face). The watermark now resolves a real family via a
+  `GlobalFonts.has()` cascade (DejaVu → Liberation → Arial → …), and the
+  production image installs `fontconfig + fonts-dejavu-core` (the runner
+  stage previously shipped **no fonts at all** — pdfjs text rendering of
+  system-font PDFs was equally affected).
+- **MCP server E2E** (`e2e/mcp.test.ts`, 15 tests): JSON-RPC handshake,
+  tools/list against the tenant allowlist, real tool execution on the seeded
+  fixtures (envelope_list/detail, document_verify VERIFIED + NOT_FOUND,
+  template_list), 401/403 gates, RPC error codes (-32601/-32602), and the
+  per-key rate limit (cold-bucket key → crisp 429 on request 3, config
+  restored in finally). Seed gains an MCP config (enabled, 4 tools,
+  120/min), a workspace template fixture and the dedicated rate key.
+- **Spent-plan quota 402** (`e2e/api.test.ts`): the seed spends an entire
+  STARTER month (25/25 envelopes) for the dedicated "E2E Quota" tenant;
+  the send path must refuse with 402 + "quota" and create nothing. Login
+  uses the session-bearer path (`/api/auth/login` → `Authorization:
+  Bearer`), which no test had exercised before.
+- **Visual regression smoke** (`e2e/visual.test.ts` + `e2e/baselines/`):
+  every public route screenshotted in a frozen deterministic context
+  (fixed 1280×800 viewport, reduced motion, all animations fast-forwarded
+  via `Animation.finish()`, Next dev overlay hidden, Europe/Paris timezone)
+  and diffed against committed baselines — per-pixel tolerance 25, ≤1.5%
+  of pixels may differ. Fail-only-on-drift: a route without a baseline is
+  baselined and passes; `UPDATE_BASELINES=1` regenerates deliberately.
+  Deterministic because Geist is a self-hosted webfont (next/font) — the
+  7 committed baselines re-diff at **0.00%** on a clean run. Chromium
+  discovery: `CHROME_BIN` (exported by CI) → ms-playwright cache →
+  `google-chrome` on PATH; `E2E_SKIP_VISUAL=1` is an honest skip. One
+  shared browser per file (per-route browsers deadlocked teardown in
+  constrained containers — found live, fixed).
+- **LCP budget** folded into the visual suite: measured on every route,
+  gated <6s on `/` and `/templates` (a dev-server budget — it exists to
+  catch a 30 MB hero asset, not to benchmark).
+- **Gates**: tsc/eslint clean, **82/82 tests** across 6 files (api 23,
+  evidence 14, transparency 13, rekor 10, mcp 15, visual 7), **25/25
+  Maestro flows**, visual determinism proven by two consecutive 0.00%
+  runs. run.sh wires the two new suites; `.github/workflows/e2e.yml`
+  exports `CHROME_BIN`.

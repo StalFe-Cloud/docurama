@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { jsonError } from "@/lib/serializers";
 import { documentPath } from "@/lib/document-store";
 import { renderPage, clampDpi } from "@/lib/docintel/text-extract";
+import { drawPreviewWatermark, watermarkFor } from "@/lib/preview-watermark";
 
 /**
  * Signer document preview — the page renderer behind /sign/{token}.
@@ -25,6 +26,12 @@ import { renderPage, clampDpi } from "@/lib/docintel/text-extract";
  * Every recipient's first successful render lands one DOCUMENT_VIEWED event
  * in the envelope ledger (idempotent per recipient) — evidence that the
  * document was actually shown, not just that the link was opened.
+ *
+ * Each page is watermarked "Prepared for {name} <{email}>" with the envelope
+ * code and render date (src/lib/preview-watermark.ts): a leaked screenshot,
+ * print or forwarded copy of the preview is traceable to the exact recipient
+ * it was prepared for. The workspace's own page renderer stays unwatermarked
+ * — the owner reviews the pristine document, signers get personalised copies.
  */
 
 export const dynamic = "force-dynamic";
@@ -72,7 +79,13 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       return jsonError("Document file not found on storage", 404);
     }
 
-    const png = await renderPage(new Uint8Array(fileBytes), pageNumber, dpi);
+    const png = await renderPage(new Uint8Array(fileBytes), pageNumber, dpi, (ctx, w, h) =>
+      drawPreviewWatermark(ctx, w, h, watermarkFor({
+        name: recipient.name,
+        email: recipient.email,
+        code: env.publicCode,
+      })),
+    );
 
     // Evidence: the document was actually shown to this signer before they
     // consented. Idempotent per recipient — the first successful page render
