@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2, Scale, Link2, QrCode } from "lucide-react";
+import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2, Scale, Link2, QrCode, FileArchive, ServerCog } from "lucide-react";
 import { apiGet, apiPost, apiUpload, ApiError } from "@/lib/client";
 import {
   Column, ConfirmDialog, CopyableCode, DataTable, PageHeader, StatusBadge, fmtDate, fmtRelative,
@@ -30,6 +30,7 @@ type EnvelopeRow = {
   id: string; publicCode: string; title: string; status: string; createdAt: string;
   createdBy: string; sealedAt: string | null; conformanceLevel: string | null; sha256: string | null;
   pages: number; lastRemindedAt: string | null; voidReason: string | null;
+  attestedAt: string | null; attestStatus: string | null; verifiedSenderDomain: string | null;
   recipients: Recipient[];
 };
 type EnvelopeDetail = {
@@ -358,13 +359,35 @@ export function UserDocuments() {
                       <span className="text-muted-foreground">Conformance</span>
                       <span>PAdES {env.conformanceLevel}</span>
                     </p>
+                    {env.verifiedSenderDomain && (
+                      <p className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Sender domain</span>
+                        <span className="font-medium text-primary-deep">{env.verifiedSenderDomain} · DNS TXT verified</span>
+                      </p>
+                    )}
                     <p className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-muted-foreground">SHA-256 digest</span>
                       {env.sha256 && <CopyableCode value={env.sha256} max={22} />}
                     </p>
+                    {env.attestedAt && (
+                      <p className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Public portal</span>
+                        <span className="flex items-center gap-1.5 font-medium text-primary-deep">
+                          <ServerCog className="h-3.5 w-3.5" aria-hidden /> fingerprint attested {fmtDate(env.attestedAt)}
+                        </span>
+                      </p>
+                    )}
                   </div>
+                  <a
+                    href={`/api/evidence-pack/${env.id}`}
+                    data-testid="evidence-pack-download"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <FileArchive className="h-4 w-4" aria-hidden /> Evidence pack (.zip)
+                  </a>
                   <p className="text-xs text-muted-foreground">
                     The digest is derived from the sealed file itself and can be re-verified at any time on the public portal.
+                    The pack adds a signed manifest, the full ledger, the bilingual certificate and an offline verifier.
                   </p>
                 </section>
               )}

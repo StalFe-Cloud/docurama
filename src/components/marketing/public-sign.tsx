@@ -44,6 +44,7 @@ export type SignPageState =
       phase: "active";
       title: string; code: string; tenantName: string;
       message: string | null; pages: number; senderName: string;
+      senderDomainVerified: string | null;
       recipientName: string; recipientEmail: string;
       signers: { name: string; email: string; status: string; order: number }[];
       bodyMarkdown: string | null;
@@ -281,6 +282,12 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                       Sent by <span className="font-medium text-foreground">{state.tenantName}</span>
                       {" · "}{state.document ? state.document.pages : state.pages} page{(state.document ? state.document.pages : state.pages) > 1 ? "s" : ""}
                     </p>
+                    {state.senderDomainVerified && (
+                      <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
+                        <ShieldCheck className="h-3 w-3" aria-hidden />
+                        Sender domain verified via DNS TXT: {state.senderDomainVerified}
+                      </p>
+                    )}
                   </div>
                   <span className="rounded-full bg-muted px-3 py-1 font-mono text-xs">{state.code}</span>
                 </div>

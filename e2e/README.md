@@ -30,26 +30,38 @@ e2e/
                  fixed-code fixtures DOC-E2E0001 (SENT), DOC-E2E0002
                  (COMPLETED + sealed), DOC-E2E0003 (decline flow) and
                  DOC-E2E0004 (signer journey), fixed signing tokens for the
-                 signer-portal flows, and an API key (ENVELOPES scope) for
-                 the API-layer tests. Wipes its own fixtures on every run —
-                 demo data is never touched.
+                 signer-portal flows, an API key (ENVELOPES scope) for the
+                 API-layer tests, and an attested-verification fixture
+                 DOC-E2EATST (remote "self-hosted instance" registry row
+                 with a real openssl key). Wipes its own fixtures and the
+                 portal registry tables on every run — demo data is never
+                 touched.
   api.test.ts    API-layer suite (bun test): X-API-Key auth, scope 403s,
                  verify-engine states, list/detail reads, sign-endpoint
                  validation, and a leak check that signing tokens never
                  appear in v1 payloads.
+  evidence.test.ts  Evidence-layer suite (bun test): downloads an evidence
+                 pack over the v1 API, parses the raw ZIP itself, re-verifies
+                 the manifest signature + every artifact hash (what
+                 verify.html does in a browser); runs the /api/attestations
+                 receiver loopback (TOFU registration, idempotent re-push,
+                 tampered signature, stolen thumbprint, pinned-key swap,
+                 cross-instance code claim 409); pure-function tests for the
+                 SPF/DMARC posture parsers.
   run.sh         Orchestrator: env guard → server → warm-up → seed → tsc
-                 gate → API tests → maestro → report. Accepts zero or more
-                 flow paths (default: all).
+                 gate → API + evidence tests → maestro → report. Accepts zero
+                 or more flow paths (default: all).
   flows/
     public/      No-auth surfaces: marketing, French catalog, verify portal
-                 (NOT_FOUND + seeded VERIFIED), docs/developers/status,
-                 signer-portal invalid-link state.
+                 (NOT_FOUND + seeded VERIFIED + attested DOC-E2EATST),
+                 docs/developers/status, signer-portal invalid-link state.
     auth/        Typed sign-in, demo one-click buttons, wrong password,
                  forgot password, sign-out.
     workspace/   Documents table, templates catalog, template→send→SENT
                  journey, envelope detail→void, in-app verify, per-signer
-                 link copy + QR handoff, and the signer journeys:
-                 sign→seal→public-verify and decline-with-reason.
+                 link copy + QR handoff, evidence-pack export entry point,
+                 and the signer journeys: sign→seal→public-verify and
+                 decline-with-reason.
     admin/       Platform overview, users directory, platform settings.
 ```
 

@@ -20,11 +20,24 @@
 
 import { PrismaClient } from "@prisma/client";
 import { createHash, randomBytes } from "crypto";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { mkdtemp, readFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+
+const run = promisify(execFile);
 
 const E2E_SIGNER_TOKEN = "e2e-fixed-signer-token-0000000000000001";
 const E2E_DECLINE_TOKEN = "e2e-fixed-decline-token-0000000000000001";
 const E2E_JOURNEY_TOKEN = "e2e-fixed-journey-token-0000000000000001";
 const E2E_API_KEY_SECRET = "dk_e2e_0000000000000000000000000000000000000000";
+
+// Fixtures for the attested-verification flow (public portal result for a
+// code sealed on a "remote self-hosted instance" — seeded directly as if the
+// receiver had processed the push).
+const E2E_ATTESTED_CODE = "DOC-E2EATST";
+const E2E_ATTESTED_DOMAIN = "acme-corp.example";
 
 const db = new PrismaClient();
 
@@ -206,6 +219,7 @@ async function main() {
         create: [
           { actor: "Ella Tester", action: "CREATED", detail: "Seeded fixture" },
           { actor: "Fixture Signer", action: "SIGNED", detail: "Sealed fixture signature" },
+          { actor: "Docurama", action: "SEALED", detail: "All signers completed. Seeded fixture seal (verification code DOC-E2E0002)" },
         ],
       },
     },
@@ -262,6 +276,83 @@ async function main() {
     },
   });
   console.log("api key: E2E Suite Key (ENVELOPES scope) for the API-layer tests");
+
+  /* ── Attested-verification fixture (remote "self-hosted instance") ── */
+  // Simulates what the portal receiver stores after a real self-hosted push:
+  // a TOFU-registered instance key + the minimal fingerprint for DOC-E2EATST.
+  // The key pair and the signature are REAL (openssl RSA-2048 + SHA-256), so
+  // the fixture is byte-equivalent to a production attestation.
+  {
+    // In the E2E environment this app plays BOTH roles (instance + portal), so
+    // the api/evidence tests leave TOFU-registered loopback instances behind.
+    // A fresh sweep keeps the portal tables deterministic; the Acme fixture
+    // below is recreated immediately after.
+    await db.portalAttestation.deleteMany({});
+    await db.portalInstance.deleteMany({});
+
+    await db.portalAttestation.deleteMany({ where: { code: E2E_ATTESTED_CODE } });
+
+    const dir = await mkdtemp(join(tmpdir(), "docurama-seed-attest-"));
+    try {
+      const keyPath = join(dir, "key.pem");
+      const certPath = join(dir, "cert.pem");
+      await run("openssl", [
+        "req", "-x509", "-newkey", "rsa:2048", "-sha256", "-days", "730", "-nodes",
+        "-keyout", keyPath, "-out", certPath,
+        "-subj", "/CN=Docurama Evidence Key - Acme Corp/O=Acme Corp/C=FR",
+        "-addext", `subjectAltName=DNS:${E2E_ATTESTED_DOMAIN}`,
+      ]);
+      const pub = await run("openssl", ["x509", "-in", certPath, "-pubkey", "-noout"]);
+      const [privateKeyPem, certificatePem] = await Promise.all([
+        readFile(keyPath, "utf8"),
+        readFile(certPath, "utf8"),
+      ]);
+      const thumbprint = createHash("sha256")
+        .update(Buffer.from(certificatePem.replace(/-----(BEGIN|END) CERTIFICATE-----/g, "").replace(/\s+/g, ""), "base64"))
+        .digest("hex");
+
+      const sealedAt = new Date();
+      const attestedDigest = createHash("sha256").update("docurama-e2e-attested-fixture").digest("hex");
+      const rawPayload = JSON.stringify({
+        format: "docurama-attestation", version: 1,
+        instance: { keyId: "ek_fixture_acme", label: "Acme Corp (self-hosted fixture)", verifiedDomain: E2E_ATTESTED_DOMAIN },
+        envelope: {
+          code: E2E_ATTESTED_CODE, sha256: attestedDigest,
+          sealedAt: sealedAt.toISOString(), completedAt: sealedAt.toISOString(),
+          conformance: "B-T", pages: 4, signerCount: 2,
+        },
+        publicKeyPem: pub.stdout.trim(), certificatePem: certificatePem.trim(), keyThumbprint: thumbprint,
+      });
+
+      const instance = await db.portalInstance.create({
+        data: {
+          keyThumbprint: thumbprint,
+          label: "Acme Corp (self-hosted fixture)",
+          verifiedDomain: E2E_ATTESTED_DOMAIN,
+          certificatePem: certificatePem.trim(),
+          publicKeyPem: pub.stdout.trim(),
+          attestationCount: 1,
+        },
+      });
+      await db.portalAttestation.create({
+        data: {
+          code: E2E_ATTESTED_CODE,
+          sha256: attestedDigest,
+          sealedAt,
+          completedAt: sealedAt,
+          conformance: "B-T",
+          pages: 4,
+          signerCount: 2,
+          verifiedDomain: E2E_ATTESTED_DOMAIN,
+          instanceThumbprint: instance.keyThumbprint,
+          rawPayload,
+        },
+      });
+      console.log(`attested fixture: ${E2E_ATTESTED_CODE} (instance "Acme Corp (self-hosted fixture)", domain ${E2E_ATTESTED_DOMAIN})`);
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
 
   /* ── Summary ─────────────────────────────────────────────────────── */
   const envelopes = await db.envelope.count({ where: { tenantId: tenant.id } });
