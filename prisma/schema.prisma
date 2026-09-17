@@ -487,6 +487,29 @@ model PortalKey {
   createdAt     DateTime @default(now())
 }
 
+// Third-party witnessing of the portal key in Sigstore Rekor (public,
+// OpenSSF-operated, free, no account): at submit time the portal key signs a
+// statement committing to its own fingerprint, and the resulting hashedrekord
+// entry is stored with its inclusion proof. A substituted or rogue portal key
+// becomes publicly provable — the neutral log contradicts the portal's claim.
+// One row per witnessed key version; absence = not yet witnessed (offline,
+// firewalled or disabled deployments keep working, TOFU-only).
+model RekorWitness {
+  id             String   @id @default("portal-key") // subject + key version
+  subject        String   @default("portal-key")
+  keyFingerprint String // SHA-256 of the portal key's SPKI DER
+  rekorUrl       String // base URL of the log the entry lives in
+  entryUUID      String // Rekor entry id (= hash of the entry body)
+  logIndex       Int
+  treeSize       Int? // at inclusion-proof fetch time
+  integratedTime DateTime
+  statement      String // canonical JSON — exactly the bytes signed and hashed
+  statementHash  String // SHA-256 of the statement, what the hashedrekord commits to
+  signature      String // base64 RSA-SHA-256 over the statement bytes
+  inclusionProof String? // JSON: Rekor's {checkpoint, hashes, logIndex, rootHash, treeSize}
+  createdAt      DateTime @default(now())
+}
+
 // ─── Production settings: eSign, notifications, SMS, MCP ──────────────────────
 
 model SigningCertificate {
