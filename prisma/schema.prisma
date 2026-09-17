@@ -186,6 +186,7 @@ model Tenant {
   smsGateway    SmsGateway?
   mcpConfig     McpConfig?
   evidenceKey   EvidenceKey?
+  transparencyEntries TransparencyEntry[]
 }
 
 // ─── Documents & Signing ──────────────────────────────────────────────────────
@@ -419,10 +420,71 @@ model PortalAttestation {
   instanceThumbprint String
   receivedAt         DateTime @default(now())
   rawPayload         String // exact canonical JSON as received, for audit
+  tSeq               Int? // instance transparency-chain position the instance claimed (null = legacy push)
+  tEntryHash         String? // instance chain entry hash; first-seen value is the witnessed commitment
 
   instance PortalInstance @relation(fields: [instanceThumbprint], references: [keyThumbprint], onDelete: Cascade)
 
   @@index([instanceThumbprint])
+}
+
+// ─── Transparency registry (instance side) ───────────────────────────────────
+// A per-tenant append-only hash chain — a miniature Certificate Transparency
+// log. Every sealed envelope appends one entry committing to its seal
+// fingerprint. Entries link backward (prevHead); rewriting any entry changes
+// every subsequent head, which contradicts the heads the public portal
+// witnessed. Evidence packs embed the entry + the segment to the current head
+// + a signed checkpoint, giving third parties an offline inclusion proof.
+
+model TransparencyEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  seq         Int // per-tenant sequence, 1-based
+  envelopeId  String? // null never happens today, but keeps the log append-only on re-seal
+  publicCode  String
+  payloadHash String // SHA-256 of the canonical seal commitment
+  prevHead    String // head of entry seq-1 ("0"×64 at genesis)
+  head        String // SHA-256 of canonical {seq, payloadHash, prevHead, at}
+  at          DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, seq])
+  @@unique([tenantId, envelopeId, payloadHash])
+  @@index([tenantId, seq])
+}
+
+// ─── Transparency registry (portal side) ─────────────────────────────────────
+// The public verification portal runs its own append-only log: every accepted
+// attestation appends one entry, witnessing the instance's claimed chain
+// position. The checkpoint endpoint signs the current head; third-party
+// monitors can poll it and detect a shrinking or rewritten log (the same
+// gossip model as Certificate Transparency, scaled down).
+
+model PortalLogEntry {
+  id                 String   @id @default(cuid())
+  seq                Int @unique // global sequence, 1-based
+  code               String
+  instanceThumbprint String
+  sha256             String
+  instanceEntryHash  String? // the instance-side chain hash that was witnessed
+  prevHead           String
+  head               String // SHA-256 of canonical {seq, code, instanceThumbprint, sha256, instanceEntryHash, prevHead, at}
+  at                 DateTime @default(now())
+
+  @@index([code])
+  @@index([seq])
+}
+
+// The portal's own signing key for transparency checkpoints. Generated once
+// per deployment; monitors pin it on first sight (TOFU) and can then hold the
+// portal operator to every checkpoint they ever served.
+model PortalKey {
+  id            String   @id @default("portal")
+  algorithm     String   @default("RSA-2048")
+  publicKeyPem  String
+  privateKeyPem String
+  createdAt     DateTime @default(now())
 }
 
 // ─── Production settings: eSign, notifications, SMS, MCP ──────────────────────

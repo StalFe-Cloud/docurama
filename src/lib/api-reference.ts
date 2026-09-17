@@ -123,15 +123,36 @@ certificate/evidence-key.pem`,
       },
       {
         method: "POST", path: "/api/attestations", auth: "signature",
-        summary: "Public-portal receiver for self-hosted instances: push a signed minimal fingerprint for a sealed envelope. Trust-on-first-use key registration; idempotent per code",
+        summary: "Public-portal receiver for self-hosted instances: push a signed minimal fingerprint for a sealed envelope. Trust-on-first-use key registration; idempotent per code; the fingerprint must carry a consistent transparency-chain claim (rewrite attempts are refused with 409)",
         response: `{
   "payload": { "format": "docurama-attestation", "version": 1,
     "instance": { "keyId": "ek_…", "label": "Company SAS", "verifiedDomain": "mail.company.com" },
     "envelope": { "code": "DOC-XXXXXXXX", "sha256": "…", "sealedAt": "…", "conformance": "B-T", "pages": 5, "signerCount": 2 },
-    "publicKeyPem": "…", "certificatePem": "…", "keyThumbprint": "…" },
+    "publicKeyPem": "…", "certificatePem": "…", "keyThumbprint": "…",
+    "transparency": { "format": "docurama-transparency-v1", "seq": 12, "payloadHash": "…", "prevHead": "…", "entryHash": "…", "at": "…" } },
   "signature": "base64 RSA-SHA-256"
 }
-→ 201 { "ok": true, "registered": true }`,
+→ 201 { "ok": true, "registered": true, "log": { "seq": 48, "head": "…" } }`,
+      },
+      {
+        method: "GET", path: "/api/transparency/checkpoint", auth: "none",
+        summary: "Signed checkpoint of the portal's append-only attestation log — poll it, pin keyFingerprint (TOFU), keep every checkpoint: a shrinking or re-anchored log is provable (see docs/TRANSPARENCY-LOG.md)",
+        response: `{
+  "log": { "size": 214, "head": "a1b2…" },
+  "checkpoint": { "format": "docurama-transparency-checkpoint", "size": 214, "head": "a1b2…",
+    "at": "2026-09-17T10:00:00Z", "signature": "base64 RSA-SHA-256", "publicKeyPem": "…", "keyFingerprint": "…" }
+}`,
+      },
+      {
+        method: "GET", path: "/api/transparency/proof/{code}", auth: "none",
+        summary: "Public inclusion proof that a code's attestation is committed in the append-only log: the log entry, the chain segment to the current head, and the signed checkpoint — re-hash it all, trust only the key you pinned",
+        response: `{
+  "code": "DOC-XXXXXXXX",
+  "entry": { "seq": 48, "code": "DOC-XXXXXXXX", "instanceThumbprint": "…", "sha256": "…", "instanceEntryHash": "…", "prevHead": "…", "head": "…", "at": "…" },
+  "segment": [ … ],
+  "truncated": false,
+  "checkpoint": { "format": "docurama-transparency-checkpoint", "size": 214, "head": "…", "signature": "…", "publicKeyPem": "…" }
+}`,
       },
     ],
   },

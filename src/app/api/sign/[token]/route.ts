@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { jsonError, jsonOk } from "@/lib/serializers";
 import { computeEnvelopeDigest } from "@/lib/esign";
 import { pushAttestationForEnvelope } from "@/lib/attestation";
+import { appendSealCommitment } from "@/lib/transparency";
 
 /**
  * Public signing endpoint — the engine behind /sign/{token}.
@@ -147,14 +148,37 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             detail: `All signers completed. Envelope sealed (SHA-256 ${digest.slice(0, 12)}…), verification code ${env.publicCode}`,
           },
         });
-        return { envelope: sealedEnv, sealed: true };
+        return { envelope: sealedEnv, sealed: true, signerCount: all.filter((r) => r.status === "SIGNED").length };
       });
 
-      // Federation: if this instance is configured to publish fingerprints to
-      // a public verification portal (self-hosted setups), push the minimal
-      // attestation now. Non-fatal by design — a portal outage never blocks
-      // the signer's success screen, and only a successful push is recorded.
       if (updated.sealed) {
+        // Transparency registry: append the seal commitment to the tenant's
+        // append-only hash chain, AFTER the seal transaction commits (the
+        // chain writes on its own connection — inside the transaction it
+        // would deadlock on SQLite's write lock). Idempotent (the attestation
+        // builder re-appends lazily with the same commitment), non-fatal by
+        // design — the log never blocks a seal.
+        try {
+          await appendSealCommitment({
+            tenantId: env.tenantId,
+            envelopeId: env.id,
+            commitment: {
+              code: env.publicCode,
+              sha256: updated.envelope.sha256 ?? "",
+              sealedAt: (updated.envelope.sealedAt ?? signedAt).toISOString(),
+              conformance: updated.envelope.conformanceLevel ?? env.conformanceLevel ?? "B-T",
+              pages: env.pages,
+              signerCount: updated.signerCount ?? 0,
+            },
+          });
+        } catch (err) {
+          console.warn("[sign] transparency append failed:", err);
+        }
+
+        // Federation: if this instance is configured to publish fingerprints to
+        // a public verification portal (self-hosted setups), push the minimal
+        // attestation now. Non-fatal by design — a portal outage never blocks
+        // the signer's success screen, and only a successful push is recorded.
         const attest = await pushAttestationForEnvelope(env.id).catch(() => ({ pushed: false, note: "attestation push crashed" }));
         if (!attest.pushed && process.env.EVIDENCE_PORTAL_URL) {
           console.warn(`[sign] attestation not pushed for ${env.publicCode}: ${attest.note}`);

@@ -205,6 +205,12 @@ export async function GET(req: NextRequest, ctx: Ctx) {
                   firstSeenAt: att.instance.firstSeenAt.toISOString(),
                   attestationCount: att.instance.attestationCount,
                 },
+                transparency: {
+                  chainSeq: att.tSeq,
+                  chainEntryHash: att.tEntryHash,
+                  proof: `/api/transparency/proof/${att.code}`,
+                  checkpoint: "/api/transparency/checkpoint",
+                },
               },
             });
           }

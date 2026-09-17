@@ -55,6 +55,18 @@ yields exactly the signed digest.
       "publicKeyPem": "-----BEGIN PUBLIC KEY-----…",
       "certificatePem": "-----BEGIN CERTIFICATE-----…",
       "sanDomain": "mail.company.com", "keyCreatedAt": "…"
+    },
+    "transparency": {
+      "format": "docurama-transparency-v1",
+      "entry": { "seq": 12, "payloadHash": "…", "prevHead": "…", "head": "…", "at": "…" },
+      "head": { "seq": 17, "head": "…" },
+      "segment": [ { "seq": 12, "payloadHash": "…", "prevHead": "…", "head": "…", "at": "…" }, … ],
+      "truncated": false,
+      "checkpoint": {
+        "format": "docurama-transparency-checkpoint",
+        "keyId": "ek_…", "size": 17, "head": "…", "at": "…",
+        "signature": "base64(RSA-SHA-256 over canonical {format, keyId, size, head, at})"
+      }
     }
   },
   "signature": "base64(RSA-SHA-256 over canonicalJson(payload))"
@@ -64,6 +76,25 @@ yields exactly the signed digest.
 **Canonical JSON** (`src/lib/canonical-json.ts`, mirrored inside
 `verify.html`): object keys sorted recursively, no whitespace, standard JSON
 escapes. Any verifier that reproduces those rules reproduces the signed bytes.
+
+### The transparency block
+
+Every pack carries an **inclusion proof** in the workspace's append-only hash
+chain (see `docs/TRANSPARENCY-LOG.md`): the envelope's chain entry, the
+segment of entries from it to the current head, and a checkpoint signed by the
+same evidence key. `verify.html` re-hashes the entire chain offline:
+
+- `entry.payloadHash` = SHA-256 of the canonical seal commitment
+  `{code, sha256, sealedAt, conformance, pages, signerCount}` — recomputed
+  from the manifest's own fields, so the entry provably commits to THIS pack;
+- every segment entry — including the first — re-hashes from
+  `{seq, payloadHash, prevHead, at}`, and each `prevHead` links to the
+  previous head: rewriting any entry breaks the chain at that point;
+- the checkpoint covers exactly the segment's last head, under the pack key.
+
+Envelopes sealed before the registry existed are committed lazily at first
+export — the same way CT logs treat previously-issued certificates; the
+commitment itself still carries the true `sealedAt`.
 
 ## Verifying offline
 
@@ -76,6 +107,8 @@ escapes. Any verifier that reproduces those rules reproduces the signed bytes.
      (WebCrypto, RSASSA-PKCS1-v1_5 + SHA-256);
    - re-hashes every artifact listed in the manifest and compares against the
      signed digests;
+   - re-hashes the transparency chain from the entry to the signed checkpoint
+     (see above) and shows the registry position;
    - shows the envelope facts, the key id/thumbprint and the SAN domain.
 
 Anything altered after export shows as `ALTÉRÉ / ALTERED` and/or an invalid

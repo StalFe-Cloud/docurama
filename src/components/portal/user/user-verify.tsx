@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, ShieldX, FileQuestion, Search, ShieldCheck, Clock, ServerCog, Globe } from "lucide-react";
+import { BadgeCheck, ShieldX, FileQuestion, Search, ShieldCheck, Clock, ServerCog, Globe, ListTree } from "lucide-react";
 import { apiGet } from "@/lib/client";
 import { CopyableCode, PageHeader, StatusBadge, fmtDate } from "@/components/portal/shared";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ type VerifyResult =
         sha256: string; sealedAt: string; completedAt: string | null; conformance: string | null;
         pages: number; signerCount: number; verifiedDomain: string | null;
         instance: { label: string; firstSeenAt: string; attestationCount: number };
+        transparency?: { chainSeq: number | null; chainEntryHash: string | null; proof: string; checkpoint: string } | null;
       };
     };
 
@@ -158,6 +159,14 @@ export function UserVerify() {
                     <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Sealed</dt><dd>{fmtDate(data.attestation.sealedAt, true)}</dd></div>
                     <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Conformance</dt><dd>PAdES {data.attestation.conformance ?? "-"}</dd></div>
                     <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Signers on record</dt><dd>{data.attestation.signerCount}</dd></div>
+                    {data.attestation.transparency?.chainSeq != null && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Transparency registry</dt>
+                        <dd className="flex items-center gap-1.5 font-medium text-primary-deep">
+                          <ListTree className="h-3.5 w-3.5" aria-hidden /> Entry #{data.attestation.transparency.chainSeq} in the public append-only log
+                        </dd>
+                      </div>
+                    )}
                     {data.attestation.verifiedDomain && (
                       <div className="flex justify-between gap-4">
                         <dt className="text-muted-foreground">Sender domain</dt>
@@ -176,6 +185,12 @@ export function UserVerify() {
                     The document was sealed on the customer&apos;s own infrastructure; this platform holds only the
                     minimal signed fingerprint it pushed (code, digest, seal date - no personal data). Ask the
                     sender for the evidence pack to inspect the document itself.
+                    {data.attestation.transparency?.chainSeq != null && (
+                      <>
+                        {" "}The fingerprint is witnessed in the public append-only log — inclusion proof at{" "}
+                        <span className="font-mono">{data.attestation.transparency.proof}</span>.
+                      </>
+                    )}
                   </p>
                 </CardContent>
               </Card>

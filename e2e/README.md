@@ -33,9 +33,10 @@ e2e/
                  signer-portal flows, an API key (ENVELOPES scope) for the
                  API-layer tests, and an attested-verification fixture
                  DOC-E2EATST (remote "self-hosted instance" registry row
-                 with a real openssl key). Wipes its own fixtures and the
-                 portal registry tables on every run — demo data is never
-                 touched.
+                 with a real openssl key, a real transparency chain claim,
+                 and a portal-log witnessing entry). Wipes its own fixtures
+                 and the portal registry tables on every run — demo data is
+                 never touched.
   api.test.ts    API-layer suite (bun test): X-API-Key auth, scope 403s,
                  verify-engine states, list/detail reads, sign-endpoint
                  validation, and a leak check that signing tokens never
@@ -48,9 +49,17 @@ e2e/
                  tampered signature, stolen thumbprint, pinned-key swap,
                  cross-instance code claim 409); pure-function tests for the
                  SPF/DMARC posture parsers.
+  transparency.test.ts  Transparency-registry suite (bun test): pack
+                 transparency block verified offline (commitment recomputed
+                 from manifest-only fields → chain → signed checkpoint),
+                 tampered commitment/segment detection, receiver chain-claim
+                 validation (commitment mismatch 400, inconsistent entry
+                 400), **chain rewrite detection 409**, idempotent no-grow,
+                 signed checkpoint verification, and inclusion proofs for the
+                 seeded fixture (incl. a tamper path).
   run.sh         Orchestrator: env guard → server → warm-up → seed → tsc
-                 gate → API + evidence tests → maestro → report. Accepts zero
-                 or more flow paths (default: all).
+                 gate → API + evidence + transparency tests → maestro →
+                 report. Accepts zero or more flow paths (default: all).
   flows/
     public/      No-auth surfaces: marketing, French catalog, verify portal
                  (NOT_FOUND + seeded VERIFIED + attested DOC-E2EATST),

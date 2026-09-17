@@ -25,6 +25,10 @@ import { promisify } from "util";
 import { mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import {
+  commitmentHash, chainEntryHash, appendPortalLogEntry,
+  GENESIS_HEAD, TRANSPARENCY_FORMAT,
+} from "../src/lib/transparency";
 
 const run = promisify(execFile);
 
@@ -289,6 +293,10 @@ async function main() {
     // below is recreated immediately after.
     await db.portalAttestation.deleteMany({});
     await db.portalInstance.deleteMany({});
+    // The portal's own append-only log is swept with the rest so every seed
+    // cycle restarts the chain deterministically (dev/E2E posture — a real
+    // portal never deletes log entries).
+    await db.portalLogEntry.deleteMany({});
 
     await db.portalAttestation.deleteMany({ where: { code: E2E_ATTESTED_CODE } });
 
@@ -313,6 +321,18 @@ async function main() {
 
       const sealedAt = new Date();
       const attestedDigest = createHash("sha256").update("docurama-e2e-attested-fixture").digest("hex");
+
+      // The transparency claim a real instance at chain position 1 would push:
+      // the entry commits to the exact fingerprint above and hashes consistently
+      // (seq 1, genesis prevHead) — byte-equivalent to a production push.
+      const tPayloadHash = commitmentHash({
+        code: E2E_ATTESTED_CODE, sha256: attestedDigest, sealedAt: sealedAt.toISOString(),
+        conformance: "B-T", pages: 4, signerCount: 2,
+      });
+      const tEntryHash = chainEntryHash({
+        seq: 1, payloadHash: tPayloadHash, prevHead: GENESIS_HEAD, at: sealedAt.toISOString(),
+      });
+
       const rawPayload = JSON.stringify({
         format: "docurama-attestation", version: 1,
         instance: { keyId: "ek_fixture_acme", label: "Acme Corp (self-hosted fixture)", verifiedDomain: E2E_ATTESTED_DOMAIN },
@@ -322,6 +342,10 @@ async function main() {
           conformance: "B-T", pages: 4, signerCount: 2,
         },
         publicKeyPem: pub.stdout.trim(), certificatePem: certificatePem.trim(), keyThumbprint: thumbprint,
+        transparency: {
+          format: TRANSPARENCY_FORMAT, seq: 1,
+          payloadHash: tPayloadHash, prevHead: GENESIS_HEAD, entryHash: tEntryHash, at: sealedAt.toISOString(),
+        },
       });
 
       const instance = await db.portalInstance.create({
@@ -346,9 +370,20 @@ async function main() {
           verifiedDomain: E2E_ATTESTED_DOMAIN,
           instanceThumbprint: instance.keyThumbprint,
           rawPayload,
+          tSeq: 1,
+          tEntryHash: tEntryHash,
         },
       });
-      console.log(`attested fixture: ${E2E_ATTESTED_CODE} (instance "Acme Corp (self-hosted fixture)", domain ${E2E_ATTESTED_DOMAIN})`);
+      // Witness the fixture in the portal's own append-only log, exactly like
+      // the receiver does for a live push — so /api/transparency/proof/DOC-E2EATST
+      // serves a real, verifiable inclusion proof for the seeded code.
+      const witnessed = await appendPortalLogEntry({
+        code: E2E_ATTESTED_CODE,
+        instanceThumbprint: instance.keyThumbprint,
+        sha256: attestedDigest,
+        instanceEntryHash: tEntryHash,
+      });
+      console.log(`attested fixture: ${E2E_ATTESTED_CODE} (instance "Acme Corp (self-hosted fixture)", domain ${E2E_ATTESTED_DOMAIN}, portal log entry #${witnessed.seq})`);
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }

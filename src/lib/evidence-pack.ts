@@ -28,6 +28,10 @@ import { zipStore, type ZipEntry } from "@/lib/zip";
 import { canonicalJson } from "@/lib/canonical-json";
 import { getOrCreateEvidenceKey, signPayload, EVIDENCE_SIGNATURE_ALGORITHM } from "@/lib/evidence-key";
 import { resolveStorageKey } from "@/lib/document-store";
+import {
+  appendSealCommitment, getChainSegment, signCheckpoint,
+  TRANSPARENCY_FORMAT, type PackTransparencyBlock,
+} from "@/lib/transparency";
 
 export const EVIDENCE_PACK_FORMAT = "docurama-evidence-pack";
 export const EVIDENCE_PACK_VERSION = 1;
@@ -229,12 +233,12 @@ function renderVerifyHtml(): string {
   <div id="out"></div>
 
   <p class="foot">
-    Cette page vérifie (1) la signature RSA-SHA-256 du manifeste avec la clé publique incluse, puis (2) que chaque fichier
-    correspond exactement à l'empreinte SHA-256 signée. La confiance repose sur la clé du certificat du dossier : son empreinte
-    (thumbprint) doit correspondre à celle publiée par l'émetteur du dossier.
-    <span class="sub">This page checks (1) the RSA-SHA-256 manifest signature against the embedded public key, then (2) that every
-    file matches its signed SHA-256. Trust anchors on the pack certificate key: its thumbprint should match the one published
-    by the pack issuer.</span>
+    Cette page vérifie (1) la signature RSA-SHA-256 du manifeste avec la clé publique incluse, (2) que chaque fichier
+    correspond exactement à l'empreinte SHA-256 signée, et (3) le registre de transparence : l'entrée de cette enveloppe
+    s'enchaîne par hachages successifs jusqu'à un point de contrôle signé — toute réécriture de l'historique casserait la chaîne.
+    <span class="sub">This page checks (1) the RSA-SHA-256 manifest signature against the embedded public key, (2) that every
+    file matches its signed SHA-256, and (3) the transparency registry: this envelope's entry hash-chains all the way to a
+    signed checkpoint — any rewrite of history breaks the chain.</span>
   </p>
 </div>
 
@@ -350,6 +354,59 @@ async function verify(fileList){
     "Clé / Key : "+esc(p.signing.keyId)+" · thumbprint "+esc(p.signing.keyThumbprint)+(p.signing.sanDomain?"<br>Domaine vérifié (SAN DNS) / verified domain: "+esc(p.signing.sanDomain):"")+
     "<br>Scellé le / sealed: "+esc(p.envelope.sealedAt)+(p.envelope.verifiedSenderDomain?"<br>Domaine expéditeur vérifié / sender domain verified: "+esc(p.envelope.verifiedSenderDomain):"");
   out.appendChild(m);
+
+  // 4 — transparency registry: the entry must commit to this envelope's
+  //     fingerprint, chain link-by-link to the head, and the checkpoint must
+  //     cover exactly that head under the pack key. All re-hashed locally.
+  var t=p.transparency;
+  if(t&&t.format==="docurama-transparency-v1"&&t.entry&&t.segment&&t.checkpoint){
+    var commitment={
+      code:p.envelope.code,
+      sha256:p.envelope.sha256,
+      sealedAt:p.envelope.sealedAt,
+      conformance:p.envelope.conformance,
+      pages:p.envelope.pages,
+      signerCount:p.signers.filter(function(s){return s.status==="SIGNED";}).length
+    };
+    var commitOk=(await sha256Hex(enc.encode(canonicalJson(commitment))))===t.entry.payloadHash;
+    var entryOk=t.entry.head===await sha256Hex(enc.encode(canonicalJson({seq:t.entry.seq,payloadHash:t.entry.payloadHash,prevHead:t.entry.prevHead,at:t.entry.at})));
+
+    var chainOk=true,chainReason="";
+    if(!t.segment.length||t.segment[0].seq!==t.entry.seq||t.segment[0].payloadHash!==t.entry.payloadHash||t.segment[0].head!==t.entry.head){
+      chainOk=false;chainReason="segment start";
+    }else{
+      var prev=null;
+      for(var k=0;k<t.segment.length;k++){
+        var cur=t.segment[k];
+        // EVERY entry — including the first — re-hashes from its own fields,
+        // so a rewritten prevHead cannot smuggle in a different history.
+        var hh=await sha256Hex(enc.encode(canonicalJson({seq:cur.seq,payloadHash:cur.payloadHash,prevHead:cur.prevHead,at:cur.at})));
+        if(hh!==cur.head){chainOk=false;chainReason="empreinte / hash seq "+cur.seq;break;}
+        if(k>0&&(cur.seq!==prev.seq+1||cur.prevHead!==prev.head)){chainOk=false;chainReason="lien / link seq "+cur.seq;break;}
+        prev=cur;
+      }
+      if(chainOk&&!t.truncated&&(prev.seq!==t.head.seq||prev.head!==t.head.head)){chainOk=false;chainReason="head";}
+    }
+
+    var cpOk=false;
+    try{
+      var cpKey=await crypto.subtle.importKey("spki",pemToBytes(p.signing.publicKeyPem),{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["verify"]);
+      cpOk=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",cpKey,b64ToBytes(t.checkpoint.signature),enc.encode(canonicalJson({format:t.checkpoint.format,keyId:t.checkpoint.keyId,size:t.checkpoint.size,head:t.checkpoint.head,at:t.checkpoint.at})));
+    }catch(e){cpOk=false;}
+    var cpCovers=t.checkpoint.size===t.head.seq&&t.checkpoint.head===t.head.head;
+
+    var tOk=commitOk&&entryOk&&chainOk&&cpOk&&cpCovers;
+    out.appendChild(el("div","banner "+(tOk?"ok":"bad"),
+      tOk?"Registre de transparence VALIDE — l'entrée #"+t.entry.seq+" s'enchaîne jusqu'au point de contrôle signé · Transparency registry VALID — entry #"+t.entry.seq+" chains to the signed checkpoint"
+         :"Registre de transparence INVALIDE — "+(chainOk?"point de contrôle / checkpoint":("chaîne / chain ("+chainReason+")"))+" incohérent · Transparency registry INVALID"));
+
+    var tm=el("div","meta");
+    tm.innerHTML="<b>Registre de transparence / Transparency registry</b><br>"+
+      "Entrée / entry #"+esc(t.entry.seq)+" · chaîne vérifiée jusqu'à / chain verified to #"+esc(t.head.seq)+(t.truncated?" (segment tronqué / truncated segment)":"")+"<br>"+
+      "Engagement / commitment : <span style='font-family:ui-monospace,monospace;font-size:11px;word-break:break-all'>"+esc(t.entry.payloadHash)+"</span><br>"+
+      "Point de contrôle / checkpoint (taille / size "+esc(t.checkpoint.size)+") : <span style='font-family:ui-monospace,monospace;font-size:11px;word-break:break-all'>"+esc(t.checkpoint.head)+"</span>";
+    out.appendChild(tm);
+  }
 }
 
 document.getElementById("files").addEventListener("change",function(e){ verify(e.target.files); });
@@ -394,17 +451,24 @@ VÉRIFIER / VERIFY
   En ligne / online : le code ${code} peut aussi être vérifié sur le portail public
   verify.docurama.eu (ou l'attestation publiée par l'instance émettrice).
 
-CONFINANCE / TRUST
+CONFIANCE / TRUST
   Le manifeste est signé par la clé de preuve de l'espace de travail émetteur.
   L'empreinte du certificat (thumbprint) est inscrite dans le manifeste ; le domaine
   SAN a été vérifié par enregistrement DNS TXT avant l'émission du certificat.
+  Le manifeste contient aussi un registre de transparence : l'entrée de cette
+  enveloppe dans une chaîne append-only (hachages chaînés) et un point de contrôle
+  signé — verify.html re-hache toute la chaîne hors ligne ; toute réécriture de
+  l'historique la casserait.
   Docurama n'est pas un QTSP eIDAS — le niveau de conformance indiqué reflète
   exactement les mécanismes appliqués.
 
   The manifest is signed by the issuing workspace's evidence key. The certificate
   thumbprint is recorded in the manifest; the SAN domain was verified via a DNS TXT
-  record before the certificate was issued. Docurama is not an eIDAS QTSP — the
-  stated conformance level reflects exactly the mechanisms applied.
+  record before the certificate was issued. The manifest also carries a transparency
+  registry: this envelope's entry in an append-only hash chain plus a signed
+  checkpoint — verify.html re-hashes the whole chain offline; any rewrite of
+  history would break it. Docurama is not an eIDAS QTSP — the stated conformance
+  level reflects exactly the mechanisms applied.
 
 Docurama SAS · 1 Rue Marguerin, 75014 Paris, France · docurama.eu
 `;
@@ -426,6 +490,39 @@ export async function buildEvidencePack(envelopeKey: string, tenantId: string): 
   }
 
   const key = await getOrCreateEvidenceKey(e.tenantId);
+
+  /* Transparency registry: the seal commitment is appended to the tenant's
+     append-only hash chain (idempotent — envelopes sealed before the registry
+     existed are committed now, at export time, which is exactly how CT logs
+     treat previously-issued certificates). The pack then carries the entry,
+     the chain segment to the current head, and a signed checkpoint, so any
+     third party can prove inclusion offline in verify.html. */
+  const signerCount = e.recipients.filter((r) => r.role === "SIGNER" && r.status === "SIGNED").length;
+  const entry = await appendSealCommitment({
+    tenantId: e.tenantId,
+    envelopeId: e.id,
+    commitment: {
+      code: e.publicCode,
+      sha256: e.sha256,
+      sealedAt: e.sealedAt.toISOString(),
+      conformance: e.conformanceLevel,
+      pages: e.pages,
+      signerCount,
+    },
+  });
+  const { segment, truncated } = await getChainSegment(e.tenantId, entry.seq);
+  const head = segment.length > 0 ? { seq: segment[segment.length - 1].seq, head: segment[segment.length - 1].head } : { seq: entry.seq, head: entry.head };
+  const transparencyBlock: PackTransparencyBlock = {
+    format: TRANSPARENCY_FORMAT,
+    entry: {
+      seq: entry.seq, payloadHash: entry.payloadHash, prevHead: entry.prevHead,
+      head: entry.head, at: entry.at.toISOString(),
+    },
+    head,
+    segment,
+    truncated,
+    checkpoint: signCheckpoint(key, head),
+  };
 
   /* Document artifact — byte-exact. Template-based envelopes carry the contract
      text; a missing file is recorded honestly rather than papered over. */
@@ -526,6 +623,7 @@ export async function buildEvidencePack(envelopeKey: string, tenantId: string): 
       sanDomain: key.sanDomain,
       keyCreatedAt: iso(key.createdAt),
     },
+    transparency: transparencyBlock,
   };
   const manifest = {
     format: EVIDENCE_PACK_FORMAT,
