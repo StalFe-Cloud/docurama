@@ -1,12 +1,15 @@
 # Single-node deployment: hardened image (non-root, HEALTHCHECK, boot-time
 # schema push) behind your own TLS proxy (Caddy/nginx — see PRODUCTION-PLAN).
 #
-#   docker compose up -d
+#   docker compose up -d                        # app only (local filesystem storage)
+#   docker compose --profile s3 up -d           # + SeaweedFS S3 object storage
+#   docker compose --profile mail up -d         # + Mailpit SMTP sink (dev inbox UI)
+#   docker compose --profile s3 --profile mail up -d
 #
 # Scale-out note: the background worker (mail retries + webhook retries) runs
 # in-process. Run exactly ONE replica; multi-replica tiers need Postgres +
-# object storage first (PRODUCTION-PLAN §9) and DOCURAMA_WORKER=off on all
-# but one replica.
+# object storage (PRODUCTION-PLAN §9, now supported — set the S3_* env below)
+# and DOCURAMA_WORKER=off on all but one replica.
 
 services:
   docurama:
@@ -26,8 +29,18 @@ services:
       # Base domain for the vanity sub-domain routing (status./docs./verify./…).
       # - ROOT_DOMAIN=docurama.eu
       # SMTP delivery (unset = outbox-only mode, mail stays QUEUED + inspectable).
-      # smtp://user:pass@relay.example.com:587 or smtps://…:465
+      #   smtp://user:pass@relay.example.com:587 or smtps://…:465
+      # With the mail profile below, the one-liner is:
+      #   SMTP_URL=smtp://mailpit:1025?tls=off   (inbox UI: http://127.0.0.1:8025)
       # - SMTP_URL=smtp://user:pass@relay.example.com:587
+      # S3 object storage instead of the local filesystem (multitenant /
+      # scale-out path — SeaweedFS, MinIO, Garage, Ceph RGW, AWS S3, R2…).
+      # With the s3 profile below, uncomment as-is (bucket auto-creates):
+      # - S3_ENDPOINT=http://seaweed:8333
+      # - S3_BUCKET=docurama
+      # - S3_ACCESS_KEY_ID=docurama
+      # - S3_SECRET_ACCESS_KEY=docurama-secret
+      # - S3_REGION=us-east-1
       # Off-switch for the in-process background worker (see scale-out note).
       # - DOCURAMA_WORKER=off
     volumes:
@@ -41,6 +54,43 @@ services:
       retries: 3
       start_period: 25s
 
+  # ── S3 object storage (profile: s3) ─────────────────────────────────────────
+  # SeaweedFS — Apache-2.0, single binary, master+volume+filer+S3 gateway in
+  # one process. The app's S3_* env above points at it. See STORAGE-OPTIONS.md
+  # for the full comparison (MinIO/Garage are AGPLv3; Ceph is heavier ops) and
+  # the production topology (multi-node, replication, s3.json auth).
+  seaweed:
+    image: chrislusf/seaweedfs:4.47
+    container_name: docurama-seaweed
+    restart: always
+    command: 'server -dir=/data -ip=seaweed -ip.bind=0.0.0.0 -master.volumeSizeLimitMB=2048 -s3 -s3.port=8333 -volume.max=0'
+    profiles: ["s3"]
+    volumes:
+      - seaweed-data:/data
+    ports:
+      - "127.0.0.1:8333:8333" # S3 API (point S3_ENDPOINT here from the host)
+      # - "127.0.0.1:9333:9333" # master UI (browse volumes) — uncomment to inspect
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── SMTP sink for local evaluation (profile: mail) ──────────────────────────
+  # Mailpit accepts everything on :1025 and shows it at http://127.0.0.1:8025.
+  # Wire the app with: SMTP_URL=smtp://mailpit:1025?tls=off
+  # (Dev/eval tool. Production uses a real relay or your own MTA.)
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: docurama-mailpit
+    restart: always
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:8025:8025" # inbox UI
+      # - "127.0.0.1:1025:1025" # host-side SMTP (only if another app needs it)
+
 volumes:
   docurama-db:
   docurama-storage:
+  seaweed-data:

@@ -57,6 +57,17 @@ jobs:
           # The visual-regression suite drives the same binary via Playwright.
           echo "CHROME_BIN=$CHROME_BIN" >> "$GITHUB_ENV"
 
+      - name: Install SeaweedFS (S3 backend E2E)
+        run: |
+          # Single static binary — the S3 storage suite spawns a real
+          # `weed server -s3` on scratch ports (e2e/s3-seaweed.test.ts).
+          WEED_VER="4.47"
+          curl -sL "https://github.com/seaweedfs/seaweedfs/releases/download/${WEED_VER}/linux_amd64.tar.gz" -o /tmp/weed.tar.gz
+          tar xzf /tmp/weed.tar.gz -C /tmp
+          mkdir -p "$HOME/.local/bin" && mv /tmp/weed "$HOME/.local/bin/weed" && chmod +x "$HOME/.local/bin/weed"
+          "$HOME/.local/bin/weed" version | head -1
+          echo "WEED_BIN=$HOME/.local/bin/weed" >> "$GITHUB_ENV"
+
       - name: Run E2E suite
         run: bash e2e/run.sh
 

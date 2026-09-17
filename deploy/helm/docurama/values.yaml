@@ -41,6 +41,28 @@ smtp:
   existingSecret: ""
   secretKey: SMTP_URL
 
+# ── S3 object storage (multitenant / scale-out) ──────────────────────────────
+# Disabled by default: documents live on the PVC (STORAGE_DIR). Enable to
+# store document bytes in S3-compatible storage instead — SeaweedFS (see
+# docs/STORAGE-OPTIONS.md), MinIO, Garage, Ceph RGW, AWS S3, Cloudflare R2…
+# Credentials come from an existing Secret (never plain values.yaml):
+#   kubectl create secret generic docurama-s3 \
+#     --from-literal=S3_ACCESS_KEY_ID=… --from-literal=S3_SECRET_ACCESS_KEY=…
+s3:
+  enabled: false
+  # S3-compatible endpoint, e.g. http://seaweedfs-s3.monitoring:8333.
+  # Empty = the AWS default endpoint for the region.
+  endpoint: ""
+  bucket: docurama
+  region: us-east-1
+  # Create the bucket on first use when it does not exist (HeadBucket →
+  # CreateBucket). Set false when the bucket is managed outside the app.
+  autoCreateBucket: true
+  existingSecret: docurama-s3
+  # Path-style addressing (needed by SeaweedFS/MinIO/Garage/R2; AWS native
+  # uses virtual-hosted style — set false only for AWS without an endpoint).
+  forcePathStyle: true
+
 # ── Service / ingress ────────────────────────────────────────────────────────
 service:
   type: ClusterIP

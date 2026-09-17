@@ -30,7 +30,7 @@ and check `curl https://sign.example.com/api/health`.
 | Replicas | **Exactly 1.** SQLite on a RWO PVC + in-process worker (mail/webhook retries). The Deployment uses `Recreate` so two pods never share the volume. |
 | Scale-out | Postgres + S3 first (PRODUCTION-PLAN §9), then `replicaCount>1` with `DOCURAMA_WORKER=off` on all but one replica (or an external cron calling the worker passes). |
 | Migrations | The container entrypoint runs `prisma db push` (idempotent, additive-only). Set `skipDbPush: true` to run migrations from a dedicated Job instead. |
-| Storage | One PVC, two subPath mounts: `/app/db` (SQLite) and `/app/storage` (documents). |
+| Storage | One PVC, two subPath mounts: `/app/db` (SQLite) and `/app/storage` (documents). With `s3.enabled: true` document bytes move to object storage and the PVC carries only the database. |
 
 ## Values of note
 
@@ -38,6 +38,7 @@ and check `curl https://sign.example.com/api/health`.
 |---|---|
 | `persistence.*` | PVC class/size and subPaths |
 | `smtp.existingSecret` | Secret holding `SMTP_URL` |
+| `s3.*` | S3 backend: `endpoint`, `bucket`, `region`, `autoCreateBucket`, credentials via `s3.existingSecret` (Secret with `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`). See `docs/STORAGE-OPTIONS.md`. |
 | `rootDomain` | Vanity sub-domain base (default derived from ingress host) |
 | `extraEnv` | e.g. external Postgres `DATABASE_URL`, `DOCURAMA_WORKER=off` |
 | `skipDbPush` | disable entrypoint migration (external Job handles it) |

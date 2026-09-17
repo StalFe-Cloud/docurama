@@ -22,12 +22,11 @@
  */
 
 import { createHash } from "crypto";
-import { readFile } from "fs/promises";
 import { db } from "@/lib/db";
 import { zipStore, type ZipEntry } from "@/lib/zip";
 import { canonicalJson } from "@/lib/canonical-json";
 import { getOrCreateEvidenceKey, signPayload, EVIDENCE_SIGNATURE_ALGORITHM } from "@/lib/evidence-key";
-import { resolveStorageKey } from "@/lib/document-store";
+import { readStoredBytes } from "@/lib/document-store";
 import {
   appendSealCommitment, getChainSegment, signCheckpoint,
   TRANSPARENCY_FORMAT, type PackTransparencyBlock,
@@ -529,7 +528,7 @@ export async function buildEvidencePack(envelopeKey: string, tenantId: string): 
   const artifacts: { path: string; data: Buffer }[] = [];
   if (e.documentId && e.document) {
     try {
-      const data = await readFile(resolveStorageKey(e.document.storageKey));
+      const data = await readStoredBytes(e.document.storageKey);
       const safeName = (e.document.filename || "document.pdf").replace(/[\\/:*?"<>|]/g, "_").slice(0, 120);
       artifacts.push({ path: `document/${safeName}`, data });
     } catch {

@@ -529,3 +529,66 @@ blockers; the €0 subset ships in this cycle:
   + chunked foreground flow groups keeps every invocation inside the limit.
   Locally verified: **97/97 tests, 25/25 flows** (public 7, auth 5, admin 3,
   workspace 10), tsc/eslint clean.
+
+## 7h. Cycle 9 — S3 object storage backend, SeaweedFS-verified (2026-09-18)
+
+The last scale-out blocker from cycle 8's gap analysis ("S3 storage" was the
+only one of the six blockers that was actually free to close — the user
+called it: SeaweedFS is Apache-2.0 and costs €0).
+
+- **Storage backend** (`src/lib/object-store.ts` + `document-store.ts`):
+  env-driven S3-compatible backend (S3_ENDPOINT/BUCKET/ACCESS_KEY_ID/
+  SECRET_ACCESS_KEY, optional REGION/AUTO_CREATE_BUCKET/FORCE_PATH_STYLE)
+  read at call time like SMTP_URL, all-or-nothing with a loud warn on partial
+  config (a half-configured production never half-works), local filesystem
+  stays the zero-config default. Same `documents/{tenantId}/{docId}.pdf`
+  key on both backends — migration is a copy, rows never change.
+- **Policy parity on both backends**: storeUpload validates magic bytes and
+  the size cap in memory and issues one PutObject — a rejected upload never
+  creates an object; deleteDocumentFile and the retention sweep (orphan
+  purge, envelope-backed evidence never touched) work on either backend;
+  readDocumentBytes/readStoredBytes are the single read path (page renders,
+  evidence packs, OCR). `/api/health` and the admin restore drill now report
+  and prove the ACTIVE backend (`checks.storage.backend`) with a real
+  write-read-delete round trip.
+- **Verified against the real thing**: `e2e/s3-seaweed.test.ts` (7 tests)
+  spawns a REAL SeaweedFS 4.47 (`weed server -s3`) on scratch ports and
+  drives the full surface — bucket auto-creation, byte-exact round trips,
+  no-local-disk leakage (the routing actually routes), all rejection classes
+  leaving no objects, idempotent deletes, the orphan-vs-evidence sweep
+  against real seeded rows, the health probe, and auto-create-off surfacing
+  a missing bucket as WRITE_FAILED. CI downloads the weed binary; run.sh
+  skips honestly when it's absent (WEED_BIN / E2E_SKIP_S3=1).
+- **Sandbox finds while making it real**: SeaweedFS `-ip` (advertised
+  address) must be set alongside `-ip.bind` or every Put 500s with the filer
+  dialing its own LAN IP; the data dir must pre-exist; bun's 5s default hook
+  timeout eats the afterAll teardown (→ SIGKILL + explicit hook timeouts,
+  same lesson as the visual suite).
+- **Packaging**: docker-compose gains profiles — `--profile s3` (SeaweedFS
+  4.47 pinned to the CI-verified version, healthcheck, named volume) and
+  `--profile mail` (Mailpit SMTP sink: `SMTP_URL=smtp://mailpit:1025?tls=off`
+  + inbox UI on :8025 — the "set SMTP_URL" path is now a one-liner for
+  evaluators). Helm chart: `s3.*` values (endpoint/bucket/region/
+  autoCreate) + credentials via existingSecret; `helm lint` + template
+  rendering validated with the real helm binary (default renders no S3 env,
+  enabled renders the full block).
+- **`docs/STORAGE-OPTIONS.md`**: the engine comparison the decision needed —
+  SeaweedFS (Apache-2.0, tiny ops, replication+EC+cloud tiering) vs MinIO /
+  Garage (AGPLv3 — technically fine as protocol servers, but they lose the
+  enterprise procurement questionnaire) vs Ceph RGW (LGPL, heavy) vs cloud
+  (Cloudflare R2: 10GB + zero egress free tier — the €0 public-cloud start;
+  Backblaze B2; EU: Scaleway/OVH/Hetzner). Recommendation per deployment
+  shape, SeaweedFS quickstart incl. the `-ip` gotcha and `s3.json` auth
+  hardening, migration recipe (rclone/aws s3 sync — layout is identical).
+- **run.sh hardening (found the hard way)**: killing the `bun run dev`
+  wrapper leaves the next-server child alive holding :3000 with a stale
+  database binding — a later run then serves phantom failures (MCP config
+  mutations "invisible", rekor witness rows missing, webhook timeouts)
+  that look exactly like product regressions. Cleanup now kills the process
+  tree. Same class: running `bun run build` between dev-server E2E runs
+  leaves mixed .next state — wipe `.next` or boot cold before trusting a
+  red run.
+- Gates: tsc/eslint clean, 97+7=**104 bun tests** across 9 files (90 in the
+  dev-server batch + 7 mail + 7 S3-seaweed), **25/25 Maestro flows**
+  (foreground chunks), helm lint/template clean, production build green with
+  the SDK traced into the standalone output.
