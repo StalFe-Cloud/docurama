@@ -119,21 +119,30 @@ model Invitation {
 }
 
 // Transactional mail ledger — every outbound system email (verification,
-// invites, reminders) is recorded here. Delivery transport (platform SMTP
-// credentials) is not wired yet, so messages are queued and inspectable
-// instead of silently dropped.
+// invites, reminders) is recorded here. When SMTP_URL is configured the
+// delivery engine (src/lib/mail.ts) drains QUEUED rows over SMTP with
+// retry/backoff; without it messages stay queued and inspectable in the
+// admin console (demo / air-gapped mode) instead of silently dropping.
 model MailOutbox {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   toEmail   String
-  fromEmail String   @default("Docurama Sign <notifications@docurama.eu>")
+  fromEmail String    @default("Docurama Sign <notifications@docurama.eu>")
   subject   String
-  template  String   // SIGNUP_VERIFICATION | TEAM_INVITE | REMINDER | TEST
-  status    String   @default("QUEUED") // QUEUED | SENT | FAILED
+  template  String    // SIGNUP_VERIFICATION | TEAM_INVITE | REMINDER | TEST
+  status    String    @default("QUEUED") // QUEUED | SENT | FAILED
   bodyText  String
   linkUrl   String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   sentAt    DateTime?
 
+  // Delivery engine (SMTP transport). Attempts and backoff survive restarts:
+  // the worker (or an inline pass after send) re-reads QUEUED rows whose
+  // nextAttemptAt has come due. FAILED is terminal after 5 attempts.
+  attempts     Int       @default(0)
+  lastError    String?
+  nextAttemptAt DateTime? // null = due immediately
+
+  @@index([status, nextAttemptAt])
   @@index([toEmail])
 }
 
@@ -887,12 +896,17 @@ model WebhookEndpoint {
   id            String    @id @default(cuid())
   tenantId      String
   url           String
-  events        String // pipe-separated event list
+  events        String // pipe-separated event list, "*" subscribes to all
   status        String    @default("ACTIVE") // ACTIVE | PAUSED | FAILING
   secretMasked  String
   successRate   Int       @default(100)
   lastDeliveryAt DateTime?
   createdAt     DateTime  @default(now())
+
+  // Raw signing secret (whsec_…), kept retrievable because HMAC verification
+  // on the receiver side needs the exact bytes. Never returned by any API -
+  // only the masked preview and the one-time reveal at creation.
+  secret        String?
 
   tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   deliveries  WebhookDelivery[]
@@ -907,7 +921,18 @@ model WebhookDelivery {
   success    Boolean
   at         DateTime @default(now())
 
+  // Retry engine: the exact payload that was POSTed is snapshotted so the
+  // worker can re-deliver byte-identical bodies (receivers verify a stable
+  // HMAC). Nullable for additive migration: pre-engine rows have no snapshot
+  // and are skipped by the retry pass. attempts < 5 with nextAttemptAt in
+  // the past = due for retry.
+  payload      String?
+  attempts     Int       @default(1)
+  nextAttemptAt DateTime?
+
   endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([success, attempts, nextAttemptAt])
 }
 
 // ─── Audit & Ops ──────────────────────────────────────────────────────────────

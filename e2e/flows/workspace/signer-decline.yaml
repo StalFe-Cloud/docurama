@@ -21,6 +21,14 @@ tags:
     direction: DOWN
     timeout: 10000
 
+# Re-assert before tapping: on cold runners the scroll can land mid-hydration
+# and the first tap re-resolves against a re-rendered tree (observed as an
+# immediate tap failure on CI while passing locally). One stability wait
+# closes the race.
+- extendedWaitUntil:
+    visible: " ?Decline to sign ?"
+    timeout: 10000
+
 # Decline from the action bar
 - tapOn: " ?Decline to sign ?"
 - extendedWaitUntil:

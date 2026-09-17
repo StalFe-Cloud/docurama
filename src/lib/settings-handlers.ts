@@ -12,6 +12,7 @@ import { validateFilenameFormat } from "@/lib/esign";
 import { verifySendingDomain, checkEmailPosture } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
+import { WEBHOOK_EVENTS } from "@/lib/api-reference";
 import { createInvitation, requestOrigin } from "@/lib/onboarding";
 
 /**
@@ -244,6 +245,34 @@ export async function getSettingsSection(
           lastTestAt: g.lastTestAt?.toISOString() ?? null,
           lastTestStatus: g.lastTestStatus, lastTestTo: g.lastTestTo,
         },
+      });
+    }
+
+    case "settings-webhooks": {
+      // Endpoint registry + recent deliveries. The signing secret is never
+      // included — it is shown exactly once at creation time.
+      const [endpoints, deliveries] = await Promise.all([
+        db.webhookEndpoint.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } }),
+        db.webhookDelivery.findMany({
+          where: { endpoint: { tenantId } },
+          orderBy: { at: "desc" },
+          take: 20,
+          include: { endpoint: { select: { url: true } } },
+        }),
+      ]);
+      return jsonOk({
+        endpoints: endpoints.map((e) => ({
+          id: e.id, url: e.url, events: e.events, status: e.status,
+          secretMasked: e.secretMasked, successRate: e.successRate,
+          lastDeliveryAt: e.lastDeliveryAt?.toISOString() ?? null,
+          createdAt: e.createdAt.toISOString(),
+        })),
+        deliveries: deliveries.map((d) => ({
+          id: d.id, event: d.event, statusCode: d.statusCode,
+          success: d.success, attempts: d.attempts,
+          at: d.at.toISOString(), url: d.endpoint.url,
+        })),
+        catalogue: WEBHOOK_EVENTS,
       });
     }
 
@@ -1036,6 +1065,55 @@ export async function postSettingsOp(
     await db.apiKey.update({ where: { id }, data: { status: "REVOKED" } });
     await recordAudit({ actor, actorRole: me.role, action: "api_key.revoked", resource: `api_key:${k.prefix}`, severity: "WARNING", tenantName: me.tenantName });
     return jsonOk({ ok: true, message: `Key ${k.prefix} revoked` });
+  }
+
+  // ── Webhooks ──
+  if (op === "webhook.create") {
+    const url = String(data.url ?? "").trim();
+    const events = Array.isArray(data.events) ? (data.events as unknown[]).map(String).filter((e) => WEBHOOK_EVENTS.some((w) => w.event === e) || e === "*") : [];
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return jsonError("Endpoint URL is not a valid URL");
+    }
+    // https only, except loopback hosts (local testing / internal networks).
+    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) || parsed.hostname.endsWith(".local") || parsed.hostname.endsWith(".internal");
+    if (parsed.protocol !== "https:" && !loopback) {
+      return jsonError("Endpoint URL must use https (http is allowed for localhost only)");
+    }
+    if (events.length === 0) return jsonError("Subscribe to at least one event");
+    const secret = `whsec_${randomBytes(24).toString("hex")}`;
+    const endpoint = await db.webhookEndpoint.create({
+      data: {
+        tenantId,
+        url,
+        events: events.join("|"),
+        secret,
+        secretMasked: `••••••${secret.slice(-4)}`,
+      },
+    });
+    await recordAudit({ actor, actorRole: me.role, action: "webhook.created", resource: `webhook:${endpoint.id}`, severity: "WARNING", tenantName: me.tenantName, detail: url });
+    // The signing secret is returned exactly once — stored retrievable (the
+    // dispatcher HMACs with it) but never echoed again by any API.
+    return jsonOk({ ok: true, message: `Endpoint registered - copy the signing secret now, it will not be shown again`, secret, endpointId: endpoint.id });
+  }
+
+  if (op === "webhook.delete") {
+    const h = await db.webhookEndpoint.findFirst({ where: { id, tenantId } });
+    if (!h) return jsonError("Endpoint not found", 404);
+    await db.webhookEndpoint.delete({ where: { id } });
+    await recordAudit({ actor, actorRole: me.role, action: "webhook.deleted", resource: `webhook:${id}`, severity: "WARNING", tenantName: me.tenantName, detail: h.url });
+    return jsonOk({ ok: true, message: "Endpoint deleted" });
+  }
+
+  if (op === "webhook.toggle") {
+    const h = await db.webhookEndpoint.findFirst({ where: { id, tenantId } });
+    if (!h) return jsonError("Endpoint not found", 404);
+    const next = h.status === "PAUSED" ? "ACTIVE" : "PAUSED";
+    await db.webhookEndpoint.update({ where: { id }, data: { status: next } });
+    await recordAudit({ actor, actorRole: me.role, action: `webhook.${next.toLowerCase()}`, resource: `webhook:${id}`, severity: "INFO", tenantName: me.tenantName });
+    return jsonOk({ ok: true, message: `Endpoint ${next === "PAUSED" ? "paused" : "resumed"}` });
   }
 
   // ── MCP server ──

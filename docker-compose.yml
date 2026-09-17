@@ -1,17 +1,46 @@
+# Single-node deployment: hardened image (non-root, HEALTHCHECK, boot-time
+# schema push) behind your own TLS proxy (Caddy/nginx — see PRODUCTION-PLAN).
+#
+#   docker compose up -d
+#
+# Scale-out note: the background worker (mail retries + webhook retries) runs
+# in-process. Run exactly ONE replica; multi-replica tiers need Postgres +
+# object storage first (PRODUCTION-PLAN §9) and DOCURAMA_WORKER=off on all
+# but one replica.
+
 services:
   docurama:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: docurama-cloud
+    container_name: docurama-app
     restart: always
     ports:
-      - "0.0.0.0:3002:3000"
+      - "127.0.0.1:3002:3000" # expose only to the local proxy; drop-in front with TLS
     environment:
       - NODE_ENV=production
+      # SQLite file inside the named volume (absolute path required by Prisma).
       - DATABASE_URL=file:/app/db/custom.db
       - STORAGE_DIR=/app/storage
       - NEXT_PUBLIC_DEMO_MODE=false
+      # Base domain for the vanity sub-domain routing (status./docs./verify./…).
+      # - ROOT_DOMAIN=docurama.eu
+      # SMTP delivery (unset = outbox-only mode, mail stays QUEUED + inspectable).
+      # smtp://user:pass@relay.example.com:587 or smtps://…:465
+      # - SMTP_URL=smtp://user:pass@relay.example.com:587
+      # Off-switch for the in-process background worker (see scale-out note).
+      # - DOCURAMA_WORKER=off
     volumes:
-      - ./db:/app/db
-      - ./storage:/app/storage
+      - docurama-db:/app/db
+      - docurama-storage:/app/storage
+    # Compose-level health supervision on top of the image HEALTHCHECK.
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+volumes:
+  docurama-db:
+  docurama-storage:

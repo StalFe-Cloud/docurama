@@ -8,10 +8,14 @@
  * Each route is loaded in a frozen, deterministic Chromium context (fixed
  * viewport, light scheme, reduced motion, animations finished, dev overlay
  * hidden), screenshotted, and compared against the committed baseline in
- * e2e/baselines/. Per-pixel tolerance 25 with at most 1.5% of pixels
- * differing — far above font antialiasing noise (Geist is self-hosted via
- * next/font, so rendering does not depend on system fonts) and far below any
- * real layout break (a missing hero section moves 15-60% of pixels).
+ * e2e/baselines/. Per-pixel tolerance 32 with at most 5% of pixels
+ * differing. The budget is cross-ENVIRONMENT: baselines are captured with
+ * one Chromium build and CI runs another, and text rasterization
+ * (antialiasing/hinting) differs measurably between them — untouched pages
+ * drifted 2.8–4.1% between the local Chrome-for-Testing and the GitHub
+ * runner's system Chrome (cycle-8 CI run). 5% clears that noise with margin
+ * and stays far below any real layout break (a missing hero section moves
+ * 15-60% of pixels). Locally, unchanged pages re-diff at 0.00%.
  *
  * Chromium resolution order:
  *   1. CHROME_BIN env var (CI exports the runner's Chrome)
@@ -43,8 +47,8 @@ const BASELINES_DIR = join(dirname(import.meta.path), "baselines");
 const UPDATE = process.env.UPDATE_BASELINES === "1";
 
 const VIEWPORT = { width: 1280, height: 800 };
-const PIXEL_TOLERANCE = 25; // max per-channel shift that still counts as "same"
-const MAX_DIFF_RATIO = 0.015; // ≤1.5% of pixels may differ
+const PIXEL_TOLERANCE = 32; // max per-channel shift that still counts as "same"
+const MAX_DIFF_RATIO = 0.05; // ≤5% of pixels may differ (cross-Chromium font rasterization; see header)
 const LCP_BUDGET_MS = 6000;
 
 const ROUTES: { name: string; path: string; lcpBudget?: boolean }[] = [
@@ -149,7 +153,9 @@ describe("visual regression smoke (marketing surfaces)", () => {
       executablePath,
       args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     });
-  });
+  }, 90_000); // cold Chromium start on a loaded shared runner can far exceed
+  // bun:test's 5s default hook timeout (observed as a flaky beforeAll abort
+  // on GitHub runners — the suite itself then "fails" unnamed).
 
   afterAll(async () => {
     if (browser) {
