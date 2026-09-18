@@ -2,8 +2,10 @@
  * Server-start hook (Next.js instrumentation) — boots the background worker.
  *
  * The worker is a single in-process loop, every WORKER_INTERVAL_MS:
- *   1. processOutbox()          — drain due SMTP mail
- *   2. retryFailedDeliveries()  — re-POST failed webhooks whose backoff elapsed
+ *   1. processOutbox()              — drain due SMTP mail
+ *   2. retryFailedDeliveries()      — re-POST failed webhooks whose backoff elapsed
+ *   3. renewDueSubscriptions()      — roll elapsed billing terms forward,
+ *                                     carrying unused envelopes (capped)
  *
  * Scale-out honesty: this design assumes ONE long-lived app instance (the
  * documented single-node topology). When the app tier goes multi-replica
@@ -27,9 +29,10 @@ export async function register() {
   if (process.env.DOCURAMA_WORKER === "off") return;
   g.__docuramaWorker = true;
 
-  const [{ processOutbox }, { retryFailedDeliveries }] = await Promise.all([
+  const [{ processOutbox }, { retryFailedDeliveries }, { renewDueSubscriptions }] = await Promise.all([
     import("@/lib/mail"),
     import("@/lib/webhooks"),
+    import("@/lib/billing"),
   ]);
 
   const WORKER_INTERVAL_MS = 30_000;
@@ -51,6 +54,14 @@ export async function register() {
     } catch (err) {
       console.warn("[worker] webhook pass failed:", err);
     }
+    try {
+      const renewals = await renewDueSubscriptions(20);
+      if (renewals.length > 0) {
+        console.log(`[worker] billing: ${renewals.length} subscription(s) renewed, ${renewals.reduce((n, r) => n + r.carriedForward, 0)} envelopes carried forward`);
+      }
+    } catch (err) {
+      console.warn("[worker] billing pass failed:", err);
+    }
   };
 
   // First pass shortly after boot (lets the server accept connections first),
@@ -59,5 +70,5 @@ export async function register() {
   boot.unref?.();
   const loop = setInterval(() => void tick(), WORKER_INTERVAL_MS);
   loop.unref?.();
-  console.log("[worker] background worker started (mail + webhook retries)");
+  console.log("[worker] background worker started (mail + webhook retries + subscription renewals)");
 }

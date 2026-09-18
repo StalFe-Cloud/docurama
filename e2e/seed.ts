@@ -40,12 +40,12 @@ const E2E_CC_TOKEN = "e2e-fixed-cc-token-0000000000000001";
 const E2E_API_KEY_SECRET = "dk_e2e_0000000000000000000000000000000000000000";
 const E2E_MCP_RATE_KEY_SECRET = "dk_e2e_mcp_rate_0000000000000000000000000000001";
 
-// Quota fixture: a STARTER tenant whose monthly envelope allowance (25) is
+// Quota fixture: a STARTER tenant whose monthly envelope allowance (50) is
 // fully spent, so the send path's 402 can be exercised deterministically.
 const E2E_QUOTA_TENANT_SLUG = "e2e-quota";
 const E2E_QUOTA_USER_EMAIL = "e2e-quota@docurama.eu";
 const E2E_QUOTA_USER_PASSWORD = "e2eQuota1234!";
-const E2E_QUOTA_FILLER = 25; // == PLAN_LIMITS.STARTER in the workspace route
+const E2E_QUOTA_FILLER = 50; // == PLAN_CATALOG.STARTER.envelopeLimit (src/lib/plans.ts)
 
 // Fixed doc ids (doc_ + 32 hex, per DOC_ID_RE) so re-seeds overwrite the same
 // storage keys instead of accumulating files.

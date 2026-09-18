@@ -7,11 +7,11 @@ import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
 import { foldForSearch } from "@/lib/search";
 import { dispatchEnvelopeEvent } from "@/lib/webhooks";
 import { processOutbox } from "@/lib/mail";
+import { currentAllowance } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ section: string }> };
-const PLAN_LIMITS: Record<string, number> = { STARTER: 25, BUSINESS: 250, ENTERPRISE: 5000 };
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -69,7 +69,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         return jsonOk({
           plan: plan ? iso(plan) : null,
           tenant: iso(tenant),
-          quota: { used: sentThisMonth, limit: PLAN_LIMITS[tenant.planCode] ?? 25 },
+          // Allowance incl. rollover (unused envelopes carried forward on
+          // renewal, capped at one monthly allowance — src/lib/billing.ts).
+          quota: await currentAllowance(tenantId!),
           kpis: { sentThisMonth, completed, pending, awaitingMe },
           recent: recent.map((e) => ({
             ...iso(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
@@ -271,11 +273,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           if (!title) return jsonError("Document title is required");
           const valid = recipients.filter((r) => r.email && String(r.email).includes("@"));
           if (valid.length === 0) return jsonError("At least one valid recipient email is required");
-          const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-          const used = await db.envelope.count({ where: { tenantId: tenantId!, createdAt: { gte: monthStart } } });
+          const allowance = await currentAllowance(tenantId!);
           const tenant = await db.tenant.findUnique({ where: { id: tenantId! } });
-          if (used >= (PLAN_LIMITS[tenant!.planCode] ?? 25)) {
-            return jsonError(`Monthly envelope quota reached (${used}/${PLAN_LIMITS[tenant!.planCode]}). Upgrade your plan to send more.`, 402);
+          if (allowance.used >= allowance.total) {
+            return jsonError(
+              `Monthly envelope quota reached (${allowance.used}/${allowance.total}` +
+                `${allowance.carriedForward > 0 ? ` incl. ${allowance.carriedForward} carried over` : ""}` +
+                "). Unused envelopes roll over on renewal, or upgrade your plan to send more.",
+              402,
+            );
           }
 
           // WS3: accept documentId or templateId for real page count and SHA-256

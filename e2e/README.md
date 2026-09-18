@@ -69,6 +69,16 @@ e2e/
                  with the tenant allowlist, real tool calls against the
                  seeded fixtures, 401/403 gates, RPC error codes, and the
                  per-key rate limit (429) — config mutations always restore.
+  plans.test.ts  Pricing/onboarding/billing suite (bun test, cycle 10): the
+                 shared plan catalog (SOLO = Starter at one seat, 50-envelope
+                 STARTER, incremental term discounts 0/5/10/15%, rollover
+                 caps, outcome framing instead of "most popular"), the
+                 pricing + /enterprise pages, signup plan prefill with hard
+                 seat limits (SOLO invite → 403), the public enterprise-lead
+                 pipeline (outbox copy to sales@, 429 throttle, admin
+                 triage), envelope rollover on renewal (carry-forward incl.
+                 the one-allowance cap and idempotency), and small-team-group
+                 ops (create/assign/delete, non-admin 403).
   webhooks.test.ts  Webhook dispatcher suite (bun test, in-process lib + real
                  server): signed delivery with HMAC-SHA256 verification over
                  the raw body, subscription filtering, a 500 → retry-pass
