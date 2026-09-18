@@ -123,7 +123,7 @@ fi
 # ── 2c. API-layer + evidence-layer + transparency-layer + MCP + visual suites ──
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
   echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + visual tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/mcp.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/MCP/webhooks/visual tests failed"; exit 1; }
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/mcp.test.ts e2e/plans.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/MCP/plans/webhooks/visual tests failed"; exit 1; }
 fi
 
 # ── 2d. Mail delivery engine (own process: it owns DATABASE_URL + SMTP_URL) ───

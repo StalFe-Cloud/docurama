@@ -307,8 +307,12 @@ describe.skipIf(!RUN_S3_E2E)("S3 document storage against real SeaweedFS", () =>
       },
     });
 
-    // Evidence: a Document row backing a real seeded envelope. Borrow an
-    // existing envelope, point it at our object, and restore afterwards.
+    // Evidence: a Document row backing a real seeded envelope. Borrow ANY
+    // envelope (documentId is restored afterwards, null included) — the old
+    // filter `{ documentId: { not: null } }` silently depended on leftover
+    // E2E fixture rows in the committed db, which a fresh prisma re-seed
+    // legitimately wipes; the sweep must equally protect a document that
+    // backs an envelope which never had one.
     const docId = "doc_" + "1e2f3a4b".repeat(4);
     const evidence = await storeUpload(chunksOf(PDF), dbTenant, docId);
     await db!.document.create({
@@ -325,7 +329,6 @@ describe.skipIf(!RUN_S3_E2E)("S3 document storage against real SeaweedFS", () =>
       },
     });
     const envelope = await db!.envelope.findFirst({
-      where: { documentId: { not: null } },
       select: { id: true, documentId: true },
     });
     expect(envelope).toBeTruthy();

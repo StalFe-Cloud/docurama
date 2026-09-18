@@ -592,3 +592,81 @@ called it: SeaweedFS is Apache-2.0 and costs €0).
   dev-server batch + 7 mail + 7 S3-seaweed), **25/25 Maestro flows**
   (foreground chunks), helm lint/template clean, production build green with
   the SDK traced into the standalone output.
+
+## 7i. Cycle 10 — Pricing, onboarding & the enterprise pipeline (2026-09-18)
+
+**Scope (user-driven):** complete user + admin onboarding with per-plan guided
+instructions and demos, seat-aware invitations, an enterprise onboarding path,
+small team groups inside company workspaces, and a repriced plan catalogue —
+50-envelope Starter ("35 sending days a month, weekends on us"), envelope
+rollover on renewal, a promotional billing-term switch with three incremental
+discount slabs, a one-seat Solo plan, and outcome framing instead of the
+"most popular" badge.
+
+- **`src/lib/plans.ts` (new)** — single source of truth: SOLO/STARTER/
+  BUSINESS/ENTERPRISE (Solo is the Starter feature set at exactly one seat,
+  €19), features + "with this plan you'll…" outcome bullets + bestFor,
+  billing terms (monthly = no engagement; 3 mo −5%, 6 mo −10%, 12 mo −15%,
+  incremental), price math (`effectiveMonthlyEur` / `termTotalEur` /
+  `termSavingsEur`), rollover caps (= one monthly allowance), and per-plan
+  onboarding guides (guided first steps + demo links). The pricing page,
+  quota engine, seeds, admin console and wizard all read this one file.
+- **Billing engine (`src/lib/billing.ts`, new)** — `currentAllowance`
+  (plan allowance + carried-forward envelopes), `renewDueSubscriptions`
+  (rolls elapsed terms forward, carries unused envelopes capped at one
+  monthly allowance, audits `subscription.renewed`, idempotent — a worker
+  outage catching up several terms is handled), `seatCapacity` (members +
+  pending invitations vs the plan's seat limit). The background worker
+  gained a third pass (subscription renewals) next to mail + webhooks.
+- **Quota + seats enforcement** — the workspace send path now refuses at
+  `used >= allowance` with a message that mentions rollover; both invite
+  paths (settings + onboarding wizard) hard-refuse with 403 when
+  members + pending invites fill the plan's seats ("All N seats…"), so a
+  pending invitation holds a seat until accepted or revoked.
+- **Pricing page** — promotional term switch (segmented control) driving
+  every card: monthly shows "no engagement — cancel anytime", committed
+  terms show the −5/−10/−15% badge, the strikethrough list price, the
+  term total and the savings. Four cards (Solo first), no highlight badge;
+  each card carries a "With {plan} you'll" outcomes block. Starter/Solo
+  feature "50 envelopes/month", "35 sending days a month — weekends are on
+  us" and the rollover line; the rollover note under the grid explains the
+  one-allowance cap. Enterprise CTA links to the new /enterprise page.
+- **Enterprise onboarding (`/enterprise` + `/api/enterprise-lead` + admin
+  "Enterprise Leads" console)** — the guided pipeline is explicit (form →
+  pilot on real contracts → security/procurement review → rollout with a
+  named contact), the lead form lands in an `EnterpriseLead` table (NEW →
+  CONTACTED → QUALIFIED → WON/LOST + triage notes), queues an outbox copy
+  to sales@docurama.eu (nothing lost without SMTP), is audited as
+  ANONYMOUS, throttled 10 min per email, and triaged in the admin console.
+- **Small team groups** — `Team` model + `Member.teamId`; workspace admins
+  create/rename/delete teams and assign members (Settings → Users shows a
+  Team column + a Teams card). Organisational only: workspace visibility
+  unchanged, members fall back to unassigned on team delete (SetNull).
+- **Onboarding completion** — the wizard's invites step shows live seat
+  occupancy ("fill your remaining seats") and blocks input at capacity;
+  the done step renders the plan guide (guided first steps + demo links +
+  outcomes); the workspace home gained a dismissable per-plan guide card
+  (localStorage via useSyncExternalStore); the admin overview gained a
+  five-item platform onboarding guide (SMTP, leads, tenants/plans, DNS,
+  health); signup accepts `?plan=SOLO` prefill from the pricing CTA
+  (existing workspace wins on invite/domain joins).
+- **Seeds** — prisma seed mirrors the catalogue (SOLO plan, 50-envelope
+  Starter, outcomes, a Solo tenant, term/discount/rollover demos on the
+  seeded subscriptions, StålFe Sales/Engineering/Legal teams, three
+  pipeline leads); e2e quota filler 25 → 50 keeping the 402 deterministic.
+- **Tests** — new `e2e/plans.test.ts` (catalog integrity incl. Solo ≡
+  Starter-minus-seats, price math, page assertions incl. "no Most
+  popular", SOLO signup + 403 seat limit, lead pipeline end-to-end with
+  outbox + audit + 429, rollover renewal incl. cap + idempotency, team
+  ops + non-admin 403); api.test.ts quota assertions 25 → 50; visual
+  baselines regenerated for the repriced pricing section. Gates:
+  tsc/eslint clean, **125 bun tests** across 10 files (104 in the
+  dev-server batch: api 23, evidence 14, transparency 13, rekor 10, mcp 15,
+  plans 21, webhooks 8 — plus visual 7, mail 7, S3 7), **25/25 Maestro
+  flows** (marketing re-validated green standalone — the Maestro-beta
+  dev-compile flake class, forensics in the worklog).
+
+**Deferred (revenue-triggered, unchanged):** payment provider integration
+(Stripe/SEPA rails), SSO/SAML implementation (Enterprise console + docs
+exist, wiring is the paid rung), bot-protection in front of the public
+lead form.

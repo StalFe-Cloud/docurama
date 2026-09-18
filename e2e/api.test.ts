@@ -335,8 +335,8 @@ describe("signer preview watermark (src/lib/preview-watermark)", () => {
 });
 
 describe("monthly envelope quota (402, spent STARTER plan)", () => {
-  // The seed spends the "E2E Quota" tenant's entire 25-envelope STARTER
-  // allowance for the current month; the send path must refuse with 402 and
+  // The seed spends the "E2E Quota" tenant's entire 50-envelope STARTER
+  // allowance for the current period; the send path must refuse with 402 and
   // must not create anything.
   const QUOTA_EMAIL = "e2e-quota@docurama.eu";
 
@@ -353,7 +353,7 @@ describe("monthly envelope quota (402, spent STARTER plan)", () => {
       const token = String((login.body as { token?: string }).token);
 
       const before = await direct.envelope.count({ where: { tenantId: quotaTenant.id } });
-      expect(before).toBe(25); // the fixture's fully-spent month
+      expect(before).toBe(50); // the fixture's fully-spent period
 
       const res = await fetch(`${BASE}/api/workspace/envelopes`, {
         method: "POST",
@@ -372,7 +372,7 @@ describe("monthly envelope quota (402, spent STARTER plan)", () => {
 
       // Refused means refused: nothing was created, no recipient rows, nothing.
       const after = await direct.envelope.count({ where: { tenantId: quotaTenant.id } });
-      expect(after).toBe(25);
+      expect(after).toBe(50);
     } finally {
       await direct.$disconnect();
     }

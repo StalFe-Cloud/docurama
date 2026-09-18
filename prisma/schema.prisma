@@ -154,10 +154,32 @@ model Member {
   status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
 
+  // Small team groups (cycle 10): optional grouping of members inside a
+  // company workspace (e.g. "Sales", "HR", "Legal"). Purely organisational —
+  // every member keeps full workspace visibility; teams drive filtering
+  // and structure for large tenants.
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tenantId])
+}
+
+// Small team groups inside a company workspace. Created by workspace admins,
+// assigned per member; used to organise large tenants (Enterprise onboarding:
+// "some users want a small team group with the company").
+model Team {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members Member[]
+
+  @@unique([tenantId, name])
 }
 
 model Tenant {
@@ -180,6 +202,7 @@ model Tenant {
 
   invitations Invitation[]
   members      Member[]
+  teams        Team[]
   envelopes    Envelope[]
   templates    Template[]
   documents    Document[]
@@ -654,7 +677,7 @@ model McpConfig {
 
 model Plan {
   id          String  @id @default(cuid())
-  code        String  @unique // STARTER | BUSINESS | ENTERPRISE
+  code        String  @unique // SOLO | STARTER | BUSINESS | ENTERPRISE
   name        String
   monthlyEur  Int
   seatLimit   Int
@@ -664,6 +687,9 @@ model Plan {
   slaUptime   String  @default("99.5%")
   support     String
   features    String // pipe-separated
+  // Outcome bullets ("with this plan you'll …") — replaces the old
+  // "most popular" highlight with per-plan value framing.
+  outcomes    String? // pipe-separated
   active      Boolean @default(true)
 }
 
@@ -679,7 +705,34 @@ model Subscription {
   lastInvoiceAt  DateTime?
   failedPayment  Boolean   @default(false)
 
+  // Billing term (cycle 10 promotional switch): 1 (no engagement), 3, 6 or
+  // 12 months, with an incremental committed discount (0/5/10/15%).
+  termMonths           Int @default(1)
+  discountPct          Int @default(0)
+  // Envelope rollover: unused envelopes carried into the current period on
+  // renewal (capped at one monthly allowance — see src/lib/billing.ts).
+  carriedForwardEnvelopes Int @default(0)
+
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// Enterprise pipeline (cycle 10): prospects from the /enterprise onboarding
+// page. Platform admins triage leads in the admin console (Leads section);
+// each lead is a potential custom Enterprise rollout (SSO, BYO certs,
+// self-hosting, high-volume quotas).
+model EnterpriseLead {
+  id          String    @id @default(cuid())
+  company     String
+  contactName String
+  email       String
+  phone       String?
+  seats       Int       @default(0) // expected seat count
+  monthlyEnvelopes Int  @default(0) // expected volume
+  requirements String   @default("") // free text: SSO, Part 11, self-hosting…
+  status      String    @default("NEW") // NEW | CONTACTED | QUALIFIED | WON | LOST
+  notes       String    @default("") // admin-visible triage notes
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 // ─── Legal, Privacy & Compliance ──────────────────────────────────────────────

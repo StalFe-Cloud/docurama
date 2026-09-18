@@ -14,6 +14,8 @@ import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
 import { WEBHOOK_EVENTS } from "@/lib/api-reference";
 import { createInvitation, requestOrigin } from "@/lib/onboarding";
+import { seatCapacity } from "@/lib/billing";
+import { planDef } from "@/lib/plans";
 
 /**
  * Workspace Settings API - GET sections and POST operations behind
@@ -76,12 +78,13 @@ export async function getSettingsSection(
     case "settings": {
       const tenant = await db.tenant.findUnique({
         where: { id: tenantId },
-        include: { members: { include: { user: true } }, subscriptions: { take: 1 } },
+        include: { members: { include: { user: true, team: true } }, subscriptions: { take: 1 }, teams: { orderBy: { name: "asc" }, include: { members: { select: { id: true } } } } },
       });
-      const [keys, signatures, invitations] = await Promise.all([
+      const [keys, signatures, invitations, capacity] = await Promise.all([
         db.apiKey.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } }),
         db.userSignature.findMany({ where: { userId: me.id }, orderBy: { createdAt: "desc" } }),
         db.invitation.findMany({ where: { tenantId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
+        seatCapacity(tenantId),
       ]);
       const plan = await db.plan.findUnique({ where: { code: tenant!.planCode } });
       return jsonOk({
@@ -115,7 +118,15 @@ export async function getSettingsSection(
           id: m.id, role: m.role, name: `${m.user.firstName} ${m.user.lastName}`,
           email: m.user.email, status: m.user.status, totpEnabled: m.user.totpEnabled,
           lastActiveAt: m.user.lastActiveAt?.toISOString() ?? null,
+          teamId: m.teamId, teamName: m.team?.name ?? null,
         })),
+        // Seat occupancy incl. pending invitations (cycle 10) — drives the
+        // "invite your team to the remaining seats" guidance.
+        seats: {
+          used: capacity.used, limit: capacity.seatLimit, remaining: capacity.remaining,
+          members: capacity.members, pendingInvites: capacity.pendingInvites, planName: planDef(capacity.planCode).name,
+        },
+        teams: tenant!.teams.map((t) => ({ id: t.id, name: t.name, memberCount: t.members.length })),
         isAdmin: adminRoles(me),
       });
     }
@@ -585,6 +596,16 @@ export async function postSettingsOp(
       const already = await db.member.findFirst({ where: { userId: exists.id, tenantId } });
       if (already) return jsonError("This person is already a member of the workspace");
     }
+    // Seat capacity: pending invitations hold a seat until accepted/revoked.
+    const cap = await seatCapacity(tenantId);
+    if (cap.remaining <= 0) {
+      return jsonError(
+        `All ${cap.seatLimit} seats on the ${planDef(cap.planCode).name} plan are in use ` +
+          `(${cap.members} member${cap.members === 1 ? "" : "s"} + ${cap.pendingInvites} pending invitation${cap.pendingInvites === 1 ? "" : "s"}). ` +
+          "Revoke an unused invitation or upgrade the plan to invite more.",
+        403,
+      );
+    }
     // Real invitations: a tokenized link is emailed (queued in the outbox);
     // the invited person creates their own password at /invite/<token> - the
     // workspace never fabricates accounts or credentials on their behalf.
@@ -619,6 +640,73 @@ export async function postSettingsOp(
     if (m.role === "OWNER") return jsonError("The workspace owner cannot be removed");
     await db.member.delete({ where: { id } });
     return jsonOk({ ok: true, message: "Member removed from workspace" });
+  }
+
+  // ── Small team groups (cycle 10) ──
+  // Organisational grouping of members inside a company workspace ("Sales",
+  // "HR", "Legal"). Purely additive: workspace visibility is unchanged.
+  if (op === "team.create") {
+    if (!adminRoles(me)) return jsonError("Only workspace owners and admins can create teams", 403);
+    const name = String(data.name ?? "").trim();
+    if (!name) return jsonError("Team name is required");
+    if (name.length > 40) return jsonError("Team name must be 40 characters or fewer");
+    const dupe = await db.team.findFirst({ where: { tenantId, name } });
+    if (dupe) return jsonError(`A team called "${name}" already exists`);
+    const team = await db.team.create({ data: { tenantId, name } });
+    await recordAudit({
+      actor, actorRole: me.role, action: "team.created", resource: `team:${name}`,
+      tenantName: me.tenantName, detail: "Small team group created",
+    });
+    return jsonOk({ ok: true, id: team.id, message: `Team "${name}" created` });
+  }
+
+  if (op === "team.rename") {
+    if (!adminRoles(me)) return jsonError("Only workspace owners and admins can rename teams", 403);
+    const name = String(data.name ?? "").trim();
+    if (!name) return jsonError("Team name is required");
+    if (name.length > 40) return jsonError("Team name must be 40 characters or fewer");
+    const team = await db.team.findFirst({ where: { id, tenantId } });
+    if (!team) return jsonError("Team not found", 404);
+    const dupe = await db.team.findFirst({ where: { tenantId, name, NOT: { id } } });
+    if (dupe) return jsonError(`A team called "${name}" already exists`);
+    await db.team.update({ where: { id }, data: { name } });
+    await recordAudit({
+      actor, actorRole: me.role, action: "team.renamed", resource: `team:${name}`,
+      tenantName: me.tenantName, detail: `Team renamed from "${team.name}"`,
+    });
+    return jsonOk({ ok: true, message: `Team renamed to "${name}"` });
+  }
+
+  if (op === "team.delete") {
+    if (!adminRoles(me)) return jsonError("Only workspace owners and admins can delete teams", 403);
+    const team = await db.team.findFirst({ where: { id, tenantId } });
+    if (!team) return jsonError("Team not found", 404);
+    // Members fall back to no team (onDelete: SetNull in the schema).
+    await db.team.delete({ where: { id } });
+    await recordAudit({
+      actor, actorRole: me.role, action: "team.deleted", resource: `team:${team.name}`,
+      tenantName: me.tenantName, detail: "Small team group deleted; members unassigned",
+    });
+    return jsonOk({ ok: true, message: `Team "${team.name}" deleted` });
+  }
+
+  if (op === "member.team") {
+    if (!adminRoles(me)) return jsonError("Only workspace owners and admins can assign team membership", 403);
+    const m = await db.member.findFirst({ where: { id, tenantId } });
+    if (!m) return jsonError("Member not found", 404);
+    let teamId: string | null = null;
+    if (data.teamId !== null && data.teamId !== undefined && data.teamId !== "") {
+      const team = await db.team.findFirst({ where: { id: String(data.teamId), tenantId } });
+      if (!team) return jsonError("Team not found in this workspace", 404);
+      teamId = team.id;
+    }
+    await db.member.update({ where: { id }, data: { teamId } });
+    const teamName = teamId ? (await db.team.findUnique({ where: { id: teamId } }))?.name : null;
+    await recordAudit({
+      actor, actorRole: me.role, action: "member.team_assigned", resource: `member:${id}`,
+      tenantName: me.tenantName, detail: teamName ? `Assigned to team "${teamName}"` : "Removed from team",
+    });
+    return jsonOk({ ok: true, message: teamName ? `Moved to team "${teamName}"` : "Removed from team" });
   }
 
   // ── Signing certificates (X.509 / PKCS#12) ──
