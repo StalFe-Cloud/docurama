@@ -16,13 +16,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: docurama-app
+    container_name: ${CONTAINER_NAME:-docurama-cloud}
     restart: always
     ports:
-      - "127.0.0.1:3002:3000" # expose only to the local proxy; drop-in front with TLS
+      - "${PORT_BIND:-0.0.0.0:3002}:3000"
     environment:
       - NODE_ENV=production
-      # SQLite file inside the named volume (absolute path required by Prisma).
+      # SQLite file inside the persistent volume (absolute path required by Prisma).
       - DATABASE_URL=file:/app/db/custom.db
       - STORAGE_DIR=/app/storage
       - NEXT_PUBLIC_DEMO_MODE=false
@@ -44,8 +44,8 @@ services:
       # Off-switch for the in-process background worker (see scale-out note).
       # - DOCURAMA_WORKER=off
     volumes:
-      - docurama-db:/app/db
-      - docurama-storage:/app/storage
+      - ${DB_DIR:-./db}:/app/db
+      - ${STORAGE_DIR:-./storage}:/app/storage
     # Compose-level health supervision on top of the image HEALTHCHECK.
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
