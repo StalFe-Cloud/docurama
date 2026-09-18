@@ -527,8 +527,11 @@ function AccountStep({ invite, inviteTokenRef, planRef, onDone }: { invite: Invi
             className="mt-0.5 h-4 w-4 accent-[#0f7a5a]"
           />
           <span className="text-muted-foreground">
-            I agree to the Docurama Terms of Service and Privacy Policy, and I consent to the processing of my
-            account data as described there (GDPR Art. 6(1)(b)).
+            I agree to the Docurama{" "}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Terms of Service</a>{" "}
+            and{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</a>,
+            and I consent to the processing of my account data as described there (GDPR Art. 6(1)(b)).
           </span>
         </label>
         <Button type="submit" className="w-full" disabled={signup.isPending}>

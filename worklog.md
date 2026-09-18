@@ -334,3 +334,27 @@ Work Log:
 Stage Summary:
 - Commercial surface is now complete and self-serve: repriced catalogue with promotional terms and rollover, guided onboarding for every persona (user per-plan, admin checklist, enterprise sales-assisted), seat-aware invitations, and a real lead pipeline in the admin console.
 - Deferred (revenue-triggered): payment provider rails (the term switch + rollover engine is provider-ready), SSO/SAML wiring, bot-protection in front of the public lead form.
+
+---
+Task ID: 15
+Agent: Super Z (main)
+Task: Reconciliation + production-readiness hardening port — a parallel session had already landed cycle 10 (pricing catalogue, onboarding, enterprise pipeline, teams — PR #10) plus storage/S3 (#9) on remote quality while my local session implemented the same feature set independently. This task resets to the landed remote work and ports ONLY my unique production-hardening layer (the duplicated feature implementations stay with the landed versions).
+
+Work Log:
+- Divergence forensics: remote quality carried 14 new commits (S3/SeaweedFS #9, cycle-10 pricing/onboarding via PR #10, docker/README). My local quality had 7 commits implementing the same 11-item feature set in parallel (different designs: my TeamMember join table vs their Member.teamId; my lazy quota renewal vs their worker pass; my quota.ts vs their plans.ts/billing.ts). My full local implementation preserved on branch save/local-implementation (4f2df45).
+- Reset quality to origin/quality (7f6ff3a); regenerated the Prisma client against their schema; installed their new deps (@aws-sdk/client-s3, nodemailer).
+- Ported the unique hardening layer onto their code:
+  * Security headers in next.config.ts: CSP (prod drops unsafe-eval), HSTS includeSubDomains, nosniff, X-Frame-Options DENY, Referrer/Permissions policies, COOP, no-store on /api.
+  * Real legal pages: /privacy (processing mapped to the actual data model, cookies/subprocessors/retention/rights) + /terms (honest signature-level section, billing terms incl. 35-day months + rollover cap, French law) — footer + wizard GDPR consent now link them; DPA honestly routed to legal@.
+  * Honest cookie notice (informational: essential + functional only, no tracking exists) mounted on the marketing page.
+  * Claims audit on their copy: FR "horodatage qualifié/piste d'audit certifiée" fixed, quotation demo stamp "eIDAS & PAdES Compliant" -> "eIDAS-aligned · PAdES", /docs/legal "signature électronique qualifiée" overclaim replaced with the honest QTSP disclosure, metadata "certification eIDAS" -> "conformité eIDAS".
+  * SEO: canonicals on all 13 public pages, OG block on the homepage, Organization JSON-LD on / and /marketing, metadataBase -> docurama.eu, sitemap +/privacy +/terms +/enterprise +/modeles-de-contrats +/mail, robots now blocks /sign, /reset-password, /api/sign, /api/enterprise-lead.
+  * Branded not-found.tsx (404 with verify/docs/support routes + honest signing-link guidance).
+  * TSA catalog https-only (Sectigo) + validation rejects http:// TSAs.
+  * Link audit: docs/legal /sign-in -> /login.
+- Two new Maestro flows ported + rewritten for their implementation (pricing.yaml: catalogue, outcome framing, term switch -15%, weekends-on-us; enterprise-lead.yaml: form submit -> confirmation) — full-string regex + below-the-fold + exact-tap lessons applied; suite now 27 flows.
+- Test-isolation fixes: MCP per-key rate-limit test made deterministic (drain-then-wait-61s pattern; the original single-probe approach consumed a rate slot itself; timeout raised to 90s) and moved to its own runner step (parallel sibling files disturbed the in-memory bucket); mail suite contract respected (own process + scratch DB).
+- Verification on the reconciled tree: tsc 0 errors; eslint clean; production build 35/35 routes; standalone boot verified (prod CSP without unsafe-eval, /privacy /terms /enterprise 200, branded 404); bun battery 132 tests green (api 23, evidence 14, transparency 13, rekor 10, mcp 15, plans 21, webhooks 8, visual 7 [0.00% diffs], mail 7 — mail in isolation per contract); Maestro 27/27 flows green in foreground groups (auth 5, admin 3, public 9 incl. the 2 new, workspace 10).
+
+Stage Summary:
+- quality now carries the landed cycle-10 feature set PLUS the production-readiness hardening layer: security headers, real privacy/terms pages, honest claims everywhere, cookie transparency, full SEO surface, branded 404, https-only TSAs, and deterministic E2E for the pricing + enterprise funnels. All gates green: 27/27 Maestro flows, 132 bun tests, tsc/eslint/build clean, prod boot verified.

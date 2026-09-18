@@ -8,6 +8,7 @@ import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { getDocsNav } from "@/lib/docs";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/docs" },
   title: "Docurama documentation",
   description:
     "Guides and API reference for Docurama: sending envelopes, templates, verification, sending domains, notifications, the REST API, webhooks, MCP and compliance modes.",

@@ -819,7 +819,7 @@ export async function postSettingsOp(
   // ── RFC 3161 Timestamp Authority ──
   if (op === "tsa.save") {
     const url = String(data.url ?? "").trim();
-    if (!/^https?:\/\//.test(url)) return jsonError("TSA URL must start with http:// or https://");
+    if (!/^https?:\/\//.test(url)) return jsonError("TSA URL must use https:// - timestamp responses must be integrity-protected");
     const hashAlgorithm = ["SHA-256", "SHA-384", "SHA-512"].includes(String(data.hashAlgorithm)) ? String(data.hashAlgorithm) : "SHA-256";
     const authType = data.authType === "basic" ? "basic" : "none";
     const username = authType === "basic" ? String(data.username ?? "").trim() || null : null;

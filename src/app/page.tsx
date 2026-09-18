@@ -16,6 +16,15 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Docurama: Sign documents. Prove everything.",
     description:
       "EU-built eSignatures with cryptographic evidence: X.509 sealing, RFC 3161 timestamps, GDPR, eIDAS-aligned and 21 CFR Part 11 workflows.",
+    alternates: { canonical: "/" },
+    openGraph: {
+      title: "Docurama: Sign documents. Prove everything.",
+      description:
+        "EU-built eSignatures with cryptographic evidence: X.509 sealing, RFC 3161 timestamps, GDPR, eIDAS-aligned and 21 CFR Part 11 workflows.",
+      siteName: "Docurama",
+      images: ["/brand/og-image.png"],
+      type: "website",
+    },
   };
 }
 
@@ -39,5 +48,35 @@ export default async function Home() {
   const me = await getSessionUser();
   if (me) return <PortalRoot />;
 
-  return <MarketingPage />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        // Structured data limited to verifiable facts about the organization.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "Docurama SAS",
+            url: "https://docurama.eu",
+            logo: "https://docurama.eu/brand/docurama-mark.svg",
+            email: "support@docurama.eu",
+            address: {
+              "@type": "PostalAddress",
+              streetAddress: "1 Rue Marguerin",
+              postalCode: "75014",
+              addressLocality: "Paris",
+              addressCountry: "FR",
+            },
+            contactPoint: [
+              { "@type": "ContactPoint", contactType: "customer support", email: "support@docurama.eu", availableLanguage: ["en", "fr"] },
+              { "@type": "ContactPoint", contactType: "sales", email: "sales@docurama.eu" },
+              { "@type": "ContactPoint", contactType: "privacy", email: "privacy@docurama.eu" },
+            ],
+          }),
+        }}
+      />
+      <MarketingPage />
+    </>
+  );
 }

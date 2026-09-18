@@ -23,7 +23,7 @@
   },
   "hero": {
     "title": "Chaque document signé et scellé selon le droit européen",
-    "subtitle": "Le portail d'e-signature d'entreprise avec scellement cryptographique PAdES, horodatage qualifié RFC 3161 et piste d'audit certifiée.",
+    "subtitle": "Le portail d'e-signature d'entreprise avec scellement cryptographique PAdES, horodatage RFC 3161 et piste d'audit vérifiable.",
     "startFree": "Commencer l'essai gratuit",
     "verifyDoc": "Vérifier un document",
     "caption": "Démonstration de l'espace StålFe de bout en bout : un certificat d'usine envoyé au partenaire de fonderie, signé, scellé et attesté par preuve cryptographique."

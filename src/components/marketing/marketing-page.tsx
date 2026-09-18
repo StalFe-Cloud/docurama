@@ -29,6 +29,7 @@ import { TableDemo } from "@/components/marketing/table-demo";
 import { VerifyDemo } from "@/components/marketing/verify-demo";
 import { LiveExamples } from "@/components/marketing/live-examples";
 import { ScrollTop } from "@/components/marketing/scroll-top";
+import { CookieNotice } from "@/components/marketing/cookie-notice";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -123,7 +124,7 @@ const FAQS = [
   },
   {
     q: "Are the signatures legally valid?",
-    a: "Docurama implements eIDAS-aligned electronic signature workflows (Simple, Advanced, Qualified-aligned) with cryptographic sealing and RFC 3161 timestamps. For most B2B contracts across the EU, Simple and Advanced eSignatures are sufficient and fully enforceable. The signing level applied to each document is reported honestly in its evidence record.",
+    a: "Docurama implements eIDAS-aligned electronic signature workflows (Simple and Advanced) with cryptographic sealing and RFC 3161 timestamps. For most B2B contracts across the EU, Simple and Advanced eSignatures are sufficient and fully enforceable. The signing level applied to each document is reported honestly in its evidence record.",
   },
   {
     q: "We're a regulated company. Can you support 21 CFR Part 11?",
@@ -551,10 +552,10 @@ export function MarketingPage() {
           <nav aria-label="Legal and trust">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Legal and trust</p>
             <ul className="space-y-2.5 text-sm">
-              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/docs#legal">Terms of Service</a></li>
-              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/docs#legal">Privacy Policy</a></li>
-              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/docs#legal">Data Processing Agreement</a></li>
-              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/docs#legal">Subprocessor list</a></li>
+              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/terms">Terms of Service</a></li>
+              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/privacy">Privacy Policy</a></li>
+              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="mailto:legal@docurama.eu">Data Processing Agreement (on request)</a></li>
+              <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/privacy">Subprocessor list (Privacy Policy, §5)</a></li>
               <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/modeles-de-contrats">French legal templates</a></li>
               <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/security">Security policy</a></li>
               <li><a className="text-muted-foreground transition-colors hover:text-foreground" href="/status">Platform status</a></li>
@@ -573,6 +574,7 @@ export function MarketingPage() {
         </div>
       </footer>
 
+      <CookieNotice />
       <ScrollTop />
     </div>
   );
