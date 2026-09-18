@@ -421,10 +421,15 @@ Docurama has undergone 10 continuous engineering cycles, graduating from early p
 9. **S3-Compatible Scalable Object Storage (Cycle 9):**
    - Native dual-engine document store supporting local POSIX storage or S3-compatible backends (Apache-2.0 SeaweedFS, MinIO, Ceph, AWS S3, Cloudflare R2).
    - Real SeaweedFS test integration in CI and Docker Compose (`--profile s3`).
-10. **Repriced Commercial Catalogue & Guided Onboarding (Cycle 10):**
-    - Multi-tier catalogue (SOLO 1-seat €19/mo, STARTER 5-seat €49/mo, BUSINESS 15-seat €149/mo, ENTERPRISE custom).
-    - Unused envelope rollover on renewal, committed-term billing discounts, and small team organizational groups.
-    - Public `/enterprise` intake pipeline (`/api/enterprise-lead`) with platform admin triage console.
+10. **Repriced Commercial Catalogue & Strategic Client Friction (Cycle 10):**
+    - Multi-tier catalogue engineered for natural expansion and strategic client friction:
+      - **SOLO (€12/mo):** 1 seat, 30 envelopes/month, weekends on us, rollover on renewal (up to 30), 5GB storage, 2 templates. Frictionless entry for solo founders and freelancers, with tight envelope & 1-seat caps that naturally nudge growing operations upward.
+      - **STARTER (€29/mo):** 3 seats (€9.67/seat sweet spot), 100 envelopes/month, weekends on us, rollover on renewal (up to 100), 10GB storage, 5 templates. The high-value collaboration tier for small teams.
+      - **BUSINESS (€79/mo):** 10 seats, 250 envelopes/month, API & webhooks, custom sending domain, SMS/WhatsApp delivery.
+      - **ENTERPRISE (€349/mo):** 100 seats, 5,000 envelopes/month, 21 CFR Part 11, BYO certs, SSO/SAML, audit evidence packs.
+    - **Committed-Term Billing Discounts:** Monthly (no commitment), 3 months (−5%), 6 months (−10%), and 12 months (−20% annual saver: Solo at €9.60/mo, Starter at €23.20/mo).
+    - **Unused Envelope Rollover:** Full rollover of unused envelopes on renewal, capped at one monthly allowance.
+    - **Enterprise Pipeline:** Public `/enterprise` guided intake (`/api/enterprise-lead`) with platform admin triage console.
 
 ---
 
