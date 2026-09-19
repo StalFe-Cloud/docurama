@@ -177,6 +177,26 @@ if [[ "${E2E_SKIP_S3:-0}" != "1" ]]; then
   fi
 fi
 
+# ── 2f. Browser suites (Playwright) ───────────────────────────────────────────
+# The replacement for the Maestro flows in section 3; all 29 flows are ported.
+# Both run during the transition — Maestro goes away once these have been green
+# on CI. E2E_SKIP_BROWSER=1 forces them off (also honoured inside the suites).
+if [[ "${E2E_SKIP_BROWSER:-0}" != "1" ]]; then
+  echo "── e2e: browser suites (Playwright)"
+  E2E_BASE_URL="$BASE_URL" bun test e2e/browser/ || { echo "!! browser suites failed"; exit 1; }
+
+  # Re-seed before handing over to Maestro. The workspace browser suite mutates
+  # the same fixtures the Maestro flows expect untouched — it declines
+  # DOC-E2E0003 and signs/seals DOC-E2E0004 — so signer-decline.yaml and
+  # signer-journey.yaml would otherwise fail against already-spent fixtures.
+  # The seed wipes and recreates its own envelopes, which resets both.
+  # This whole step disappears with section 3.
+  if [[ "${E2E_SKIP_SEED:-0}" != "1" ]]; then
+    echo "── e2e: re-seeding before the Maestro flows"
+    bun e2e/seed.ts > /dev/null
+  fi
+fi
+
 # ── 3. Discover flows and run them ────────────────────────────────────────────
 export MAESTRO_BASE_URL="$BASE_URL"
 export MAESTRO_CLI_NO_ANALYTICS=1

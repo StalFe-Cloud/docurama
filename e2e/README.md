@@ -1,8 +1,24 @@
-# Docurama E2E — Maestro browser suite
+# Docurama E2E — browser suite
 
-End-to-end coverage of the critical user journeys with
-[Maestro](https://github.com/mobile-dev-inc/Maestro) driving headless Chrome
-via CDP/Selenium.
+End-to-end coverage of the critical user journeys.
+
+> **Migration in progress: Maestro → Playwright.**
+> All 29 flows under `e2e/flows/` have been ported to Playwright specs under
+> `e2e/browser/`. Both suites currently run — `e2e/run.sh` executes the
+> Playwright suites (section 2f) and then the Maestro flows (section 3).
+> Maestro, `e2e/flows/`, and section 3 are removed once the Playwright suites
+> have been green on CI; see `e2e/browser/harness.ts` for why we moved.
+>
+> **Write new coverage as a Playwright spec in `e2e/browser/`, not as a flow.**
+> The "Selector conventions" section below describes Maestro's accessibility
+> tree and does not apply to the Playwright suites: Playwright normalises
+> whitespace (no tolerant `" ?Text ?"` regexes) and matches placeholders and
+> aria-labels through dedicated locators rather than through visible text.
+
+The legacy runner drives headless Chrome through
+[Maestro](https://github.com/mobile-dev-inc/Maestro) over CDP/Selenium; the
+Playwright suites drive Chromium directly, reusing the browser resolution that
+`e2e/visual.test.ts` already used.
 
 ## Quick start
 
@@ -24,6 +40,14 @@ script on `PATH` handles it (see CI notes below).
 
 ```
 e2e/
+  browser/       Playwright browser suites (bun test) — the replacement for
+                 the Maestro flows below. harness.ts holds the shared browser
+                 lifecycle, Chromium resolution and locator helpers;
+                 public/auth/workspace/admin.test.ts mirror the flow
+                 directories one-for-one. The workspace suite mutates seeded
+                 fixtures and needs a fresh `bun e2e/seed.ts` per run.
+                 E2E_SKIP_BROWSER=1 skips them. Target origin: E2E_BASE_URL
+                 (MAESTRO_BASE_URL still honoured).
   seed.ts        Idempotent Prisma seed. Dedicated "E2E Testing" tenant,
                  e2e@docurama.eu / e2ePass1234! (workspace) and
                  e2e-admin@docurama.eu / e2eAdmin1234! (platform admin),
