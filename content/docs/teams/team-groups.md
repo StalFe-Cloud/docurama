@@ -14,7 +14,7 @@ A team group is a named set of workspace members. Groups are small by design —
 
 ## Availability
 
-Team groups are available on **Business and above** (Business, Business, Enterprise). On Solo and Starter the member list is small enough that groups would be ceremony: Solo has one member, Starter three.
+Team groups are available on **Business and Enterprise**. On Solo and Starter the member list is small enough that groups would be ceremony: Solo has one member, Starter three.
 
 ## Creating and managing groups
 
@@ -27,7 +27,7 @@ Group operations — create, rename, delete, and assigning members — are **adm
 
 ## What groups are good for
 
-- **Keeping Settings → Users scannable.** A forty-person Business workspace reads much better as Sales / HR / Legal than as a flat alphabetical list.
+- **Keeping Settings → Users scannable.** A growing workspace reads much better as Sales / HR / Legal than as a flat alphabetical list.
 - **Answering "who is in the Legal team?"** with one glance instead of an org-chart archaeology session.
 - **Making templates make sense.** When the template library holds a dozen house contracts, knowing that the NDA set belongs to the Legal group gives every member a starting point.
 

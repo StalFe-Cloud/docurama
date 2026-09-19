@@ -785,7 +785,7 @@ model Payment {
 // connection's tenant.
 model SsoConnection {
   id          String   @id @default(cuid())
-  tenantId    String? // null = platform-wide default (self-host deployments)
+  tenantId    String? // Legacy null rows are untrusted; authentication requires a tenant.
   protocol    String // OIDC | SAML
   label       String // e.g. "Microsoft Entra ID"
   emailDomain String // users@this-domain authenticate via this connection

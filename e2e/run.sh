@@ -124,6 +124,7 @@ fi
 # Security tests use mocked request context and a fresh database. Keep them
 # in their own process so mocks cannot affect the HTTP regression suites.
 bun test e2e/auth-security.test.ts || { echo "!! authentication security tests failed"; exit 1; }
+bun test e2e/password-security.test.ts || { echo "!! password security tests failed"; exit 1; }
 bun test e2e/quota-security.test.ts || { echo "!! quota and API entitlement tests failed"; exit 1; }
 bun test e2e/blog.test.ts e2e/storage-config.test.ts || { echo "!! content/storage tests failed"; exit 1; }
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then

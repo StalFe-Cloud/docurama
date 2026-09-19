@@ -7,7 +7,7 @@ tags: [product, onboarding, teams]
 draft: false
 ---
 
-You do not need a project plan to adopt eSignatures — you need one focused afternoon. Here is the 45-minute rollout we recommend to new Business and Business workspaces; the same shape works for Starter with three seats.
+You do not need a project plan to adopt eSignatures — you need one focused afternoon. Here is the 45-minute rollout we recommend to new Business workspaces; the same shape works for Starter with three seats.
 
 ## Minutes 0–10: workspace and signature
 

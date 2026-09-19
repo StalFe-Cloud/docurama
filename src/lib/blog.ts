@@ -30,12 +30,12 @@ export interface BlogPost {
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 
-function parsePost(slug: string, raw: string): BlogPost | null {
+export function parsePost(slug: string, raw: string): BlogPost | null {
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) return null;
 
   const meta: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
+  for (const line of match[1].split(/\r?\n/)) {
     const kv = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
     if (kv) {
       const value = kv[2].trim();

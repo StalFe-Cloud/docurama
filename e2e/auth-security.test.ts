@@ -71,7 +71,7 @@ describe("installation bootstrap", () => {
     const admin = await bootstrapAdmin({ email: "admin@bootstrap.test", password: "StrongBootstrapSecret123!" });
     await expect(bootstrapAdmin({ email: "second@bootstrap.test", password: "AnotherBootstrapSecret123!" })).rejects.toThrow("already contains");
     const bootstrapUser = await db.user.findUniqueOrThrow({ where: { id: admin.id } });
-    expect(bootstrapUser.passwordHash).toBe(auth.hashPassword("StrongBootstrapSecret123!"));
+    expect(auth.verifyPassword("StrongBootstrapSecret123!", bootstrapUser.passwordHash)).toBe(true);
     expect(bootstrapUser.role).toBe("PLATFORM_ADMIN");
     expect(await db.auditEvent.count({ where: { action: "installation.admin_bootstrapped" } })).toBe(1);
     const outsider = await newUser();

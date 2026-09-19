@@ -1,12 +1,12 @@
 ---
 title: Plans and Allowances
-description: The five Docurama plans, what every plan includes, and how envelopes, seats, rollover and term discounts are counted.
+description: The four Docurama plans, what every plan includes, and how envelopes, seats, rollover and term discounts are counted.
 group: Billing
 order: 1
 tags: [billing, plans, pricing]
 ---
 
-Docurama is self-serve from a single consultant up to a fifty-person company, with Enterprise handled by our sales team. This page explains the plans, what is included in all of them, and how allowances, seats and rollover are counted, so nothing on your invoice is a surprise.
+Docurama offers plans for individual consultants and teams, with Enterprise handled by our sales team. This page explains the plans, what is included in all of them, and how allowances, seats and rollover are counted, so nothing on your invoice is a surprise.
 
 ## The plans at a glance
 

@@ -20,17 +20,26 @@
  *     customer.subscription.deleted → CANCELED.
  */
 
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import { describe, expect, test, afterAll } from "bun:test";
 import { PrismaClient } from "@prisma/client";
-import { cpSync, rmSync, mkdtempSync } from "node:fs";
+import { rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { Database } from "bun:sqlite";
 
-/* ── Scratch database (copy of the committed seed) ─────────────────────────── */
+/* ── Fresh scratch schema: independent of edition-specific committed data ── */
 
 const SCRATCH = join(mkdtempSync(join(tmpdir(), "billing-e2e-")), "scratch.db");
-cpSync("db/custom.db", SCRATCH);
-process.env.DATABASE_URL = `file:${SCRATCH}`;
+process.env.DATABASE_URL = `file:${SCRATCH.replace(/\\/g, "/")}`;
+new Database(SCRATCH, { create: true }).close();
+execFileSync("node", ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"], {
+  env: process.env, stdio: "pipe",
+});
+delete process.env.PAYMENT_PROVIDER;
+delete process.env.STRIPE_SECRET_KEY;
+delete process.env.STRIPE_WEBHOOK_SECRET;
+delete process.env.STRIPE_API_BASE;
 
 const db = new PrismaClient();
 
@@ -40,6 +49,17 @@ const lib = await import("../src/lib/payments");
 const plans = await import("../src/lib/plans");
 const webhookRoute = await import("../src/app/api/billing/webhook/route");
 const Stripe = (await import("stripe")).default;
+const periodEnd = new Date();
+periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+const firstPeriodEnd = Math.floor(periodEnd.getTime() / 1000);
+periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+const secondPeriodEnd = Math.floor(periodEnd.getTime() / 1000);
+const invoiceLine = (end: number) => ({ parent: { type: "subscription_item_details" }, period: { start: end - 365 * 86400, end } });
+const invoice = (id: string, end: number, billingReason = "subscription_cycle") => ({
+  id, parent: { type: "subscription_details", subscription_details: { subscription: "sub_test_9" } },
+  customer: "cus_test_1", billing_reason: billingReason, amount_paid: 11520,
+  lines: { data: [invoiceLine(end)] },
+});
 
 /* ── A local stub Stripe API ───────────────────────────────────────────────── */
 
@@ -47,6 +67,12 @@ const stub = Bun.serve({
   port: 0,
   async fetch(req) {
     const url = new URL(req.url);
+    if (req.method === "GET" && url.pathname === "/v1/subscriptions/sub_test_9") {
+      return Response.json({ id: "sub_test_9", object: "subscription", status: "active", items: { data: [{ current_period_end: firstPeriodEnd }] } });
+    }
+    if (req.method === "GET" && url.pathname === "/v1/subscriptions/sub_legacy") {
+      return Response.json({ id: "sub_legacy", object: "subscription", status: "active", current_period_end: firstPeriodEnd, items: { data: [{ id: "si_legacy" }] } });
+    }
     if (req.method !== "POST") return new Response("not found", { status: 404 });
     if (url.pathname === "/v1/customers") {
       return Response.json({ id: "cus_test_1", object: "customer" });
@@ -90,12 +116,11 @@ async function postWebhook(payload: string, header: string | null): Promise<Resp
 
 /* ── Fixtures ──────────────────────────────────────────────────────────────── */
 
-const tenant = await db.tenant.findUnique({ where: { slug: "solstice-media" } });
-if (!tenant) throw new Error("seed tenant solstice-media missing — run bun run test:e2e:seed first");
-
-beforeAll(() => {
-  // Manual mode is the default (no env) — nothing to set for suite 1–2.
-});
+const tenant = await db.tenant.create({ data: { name: "Billing test workspace", slug: "billing-test", planCode: "STARTER", status: "ACTIVE" } });
+await db.user.create({ data: {
+  email: "billing-owner@example.test", firstName: "Billing", lastName: "Owner", passwordHash: "unused-test-password",
+  emailVerifiedAt: new Date(), memberships: { create: { tenantId: tenant.id, role: "OWNER" } },
+} });
 
 afterAll(async () => {
   await db.$disconnect();
@@ -188,6 +213,9 @@ describe("manual mode (bank transfer, out-of-band)", () => {
   });
 
   test("re-approving the same payment is idempotent (no second PAID flip, no dup rows)", async () => {
+    const before = await db.subscription.findFirstOrThrow({ where: { tenantId: tenant.id } });
+    const audits = await db.auditEvent.count({ where: { action: "subscription.activated" } });
+    const receipts = await db.mailOutbox.count({ where: { template: "BILLING" } });
     await lib.activateSubscription({
       tenantId: tenant.id, planCode: "BUSINESS", termMonths: 3,
       provider: "manual", paymentId,
@@ -197,6 +225,23 @@ describe("manual mode (bank transfer, out-of-band)", () => {
     const rows = await db.payment.findMany({ where: { id: paymentId } });
     expect(rows.length).toBe(1);
     expect(rows[0].status).toBe("PAID");
+    expect((await db.subscription.findUniqueOrThrow({ where: { id: before.id } })).renewalAt).toEqual(before.renewalAt);
+    expect(await db.auditEvent.count({ where: { action: "subscription.activated" } })).toBe(audits);
+    expect(await db.mailOutbox.count({ where: { template: "BILLING" } })).toBe(receipts);
+  });
+
+  test("concurrent first approvals commit activation once; mismatched checkout metadata changes nothing", async () => {
+    const t = await db.tenant.create({ data: { name: "Concurrent approval", slug: "billing-concurrent", planCode: "STARTER" } });
+    const quote = await lib.createCheckout({ tenantId: t.id, tenantName: t.name, userEmail: "concurrent@example.test", userName: "Concurrent", planCode: "BUSINESS", termMonths: 1, origin: "http://localhost" });
+    const payment = await db.payment.findFirstOrThrow({ where: { reference: quote.reference } });
+    const activation = { tenantId: t.id, planCode: "BUSINESS", termMonths: 1, provider: "manual" as const, paymentId: payment.id, actor: "Admin", actorRole: "PLATFORM_ADMIN" };
+    await expect(lib.activateSubscription({ ...activation, planCode: "ENTERPRISE" })).rejects.toThrow("recorded checkout");
+    expect((await db.tenant.findUniqueOrThrow({ where: { id: t.id } })).planCode).toBe("STARTER");
+    expect((await db.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe("PENDING");
+    const results = await Promise.all([lib.activateSubscription(activation), lib.activateSubscription(activation)]);
+    expect(results[0].subscriptionId).toBe(results[1].subscriptionId);
+    expect(results[0].renewalAt).toEqual(results[1].renewalAt);
+    expect(await db.auditEvent.count({ where: { action: "subscription.activated", resource: `tenant:${t.slug}` } })).toBe(1);
   });
 });
 
@@ -250,9 +295,22 @@ describe("stripe mode against a stub API + webhook route", () => {
     expect(audit).toBeTruthy();
   });
 
-  test("checkout.session.completed activates the plan and binds providerRef", async () => {
-    const { payload, header } = await signedEvent("checkout.session.completed", {
+  test("initial invoice before checkout and completed-but-unpaid checkout do not grant service", async () => {
+    const initial = await signedEvent("invoice.paid", invoice("in_initial_early", firstPeriodEnd, "subscription_create"));
+    expect((await postWebhook(initial.payload, initial.header)).status).toBe(200);
+    const unpaid = await signedEvent("checkout.session.completed", {
+      id: "cs_test_9", payment_status: "unpaid", client_reference_id: tenant.id,
+      metadata: { tenantId: tenant.id, planCode: "SOLO", termMonths: "12" }, subscription: "sub_test_9",
+    });
+    expect((await postWebhook(unpaid.payload, unpaid.header)).status).toBe(200);
+    expect((await db.tenant.findUniqueOrThrow({ where: { id: tenant.id } })).planCode).toBe("BUSINESS");
+    expect((await db.payment.findFirstOrThrow({ where: { reference: "cs_test_9" } })).status).toBe("PENDING");
+  });
+
+  test("successful asynchronous payment activates exactly the provider's purchased period", async () => {
+    const { payload, header } = await signedEvent("checkout.session.async_payment_succeeded", {
       id: "cs_test_9",
+      payment_status: "paid",
       client_reference_id: tenant.id,
       metadata: { tenantId: tenant.id, planCode: "SOLO", termMonths: "12" },
       subscription: "sub_test_9",
@@ -268,9 +326,17 @@ describe("stripe mode against a stub API + webhook route", () => {
     expect(sub?.status).toBe("ACTIVE");
     expect(sub?.termMonths).toBe(12);
     expect(sub?.discountPct).toBe(20);
+    expect(sub?.renewalAt.getTime()).toBe(firstPeriodEnd * 1000);
 
     const payment = await db.payment.findFirst({ where: { reference: "cs_test_9" } });
     expect(payment?.status).toBe("PAID");
+  });
+
+  test("first invoice following checkout never grants a second term", async () => {
+    const initial = await signedEvent("invoice.paid", invoice("in_initial", firstPeriodEnd, "subscription_create"));
+    expect((await postWebhook(initial.payload, initial.header)).status).toBe(200);
+    expect((await db.subscription.findFirstOrThrow({ where: { providerRef: "sub_test_9" } })).renewalAt.getTime()).toBe(firstPeriodEnd * 1000);
+    expect(await db.payment.count({ where: { reference: "in_initial" } })).toBe(0);
   });
 
   test("invoice.paid advances one term and records the renewal payment", async () => {
@@ -278,9 +344,7 @@ describe("stripe mode against a stub API + webhook route", () => {
     expect(sub).toBeTruthy();
     const renewalBefore = sub!.renewalAt.getTime();
 
-    const { payload, header } = await signedEvent("invoice.paid", {
-      id: "in_test_paid_1", subscription: "sub_test_9", customer: "cus_test_1",
-    });
+    const { payload, header } = await signedEvent("invoice.paid", invoice("in_test_paid_1", secondPeriodEnd));
     const res = await postWebhook(payload, header);
     expect(res.status).toBe(200);
 
@@ -288,16 +352,53 @@ describe("stripe mode against a stub API + webhook route", () => {
     const advanced = (after!.renewalAt.getTime() - renewalBefore) / 86_400_000;
     expect(advanced).toBeGreaterThan(364); // +12 months
     expect(after!.status).toBe("ACTIVE");
+    expect(after!.renewalAt.getTime()).toBe(secondPeriodEnd * 1000);
 
     const renewal = await db.payment.findFirst({ where: { reference: "in_test_paid_1" } });
     expect(renewal?.kind).toBe("renewal");
     expect(renewal?.status).toBe("PAID");
   });
 
-  test("invoice.payment_failed flips the subscription to PAST_DUE and duns the admin", async () => {
-    const { payload, header } = await signedEvent("invoice.payment_failed", {
-      id: "in_test_fail_1", subscription: "sub_test_9", customer: "cus_test_1",
+  test("parallel invoice replay and late checkout replay do not change the term, receipts or audit", async () => {
+    const before = await db.subscription.findFirstOrThrow({ where: { providerRef: "sub_test_9" } });
+    const audits = await db.auditEvent.count();
+    const receipts = await db.mailOutbox.count();
+    const renewal = await signedEvent("invoice.paid", invoice("in_test_paid_1", secondPeriodEnd));
+    const results = await Promise.all([postWebhook(renewal.payload, renewal.header), postWebhook(renewal.payload, renewal.header)]);
+    expect(results.map((response) => response.status)).toEqual([200, 200]);
+    const checkout = await signedEvent("checkout.session.completed", {
+      id: "cs_test_9", payment_status: "paid", client_reference_id: tenant.id,
+      metadata: { tenantId: tenant.id, planCode: "SOLO", termMonths: "12" }, subscription: "sub_test_9",
     });
+    expect((await postWebhook(checkout.payload, checkout.header)).status).toBe(200);
+    const after = await db.subscription.findUniqueOrThrow({ where: { id: before.id } });
+    expect(after.renewalAt).toEqual(before.renewalAt);
+    expect(after.carriedForwardEnvelopes).toBe(before.carriedForwardEnvelopes);
+    expect(await db.auditEvent.count()).toBe(audits);
+    expect(await db.mailOutbox.count()).toBe(receipts);
+    expect(await db.payment.count({ where: { reference: "in_test_paid_1" } })).toBe(1);
+  });
+
+  test("an older paid period and a delayed failure cannot rewind or revoke a newer paid term", async () => {
+    const late = await signedEvent("invoice.paid", invoice("in_older_cycle", firstPeriodEnd));
+    expect((await postWebhook(late.payload, late.header)).status).toBe(200);
+    const failed = await signedEvent("invoice.payment_failed", invoice("in_test_paid_1", secondPeriodEnd));
+    expect((await postWebhook(failed.payload, failed.header)).status).toBe(200);
+    const after = await db.subscription.findFirstOrThrow({ where: { providerRef: "sub_test_9" } });
+    expect(after.renewalAt.getTime()).toBe(secondPeriodEnd * 1000);
+    expect(after.status).toBe("ACTIVE");
+  });
+
+  test("an invoice for an unrelated purchase never renews by customer association", async () => {
+    const before = await db.subscription.findFirstOrThrow({ where: { providerRef: "sub_test_9" } });
+    const unrelated = await signedEvent("invoice.paid", { id: "in_unrelated", customer: "cus_test_1", billing_reason: "manual", amount_paid: 9900 });
+    expect((await postWebhook(unrelated.payload, unrelated.header)).status).toBe(200);
+    expect((await db.subscription.findUniqueOrThrow({ where: { id: before.id } })).renewalAt).toEqual(before.renewalAt);
+    expect(await db.payment.count({ where: { reference: "in_unrelated" } })).toBe(0);
+  });
+
+  test("invoice.payment_failed flips the subscription to PAST_DUE and duns the admin", async () => {
+    const { payload, header } = await signedEvent("invoice.payment_failed", invoice("in_test_fail_1", secondPeriodEnd + 365 * 86400));
     const res = await postWebhook(payload, header);
     expect(res.status).toBe(200);
 
@@ -320,5 +421,46 @@ describe("stripe mode against a stub API + webhook route", () => {
     expect(sub?.status).toBe("CANCELED");
     const audit = await db.auditEvent.findFirst({ where: { action: "subscription.canceled" }, orderBy: { at: "desc" } });
     expect(audit).toBeTruthy();
+  });
+
+  test("late paid invoice cannot reactivate a canceled subscription", async () => {
+    const before = await db.subscription.findFirstOrThrow({ where: { providerRef: "sub_test_9" } });
+    const late = await signedEvent("invoice.paid", invoice("in_late_after_cancel", secondPeriodEnd + 365 * 86400));
+    expect((await postWebhook(late.payload, late.header)).status).toBe(200);
+    const after = await db.subscription.findUniqueOrThrow({ where: { id: before.id } });
+    expect(after.status).toBe("CANCELED");
+    expect(after.renewalAt).toEqual(before.renewalAt);
+  });
+
+  test("a renewal delivered before activation is retried and then applied exactly once", async () => {
+    const t = await db.tenant.create({ data: { name: "Out of order", slug: "billing-out-of-order", planCode: "STARTER" } });
+    const payment = await db.payment.create({ data: { tenantId: t.id, provider: "stripe", kind: "checkout", planCode: "SOLO", termMonths: 12, amountCents: 11520, reference: "cs_late_activation", description: "Out of order checkout" } });
+    const object = invoice("in_early_cycle", secondPeriodEnd);
+    object.parent.subscription_details.subscription = "sub_late_activation";
+    const early = await signedEvent("invoice.paid", object);
+    expect((await postWebhook(early.payload, early.header)).status).toBe(500);
+    await lib.activateSubscription({ tenantId: t.id, planCode: "SOLO", termMonths: 12, provider: "stripe", providerRef: "sub_late_activation", providerPeriodEnd: new Date(firstPeriodEnd * 1000), paymentId: payment.id, actor: "Stripe", actorRole: "SYSTEM" });
+    expect((await postWebhook(early.payload, early.header)).status).toBe(200);
+    expect((await postWebhook(early.payload, early.header)).status).toBe(200);
+    expect((await db.subscription.findFirstOrThrow({ where: { tenantId: t.id } })).renewalAt.getTime()).toBe(secondPeriodEnd * 1000);
+    expect(await db.payment.count({ where: { reference: "in_early_cycle" } })).toBe(1);
+  });
+
+  test("legacy subscription dates and invoice references preserve the paid service period", async () => {
+    const t = await db.tenant.create({ data: { name: "Legacy billing", slug: "billing-legacy", planCode: "STARTER" } });
+    await db.payment.create({ data: { tenantId: t.id, provider: "stripe", kind: "checkout", planCode: "SOLO", termMonths: 12, amountCents: 11520, reference: "cs_legacy", description: "Legacy checkout" } });
+    const checkout = await signedEvent("checkout.session.completed", {
+      id: "cs_legacy", payment_status: "paid", client_reference_id: t.id,
+      metadata: { planCode: "SOLO", termMonths: "12" }, subscription: "sub_legacy",
+    });
+    expect((await postWebhook(checkout.payload, checkout.header)).status).toBe(200);
+    expect((await db.subscription.findFirstOrThrow({ where: { tenantId: t.id } })).renewalAt.getTime()).toBe(firstPeriodEnd * 1000);
+    const renewal = await signedEvent("invoice.paid", {
+      id: "in_legacy", subscription: "sub_legacy", billing_reason: "subscription_cycle", amount_paid: 11520,
+      lines: { data: [{ type: "subscription", period: { start: firstPeriodEnd, end: secondPeriodEnd } }] },
+    });
+    expect((await postWebhook(renewal.payload, renewal.header)).status).toBe(200);
+    expect((await db.subscription.findFirstOrThrow({ where: { tenantId: t.id } })).renewalAt.getTime()).toBe(secondPeriodEnd * 1000);
+    expect((await db.payment.findFirstOrThrow({ where: { reference: "in_legacy" } })).amountCents).toBe(11520);
   });
 });

@@ -3,6 +3,7 @@ import { domainToASCII } from "node:url";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { SESSION_COOKIE, sessionCookieAttributes } from "@/lib/auth";
+import { seatCapacity } from "@/lib/billing";
 import * as jose from "jose";
 
 /**
@@ -255,7 +256,7 @@ export async function verifyOidcCallback(input: {
   const payload = claims.payload as { nonce?: string; email?: string; email_verified?: boolean; name?: string; preferred_username?: string };
   if (payload.nonce !== input.nonce) throw new Error("id_token nonce mismatch — possible replay");
   if (!payload.email) throw new Error("id_token carries no email claim (require the 'email' scope)");
-  if (payload.email_verified === false) throw new Error("id_token email is not verified");
+  if (payload.email_verified !== true) throw new Error("id_token must carry email_verified: true");
 
   return {
     email: String(payload.email).toLowerCase(),
@@ -403,6 +404,9 @@ export async function jitSsoLogin(input: {
   let user = await tx.user.findUnique({ where: { email } });
   let created = false;
   if (!user) {
+    if ((await seatCapacity(connection.tenantId!, tx)).remaining <= 0) {
+      throw new Error("No workspace seat is available for SSO provisioning; contact your administrator");
+    }
     const [firstName, ...rest] = input.name.trim().split(/\s+/);
     user = await tx.user.create({
       data: {

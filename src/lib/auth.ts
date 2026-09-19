@@ -1,10 +1,46 @@
-import { createHash } from "crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { db } from "@/lib/db";
 
 export const SESSION_COOKIE = "docurama_session";
 export const SESSION_TOKEN_STORE = "docurama_token";
-export const hashPassword = (pw: string) => createHash("sha256").update(pw).digest("hex");
+const PASSWORD_SCRYPT = { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 } as const;
+const PASSWORD_KEY_BYTES = 32;
+const PASSWORD_HASH_PREFIX = "scrypt$1$32768$8$3$";
+const LEGACY_PASSWORD_HASH = /^[a-f0-9]{64}$/i;
+const SCRYPT_PASSWORD_HASH = /^scrypt\$1\$32768\$8\$3\$([a-f0-9]{32})\$([a-f0-9]{64})$/;
+
+/** Versioned, salted scrypt. Keep this synchronous for existing password writers. */
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const key = scryptSync(password, salt, PASSWORD_KEY_BYTES, PASSWORD_SCRYPT);
+  return `${PASSWORD_HASH_PREFIX}${salt.toString("hex")}$${key.toString("hex")}`;
+}
+
+/** Legacy digests are readable only; successful complete sign-in upgrades them. */
+export function passwordNeedsUpgrade(storedHash: string): boolean {
+  return typeof storedHash === "string" && LEGACY_PASSWORD_HASH.test(storedHash);
+}
+
+/**
+ * Compare fixed-length derived keys in constant time. Only this version's cost
+ * profile is accepted: corrupted/untrusted records cannot request arbitrary
+ * CPU or memory. Passwords retain their exact UTF-8 bytes, without truncation.
+ */
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (typeof password !== "string" || typeof storedHash !== "string" || storedHash.length > 256) return false;
+  try {
+    if (passwordNeedsUpgrade(storedHash)) {
+      return timingSafeEqual(createHash("sha256").update(password).digest(), Buffer.from(storedHash, "hex"));
+    }
+    const match = SCRYPT_PASSWORD_HASH.exec(storedHash);
+    if (!match) return false;
+    const actual = scryptSync(password, Buffer.from(match[1], "hex"), PASSWORD_KEY_BYTES, PASSWORD_SCRYPT);
+    return timingSafeEqual(actual, Buffer.from(match[2], "hex"));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Build the Set-Cookie attribute string for the session cookie.

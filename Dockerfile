@@ -1,5 +1,10 @@
 FROM oven/bun:1.2 AS base
 WORKDIR /app
+# Prisma must detect the installed OpenSSL ABI during client generation and
+# find the same libraries when the generated engine starts in the runner.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 FROM base AS deps
@@ -39,16 +44,16 @@ RUN apt-get update \
   && groupadd -g 10001 docurama \
   && useradd -u 10001 -g docurama -m -s /usr/sbin/nologin docurama
 
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/content ./content
+COPY --from=builder --chown=10001:10001 /app/.next/standalone ./
+COPY --from=builder --chown=10001:10001 /app/prisma ./prisma
+COPY --from=builder --chown=10001:10001 /app/content ./content
 # Prisma CLI for the entrypoint's idempotent schema push (migrations on boot).
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps --chown=10001:10001 /app/node_modules ./node_modules
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
   && mkdir -p /app/db /app/storage \
-  && chown -R docurama:docurama /app
+  && chown docurama:docurama /app /app/db /app/storage
 
 USER docurama
 

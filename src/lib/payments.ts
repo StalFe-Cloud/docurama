@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ENVELOPE_LIMITS, planDef, termFor, rolloverCap } from "@/lib/plans";
 import { periodStart } from "@/lib/billing";
@@ -202,6 +203,8 @@ export async function activateSubscription(input: {
   providerRef?: string | null;
   paymentId?: string | null;
   paymentReference?: string | null;
+  /** Authoritative paid service-period end from Stripe; manual terms use now. */
+  providerPeriodEnd?: Date;
   actor: string;
   actorRole: string;
   note?: string;
@@ -211,158 +214,178 @@ export async function activateSubscription(input: {
   const renewalAt = new Date();
   renewalAt.setMonth(renewalAt.getMonth() + term.months);
   const amountCents = termCents(input.planCode, input.termMonths);
+  const paidUntil = input.provider === "stripe" ? input.providerPeriodEnd : renewalAt;
+  if (!paidUntil || !Number.isFinite(paidUntil.getTime())) throw new Error("A valid provider service-period end is required");
 
-  const tenant = await db.tenant.update({ where: { id: input.tenantId }, data: { planCode: input.planCode } });
-
-  const sub = await db.subscription.upsert({
-    where: { id: (await db.subscription.findFirst({ where: { tenantId: input.tenantId }, orderBy: { renewalAt: "desc" } }))?.id ?? "" },
-    update: {
-      planCode: input.planCode,
-      status: "ACTIVE",
-      mrrEur: plan.monthlyEur,
-      renewalAt,
-      termMonths: term.months,
-      discountPct: term.discountPct,
-      failedPayment: false,
-      lastInvoiceAt: new Date(),
-      provider: input.provider,
-      ...(input.providerRef !== undefined ? { providerRef: input.providerRef } : {}),
-    },
-    create: {
-      tenantId: input.tenantId,
-      planCode: input.planCode,
-      status: "ACTIVE",
-      mrrEur: plan.monthlyEur,
-      seats: Math.min(plan.seatLimit, 10),
-      renewalAt,
-      termMonths: term.months,
-      discountPct: term.discountPct,
-      paymentMethod: input.provider === "stripe" ? "Stripe" : "Bank transfer",
-      provider: input.provider,
-      providerRef: input.providerRef ?? null,
-      lastInvoiceAt: new Date(),
-    },
-  });
-
-  // Mark the originating payment PAID (idempotent).
-  if (input.paymentId) {
-    await db.payment.updateMany({
-      where: { id: input.paymentId, status: "PENDING" },
+  return db.$transaction(async (tx) => {
+    const payment = input.paymentId
+      ? await tx.payment.findUnique({ where: { id: input.paymentId } })
+      : input.paymentReference ? await tx.payment.findFirst({ where: { provider: input.provider, reference: input.paymentReference } }) : null;
+    if (!payment || payment.tenantId !== input.tenantId || payment.provider !== input.provider ||
+        payment.kind !== "checkout" || payment.planCode !== input.planCode || payment.termMonths !== term.months) {
+      throw new Error("Activation must match a recorded checkout payment");
+    }
+    const existing = await tx.subscription.findFirst({ where: { tenantId: input.tenantId }, orderBy: { renewalAt: "desc" } });
+    if (payment.status === "PAID") {
+      if (!existing) throw new Error("Paid checkout has no subscription");
+      return { subscriptionId: existing.id, renewalAt: existing.renewalAt, planCode: existing.planCode, termMonths: existing.termMonths };
+    }
+    if (payment.status !== "PENDING") throw new Error("Only pending checkout payments can activate subscriptions");
+    const claimed = await tx.payment.updateMany({
+      where: { id: payment.id, status: "PENDING" },
       data: { status: "PAID", paidAt: new Date(), approverNote: input.note },
     });
-  } else if (input.paymentReference) {
-    await db.payment.updateMany({
-      where: { reference: input.paymentReference, status: "PENDING" },
-      data: { status: "PAID", paidAt: new Date(), approverNote: input.note },
+    if (claimed.count !== 1) throw new Error("Checkout payment changed during activation");
+    const tenant = await tx.tenant.update({ where: { id: input.tenantId }, data: { planCode: input.planCode } });
+
+    const sub = await tx.subscription.upsert({
+      where: { id: existing?.id ?? "" },
+      update: {
+        planCode: input.planCode,
+        status: "ACTIVE",
+        mrrEur: plan.monthlyEur,
+        renewalAt: paidUntil,
+        termMonths: term.months,
+        discountPct: term.discountPct,
+        failedPayment: false,
+        lastInvoiceAt: new Date(),
+        provider: input.provider,
+        ...(input.providerRef !== undefined ? { providerRef: input.providerRef } : {}),
+      },
+      create: {
+        tenantId: input.tenantId,
+        planCode: input.planCode,
+        status: "ACTIVE",
+        mrrEur: plan.monthlyEur,
+        seats: Math.min(plan.seatLimit, 10),
+        renewalAt: paidUntil,
+        termMonths: term.months,
+        discountPct: term.discountPct,
+        paymentMethod: input.provider === "stripe" ? "Stripe" : "Bank transfer",
+        provider: input.provider,
+        providerRef: input.providerRef ?? null,
+        lastInvoiceAt: new Date(),
+      },
     });
-  }
 
-  await db.auditEvent.create({
-    data: {
-      actor: input.actor,
-      actorRole: input.actorRole,
-      action: "subscription.activated",
-      resource: `tenant:${tenant.slug}`,
-      tenantName: tenant.name,
-      ip: "system",
-      severity: "WARNING",
-      detail:
-        `${plan.name} activated for ${term.months} month(s) via ${input.provider}` +
-        `${term.discountPct ? ` (term −${term.discountPct}%)` : ""} — ${centsToEur(amountCents)}.` +
-        (input.note ? ` Note: ${input.note}` : ""),
-    },
+    await tx.auditEvent.create({
+      data: {
+        actor: input.actor,
+        actorRole: input.actorRole,
+        action: "subscription.activated",
+        resource: `tenant:${tenant.slug}`,
+        tenantName: tenant.name,
+        ip: "system",
+        severity: "WARNING",
+        detail:
+          `${plan.name} activated for ${term.months} month(s) via ${input.provider}` +
+          `${term.discountPct ? ` (term −${term.discountPct}%)` : ""} — ${centsToEur(amountCents)}.` +
+          (input.note ? ` Note: ${input.note}` : ""),
+      },
+    });
+
+    await queueReceiptMail(input.tenantId, plan.name, term.months, amountCents, paidUntil, tx);
+
+    return { subscriptionId: sub.id, renewalAt: paidUntil, planCode: input.planCode, termMonths: term.months };
   });
-
-  await queueReceiptMail(input.tenantId, plan.name, term.months, amountCents, renewalAt);
-
-  return { subscriptionId: sub.id, renewalAt, planCode: input.planCode, termMonths: term.months };
 }
 
 /** Renewal of a Stripe-managed subscription: one term paid, rollover computed. */
-export async function renewPaidTerm(subscriptionId: string, invoiceRef: string, actor = "Docurama Billing"): Promise<void> {
-  const sub = await db.subscription.findUnique({ where: { id: subscriptionId }, include: { tenant: true } });
-  if (!sub) return;
+export async function renewPaidTerm(subscriptionId: string, invoiceRef: string, paidPeriodEnd: Date, amountPaidCents: number, actor = "Docurama Billing"): Promise<void> {
+  if (!Number.isFinite(paidPeriodEnd.getTime()) || !Number.isSafeInteger(amountPaidCents) || amountPaidCents < 0) throw new Error("Invalid paid invoice period or amount");
+  await db.$transaction(async (tx) => {
+    const sub = await tx.subscription.findUnique({ where: { id: subscriptionId }, include: { tenant: true } });
+    if (!sub || sub.provider !== "stripe") throw new Error("Stripe subscription is not activated yet");
+    if (await tx.payment.findFirst({ where: { provider: "stripe", reference: invoiceRef, status: "PAID" } })) return;
 
-  // Rollover for the period that just closed.
-  const periodFrom = periodStart(sub);
-  const usedInPeriod = await db.envelope.count({
-    where: { tenantId: sub.tenantId, createdAt: { gte: periodFrom, lt: sub.renewalAt } },
-  });
-  const plan = planDef(sub.planCode);
-  const allowance = (ENVELOPE_LIMITS[sub.planCode] ?? plan.envelopeLimit) + sub.carriedForwardEnvelopes;
-  const unused = Math.max(0, allowance - usedInPeriod);
-  const carriedForward = Math.min(unused, rolloverCap(plan));
+    // A delayed invoice must neither rewind the paid-through date nor reactivate
+    // a canceled subscription. Keep its receipt in the ledger exactly once.
+    const advances = paidPeriodEnd > sub.renewalAt && sub.status !== "CANCELED";
 
-  const renewalAt = new Date(sub.renewalAt);
-  renewalAt.setMonth(renewalAt.getMonth() + Math.max(1, sub.termMonths));
+    // Rollover for the period that just closed.
+    const periodFrom = periodStart(sub);
+    const usedInPeriod = await tx.envelope.count({
+      where: { tenantId: sub.tenantId, createdAt: { gte: periodFrom, lt: sub.renewalAt } },
+    });
+    const plan = planDef(sub.planCode);
+    const allowance = (ENVELOPE_LIMITS[sub.planCode] ?? plan.envelopeLimit) + sub.carriedForwardEnvelopes;
+    const unused = Math.max(0, allowance - usedInPeriod);
+    const carriedForward = Math.min(unused, rolloverCap(plan));
 
-  await db.subscription.update({
-    where: { id: sub.id },
-    data: { renewalAt, carriedForwardEnvelopes: carriedForward, status: "ACTIVE", failedPayment: false, lastInvoiceAt: new Date() },
-  });
-  await db.payment.create({
-    data: {
-      tenantId: sub.tenantId,
-      provider: sub.provider ?? "manual",
-      kind: "renewal",
-      planCode: sub.planCode,
-      termMonths: sub.termMonths,
-      amountCents: termCents(sub.planCode, sub.termMonths),
-      status: "PAID",
-      reference: invoiceRef,
-      description: `${plan.name} renewal — ${sub.termMonths} month(s)`,
-      paidAt: new Date(),
-    },
-  });
-  await db.auditEvent.create({
-    data: {
-      actor,
-      actorRole: "SYSTEM",
-      action: "subscription.renewed",
-      resource: `subscription:${sub.id}`,
-      tenantName: sub.tenant.name,
-      ip: "system",
-      detail:
-        `Stripe renewal ${invoiceRef}: used ${usedInPeriod}/${allowance} envelopes in the closed period; ` +
-        `${carriedForward} carried forward (cap ${rolloverCap(plan)}).`,
-    },
+    const renewalAt = advances ? paidPeriodEnd : sub.renewalAt;
+
+    if (advances) await tx.subscription.update({
+      where: { id: sub.id },
+      data: { renewalAt, carriedForwardEnvelopes: carriedForward, status: "ACTIVE", failedPayment: false, lastInvoiceAt: new Date() },
+    });
+    await tx.payment.create({
+      data: {
+        tenantId: sub.tenantId,
+        provider: sub.provider ?? "manual",
+        kind: "renewal",
+        planCode: sub.planCode,
+        termMonths: sub.termMonths,
+        amountCents: amountPaidCents,
+        status: "PAID",
+        reference: invoiceRef,
+        description: `${plan.name} renewal — ${sub.termMonths} month(s)`,
+        paidAt: new Date(),
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actor,
+        actorRole: "SYSTEM",
+        action: advances ? "subscription.renewed" : "billing.invoice_recorded",
+        resource: `subscription:${sub.id}`,
+        tenantName: sub.tenant.name,
+        ip: "system",
+        detail:
+          `Stripe renewal ${invoiceRef}: used ${usedInPeriod}/${allowance} envelopes in the closed period; ` +
+          `${carriedForward} carried forward (cap ${rolloverCap(plan)}).`,
+      },
+    });
   });
 }
 
 /** A Stripe charge failed: flip to PAST_DUE and tell the billing contact. */
-export async function markPastDue(providerSubscriptionRef: string, invoiceRef: string): Promise<void> {
-  const sub = await db.subscription.findFirst({ where: { providerRef: providerSubscriptionRef }, include: { tenant: true } });
-  if (!sub || sub.status === "PAST_DUE") return;
-  await db.subscription.update({ where: { id: sub.id }, data: { status: "PAST_DUE", failedPayment: true } });
-  await db.auditEvent.create({
-    data: {
-      actor: "Docurama Billing",
-      actorRole: "SYSTEM",
-      action: "subscription.payment_failed",
-      resource: `subscription:${sub.id}`,
-      tenantName: sub.tenant.name,
-      ip: "system",
-      severity: "CRITICAL",
-      detail: `Stripe charge failed (${invoiceRef}). Subscription marked PAST_DUE — retry or update the payment method via the billing portal.`,
-    },
-  });
-  const owner = await db.member.findFirst({
-    where: { tenantId: sub.tenantId, role: { in: ["OWNER", "ADMIN"] } },
-    include: { user: true },
-  });
-  if (owner) {
-    await db.mailOutbox.create({
+export async function markPastDue(providerSubscriptionRef: string, invoiceRef: string, failedPeriodEnd?: Date): Promise<void> {
+  await db.$transaction(async (tx) => {
+    const sub = await tx.subscription.findFirst({ where: { provider: "stripe", providerRef: providerSubscriptionRef }, include: { tenant: true } });
+    if (!sub || sub.status === "PAST_DUE" || sub.status === "CANCELED") return;
+    if (await tx.payment.findFirst({ where: { provider: "stripe", reference: invoiceRef, status: "PAID" } })) return;
+    if (failedPeriodEnd && failedPeriodEnd <= sub.renewalAt) return;
+    await tx.subscription.update({ where: { id: sub.id }, data: { status: "PAST_DUE", failedPayment: true } });
+    await tx.auditEvent.create({
       data: {
-        toEmail: owner.user.email,
-        subject: `Action needed: payment failed for ${sub.tenant.name}`,
-        template: "BILLING",
-        bodyText:
-          `Our attempt to charge your ${planDef(sub.planCode).name} subscription failed (invoice ${invoiceRef}).\n\n` +
-          `Your workspace is now marked past due. Update your payment method from Settings → Billing → Manage payment method, ` +
-          `or reply to this email if you believe this is an error. Envelope sending is paused for past-due workspaces after a grace period.`,
+        actor: "Docurama Billing",
+        actorRole: "SYSTEM",
+        action: "subscription.payment_failed",
+        resource: `subscription:${sub.id}`,
+        tenantName: sub.tenant.name,
+        ip: "system",
+        severity: "CRITICAL",
+        detail: `Stripe charge failed (${invoiceRef}). Subscription marked PAST_DUE — retry or update the payment method via the billing portal.`,
       },
     });
-  }
+    const owner = await tx.member.findFirst({
+      where: { tenantId: sub.tenantId, role: { in: ["OWNER", "ADMIN"] } },
+      include: { user: true },
+    });
+    if (owner) {
+      await tx.mailOutbox.create({
+        data: {
+          toEmail: owner.user.email,
+          subject: `Action needed: payment failed for ${sub.tenant.name}`,
+          template: "BILLING",
+          bodyText:
+            `Our attempt to charge your ${planDef(sub.planCode).name} subscription failed (invoice ${invoiceRef}).\n\n` +
+            `Your workspace is now marked past due. Update your payment method from Settings → Billing → Manage payment method, ` +
+            `or reply to this email if you believe this is an error. Envelope sending is paused for past-due workspaces after a grace period.`,
+        },
+      });
+    }
+  });
 }
 
 /** The customer canceled in the Stripe portal: mark CANCELED, keep the data. */
@@ -386,10 +409,10 @@ export async function markCanceled(providerSubscriptionRef: string): Promise<voi
 
 // ─── Receipts ────────────────────────────────────────────────────────────────
 
-async function queueReceiptMail(tenantId: string, planName: string, months: number, amountCents: number, renewalAt: Date) {
-  const owner = await db.member.findFirst({ where: { tenantId, role: { in: ["OWNER", "ADMIN"] } }, include: { user: true } });
+async function queueReceiptMail(tenantId: string, planName: string, months: number, amountCents: number, renewalAt: Date, client: Prisma.TransactionClient = db) {
+  const owner = await client.member.findFirst({ where: { tenantId, status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } }, include: { user: true } });
   if (!owner) return;
-  await db.mailOutbox.create({
+  await client.mailOutbox.create({
     data: {
       toEmail: owner.user.email,
       subject: `Receipt: ${planName} activated — ${centsToEur(amountCents)}`,

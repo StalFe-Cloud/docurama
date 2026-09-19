@@ -8,7 +8,8 @@
  *    The demo dataset (StålFe, Aurora, …) is never touched.
  *  - Re-running wipes the tenant's envelopes/templates first, so every
  *    `maestro test` cycle starts from the same state.
- *  - Passwords use the same sha256 scheme as src/lib/auth.ts (hashPassword).
+ *  - Demo passwords retain the legacy SHA-256 fixture format; successful
+ *    password login upgrades them through src/lib/auth.ts to salted scrypt.
  *  - Fixed publicCodes (DOC-E2E0001/0002/0003) make verify-portal flows
  *    deterministic without scraping codes out of the UI.
  *  - Fixed signing tokens (E2E_SIGNER_TOKEN / E2E_DECLINE_TOKEN) make the

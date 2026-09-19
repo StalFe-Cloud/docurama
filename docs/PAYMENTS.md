@@ -13,7 +13,7 @@ Both modes converge on `activateSubscription()` / `renewPaidTerm()` so the `Paym
 
 1. **No product/price creation needed.** Checkout sessions are created with inline `price_data` (currency EUR, `unit_amount` = computed term cents, `recurring: { interval: "month", interval_count: termMonths }`) — nothing to pre-register in the Stripe catalog.
 2. Set env vars: `PAYMENT_PROVIDER=stripe`, `STRIPE_SECRET_KEY=sk_live_…`, and (after step 3) `STRIPE_WEBHOOK_SECRET=whsec_…`.
-3. Register the webhook endpoint in the Stripe dashboard: `https://app.<root>/api/billing/webhook`, events **`checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`**. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Register the webhook endpoint in the Stripe dashboard: `https://app.<root>/api/billing/webhook`, events **`checkout.session.completed`, `checkout.session.async_payment_succeeded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`**. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
 4. Test with test cards (`4242 4242 4242 4242`) in test mode before flipping live keys.
 
 The route verifies every event's signature (`constructEventAsync` over the raw body) before acting; a bad signature is 400 + an audited `billing.webhook_rejected`, a handler error is 500 so **Stripe retries** (safe — activation is idempotent per payment row).
@@ -32,7 +32,9 @@ Enterprise is sales-led (custom contracts; catalog anchor €349). Billing terms
 
 ## 3. Renewal model
 
-- **Stripe subscriptions** charge automatically every `termMonths` (`interval_count`). On `invoice.paid`, `renewPaidTerm(subscriptionId, invoiceRef)` advances the term by `termMonths`, computes rollover for the closed period (unused envelopes carried forward, capped at one monthly allowance) and records an audited `subscription.renewed` + a PAID renewal `Payment` row. The first term is already handled by `checkout.session.completed`, so the route skips `invoice.paid` events it has already receipted.
+- **Stripe activation** requires a paid `checkout.session.completed` or `checkout.session.async_payment_succeeded` event and a matching local PENDING checkout payment. The subscription is retrieved from Stripe and its recurring item's service-period end becomes the local paid-through date; legacy subscription-level dates are also supported. Checkout creation supports one recurring plan item. Payment state, subscription, tenant plan, audit and receipt are committed in one transaction.
+- **Stripe renewals** charge automatically every `termMonths` (`interval_count`). Only `invoice.paid` with `billing_reason=subscription_cycle` renews service. `renewPaidTerm()` uses the invoice's recurring line service-period end and actual paid amount, computes rollover for the closed period, and records the invoice reference once. Current nested and legacy subscription references are accepted; customer association alone never grants a term.
+- **Event ordering and retries:** initial `subscription_create` invoices are ignored because paid checkout activation owns the first term. A renewal arriving before activation returns 500 for Stripe to retry. Replayed checkouts/invoices cannot shift dates or duplicate receipts; older paid invoices cannot rewind a newer paid period, delayed failures cannot revoke an already paid period, and late paid invoices cannot reactivate canceled subscriptions.
 - **Manual subscriptions** are renewed by the worker pass (`renewDueSubscriptions`, src/lib/billing.ts), which explicitly **skips Stripe-managed rows** (`provider="stripe"` / `providerRef=sub_…`) — never double-advance those by hand.
 
 ## 4. Manual mode operations
@@ -56,7 +58,7 @@ Watch the PAST_DUE queue daily post-launch (admin Billing section); sending paus
 
 ## 6. Testing
 
-`e2e/billing.test.ts` is fully hermetic — it runs against a scratch copy of `db/custom.db`, stubs the Stripe API with an in-process server pointed at by **`STRIPE_API_BASE`**, and signs webhook payloads with `stripe.webhooks.generateTestHeaderStringAsync()`. Covered: the money-math ladder (Solo €12 … Business €79), the full manual path (checkout → PENDING → approval/activation → PAID, audit, receipt mail, idempotency), Stripe checkout/customer/portal against the stub, and every webhook branch (not-configured 400, bad signature 400, activation, renewal with rollover, PAST_DUE + dunning mail, CANCELED).
+`e2e/billing.test.ts` is fully hermetic — it creates a fresh temporary SQLite schema, stubs the Stripe API with an in-process server pointed at by **`STRIPE_API_BASE`**, and signs webhook payloads with `stripe.webhooks.generateTestHeaderStringAsync()`. Covered: the money-math ladder (Solo €12 … Business €79), the full manual path (checkout → PENDING → approval/activation → PAID, audit, receipt mail), Stripe checkout/customer/portal, signature rejection, paid and asynchronous activation, provider service-period dates, renewal, PAST_DUE + dunning mail, and cancellation. Regression cases exercise concurrent/replayed approvals, duplicate and out-of-order invoices, unpaid checkout, initial-invoice double credit, unrelated customer invoices, and canceled-subscription replay.
 
 ```bash
 bun test e2e/billing.test.ts     # via e2e/run.sh (wired with scratch DATABASE_URL)

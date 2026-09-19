@@ -30,6 +30,7 @@ jobs:
           for attempt in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:3030/api/health; then
               curl -fsS http://127.0.0.1:3030/blog | grep -q 'Docurama is live'
+              docker exec -e DOCURAMA_BOOTSTRAP_EMAIL=admin@container.test -e DOCURAMA_BOOTSTRAP_PASSWORD=DisposableContainerTest123 docurama-ci bun /app/bootstrap-admin.js --empty-installation
               exit 0
             fi
             sleep 3
@@ -115,9 +116,9 @@ jobs:
           retention-days: 7
 
   # ── Schema portability gate (PRODUCTION-PLAN §9) ──────────────────────────
-  # The scale-out path is "flip DATABASE_URL to Postgres". This job proves the
-  # schema actually applies cleanly to PostgreSQL on every push, so the
-  # migration stays a config change instead of becoming a project.
+  # This validates schema shape only. A PostgreSQL release also needs a
+  # provider-specific generated client and the full runtime regression suite.
+  # The supplied SQLite image must not be pointed at PostgreSQL unchanged.
   postgres-portability:
     runs-on: ubuntu-latest
     timeout-minutes: 10

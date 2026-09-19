@@ -4,7 +4,7 @@ Master gate. Every box ticks before launch day; sign-off per section. Companion 
 
 ## 1. Product & content
 
-- [ ] Pricing ladder verified end-to-end: **Solo €12 / Starter €19 / Smart Team €79 / Business €199 / Enterprise custom** (sales-led); term switch −5/−10/−15% math correct (e.g. Starter 12 mo = €193.80); no "most popular" badges.
+- [ ] Pricing ladder verified end-to-end: **Solo €12 / Starter €29 / Business €79 / Enterprise sales-led** (€349 catalogue anchor); term switch −5/−10/−20% math correct (e.g. Starter 12 mo = €278.40); no "most popular" badges. Negotiated Enterprise overrides remain a separate delivery gate; see `PRICING-BRANCH-RECONCILIATION.md`.
 - [ ] Legal pages reviewed by counsel: `/privacy` (processing mapped to the real data model), `/terms` (billing terms incl. 35-day months + rollover cap), DPA route to legal@.
 - [ ] Cookie notice present (informational, no tracking).
 - [ ] Organization JSON-LD valid (rich-results test), canonical + OG metadata on all public pages.
@@ -22,10 +22,10 @@ Master gate. Every box ticks before launch day; sign-off per section. Companion 
 
 - [ ] DNS: apex, `www` → apex redirect, `app.`, `docs.`, `verify.`, `status.`, `security.`, `mta-sts.` (+ `sign.`, `mail.`, `api.`, `admin.`), all resolving; MX/SPF/DKIM/DMARC/MTA-STS/TLS-RPT/CAA published.
 - [ ] TLS certs valid on every host (auto-renew on).
-- [ ] **Postgres** `DATABASE_URL` set (external, backups enabled).
+- [ ] Database deployment selected and restore-tested. The supplied application image uses SQLite and requires one replica. PostgreSQL needs a provider-specific generated Prisma client plus full runtime integration evidence; the schema portability check alone does not establish that support.
 - [ ] **S3** storage block set + bucket lifecycle policy; `/api/health` reports `storage.backend: "s3"`.
 - [ ] `SMTP_URL` real credentials; **SPF/DKIM/DMARC verified on every sending domain**; test mail lands in Gmail/Outlook inboxes (not spam).
-- [ ] Stripe **live** keys + `STRIPE_WEBHOOK_SECRET`; webhook endpoint registered for `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`; one live test purchase and refund.
+- [ ] Stripe **live** keys + `STRIPE_WEBHOOK_SECRET`; webhook endpoint registered for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`; one live test purchase and refund, plus signed test events for duplicate delivery and asynchronous settlement.
 - [ ] Turnstile keys set (`TURNSTILE_SECRET_KEY` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY`).
 - [ ] `SSO_TXN_SECRET` set (strong random).
 - [ ] `ROOT_DOMAIN=docurama.eu`; `EVIDENCE_PORTAL_URL` set if federating attestations.
@@ -42,9 +42,9 @@ Master gate. Every box ticks before launch day; sign-off per section. Companion 
 
 ## 5. Enterprise self-host (Helm)
 
-- [ ] `deploy/helm/docurama` values reviewed: external **Postgres** `DATABASE_URL`, own **S3** (creds via `s3.existingSecret`), own **SMTP**, ingress + TLS, `rootDomain` set.
-- [ ] Replica policy: single replica for SQLite; Postgres + `DOCURAMA_WORKER=off` on all-but-one for multi-replica.
-- [ ] **Platform-wide SSO connection** (`tenantId` null) configured per `SSO.md` for the company domain.
+- [ ] `deploy/helm/docurama` values reviewed: database matching the generated client, own **S3** (creds via `s3.existingSecret`), own **SMTP**, ingress + TLS, `rootDomain` set.
+- [ ] Replica policy: single replica for the supplied SQLite image. Multi-replica deployment requires a separately validated PostgreSQL build and worker coordination.
+- [ ] Initial administrator provisioned offline per `INSTALLATION-BOOTSTRAP.md`; first tenant created and company domain verified. Configure **tenant-owned SSO** per `SSO.md`, then complete a real IdP login/replay/2FA acceptance test. Platform-wide SSO connections are rejected.
 - [ ] `EVIDENCE_PORTAL_URL` set if pushing attestations to the central verification portal (or run the portal locally).
 - [ ] **Backup + restore drill completed on the cluster** (PVC snapshots or `scripts/backup.sh` in a CronJob); RPO/RTO documented.
 - [ ] Network segmentation: admin/portal ingress rules, egress allow-list for TSA + IdP + SMTP + S3.

@@ -10,12 +10,15 @@ export const dynamic = "force-dynamic";
  * POST /api/billing/webhook — Stripe events, signature-verified.
  *
  * Handled events:
- *   checkout.session.completed        → activate the plan for the paid term
- *   invoice.paid                      → advance one term (rollover computed)
+ *   checkout.session.completed        → activate only once payment is paid
+ *   checkout.session.async_payment_succeeded → activate a delayed paid checkout
+ *   invoice.paid                      → apply the paid recurring service period
  *   invoice.payment_failed            → PAST_DUE + mail to the billing contact
  *   customer.subscription.deleted     → CANCELED (data kept, term honored)
  *
- * Everything else is acknowledged 200 and audited as ignored.
+ * Initial invoices are owned by checkout activation. Other invoice types and
+ * unrelated events are acknowledged 200. Payment claims, entitlements, audit
+ * and receipt records commit together so retries cannot grant duplicate terms.
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -52,19 +55,31 @@ export async function POST(req: NextRequest) {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded": {
         const session = event.data.object as Stripe.Checkout.Session;
+        // A completed checkout can still be awaiting an asynchronous payment.
+        if (session.payment_status !== "paid") break;
         const tenantId = session.client_reference_id ?? session.metadata?.tenantId ?? null;
         const planCode = session.metadata?.planCode ?? null;
         const termMonths = Number(session.metadata?.termMonths ?? 1);
-        if (!tenantId || !planCode) break;
+        if (!tenantId || !planCode) throw new Error("Checkout identity metadata is missing");
+        const recorded = await db.payment.findFirst({ where: { provider: "stripe", reference: session.id } });
+        if (!recorded) throw new Error("Checkout payment has not been recorded yet");
+        if (recorded.status === "PAID") break;
+        const subscriptionRef = objectId(session.subscription);
+        if (!subscriptionRef) throw new Error("Paid checkout has no subscription");
+        const providerSubscription = await stripe.subscriptions.retrieve(subscriptionRef);
+        if (providerSubscription.status === "canceled") break;
+        const providerPeriodEnd = subscriptionPeriodEnd(providerSubscription);
 
         await activateSubscription({
           tenantId,
           planCode,
           termMonths: [1, 3, 6, 12].includes(termMonths) ? termMonths : 1,
           provider: "stripe",
-          providerRef: typeof session.subscription === "string" ? session.subscription : (session.subscription as { id?: string } | null)?.id ?? null,
+          providerRef: subscriptionRef,
+          providerPeriodEnd,
           paymentReference: session.id,
           actor: "Stripe",
           actorRole: "SYSTEM",
@@ -74,25 +89,22 @@ export async function POST(req: NextRequest) {
       }
 
       case "invoice.paid": {
-        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | { id: string } | null };
-        const subRef = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id ?? null;
-        const sub = subRef
-          ? await db.subscription.findFirst({ where: { providerRef: subRef } })
-          : await findSubscriptionByCustomer(invoice.customer);
-        if (sub) {
-          // checkout.session.completed already handled the first term.
-          const isFirstTerm = await db.payment.findFirst({
-            where: { reference: invoice.id ?? "none", status: "PAID" },
-          });
-          if (!isFirstTerm) await renewPaidTerm(sub.id, invoice.id ?? `in_${event.id}`);
-        }
+        const invoice = event.data.object as Stripe.Invoice;
+        // Checkout owns the initial paid term. One-off invoices, prorations and
+        // subscription creation must not add another whole term.
+        if (invoice.billing_reason !== "subscription_cycle") break;
+        const subRef = invoiceSubscriptionRef(invoice);
+        if (!subRef) break;
+        const sub = await db.subscription.findFirst({ where: { provider: "stripe", providerRef: subRef } });
+        if (!sub) throw new Error("Renewal arrived before its subscription activation");
+        await renewPaidTerm(sub.id, invoice.id, invoicePeriodEnd(invoice), invoice.amount_paid);
         break;
       }
 
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | { id: string } | null };
-        const subRef = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id ?? null;
-        if (subRef) await markPastDue(subRef, invoice.id ?? `in_${event.id}`);
+        const invoice = event.data.object as Stripe.Invoice;
+        const subRef = invoiceSubscriptionRef(invoice);
+        if (subRef) await markPastDue(subRef, invoice.id, invoicePeriodEnd(invoice));
         break;
       }
 
@@ -114,11 +126,36 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** Fallback: map a Stripe customer id to its subscription via PaymentCustomer. */
-async function findSubscriptionByCustomer(customer: string | { id: string } | null): Promise<{ id: string } | null> {
-  if (!customer) return null;
-  const customerId = typeof customer === "string" ? customer : customer.id;
-  const pc = await db.paymentCustomer.findFirst({ where: { externalId: customerId } });
-  if (!pc) return null;
-  return db.subscription.findFirst({ where: { tenantId: pc.tenantId, provider: "stripe" }, orderBy: { renewalAt: "desc" } });
+function objectId(value: string | { id: string } | null | undefined): string | null {
+  return typeof value === "string" ? value : value?.id ?? null;
+}
+
+function invoiceSubscriptionRef(invoice: Stripe.Invoice): string | null {
+  // Current Stripe API nests the subscription under parent; older webhook
+  // endpoints can still deliver the former top-level property.
+  return objectId(invoice.parent?.subscription_details?.subscription) ??
+    objectId((invoice as Stripe.Invoice & { subscription?: string | { id: string } }).subscription);
+}
+
+function validPeriodEnd(seconds: number | undefined): Date {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) throw new Error("Stripe service period is missing");
+  return new Date(seconds * 1000);
+}
+
+function subscriptionPeriodEnd(subscription: Stripe.Subscription): Date {
+  // Docurama checkout creates exactly one recurring plan item. Use Stripe's
+  // dates so retries or late events cannot shift the purchased service term.
+  const items = subscription.items?.data ?? [];
+  if (items.length > 1) throw new Error("Subscription must contain one recurring plan item");
+  return validPeriodEnd(items[0]?.current_period_end ??
+    (subscription as Stripe.Subscription & { current_period_end?: number }).current_period_end);
+}
+
+function invoicePeriodEnd(invoice: Stripe.Invoice): Date {
+  const subscriptionLines = (invoice.lines?.data ?? []).filter((line) =>
+    line.parent?.type === "subscription_item_details" ||
+    (line as typeof line & { type?: string }).type === "subscription",
+  );
+  if (subscriptionLines.length !== 1) throw new Error("Invoice must identify one recurring plan service period");
+  return validPeriodEnd(subscriptionLines[0].period?.end);
 }

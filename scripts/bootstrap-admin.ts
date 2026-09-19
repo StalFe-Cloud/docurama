@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+/// <reference types="bun-types" />
 
 /** Offline operator bootstrap. Never invoke from an HTTP route or image startup. */
 import { db } from "../src/lib/db";

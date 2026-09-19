@@ -100,7 +100,7 @@ async function issueOidcToken(code: string, claims: Record<string, unknown>) {
 
 /* ── Fixtures: tenant + SSO connections ────────────────────────────────────── */
 
-const tenant = await db.tenant.create({ data: { name: "SSO test", slug: "sso-test", status: "ACTIVE" } });
+const tenant = await db.tenant.create({ data: { name: "SSO test", slug: "sso-test", status: "ACTIVE", planCode: "ENTERPRISE" } });
 
 const SSO_DOMAIN = "ssotest.example";
 for (const domain of [SSO_DOMAIN, "samlexample.test"]) {
@@ -234,7 +234,7 @@ describe("oidc flow", () => {
 
   test("full code exchange verifies signature, issuer, audience and nonce", async () => {
     const nonce = "nonce-123";
-    await issueOidcToken("good-code", { email: `ada@${SSO_DOMAIN}`, name: "Ada Lovelace", nonce });
+    await issueOidcToken("good-code", { email: `ada@${SSO_DOMAIN}`, email_verified: true, name: "Ada Lovelace", nonce });
     const discovery = await lib.oidcDiscovery(ISSUER);
     const identity = await lib.verifyOidcCallback({
       discovery, clientId: "sso-e2e-client", clientSecret: "sso-e2e-secret-value",
@@ -246,7 +246,7 @@ describe("oidc flow", () => {
   });
 
   test("a nonce mismatch is rejected (replay protection)", async () => {
-    await issueOidcToken("replay-code", { email: `eve@${SSO_DOMAIN}`, name: "Eve", nonce: "original" });
+    await issueOidcToken("replay-code", { email: `eve@${SSO_DOMAIN}`, email_verified: true, name: "Eve", nonce: "original" });
     const discovery = await lib.oidcDiscovery(ISSUER);
     await expect(lib.verifyOidcCallback({
       discovery, clientId: "sso-e2e-client", clientSecret: "sso-e2e-secret-value",
@@ -254,12 +254,15 @@ describe("oidc flow", () => {
     })).rejects.toThrow(/nonce/);
   });
 
-  test("an explicitly unverified OIDC email cannot establish mailbox control", async () => {
-    await issueOidcToken("unverified-code", { email: `eve@${SSO_DOMAIN}`, email_verified: false, nonce: "n" });
-    await expect(lib.verifyOidcCallback({
-      discovery: await lib.oidcDiscovery(ISSUER), clientId: "sso-e2e-client", clientSecret: "test",
-      code: "unverified-code", codeVerifier: "v", nonce: "n", origin: "http://127.0.0.1:3000",
-    })).rejects.toThrow(/not verified/);
+  test("OIDC requires literal true mailbox verification, including absent and malformed claims", async () => {
+    for (const [index, value] of [undefined, false, "true", 1, null].entries()) {
+      const code = `unverified-code-${index}`;
+      await issueOidcToken(code, { email: `eve@${SSO_DOMAIN}`, ...(value === undefined ? {} : { email_verified: value }), nonce: "n" });
+      await expect(lib.verifyOidcCallback({
+        discovery: await lib.oidcDiscovery(ISSUER), clientId: "sso-e2e-client", clientSecret: "test",
+        code, codeVerifier: "v", nonce: "n", origin: "http://127.0.0.1:3000",
+      })).rejects.toThrow(/email_verified/);
+    }
   });
 
   test("JIT login provisions the user, enrolls them in the tenant and opens a session", async () => {
@@ -393,6 +396,34 @@ describe("SSO tenant trust boundary", () => {
     expect(await lib.findSsoConnection(`victim@${SSO_DOMAIN}`)).toBeNull();
     await db.domain.delete({ where: { id: ambiguous.id } });
     expect(await db.user.count({ where: { email: "victim@unowned.test" } })).toBe(0);
+  });
+
+  test("JIT provisioning respects occupied seats and pending membership/invitation reservations", async () => {
+    for (const reservation of ["ACTIVE", "PENDING_VERIFICATION", "INVITATION"]) {
+      const domain = `${reservation.toLowerCase().replaceAll("_", "-")}.seat-test.example`;
+      const workspace = await db.tenant.create({ data: { name: "SSO capacity", slug: `sso-capacity-${reservation}`, planCode: "SOLO", status: "ACTIVE" } });
+      await db.domain.create({ data: { tenantId: workspace.id, domain, token: "test", status: "VERIFIED", verifiedAt: new Date() } });
+      const connection = await db.ssoConnection.create({ data: { tenantId: workspace.id, protocol: "OIDC", label: "Capacity test", emailDomain: domain, issuerUrl: ISSUER } });
+      if (reservation === "INVITATION") {
+        await db.invitation.create({ data: { tenantId: workspace.id, email: `invited@${domain}`, token: "sso-capacity-invite", invitedBy: "Owner", expiresAt: new Date(Date.now() + 60_000) } });
+      } else {
+        await db.user.create({ data: { email: `reserved@${domain}`, firstName: "Reserved", lastName: "Seat", passwordHash: "test", memberships: { create: { tenantId: workspace.id, status: reservation } } } });
+      }
+      await expect(login(`new@${domain}`, connection.id)).rejects.toThrow(/No workspace seat/);
+      expect(await db.user.findUnique({ where: { email: `new@${domain}` } })).toBeNull();
+      expect(await db.member.count({ where: { tenantId: workspace.id } })).toBe(reservation === "INVITATION" ? 0 : 1);
+    }
+  });
+
+  test("concurrent JIT logins cannot consume the final seat twice", async () => {
+    const domain = "concurrent-seat.example";
+    const workspace = await db.tenant.create({ data: { name: "SSO final seat", slug: "sso-final-seat", planCode: "SOLO", status: "ACTIVE" } });
+    await db.domain.create({ data: { tenantId: workspace.id, domain, token: "test", status: "VERIFIED", verifiedAt: new Date() } });
+    const connection = await db.ssoConnection.create({ data: { tenantId: workspace.id, protocol: "OIDC", label: "Final seat", emailDomain: domain, issuerUrl: ISSUER } });
+    const results = await Promise.allSettled([login(`one@${domain}`, connection.id), login(`two@${domain}`, connection.id)]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(await db.member.count({ where: { tenantId: workspace.id } })).toBe(1);
+    expect(await db.user.count({ where: { email: { endsWith: `@${domain}` } } })).toBe(1);
   });
 
   test("existing platform admins and accounts outside the authorized tenant cannot be impersonated", async () => {

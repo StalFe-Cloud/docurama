@@ -4,7 +4,7 @@ import net from "net";
 import QRCode from "qrcode";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
-import { hashPassword, recordAudit } from "@/lib/auth";
+import { hashPassword, verifyPassword, recordAudit } from "@/lib/auth";
 import { jsonError, jsonOk, iso, isos } from "@/lib/serializers";
 import { generateTotpSecret, verifyTotp, otpauthUri, generateRecoveryCodes } from "@/lib/totp";
 import { issueSigningCertificate, shortThumbprint } from "@/lib/certificates";
@@ -424,7 +424,7 @@ export async function postSettingsOp(
   if (op === "password.change") {
     const current = String(data.current ?? "");
     const next = String(data.next ?? "");
-    if (user.passwordHash !== hashPassword(current)) {
+    if (!verifyPassword(current, user.passwordHash)) {
       await db.securityEvent.create({
         data: { type: "PASSWORD_CHANGE_FAILED", severity: "MEDIUM", actor: me.email, ip: "10.42.0.7", blocked: true, detail: "Current password did not match" },
       });
@@ -497,7 +497,7 @@ export async function postSettingsOp(
 
   if (op === "2fa.disable") {
     if (!user.totpEnabled) return jsonError("Two-factor authentication is not enabled");
-    if (user.passwordHash !== hashPassword(String(data.password ?? ""))) {
+    if (!verifyPassword(String(data.password ?? ""), user.passwordHash)) {
       return jsonError("Password is incorrect", 401);
     }
     if (!verifyTotp(user.totpSecret ?? "", String(data.code ?? ""))) {
