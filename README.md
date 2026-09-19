@@ -428,6 +428,20 @@ Docurama has undergone 10 continuous engineering cycles, graduating from early p
 
 ---
 
+## 10b. Go-Live Cycle (feat/go-live-platform)
+
+Everything needed for 100% public launch, on top of cycles 1–10:
+
+- **Final commercial ladder** — Solo €12 (1 seat) · Starter €19 (3 seats, same 50-envelope allowance as Solo) · Smart Team €79 (10 seats, 250) · Business €199 (50 seats, 1,000) · Enterprise custom. Rendered from one source (`src/lib/plans.ts`) across the marketing grid, admin console, Settings → Billing, seed data, Product/offers JSON-LD, i18n and the test suite.
+- **Payment rails** — Stripe Checkout (subscription mode: the chosen term charged automatically every term) with signature-verified webhooks (`checkout.session.completed` activation, `invoice.paid` renewal with rollover, `invoice.payment_failed` → PAST_DUE + dunning, `customer.subscription.deleted` → CANCELED), plus a **manual bank-transfer mode** for self-host/out-of-band deployments: tenants request activation with a quotable reference, platform admins approve in the admin console, and both modes run the identical activation path. Operator guide: `docs/PAYMENTS.md`.
+- **Single sign-on** — OIDC (Microsoft Entra ID, Google Workspace, Okta, Keycloak; discovery + PKCE + nonce + JWKS verification) and SAML 2.0 (samlify SP, SP metadata endpoint, signature-verified ACS), bound to the company email domain, one active connection per domain, JIT-provisioned members with unusable passwords. The sign-in screen offers the IdP path as soon as a typed email matches. Operator guide: `docs/SSO.md`.
+- **Bot protection** — honeypot + time trap + optional Cloudflare Turnstile on every public form (signup, enterprise lead).
+- **Knowledge base & tutorials** — the `/docs` site covers every section (19 new articles: billing, teams, account & security, self-hosting, troubleshooting, templates, domains, notifications, webhooks, MCP + 2 step-by-step tutorials) with real markdown rendering.
+- **Blog** — `/blog` with the six launch posts, SEO (JSON-LD Blog/BlogPosting, sitemap entries, canonicals).
+- **Internal runbooks** — `docs/OPERATIONS-RUNBOOK.md`, `docs/DEPLOYMENT.md` (Vercel / Docker / Compose / Helm + full env reference), `docs/SECURITY.md`, `docs/PAYMENTS.md`, `docs/SSO.md`, and the master `docs/GO-LIVE-CHECKLIST.md`.
+- **Trust surfaces** — `/.well-known/security.txt` (RFC 9116), Product/offers structured data.
+- **Verification** — 149 bun tests across 13 suites (four new: billing 14, SSO 12, bot-guard 10, plans rewritten to the final ladder) and 29 Maestro flows (two new: blog, settings-billing). tsc/eslint/production build clean; 37 routes build.
+
 ## 11. Key Decisions for Your Confirmation
 
 1. **Header Navigation Decluttering:**  
