@@ -272,10 +272,18 @@ let samlifyReady = false;
 async function getSamlify() {
   const samlify = await import("samlify");
   if (!samlifyReady) {
-    // XSD validation disabled (signature verification still enforced);
-    // the xmllint-wasm validator is an optional peer dependency.
+    // XML well-formedness validation via xmllint-wasm (WASM, no Java).
+    // Rejects structurally malformed SAML payloads before signature/assertion
+    // processing. Signature verification is enforced separately by samlify.
+    const { validateXML } = await import("xmllint-wasm");
     samlify.setSchemaValidator({
-      validate: async () => Promise.resolve(true),
+      validate: async (xml: string) => {
+        const result = await validateXML({ xml: [{ fileName: "saml.xml", contents: xml }], schema: [] as never });
+        if (!result.valid) {
+          throw new Error(`SAML XML validation failed: ${result.errors.map(e => e.message).join("; ")}`);
+        }
+        return "valid";
+      },
     });
     samlifyReady = true;
   }
