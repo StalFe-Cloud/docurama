@@ -272,13 +272,34 @@ let samlifyReady = false;
 async function getSamlify() {
   const samlify = await import("samlify");
   if (!samlifyReady) {
-    // XML well-formedness validation via xmllint-wasm (WASM, no Java).
-    // Rejects structurally malformed SAML payloads before signature/assertion
-    // processing. Signature verification is enforced separately by samlify.
+    // Full SAML 2.0 XSD validation via xmllint-wasm (WASM — no Java/JRE in the
+    // image). samlify REQUIRES a schema validator and ships none of its own.
+    // The stub this replaced returned true unconditionally; its successor
+    // passed an empty schema list, which makes xmllint parse the document but
+    // check it against nothing. Either way a well-formed document asserting
+    // arbitrary structure reached the assertion extractor. Schema validation is
+    // defence in depth AHEAD of signature verification, which samlify enforces
+    // separately — it is not a substitute for it.
+    //
+    // schema[0] is the protocol XSD; the rest are preloaded so its relative
+    // <import schemaLocation="..."> references resolve inside the WASM
+    // filesystem. See scripts/gen-saml-xsd.mjs for provenance.
+    //
+    // Cost, measured on this code (20 runs, typical response): median 69ms /
+    // p90 85ms per validation, against 44ms for well-formedness alone. Most of
+    // that is WASM instantiation, which we paid already — real schema checking
+    // is only ~25ms of it. Once per SSO login, so it stays unconditional.
     const { validateXML } = await import("xmllint-wasm");
+    const { SAML_SCHEMA_FILES } = await import("@/lib/saml-xsd");
+    const [schema, ...preload] = SAML_SCHEMA_FILES;
     samlify.setSchemaValidator({
       validate: async (xml: string) => {
-        const result = await validateXML({ xml: [{ fileName: "saml.xml", contents: xml }], schema: [] as never });
+        const result = await validateXML({
+          xml: [{ fileName: "saml.xml", contents: xml }],
+          extension: "schema",
+          schema: [schema.contents],
+          preload,
+        });
         if (!result.valid) {
           throw new Error(`SAML XML validation failed: ${result.errors.map(e => e.message).join("; ")}`);
         }
