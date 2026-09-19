@@ -187,6 +187,17 @@ export async function seeText(page: Page, text: string | RegExp, timeout = 15_00
   await page.getByText(text).first().waitFor({ state: "visible", timeout });
 }
 
+/**
+ * Wait for an input with this placeholder to be visible.
+ *
+ * Maestro's assertVisible matched the accessibility tree, which carries
+ * placeholder and aria-label text; Playwright's getByText only matches rendered
+ * text content. Flows that asserted on a placeholder need this instead.
+ */
+export async function seePlaceholder(page: Page, text: string | RegExp, timeout = 15_000): Promise<void> {
+  await page.getByPlaceholder(text).first().waitFor({ state: "visible", timeout });
+}
+
 /** Wait for text to disappear (the old runner's extendedWaitUntil/notVisible). */
 export async function textGone(page: Page, text: string | RegExp, timeout = 30_000): Promise<void> {
   await page.getByText(text).first().waitFor({ state: "hidden", timeout });
@@ -241,10 +252,25 @@ export async function signIn(
   page: Page,
   account: { email: string; password: string } = ACCOUNTS.workspace,
 ): Promise<void> {
+  await submitLogin(page, account);
+  await seeText(page, /Welcome back/, 30_000);
+}
+
+/**
+ * Sign in as the platform admin. PLATFORM_ADMIN lands in the admin shell
+ * ("Platform overview"), not the workspace shell, so it needs its own landing
+ * assertion rather than signIn's.
+ */
+export async function signInAdmin(page: Page): Promise<void> {
+  await submitLogin(page, ACCOUNTS.admin);
+  await seeText(page, /Platform overview/, 30_000);
+}
+
+/** Fill and submit the sign-in form. Shared by signIn and signInAdmin. */
+async function submitLogin(page: Page, account: { email: string; password: string }): Promise<void> {
   await goto(page, "/login");
   await seeText(page, "Sign in to your portal", 30_000);
   await page.locator("#email").fill(account.email);
   await page.locator("#password").fill(account.password);
   await clickByName(page, /Sign in securely/);
-  await seeText(page, /Welcome back/, 30_000);
 }
