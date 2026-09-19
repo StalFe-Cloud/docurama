@@ -37,10 +37,10 @@ type TenantDetail = {
 
 // Plan labels mirror src/lib/billing.ts — the seeded single source of truth.
 const PLANS = [
-  { code: "SOLO", label: "Solo - €9/mo · 50 envelopes per 35-day month · 1 seat" },
-  { code: "STARTER", label: "Starter - €19/mo · 100 envelopes per 35-day month · 3 seats" },
+  { code: "SOLO", label: "Solo - €12/mo · 50 envelopes per 35-day month · 1 seat" },
+  { code: "STARTER", label: "Starter - €19/mo · 50 envelopes per 35-day month · 3 seats" },
   { code: "SMART_TEAM", label: "Smart Team - €79/mo · 250 envelopes · 10 seats" },
-  { code: "BUSINESS", label: "Business - €249/mo · 1,000 envelopes · 50 seats" },
+  { code: "BUSINESS", label: "Business - €199/mo · 1,000 envelopes · 50 seats" },
   { code: "ENTERPRISE", label: "Enterprise - custom pricing · negotiated seats and volume" },
 ];
 

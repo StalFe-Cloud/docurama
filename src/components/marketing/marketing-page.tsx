@@ -183,6 +183,10 @@ const FAQS = [
     a: "Write to privacy@docurama.eu or use the DSAR tooling available to workspace administrators. Access, erasure, rectification and portability requests are tracked with statutory due dates and completion records.",
   },
   {
+    q: "What is the difference between Solo and Starter?",
+    a: "The allowance is identical — 50 envelopes per 35-day month, every core feature, rollover included. Solo has one seat at €12/month; Starter has three seats at €19/month. You are paying for colleagues, not for a bigger limit you might not use.",
+  },
+  {
     q: "Why do Solo and Starter use 35-day months?",
     a: "Every monthly cycle on our entry plans includes the weekends, on us: you get 35 days of envelope allowance instead of a calendar month's 30. Unused envelopes also roll into your next period (capped at one full period's allowance), so a quiet month is never a wasted month.",
   },
@@ -622,7 +626,13 @@ export function MarketingPage() {
               );
             })}
           </div>
-          <p className="mt-6 text-xs text-muted-foreground">
+          <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">Solo and Starter include the same allowance</span>{" "}
+            — 50 envelopes on 35-day months, every core feature. The only difference is
+            seats: one for Solo, three for Starter. Need more volume and an API? That is
+            what Smart Team and Business are for.
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
             Need on-premises deployment or self-hosting?{" "}
             <a className="font-medium underline underline-offset-2" href="/enterprise">Tell us what you are planning</a>.
           </p>

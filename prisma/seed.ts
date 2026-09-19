@@ -122,8 +122,8 @@ async function main() {
     ["atlas-freight", "SMART_TEAM", 79, 9, 6, 10, "ACTIVE"],
     ["verdant-agri", "STARTER", 19, 2, 1, 0, "ACTIVE"],
     ["corvus-mfg", "ENTERPRISE", 390, 24, 12, 15, "PAST_DUE"],
-    ["camille-notaire", "SOLO", 9, 1, 1, 0, "ACTIVE"],
-    ["nordwind-logistics", "BUSINESS", 249, 38, 6, 10, "ACTIVE"],
+    ["camille-notaire", "SOLO", 12, 1, 1, 0, "ACTIVE"],
+    ["nordwind-logistics", "BUSINESS", 199, 38, 6, 10, "ACTIVE"],
     ["lumen-research", "STARTER", 19, 1, 1, 0, "TRIALING"],
     ["meteora-health", "SMART_TEAM", 79, 4, 1, 0, "TRIALING"],
   ];

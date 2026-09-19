@@ -29,7 +29,6 @@ async function main() {
   const expectAllowance = 50 + 5;
   console.log(`[1] SOLO mid-window: limit=${snap1.envelopeLimit} rollover=${snap1.rollover} allowance=${snap1.allowance} (expect 50/5/${expectAllowance})`);
   if (snap1.envelopeLimit !== 50 || snap1.rollover !== 5 || snap1.allowance !== expectAllowance) throw new Error("scenario 1 failed");
-  if (snap1.windowDaysRemainingLabel === undefined) void 0;
 
   // ── Scenario 2: expired window rolls forward with carry ──
   // SOLO window = 35 days (35-day month). Put the anchor 80 days back:

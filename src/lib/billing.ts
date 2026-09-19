@@ -6,11 +6,12 @@
  * read from here so a plan change is a one-file change.
  *
  * Pricing strategy (2026 revision):
- * - SOLO and STARTER are clearly differentiated (price, seats AND envelopes)
- *   while keeping every competitive feature: 35-day billing months ("weekends
- *   on us"), unused-envelope rollover, no engagement, cancel anytime.
+ * - SOLO (€12, 1 seat) and STARTER (€19, 3 seats) share the exact same
+ *   allowance — 50 envelopes on 35-day billing months ("weekends on us") —
+ *   and every core feature. The ONLY difference is seats: pricing and every
+ *   screen must say this plainly, so nobody wonders what €7 buys.
  * - SMART TEAM (previously "Business") is the 10-seat API tier.
- * - BUSINESS is the new 50-seat tier with 1,000 envelopes per month.
+ * - BUSINESS is the 50-seat volume tier with 1,000 envelopes per month.
  * - ENTERPRISE is custom-priced; seats, envelopes and price are negotiated
  *   per deal (Subscription overrides) — never a public number.
  */
@@ -46,7 +47,7 @@ export const PLAN_DEFS: PlanDef[] = [
   {
     code: "SOLO",
     name: "Solo",
-    monthlyEur: 9,
+    monthlyEur: 12,
     seatLimit: 1,
     envelopeLimit: 50,
     storageGb: 5,
@@ -69,19 +70,19 @@ export const PLAN_DEFS: PlanDef[] = [
     name: "Starter",
     monthlyEur: 19,
     seatLimit: 3,
-    envelopeLimit: 100,
+    envelopeLimit: 50,
     storageGb: 5,
     apiAccess: false,
     periodDays: 35,
     slaUptime: "99.5%",
     support: "Email support",
     features: [
-      "3 seats", "100 envelopes per 35-day month", "PAdES B-B sealing",
+      "3 seats", "50 envelopes per 35-day month", "PAdES B-B sealing",
       "Email signing and public verify portal", "2 templates", "Unused envelopes roll over",
     ],
-    blurb: "A tiny team's serious signing desk.",
-    outcome: "Share the workload across three seats with one shared audit trail.",
-    helps: "Small teams (2-3 people) sending tens of envelopes a month who need shared templates and a team inbox for signatures.",
+    blurb: "Everything in Solo, plus two more seats.",
+    outcome: "Same 50-envelope, 35-day allowance as Solo — shared by three people with one audit trail.",
+    helps: "Small teams (2-3 people) who outgrew one seat and need shared templates and a team inbox for signatures.",
     selfServe: true,
     customPricing: false,
   },
@@ -110,7 +111,7 @@ export const PLAN_DEFS: PlanDef[] = [
   {
     code: "BUSINESS",
     name: "Business",
-    monthlyEur: 249,
+    monthlyEur: 199,
     seatLimit: 50,
     envelopeLimit: 1000,
     storageGb: 200,
