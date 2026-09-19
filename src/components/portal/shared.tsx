@@ -158,13 +158,18 @@ const STATUS_LABELS: Record<string, string> = {
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
   const style = STATUS_STYLES[status] ?? "bg-muted text-muted-foreground";
   const label = STATUS_LABELS[status] ?? status.replace(/_/g, " ").toLowerCase();
+  // In-flight states breathe so live progress is legible; terminal states
+  // stay still. Pure CSS (globals.css), collapses under reduced motion.
+  const live = ["SENT", "PARTIALLY_SIGNED", "PENDING", "TRIALING", "TRIAL", "INVITED", "DELIVERED"].includes(status);
   return (
     <span
+      key={status}
       className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        "chip-enter inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap",
         style, className,
       )}
     >
+      {live && <span className="status-dot status-dot-live" aria-hidden style={{ background: "currentColor" }} />}
       {label}
     </span>
   );

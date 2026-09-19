@@ -113,11 +113,19 @@ INV_TOKEN3=$(dbq "SELECT token FROM Invitation WHERE email='$OTHER' AND status='
 R=$(curl -s -X POST "$BASE/api/auth/signup" -H "Content-Type: application/json" -d "{\"firstName\":\"X\",\"lastName\":\"Y\",\"email\":\"wrong-$TS@example.com\",\"password\":\"$PASS\",\"consent\":true,\"inviteToken\":\"$INV_TOKEN3\"}")
 check "mismatched invite email rejected" "sent to $OTHER" "$R"
 
-echo "── 9. Settings API: pending invitations in GET + invite-member op ──"
+echo "── 9. Settings API: pending invitations + seat-aware invite-member ──"
 R=$(curl -s "$BASE/api/workspace/settings" -H "Authorization: Bearer $TOKEN")
 check "settings lists pending invitations" "$OTHER" "$R"
+# Seat reality (2026 pricing): STARTER has 3 seats. This org now has
+# 2 members + 1 pending invite = full. A further invite must be blocked…
 R=$(curl -s -X POST "$BASE/api/workspace/settings" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"op\":\"invite-member\",\"data\":{\"email\":\"hire.$TS@example.com\",\"role\":\"MEMBER\"}}")
-check "settings invite-member uses real invitations" 'they create their own password' "$R"
+check "invite blocked when all seats reserved (402 copy)" 'All 3 seats are taken' "$R"
+# …and revoking the pending invite frees the seat again.
+REV_ID=$(echo "$R" >/dev/null; python3 scripts/db-lookup.py "SELECT id FROM Invitation WHERE email='$OTHER' AND status='PENDING' ORDER BY createdAt DESC LIMIT 1" "")
+R=$(curl -s -X POST "$BASE/api/workspace/settings" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"op\":\"invite-revoke\",\"id\":\"$REV_ID\"}")
+check "pending invitation revoked" 'revoked' "$R"
+R=$(curl -s -X POST "$BASE/api/workspace/settings" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"op\":\"invite-member\",\"data\":{\"email\":\"hire.$TS@example.com\",\"role\":\"MEMBER\"}}")
+check "invite succeeds after seat freed" 'they create their own password' "$R"
 R=$(curl -s "$BASE/api/workspace/settings" -H "Authorization: Bearer $TOKEN")
 check "new invite visible in settings" "hire.$TS@example.com" "$R"
 

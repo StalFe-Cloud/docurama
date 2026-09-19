@@ -15,8 +15,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type UsersData = {
   members: { id: string; role: string; name: string; email: string; status: string; totpEnabled: boolean; lastActiveAt: string | null }[];
   invitations: { id: string; email: string; role: string; invitedBy: string; createdAt: string; expiresAt: string }[];
-  plan: { seatLimit: number } | null;
+  plan: { seatLimit: number; envelopeLimit: number; code?: string } | null;
   isAdmin: boolean;
+  teams?: {
+    id: string; name: string; color: string; envelopeCount: number;
+    members: { userId: string; name: string; email: string }[];
+  }[];
 };
 
 type AccountInfo = { enforceTwoFactor: boolean };
@@ -40,8 +44,120 @@ export function UsersTab() {
     <div className="space-y-6">
       <TeamCard data={base.data} />
       {base.data.invitations?.length > 0 && <PendingInvitesCard data={base.data} />}
+      <GroupsCard data={base.data} />
       <EnforcementCard enforce={account.data?.enforceTwoFactor ?? false} isAdmin={base.data.isAdmin} />
     </div>
+  );
+}
+
+/** Small groups inside the workspace (BUSINESS+). Grouping only — it never
+ *  changes permissions, roles or quota, just organizes members and their
+ *  envelopes for larger organizations. */
+function GroupsCard({ data }: { data: UsersData }) {
+  const act = useSettingsAct(["settings"]);
+  const [name, setName] = useState("");
+  const [addTo, setAddTo] = useState<string | null>(null);
+  const teamsAvailable = (data.teams?.length ?? 0) > 0 || ["BUSINESS", "ENTERPRISE"].includes(data.plan?.code ?? "");
+  if (!teamsAvailable) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Users className="h-4 w-4 text-muted-foreground" aria-hidden /> Teams
+        </CardTitle>
+        <CardDescription>
+          Group members and their envelopes (e.g. Sales, Procurement) for a clearer view — permissions stay untouched. Included in the Business plan.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {data.isAdmin && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="new-team">New team</Label>
+              <Input id="new-team" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sales" className="h-11" maxLength={40} />
+            </div>
+            <Button
+              className="h-11"
+              disabled={!name.trim() || act.isPending}
+              onClick={() => { act.mutate({ op: "team.create", data: { name } }); setName(""); }}
+            >
+              <Plus className="h-4 w-4" aria-hidden /> Create team
+            </Button>
+          </div>
+        )}
+        <ul className="divide-y rounded-lg border">
+          {(data.teams ?? []).map((t) => (
+            <li key={t.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {t.name}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">· {t.envelopeCount} envelope{t.envelopeCount === 1 ? "" : "s"}</span>
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {t.members.length === 0 ? "No members yet" : t.members.map((m) => m.name).join(", ")}
+                  </p>
+                </div>
+                {data.isAdmin && (
+                  <div className="flex shrink-0 gap-1">
+                    <Select value={addTo === t.id ? "choose" : undefined} onValueChange={(memberId) => {
+                      act.mutate({ op: "team.member.add", id: t.id, data: { memberId } });
+                      setAddTo(null);
+                    }}>
+                      <SelectTrigger className="h-9 w-28" aria-label={`Add a member to ${t.name}`}>
+                        <SelectValue placeholder={addTo === t.id ? "Pick member" : "Add member"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {data.members
+                          .filter((m) => !t.members.some((tm) => tm.email === m.email))
+                          .map((m) => (
+                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <ConfirmDialog
+                      trigger={<Button variant="ghost" size="sm" className="text-destructive" aria-label={`Delete team ${t.name}`}><Trash2 className="h-4 w-4" aria-hidden /></Button>}
+                      title={`Delete the ${t.name} team?`}
+                      description="Members stay in the workspace and their envelopes remain — only the grouping disappears."
+                      confirmLabel="Delete team"
+                      onConfirm={() => act.mutateAsync({ op: "team.delete", id: t.id })}
+                    />
+                  </div>
+                )}
+              </div>
+              {t.members.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {t.members.map((m) => (
+                    <span key={`${t.id}-${m.email}`} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs">
+                      {m.name}
+                      {data.isAdmin && (
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${m.name} from ${t.name}`}
+                          onClick={() => {
+                            const member = data.members.find((x) => x.email === m.email);
+                            if (member) act.mutate({ op: "team.member.remove", id: member.id, data: { teamId: t.id } });
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+          {(data.teams ?? []).length === 0 && (
+            <li className="px-4 py-6 text-center text-sm text-muted-foreground">
+              No teams yet — create the first one above.
+            </li>
+          )}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 

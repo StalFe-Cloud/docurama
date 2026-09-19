@@ -28,9 +28,11 @@ import { TableDemo } from "@/components/marketing/table-demo";
 import { VerifyDemo } from "@/components/marketing/verify-demo";
 import { LiveExamples } from "@/components/marketing/live-examples";
 import { ScrollTop } from "@/components/marketing/scroll-top";
+import { CookieNotice } from "@/components/marketing/cookie-notice";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { PLAN_DEFS, BILLING_PERIODS, monthlyEffectiveEur, periodDaysLabel } from "@/lib/billing";
 
 const NAV = [
   { href: "#product", labelKey: "nav.product", fallback: "Product" },
@@ -111,34 +113,48 @@ const COMPLIANCE = [
   },
 ];
 
-const PLANS = [
+// Plans come from src/lib/billing.ts — the same single source of truth the
+// signup API, quota engine and admin console read. No price drift possible.
+const PLANS = PLAN_DEFS;
+
+// Honest differentiators — every line maps to a shipped capability.
+const DIFFERENTIATORS = [
   {
-    code: "STARTER",
-    name: "Starter",
-    price: "€19",
-    per: "/mo",
-    blurb: "For small teams sending their first envelopes.",
-    features: ["3 seats", "25 envelopes / month", "PAdES B-B sealing", "Email signing and public verify portal", "2 templates", "99.5% uptime SLA"],
-    highlight: false,
+    title: "35-day billing months",
+    body: "Solo and Starter run on 35-day months: the weekends are on us. You get five extra free days of envelope allowance every single cycle — we have never seen another platform do this.",
   },
   {
-    code: "BUSINESS",
-    name: "Business",
-    price: "€79",
-    per: "/mo",
-    blurb: "For growing operations that live in documents.",
-    features: ["10 seats", "250 envelopes / month", "PAdES B-LT sealing", "SMS + WhatsApp delivery", "API access and webhooks", "DNS domain attestation", "Unlimited templates", "99.9% uptime SLA"],
-    highlight: true,
+    title: "Unused envelopes roll over",
+    body: "Envelopes you paid for and did not send carry into your next period, capped at one full period's allowance. Your budget never evaporates at midnight on the last day of the month.",
   },
   {
-    code: "ENTERPRISE",
-    name: "Enterprise",
-    price: "€349",
-    per: "/mo",
-    blurb: "For regulated teams with audit obligations.",
-    features: ["100 seats", "5,000 envelopes / month", "PAdES B-LTA sealing", "BYO certificates and SSO/SAML", "21 CFR Part 11 mode", "Audit chain exports", "Custom retention and legal hold", "99.99% uptime SLA"],
-    highlight: false,
+    title: "No engagement, ever",
+    body: "Monthly is the default, cancel anytime, no sales call to do it. Prepay 3, 6 or 12 months only if you want up to 15% off — savings are a choice, not a lock-in.",
   },
+  {
+    title: "Proof anyone can check",
+    body: "Every sealed envelope gets a public verification code, a transparency-log entry with offline-verifiable inclusion proofs, and a full evidence pack you can export and keep.",
+  },
+  {
+    title: "EU-built, EU-hosted",
+    body: "A French company, EU data residency, no transatlantic document transfers. eIDAS-aligned conformance levels (B-B to B-LTA) reported honestly on every document.",
+  },
+  {
+    title: "An API your AI agent can use",
+    body: "REST API, signed webhooks and an MCP server — your workflows and your AI agents send envelopes without a human in the loop. Included from Smart Team up.",
+  },
+];
+
+// Honest comparison — the legacy column describes patterns common to
+// traditional e-signature platforms, without naming or inventing specifics.
+const COMPARE: [string, string, string][] = [
+  ["Billing month", "Calendar month — pay for 30 days", "35-day months on entry plans, weekends included"],
+  ["Unused envelopes", "Typically lost at month end", "Roll over, capped at a full period's allowance"],
+  ["Commitment", "Annual contracts commonly pushed at checkout", "Monthly by default, cancel anytime, prepay optional"],
+  ["Document verification", "Often gated or behind the sender's account", "Free public portal with cryptographic inclusion proofs"],
+  ["Evidence export", "A basic audit PDF", "Evidence packs + self-hosted attestation you can verify offline"],
+  ["AI integration", "Rarely available", "MCP server plus REST API and webhooks from Smart Team"],
+  ["Getting started", "Sales-assisted in many cases", "Self-serve to 50 seats; guided onboarding with a live demo"],
 ];
 
 const FAQS = [
@@ -160,20 +176,85 @@ const FAQS = [
   },
   {
     q: "Is there an API?",
-    a: "Business and Enterprise plans include a REST API with X-API-Key authentication, envelope and template endpoints, a public verification endpoint and signed webhooks. An MCP server is also available for AI-agent integrations. See the API documentation at docs.docurama.eu.",
+    a: "Smart Team, Business and Enterprise plans include a REST API with X-API-Key authentication, envelope and template endpoints, a public verification endpoint and signed webhooks. An MCP server is also available for AI-agent integrations. See the API documentation at docs.docurama.eu.",
   },
   {
     q: "How do we exercise GDPR rights?",
     a: "Write to privacy@docurama.eu or use the DSAR tooling available to workspace administrators. Access, erasure, rectification and portability requests are tracked with statutory due dates and completion records.",
   },
+  {
+    q: "Why do Solo and Starter use 35-day months?",
+    a: "Every monthly cycle on our entry plans includes the weekends, on us: you get 35 days of envelope allowance instead of a calendar month's 30. Unused envelopes also roll into your next period (capped at one full period's allowance), so a quiet month is never a wasted month.",
+  },
+  {
+    q: "Can I cancel anytime?",
+    a: "Yes. Monthly billing is the default and there is no engagement — cancel whenever you want from Settings. If you choose a 3, 6 or 12-month prepaid period for the discount, you can still cancel before it renews.",
+  },
+  {
+    q: "What does Custom pricing mean for Enterprise?",
+    a: "Seats, envelope volume, price and terms are negotiated per deal — there is no fixed public number. Tell us what you need on the Enterprise page and we come back with a concrete proposal covering SSO, bring-your-own certificates, retention policies and legal hold.",
+  },
 ];
 
 export function MarketingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  // Billing period shown on the pricing cards. Monthly (no engagement) is the
+  // default; prepay options reveal the 3/6/12-month discounts.
+  const [billingMonths, setBillingMonths] = useState(1);
   const { t, locale } = useI18n();
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Structured data: Organization + Product offers + FAQ. Static JSON,
+          no scripts, no third parties. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "Organization",
+                "@id": "https://docurama.eu/#org",
+                name: "Docurama",
+                legalName: "Docurama SAS",
+                url: "https://docurama.eu",
+                email: "support@docurama.eu",
+                address: {
+                  "@type": "PostalAddress",
+                  streetAddress: "1 Rue Marguerin",
+                  addressLocality: "Paris",
+                  postalCode: "75014",
+                  addressCountry: "FR",
+                },
+              },
+              {
+                "@type": "SoftwareApplication",
+                name: "Docurama eSignature",
+                applicationCategory: "BusinessApplication",
+                operatingSystem: "Web",
+                description:
+                  "EU-built electronic signatures with cryptographic evidence: PAdES sealing, RFC 3161 timestamps, public verification and audit trails.",
+                offers: PLAN_DEFS.filter((p) => !p.customPricing).map((p) => ({
+                  "@type": "Offer",
+                  name: p.name,
+                  price: p.monthlyEur,
+                  priceCurrency: "EUR",
+                  description: `${p.seatLimit} seat(s), ${p.envelopeLimit} envelopes per ${p.periodDays === 30 ? "month" : `${p.periodDays}-day month`}`,
+                })),
+              },
+              {
+                "@type": "FAQPage",
+                mainEntity: FAQS.map((f) => ({
+                  "@type": "Question",
+                  name: f.q,
+                  acceptedAnswer: { "@type": "Answer", text: f.a },
+                })),
+              },
+            ],
+          }),
+        }}
+      />
       {/* Nav: one line, 64px, light */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
@@ -227,8 +308,27 @@ export function MarketingPage() {
       </header>
 
       {/* Hero: centered statement over the live product movie */}
-      <section id="top" className="border-b">
-        <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+      <section id="top" className="relative overflow-hidden border-b">
+        {/* Hike-style layered contour background: one inline SVG, ~600 bytes,
+            single accent, opacity low enough to stay behind the content.
+            Decorative only — hidden from AT, untouchable by pointer. */}
+        <svg
+          aria-hidden
+          focusable="false"
+          viewBox="0 0 1200 320"
+          preserveAspectRatio="xMidYMid slice"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          style={{ opacity: 0.05 }}
+        >
+          <path d="M-40 260 C 180 190, 260 240, 420 180 S 700 90, 880 170 S 1120 250, 1260 190" fill="none" stroke="#0f7a5a" strokeWidth="1.5" />
+          <path d="M-40 220 C 160 150, 300 200, 460 140 S 720 50, 900 130 S 1140 210, 1260 150" fill="none" stroke="#0f7a5a" strokeWidth="1.25" />
+          <path d="M-40 180 C 150 110, 320 160, 480 100 S 740 10, 920 90 S 1160 170, 1260 110" fill="none" stroke="#0f7a5a" strokeWidth="1" />
+          <path d="M-40 300 C 200 230, 280 280, 440 220 S 720 130, 900 210 S 1140 290, 1260 230" fill="none" stroke="#1a1a1a" strokeWidth="1" />
+          <circle cx="420" cy="180" r="2.5" fill="#0f7a5a" />
+          <circle cx="880" cy="170" r="2.5" fill="#0f7a5a" />
+          <circle cx="480" cy="100" r="2" fill="#1a1a1a" />
+        </svg>
+        <div className="relative mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
           <div className="text-center">
             <h1 className="hero-in mx-auto max-w-3xl text-4xl font-semibold leading-[1.06] tracking-tighter sm:text-5xl lg:text-6xl">
               {locale === "fr" ? (
@@ -446,51 +546,144 @@ export function MarketingPage() {
             Simple, EU-priced plans
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Every plan starts with a 14-day trial, no credit card required.
-            Prices exclude VAT.
+            Every plan starts with a {`14-day`} trial on your chosen plan's real limits,
+            no credit card required. Prices exclude VAT.
           </p>
-          <div className="mt-10 grid gap-4 lg:grid-cols-3">
-            {PLANS.map((p) => (
-              <div key={p.code} className={cn(
-                "relative flex flex-col rounded-xl border p-6",
-                p.highlight ? "border-primary bg-card shadow-lg shadow-primary/[0.07]" : "bg-card",
-              )}>
-                {p.highlight && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-0.5 text-[11px] font-semibold text-primary-foreground">
-                    Most popular
-                  </span>
-                )}
-                {/* Fixed-height header block keeps feature lists aligned across columns */}
-                <div className="min-h-[104px]">
+
+          {/* Billing period selector: monthly is the no-engagement default. */}
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div role="group" aria-label="Billing period" className="inline-flex rounded-lg border bg-card p-1">
+              {BILLING_PERIODS.map((bp) => (
+                <button
+                  key={bp.months}
+                  type="button"
+                  onClick={() => setBillingMonths(bp.months)}
+                  aria-pressed={billingMonths === bp.months}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    billingMonths === bp.months
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {bp.label}
+                  {bp.discountPct > 0 && <span aria-hidden> ·−{bp.discountPct}%</span>}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {billingMonths === 1
+                ? "No engagement — pay monthly, cancel anytime, unused envelopes roll over."
+                : `Prepay ${billingMonths} months and save ${BILLING_PERIODS.find((b) => b.months === billingMonths)?.discountPct}% on every month. Cancel whenever it renews.`}
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {PLANS.map((p) => {
+              const effective = p.customPricing
+                ? null
+                : monthlyEffectiveEur(p.monthlyEur, billingMonths);
+              return (
+                <div key={p.code} className={cn(
+                  "relative flex flex-col rounded-xl border bg-card p-5",
+                  p.code === "STARTER" && "border-primary/40",
+                )}>
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{p.name}</h3>
                   <p className="mt-2 flex items-baseline gap-1">
-                    <span className="text-3xl font-semibold tracking-tight">{p.price}</span>
-                    <span className="text-sm text-muted-foreground">{p.per}</span>
+                    {p.customPricing ? (
+                      <span className="text-2xl font-semibold tracking-tight">Custom</span>
+                    ) : (
+                      <>
+                        <span className="text-2xl font-semibold tracking-tight">€{effective}</span>
+                        <span className="text-xs text-muted-foreground">/mo</span>
+                      </>
+                    )}
                   </p>
-                  <p className="mt-1.5 text-xs text-muted-foreground">{p.blurb}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {p.customPricing ? "Negotiated seats, volume and price" : periodDaysLabel(p.periodDays)}
+                  </p>
+                  <p className="mt-2 text-xs font-medium">{p.blurb}</p>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{p.outcome}</p>
+                  <ul className="mt-4 flex-1 space-y-2">
+                    {p.features.slice(0, 6).map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-[11px] leading-relaxed">
+                        <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button className="mt-5 w-full" size="sm" variant={p.selfServe ? "outline" : "default"}
+                    onClick={() => {
+                      window.location.assign(p.selfServe ? `/welcome?plan=${p.code}&months=${billingMonths}` : "/enterprise");
+                    }}>
+                    {p.selfServe ? "Start free trial" : "Talk to sales"}
+                  </Button>
                 </div>
-                <ul className="mt-5 flex-1 space-y-2.5">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs leading-relaxed">
-                      <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Button className="mt-6 w-full" variant={p.highlight ? "default" : "outline"}
-                  onClick={() => {
-                    if (p.code === "ENTERPRISE") window.location.assign("mailto:sales@docurama.eu");
-                    else window.location.assign("/welcome");
-                  }}>
-                  {p.code === "ENTERPRISE" ? "Talk to sales" : "Start free trial"}
-                </Button>
+              );
+            })}
+          </div>
+          <p className="mt-6 text-xs text-muted-foreground">
+            Need on-premises deployment or self-hosting?{" "}
+            <a className="font-medium underline underline-offset-2" href="/enterprise">Tell us what you are planning</a>.
+          </p>
+        </div>
+      </section>
+
+      {/* Why Docurama: differentiators grounded in shipped capabilities */}
+      <section id="why" className="reveal border-b">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+          <h2 className="max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl">
+            What you will not get elsewhere
+          </h2>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Not features on a roadmap — capabilities shipping today, and the
+            reasons teams keep their signatures here.
+          </p>
+          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {DIFFERENTIATORS.map((d) => (
+              <div key={d.title} className="rounded-xl border bg-card p-5">
+                <h3 className="flex items-center gap-2 text-sm font-semibold">
+                  <BadgeCheck className="h-4 w-4 text-primary" aria-hidden />
+                  {d.title}
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{d.body}</p>
               </div>
             ))}
           </div>
-          <p className="mt-6 text-xs text-muted-foreground">
-            Need more envelopes, self-hosting or on-premises deployment?{" "}
-            <a className="font-medium underline underline-offset-2" href="mailto:sales@docurama.eu">Write to sales@docurama.eu</a>.
+        </div>
+      </section>
+
+      {/* Honest comparison table */}
+      <section id="compare" className="reveal border-b bg-muted/40">
+        <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:py-20">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            How Docurama compares
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Typical patterns of legacy e-signature platforms versus what we do
+            differently. No invented competitor numbers — just our guarantees.
           </p>
+          <div className="mt-8 overflow-x-auto rounded-xl border bg-card">
+            <table className="w-full text-left text-xs">
+              <caption className="sr-only">Legacy e-signature platforms compared with Docurama</caption>
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th scope="col" className="px-4 py-3 font-semibold">Dimension</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Legacy platforms</th>
+                  <th scope="col" className="px-4 py-3 font-semibold text-primary">Docurama</th>
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARE.map(([dim, legacy, ours]) => (
+                  <tr key={dim} className="border-b last:border-0">
+                    <th scope="row" className="px-4 py-3 font-medium">{dim}</th>
+                    <td className="px-4 py-3 text-muted-foreground">{legacy}</td>
+                    <td className="px-4 py-3 font-medium">{ours}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -544,7 +737,7 @@ export function MarketingPage() {
           <nav aria-label="Product">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Product</p>
             <ul className="space-y-2.5 text-sm">
-              {[["Features", "#product"], ["Live examples", "#examples"], ["Compliance", "#compliance"], ["Pricing", "#pricing"], ["Contract templates", "/modeles-de-contrats"], ["Developers", "/developers"], ["Verify a document", "/verify"], ["Documentation", "/docs"], ["Create account", "/welcome"]].map(([l, h]) => (
+              {[["Features", "#product"], ["Live examples", "#examples"], ["Compliance", "#compliance"], ["Pricing", "#pricing"], ["Why Docurama", "#why"], ["Compare", "#compare"], ["Contract templates", "/modeles-de-contrats"], ["Developers", "/developers"], ["Verify a document", "/verify"], ["Documentation", "/docs"], ["Enterprise", "/enterprise"], ["Create account", "/welcome"]].map(([l, h]) => (
                 <li key={l}><a className="text-muted-foreground transition-colors hover:text-foreground" href={h}>{l}</a></li>
               ))}
             </ul>
@@ -583,6 +776,7 @@ export function MarketingPage() {
       </footer>
 
       <ScrollTop />
+      <CookieNotice />
     </div>
   );
 }

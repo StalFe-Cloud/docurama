@@ -28,6 +28,8 @@ import { AdminDomains } from "@/components/portal/admin/admin-domains";
 import { AdminLegal } from "@/components/portal/admin/admin-legal";
 import { AdminCompliance } from "@/components/portal/admin/admin-compliance";
 import { AdminBilling } from "@/components/portal/admin/admin-billing";
+import { AdminLeads } from "@/components/portal/admin/admin-leads";
+import { AdminPlans } from "@/components/portal/admin/admin-plans";
 import { AdminIntegrations } from "@/components/portal/admin/admin-integrations";
 import { AdminProvisioning } from "@/components/portal/admin/admin-provisioning";
 import { AdminSettings } from "@/components/portal/admin/admin-settings";
@@ -68,7 +70,7 @@ function Portal({ user }: { user: SessionUser }) {
   let settingsTab: SettingsTabKey = "account";
 
   if (isAdmin) {
-    const m = pathname.match(/^\/admin\/([a-z-]+)/);
+    const m = pathname.match(/^\/admin\/([a-z-]+)/); // matches "leads", "plans" too
     if (m && ADMIN_KEYS.includes(m[1])) adminSection = m[1] as AdminSectionKey;
   } else {
     const s = pathname.match(/^\/settings(?:\/([a-z]+))?/);
@@ -110,6 +112,8 @@ function Portal({ user }: { user: SessionUser }) {
         {adminSection === "legal" && <AdminLegal />}
         {adminSection === "compliance" && <AdminCompliance />}
         {adminSection === "billing" && <AdminBilling />}
+        {adminSection === "plans" && <AdminPlans />}
+        {adminSection === "leads" && <AdminLeads />}
         {adminSection === "integrations" && <AdminIntegrations />}
         {adminSection === "provisioning" && <AdminProvisioning />}
         {adminSection === "settings" && <AdminSettings />}

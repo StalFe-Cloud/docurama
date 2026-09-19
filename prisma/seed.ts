@@ -2,6 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import { foldForSearch } from "../src/lib/search";
+import { PLAN_DEFS } from "../src/lib/billing";
 
 const db = new PrismaClient();
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -12,8 +13,16 @@ const pick = <T,>(arr: T[], i: number) => arr[i % arr.length];
 
 async function main() {
   console.log("Clearing existing data…");
+  // Deletes run in strict dependency order (SQLite is single-writer; the old
+  // parallel batch could hit FK restricts when users went before the tenants
+  // whose cascade removes their envelopes). Tenants cascade: members,
+  // invitations, envelopes, templates, subscriptions, teams, integrations…
+  await db.tenant.deleteMany();
+  await db.user.deleteMany();
+  await db.enterpriseLead.deleteMany();
+  await db.mailOutbox.deleteMany();
+  await db.plan.deleteMany();
   await Promise.all([
-    db.user.deleteMany(), db.tenant.deleteMany(), db.plan.deleteMany(),
     db.control.deleteMany(), db.retentionPolicy.deleteMany(), db.consent.deleteMany(),
     db.incident.deleteMany(), db.accessReview.deleteMany(), db.risk.deleteMany(),
     db.change.deleteMany(), db.vendor.deleteMany(), db.restoreDrill.deleteMany(),
@@ -24,24 +33,27 @@ async function main() {
 
   // ── Plans ──────────────────────────────────────────────────────────────
   await db.plan.createMany({
-    data: [
-      { code: "STARTER", name: "Starter", monthlyEur: 19, seatLimit: 3, envelopeLimit: 25, storageGb: 5, apiAccess: false, slaUptime: "99.5%", support: "Email support", features: "PAdES B-B sealing|Email signing|Public verify portal|2 templates" },
-      { code: "BUSINESS", name: "Business", monthlyEur: 79, seatLimit: 10, envelopeLimit: 250, storageGb: 50, apiAccess: true, slaUptime: "99.9%", support: "Priority email support", features: "PAdES B-LT sealing|SMS delivery|API + webhooks|Unlimited templates|DNS domain attestation" },
-      { code: "ENTERPRISE", name: "Enterprise", monthlyEur: 349, seatLimit: 100, envelopeLimit: 5000, storageGb: 500, apiAccess: true, slaUptime: "99.99%", support: "24/7 support + TAM", features: "PAdES B-LTA sealing|BYO certificate|SSO/SAML|Audit chain exports|Custom retention|Legal hold workflows" },
-    ],
+    data: PLAN_DEFS.map((p) => ({
+      code: p.code, name: p.name, monthlyEur: p.monthlyEur,
+      seatLimit: p.seatLimit, envelopeLimit: p.envelopeLimit, storageGb: p.storageGb,
+      apiAccess: p.apiAccess, slaUptime: p.slaUptime, support: p.support,
+      features: p.features.join("|"), periodDays: p.periodDays, customPricing: p.customPricing,
+    })),
   });
 
   // ── Tenants ────────────────────────────────────────────────────────────
   const tenantsData = [
     { name: "StålFe", slug: "stalfe", plan: "ENTERPRISE", status: "ACTIVE", storage: 214_800 },
-    { name: "Aurora Legal LLP", slug: "aurora-legal", plan: "BUSINESS", status: "ACTIVE", storage: 18_200 },
+    { name: "Aurora Legal LLP", slug: "aurora-legal", plan: "SMART_TEAM", status: "ACTIVE", storage: 18_200 },
     { name: "Helios Energy Group", slug: "helios-energy", plan: "ENTERPRISE", status: "ACTIVE", storage: 331_000 },
-    { name: "Bayern Immobilien AG", slug: "bayern-immo", plan: "BUSINESS", status: "ACTIVE", storage: 24_600 },
-    { name: "Meteora Health Clinics", slug: "meteora-health", plan: "BUSINESS", status: "TRIAL", storage: 2_400 },
+    { name: "Bayern Immobilien AG", slug: "bayern-immo", plan: "SMART_TEAM", status: "ACTIVE", storage: 24_600 },
+    { name: "Meteora Health Clinics", slug: "meteora-health", plan: "SMART_TEAM", status: "TRIAL", storage: 2_400 },
     { name: "Solstice Media Ltd", slug: "solstice-media", plan: "STARTER", status: "ACTIVE", storage: 610 },
     { name: "Corvus Manufacturing", slug: "corvus-mfg", plan: "ENTERPRISE", status: "SUSPENDED", storage: 158_000, suspendedReason: "Invoice overdue 60+ days (INV-20841)" },
     { name: "Lumen Research Institute", slug: "lumen-research", plan: "STARTER", status: "TRIAL", storage: 980 },
-    { name: "Atlas Freight Systems", slug: "atlas-freight", plan: "BUSINESS", status: "ACTIVE", storage: 41_300 },
+    { name: "Atlas Freight Systems", slug: "atlas-freight", plan: "SMART_TEAM", status: "ACTIVE", storage: 41_300 },
+    { name: "Camille Notaire", slug: "camille-notaire", plan: "SOLO", status: "ACTIVE", storage: 320 },
+    { name: "Nordwind Logistics GmbH", slug: "nordwind-logistics", plan: "BUSINESS", status: "ACTIVE", storage: 88_000 },
     { name: "Verdant Agriculture", slug: "verdant-agri", plan: "STARTER", status: "ACTIVE", storage: 1_850 },
   ];
   const tenants: Record<string, string> = {};
@@ -52,6 +64,11 @@ async function main() {
         storageUsedMb: t.storage, suspendedReason: t.suspendedReason ?? null,
         createdAt: d(40 + Math.random() * 300), trialEndsAt: t.status === "TRIAL" ? dFuture(9) : null,
         billingEmail: `billing@${t.slug}.example`,
+        // Quota window anchors: most tenants are mid-window; the lazy
+        // renewal in src/lib/quota.ts rolls windows forward on first read and
+        // carries unused envelopes over (envelopeRollover seed below).
+        periodStartedAt: d(3 + Math.random() * 20),
+        envelopeRollover: Math.floor(Math.random() * 12),
       },
     });
     tenants[t.slug] = rec.id;
@@ -74,6 +91,10 @@ async function main() {
     { email: "yuki@lumen-research.example", first: "Yuki", last: "Tanaka", role: "MEMBER", pw: "demo1234", tenant: "lumen-research", mrole: "OWNER", totp: false },
     { email: "dmitri@atlas-freight.example", first: "Dmitri", last: "Volkov", role: "MEMBER", pw: "demo1234", tenant: "atlas-freight", mrole: "ADMIN", totp: true },
     { email: "leila@verdant-agri.example", first: "Leila", last: "Haddad", role: "MEMBER", pw: "demo1234", tenant: "verdant-agri", mrole: "OWNER", totp: false },
+    { email: "camille@camille-notaire.example", first: "Camille", last: "Dubois", role: "MEMBER", pw: "demo1234", tenant: "camille-notaire", mrole: "OWNER", totp: false },
+    { email: "klaus@nordwind-logistics.example", first: "Klaus", last: "Brandt", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "nordwind-logistics", mrole: "OWNER", totp: true },
+    { email: "nina@nordwind-logistics.example", first: "Nina", last: "Petrova", role: "MEMBER", pw: "demo1234", tenant: "nordwind-logistics", mrole: "ADMIN", totp: false },
+    { email: "oskar@nordwind-logistics.example", first: "Oskar", last: "Meyer", role: "MEMBER", pw: "demo1234", tenant: "nordwind-logistics", mrole: "MEMBER", totp: false },
   ];
   const users: Record<string, string> = {};
   for (const u of usersData) {
@@ -91,19 +112,37 @@ async function main() {
   }
 
   // ── Subscriptions ──────────────────────────────────────────────────────
-  const subData: [string, string, number, number][] = [
-    ["stalfe", "ENTERPRISE", 349, 18], ["aurora-legal", "BUSINESS", 79, 7],
-    ["helios-energy", "ENTERPRISE", 349, 42], ["bayern-immo", "BUSINESS", 79, 5],
-    ["solstice-media", "STARTER", 19, 2], ["atlas-freight", "BUSINESS", 79, 9],
-    ["verdant-agri", "STARTER", 19, 2], ["corvus-mfg", "ENTERPRISE", 349, 24],
+  // [slug, plan, listMrr, seats, billingMonths, discountPct, status]
+  const subData: [string, string, number, number, number, number, string][] = [
+    ["stalfe", "ENTERPRISE", 460, 18, 12, 15, "ACTIVE"],
+    ["aurora-legal", "SMART_TEAM", 79, 7, 1, 0, "ACTIVE"],
+    ["helios-energy", "ENTERPRISE", 520, 42, 12, 15, "ACTIVE"],
+    ["bayern-immo", "SMART_TEAM", 79, 5, 3, 5, "ACTIVE"],
+    ["solstice-media", "STARTER", 19, 2, 1, 0, "ACTIVE"],
+    ["atlas-freight", "SMART_TEAM", 79, 9, 6, 10, "ACTIVE"],
+    ["verdant-agri", "STARTER", 19, 2, 1, 0, "ACTIVE"],
+    ["corvus-mfg", "ENTERPRISE", 390, 24, 12, 15, "PAST_DUE"],
+    ["camille-notaire", "SOLO", 9, 1, 1, 0, "ACTIVE"],
+    ["nordwind-logistics", "BUSINESS", 249, 38, 6, 10, "ACTIVE"],
+    ["lumen-research", "STARTER", 19, 1, 1, 0, "TRIALING"],
+    ["meteora-health", "SMART_TEAM", 79, 4, 1, 0, "TRIALING"],
   ];
-  for (const [slug, plan, mrr, seats] of subData) {
+  for (const [slug, plan, mrr, seats, months, discount, status] of subData) {
     const failed = slug === "corvus-mfg";
+    const effective = Math.round(mrr * (1 - discount / 100));
     await db.subscription.create({
       data: {
-        tenantId: tenants[slug], planCode: plan, status: failed ? "PAST_DUE" : "ACTIVE",
-        mrrEur: mrr, seats, renewalAt: dFuture(10 + (mrr % 17)),
+        tenantId: tenants[slug], planCode: plan, status,
+        mrrEur: effective, seats, renewalAt: dFuture(10 + (effective % 17)),
         lastInvoiceAt: d(12), failedPayment: failed,
+        billingMonths: months, discountPct: discount,
+        periodStartedAt: d(3 + Math.random() * 20),
+        ...(plan === "ENTERPRISE" ? {
+          // Negotiated per-deal limits (public plan defaults are 100 seats / 5000 envelopes).
+          seatLimitOverride: seats + 6,
+          envelopeLimitOverride: 6000 + effective,
+          priceEurOverride: mrr,
+        } : {}),
       },
     });
   }
@@ -132,9 +171,9 @@ async function main() {
     ["Hannah Schulz", "hannah@helios-energy.example"], ["Pietro Rinaldi", "pietro@aurora-legal.example"],
     ["Dmitri Volkov", "dmitri@atlas-freight.example"], ["Sofia Lindqvist", "sofia@stalfe.example"],
   ];
-  const creatorPool = ["alex@stalfe.example", "pietro@aurora-legal.example", "hannah@helios-energy.example", "dmitri@atlas-freight.example", "lucas@bayern-immo.example"];
+  const creatorPool = ["alex@stalfe.example", "pietro@aurora-legal.example", "hannah@helios-energy.example", "dmitri@atlas-freight.example", "lucas@bayern-immo.example", "klaus@nordwind-logistics.example", "camille@camille-notaire.example"];
   // Weighted pool (StålFe twice) with a coprime step so every tenant gets envelopes.
-  const tenantPool = ["stalfe", "stalfe", "aurora-legal", "helios-energy", "bayern-immo", "atlas-freight", "meteora-health", "lumen-research", "solstice-media", "verdant-agri"];
+  const tenantPool = ["stalfe", "stalfe", "aurora-legal", "helios-energy", "bayern-immo", "atlas-freight", "meteora-health", "lumen-research", "solstice-media", "verdant-agri", "nordwind-logistics", "camille-notaire"];
 
   for (let i = 0; i < 64; i++) {
     const slug = pick(tenantPool, i * 3 + 1);
@@ -501,11 +540,76 @@ async function main() {
     },
   });
 
+  // ── Teams (small groups inside a workspace — BUSINESS feature) ────────
+  const teamData: [string, string, string][] = [
+    ["nordwind-logistics", "Sales", "emerald"],
+    ["nordwind-logistics", "Procurement", "blue"],
+    ["nordwind-logistics", "Legal", "amber"],
+    ["stalfe", "Quality", "emerald"],
+    ["atlas-freight", "Dispatch", "blue"],
+  ];
+  const teams: Record<string, string> = {};
+  for (const [slug, name, color] of teamData) {
+    const rec = await db.team.create({ data: { tenantId: tenants[slug], name, color } });
+    teams[`${slug}/${name}`] = rec.id;
+  }
+  // Assign workspace members to teams (membership is many-to-many, tenant-scoped).
+  const memberAssignments: [string, string][] = [
+    ["nordwind-logistics/Sales", "klaus@nordwind-logistics.example"],
+    ["nordwind-logistics/Sales", "nina@nordwind-logistics.example"],
+    ["nordwind-logistics/Procurement", "oskar@nordwind-logistics.example"],
+    ["nordwind-logistics/Legal", "klaus@nordwind-logistics.example"],
+    ["stalfe/Quality", "alex@stalfe.example"],
+    ["stalfe/Quality", "sofia@stalfe.example"],
+    ["atlas-freight/Dispatch", "dmitri@atlas-freight.example"],
+  ];
+  for (const [teamKey, email] of memberAssignments) {
+    const teamId = teams[teamKey];
+    const userId = users[email];
+    // Only create the membership when the user actually belongs to the
+    // team's tenant — cross-tenant membership is invalid by design.
+    const t = await db.team.findUnique({ where: { id: teamId }, select: { tenantId: true } });
+    const m = await db.member.findFirst({ where: { userId, tenantId: t!.tenantId } });
+    if (m) await db.teamMember.create({ data: { teamId, userId } }).catch(() => void 0);
+  }
+  // Attribute a handful of recent envelopes to teams.
+  const teamEnvCandidates = await db.envelope.findMany({
+    where: { tenantId: tenants["nordwind-logistics"] },
+    orderBy: { createdAt: "desc" }, take: 3,
+  });
+  for (const [i, env] of teamEnvCandidates.entries()) {
+    const teamId = i === 0 ? teams["nordwind-logistics/Sales"] : i === 1 ? teams["nordwind-logistics/Procurement"] : teams["nordwind-logistics/Legal"];
+    await db.envelope.update({ where: { id: env.id }, data: { teamId } });
+  }
+
+  // ── Enterprise pipeline (public /enterprise submissions) ───────────────
+  const leadData: [string, string, string, string, string, string, string][] = [
+    ["Ingrid Sørensen", "ingrid@balticwind.example", "Baltic Wind Partners", "201-1000", "Denmark", "800", "NEW"],
+    ["Tomás Ferreira", "tomas@lusodesc.example", "Luso Descargas SA", "51-200", "Portugal", "300", "CONTACTED"],
+    ["Anna Kowalczyk", "anna@vistulabank.example", "Vistula Bank Group", "1000+", "Poland", "2500", "QUALIFIED"],
+    ["Rémi Lambert", "remi@axiome-pharma.example", "Axiome Pharma", "201-1000", "France", "1200", "PROPOSAL"],
+    ["Sofia Marino", "sofia@italcert.example", "ItalCert Srl", "51-200", "Italy", "600", "WON"],
+  ];
+  for (const [contact, email, company, size, country, volume, status] of leadData) {
+    await db.enterpriseLead.create({
+      data: {
+        contactName: contact, workEmail: email, companyName: company,
+        companySize: size, country, monthlyVolume: volume,
+        needs: "SSO/SAML, BYO certificates, audit exports, EU data residency",
+        status,
+        notes: status === "WON" ? "Converted to workspace. 120 seats / 6,500 envelopes / €540 per month, 12-month term with 15% saving." : null,
+        convertedTenantId: null,
+        createdAt: d(2 + Math.random() * 20), updatedAt: d(Math.random() * 2),
+      },
+    });
+  }
+
   const counts = {
     tenants: await db.tenant.count(), users: await db.user.count(),
     envelopes: await db.envelope.count(), recipients: await db.recipient.count(),
     events: await db.envelopeEvent.count(), templates: await db.template.count(),
     audit: await db.auditEvent.count(), stats: await db.dailyStat.count(),
+    teams: await db.team.count(), leads: await db.enterpriseLead.count(),
   };
   console.log("Seed complete:", counts);
 }

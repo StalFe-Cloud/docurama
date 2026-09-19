@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, Building2, Users, FileSignature, Globe, Scale, ShieldCheck,
   CreditCard, Webhook, Settings2, HeartPulse, ScrollText, LogOut, Mail,
-  Sun, Moon, Menu, ChevronDown, ExternalLink,
+  Sun, Moon, Menu, ChevronDown, ExternalLink, Handshake, SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ export const ADMIN_SECTIONS = [
   { key: "legal", label: "Legal & DSAR", icon: Scale, desc: "DMCA notices and data subject requests" },
   { key: "compliance", label: "Compliance", icon: ShieldCheck, desc: "Controls, retention, holds, incidents" },
   { key: "billing", label: "Billing", icon: CreditCard, desc: "Plans, subscriptions and revenue" },
+  { key: "plans", label: "Plan editor", icon: SlidersHorizontal, desc: "Live plan limits, prices and month lengths" },
+  { key: "leads", label: "Enterprise leads", icon: Handshake, desc: "Pipeline from the public Enterprise form" },
   { key: "integrations", label: "API & Webhooks", icon: Webhook, desc: "Keys, endpoints and deliveries" },
   { key: "provisioning", label: "Email & DNS", icon: Mail, desc: "docurama.eu mailboxes, sub-domains, zone file" },
   { key: "settings", label: "Platform Settings", icon: Settings2, desc: "SMTP, TSA, feature flags" },

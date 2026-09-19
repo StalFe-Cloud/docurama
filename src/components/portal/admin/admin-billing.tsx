@@ -13,8 +13,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type BillingData = {
-  plans: { id: string; code: string; name: string; monthlyEur: number; seatLimit: number; envelopeLimit: number; storageGb: number; apiAccess: boolean; slaUptime: string; support: string; features: string }[];
-  subscriptions: { id: string; tenantName: string; tenantSlug: string; tenantStatus: string; planCode: string; status: string; mrrEur: number; seats: number; renewalAt: string; paymentMethod: string; lastInvoiceAt: string | null; failedPayment: boolean }[];
+  plans: { id: string; code: string; name: string; monthlyEur: number; seatLimit: number; envelopeLimit: number; storageGb: number; apiAccess: boolean; slaUptime: string; support: string; features: string; periodDays: number; customPricing: boolean }[];
+  subscriptions: {
+    id: string; tenantName: string; tenantSlug: string; tenantStatus: string; planCode: string; status: string;
+    mrrEur: number; seats: number; renewalAt: string; paymentMethod: string; lastInvoiceAt: string | null; failedPayment: boolean;
+    billingMonths: number; discountPct: number;
+    quota: { allowance: number; used: number; rollover: number; windowEnd: string } | null;
+  }[];
   mrrTrend: { date: string; mrrEur: number }[];
 };
 
@@ -108,6 +113,8 @@ export function AdminBilling() {
                   <TableHead>Tenant</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Period</TableHead>
+                  <TableHead className="text-right">Quota (window)</TableHead>
                   <TableHead className="text-right">Seats</TableHead>
                   <TableHead className="text-right">MRR</TableHead>
                   <TableHead>Renews</TableHead>
@@ -128,11 +135,47 @@ export function AdminBilling() {
                         {s.failedPayment && <span className="text-xs text-destructive">payment failed</span>}
                       </div>
                     </TableCell>
+                    <TableCell className="text-sm">
+                      <span className="inline-flex items-center gap-1.5">
+                        {s.billingMonths > 1 ? `${s.billingMonths} mo · −${s.discountPct}%` : "Monthly"}
+                        <select
+                          aria-label={`Billing period for ${s.tenantName}`}
+                          className="h-8 rounded-md border bg-background px-1.5 text-xs"
+                          value={s.billingMonths}
+                          onChange={(e) => act.mutate({ op: "set-period", id: s.id, data: { billingMonths: Number(e.target.value) } })}
+                        >
+                          <option value={1}>→ 1 mo</option>
+                          <option value={3}>→ 3 mo</option>
+                          <option value={6}>→ 6 mo</option>
+                          <option value={12}>→ 12 mo</option>
+                        </select>
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right text-sm">
+                      {s.quota ? (
+                        <span className="tabular-nums">
+                          {s.quota.used}/{s.quota.allowance}
+                          {s.quota.rollover > 0 && (
+                            <span className="ml-1 text-xs text-muted-foreground">(+{s.quota.rollover} rollover)</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{s.seats}</TableCell>
                     <TableCell className="text-right tabular-nums">€{s.mrrEur}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{fmtDate(s.renewalAt)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button
+                          variant="outline" size="sm" className="h-11"
+                          onClick={() => act.mutate({ op: "renew-now", id: s.id })}
+                          aria-label={`Renew ${s.tenantName} window now`}
+                          title="Close this window now, carry unused envelopes, start a fresh one"
+                        >
+                          <RotateCcw className="h-4 w-4" aria-hidden /> Renew
+                        </Button>
                         {s.failedPayment && (
                           <Button
                             variant="outline" size="sm" className="h-11"
@@ -172,15 +215,17 @@ export function AdminBilling() {
           <CardTitle className="text-base">Plan catalogue</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {data.plans.map((p) => (
               <div key={p.id} className="space-y-3 rounded-xl border bg-card p-5">
                 <div className="flex items-center justify-between">
                   <StatusBadge status={p.code} />
-                  <p className="text-lg font-semibold">€{p.monthlyEur}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                  <p className="text-lg font-semibold">
+                    {p.customPricing ? "Custom" : <>€{p.monthlyEur}<span className="text-xs font-normal text-muted-foreground">/mo</span></>}
+                  </p>
                 </div>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  <li>{p.envelopeLimit.toLocaleString()} envelopes / month</li>
+                  <li>{p.envelopeLimit.toLocaleString()} envelopes / {p.periodDays === 30 ? "month" : `${p.periodDays}-day month`}</li>
                   <li>{p.seatLimit} seats · {p.storageGb} GB storage</li>
                   <li>{p.apiAccess ? "API + webhooks" : "No API access"}</li>
                   <li>{p.slaUptime} SLA · {p.support}</li>
@@ -188,6 +233,11 @@ export function AdminBilling() {
               </div>
             ))}
           </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Plan values are enforced live by the quota engine (35-day months on Solo and
+            Starter, rollover capped at one period's allowance). Edit them in the{" "}
+            <a className="underline underline-offset-2" href="/admin/plans">plan editor</a>.
+          </p>
         </CardContent>
       </Card>
     </div>

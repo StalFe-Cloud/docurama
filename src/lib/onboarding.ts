@@ -1,24 +1,25 @@
 import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/db";
+import { quotaSnapshot } from "@/lib/quota";
+import { SMTP_TRANSPORT_CONFIGURED as SMTP_CONFIGURED, tryDeliverSoon } from "@/lib/mail";
+
+export { SMTP_TRANSPORT_CONFIGURED } from "@/lib/mail";
 
 /**
  * Onboarding domain logic (Task 7) - shared by /api/auth/signup,
  * /api/onboarding, /api/invitations/[token] and the /welcome wizard.
  *
- * Honest-delivery note: the platform has no outbound SMTP transport wired
- * (PlatformSetting carries host/user metadata only - no credentials), so
- * transactional mail is recorded in the MailOutbox ledger with status QUEUED
- * instead of being silently dropped. The raw verification / invitation link
- * is stored on the outbox row so an operator can hand it over while the
- * transport is being provisioned. When platform SMTP credentials land, a
- * worker can flip QUEUED rows to SENT.
+ * Honest-delivery note: transactional mail always lands in the MailOutbox
+ * ledger first. When the SMTP_URL environment variable is configured
+ * (src/lib/mail.ts, nodemailer transport) messages are delivered for real and
+ * marked SENT only after a successful SMTP response. Without SMTP_URL they
+ * stay QUEUED, inspectable in the admin console - never silently dropped and
+ * never optimistically marked as sent.
  */
 
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
-/** True when a platform-level SMTP transport is configured. It is not yet -
- *  see note above. Drives the in-session "demo verify" shortcut visibility. */
-export const SMTP_TRANSPORT_CONFIGURED = false;
+void SMTP_CONFIGURED; // re-exported for callers; see src/lib/mail.ts
 
 export type OnboardingFlags = {
   skippedInvite?: boolean;
@@ -45,6 +46,12 @@ export type OnboardingState = {
   pendingInvites: number;
   inviteList: { id: string; email: string; role: string; createdAt: string }[];
   smtpTransportConfigured: boolean;
+  /** Live plan/quota snapshot — reading it also rolls expired windows. */
+  quota: {
+    planCode: string; planName: string; seatLimit: number; seatsUsed: number; seatsRemaining: number;
+    envelopeLimit: number; allowance: number; periodDays: number; billingMonths: number; discountPct: number;
+    workspaceRole: string;
+  } | null;
 };
 
 export const newVerificationToken = () => randomBytes(32).toString("hex");
@@ -83,13 +90,27 @@ export async function computeOnboardingState(userId: string): Promise<Onboarding
     return {
       authenticated: false, user: null, emailVerified: false, emailVerifiedAt: null, org: null,
       steps: { account: false, verify: false, org: false, signature: false, invites: false, security: false },
-      flags: {}, completed: false, pendingInvites: 0, inviteList: [], smtpTransportConfigured: SMTP_TRANSPORT_CONFIGURED,
+      flags: {}, completed: false, pendingInvites: 0, inviteList: [], smtpTransportConfigured: SMTP_CONFIGURED,
+      quota: null,
     };
   }
 
   const flags = await getOnboardingFlags(userId);
   const active = user.memberships.find((m) => m.tenantId === user.activeTenantId) ?? user.memberships[0];
   const tenant = active?.tenant ?? null;
+
+  // Live quota snapshot (lazily renews expired windows — see src/lib/quota.ts).
+  let quota: OnboardingState["quota"] = null;
+  if (tenant) {
+    const snap = await quotaSnapshot(tenant.id);
+    quota = {
+      planCode: snap.planCode, planName: snap.planName,
+      seatLimit: snap.seatLimit, seatsUsed: snap.seatsUsed, seatsRemaining: snap.seatsRemaining,
+      envelopeLimit: snap.envelopeLimit, allowance: snap.allowance,
+      periodDays: snap.periodDays, billingMonths: snap.billingMonths, discountPct: snap.discountPct,
+      workspaceRole: active.role,
+    };
+  }
 
   let pendingInvites = 0;
   let inviteList: { id: string; email: string; role: string; createdAt: string }[] = [];
@@ -128,11 +149,14 @@ export async function computeOnboardingState(userId: string): Promise<Onboarding
     completed: Boolean(flags.completedAt),
     pendingInvites,
     inviteList,
-    smtpTransportConfigured: SMTP_TRANSPORT_CONFIGURED,
+    smtpTransportConfigured: SMTP_CONFIGURED,
+    quota,
   };
 }
 
-/** Queue a transactional email in the MailOutbox ledger. */
+/** Queue a transactional email in the MailOutbox ledger. When a real SMTP
+ *  transport is configured the message is delivered immediately (and marked
+ *  SENT only on successful delivery, never optimistically). */
 export async function queueMail(input: {
   to: string;
   subject: string;
@@ -140,17 +164,18 @@ export async function queueMail(input: {
   body: string;
   linkUrl?: string;
 }) {
-  return db.mailOutbox.create({
+  const row = await db.mailOutbox.create({
     data: {
       toEmail: input.to.toLowerCase(),
       subject: input.subject,
       template: input.template,
       bodyText: input.body,
       linkUrl: input.linkUrl ?? null,
-      status: SMTP_TRANSPORT_CONFIGURED ? "SENT" : "QUEUED",
-      sentAt: SMTP_TRANSPORT_CONFIGURED ? new Date() : null,
+      status: "QUEUED",
     },
   });
+  if (SMTP_CONFIGURED) await tryDeliverSoon();
+  return row;
 }
 
 /** Create a fresh email-verification token for a user (invalidates older ones). */

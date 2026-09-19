@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { SESSION_COOKIE, hashPassword, recordAudit, sessionCookieAttributes } from "@/lib/auth";
 import { jsonError, jsonOk } from "@/lib/serializers";
 import { issueEmailVerification, requestOrigin } from "@/lib/onboarding";
+import { isSelfServePlan, planDef, billingPeriod, VALID_BILLING_MONTHS } from "@/lib/billing";
+import { checkSeatAvailable } from "@/lib/quota";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -12,11 +14,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  * Creates the account + organization (or joins via invitation token), opens a
  * session immediately (the wizard continues at /welcome), queues the email
  * verification message from notifications@docurama.eu and records GDPR consent.
+ * The chosen plan (SOLO | STARTER | SMART_TEAM | BUSINESS) and optional prepaid
+ * billing period (1 | 3 | 6 | 12 months) open a TRIALING subscription with a
+ * quota window anchored at signup — the trial runs on the real plan limits.
  */
 export async function POST(req: NextRequest) {
   let body: {
     firstName?: string; lastName?: string; email?: string; password?: string;
     organization?: string; inviteToken?: string; consent?: boolean;
+    planCode?: string; billingMonths?: number;
   };
   try {
     body = await req.json();
@@ -67,6 +73,7 @@ export async function POST(req: NextRequest) {
   let membershipRole: string;
   let tenantNameForLog: string;
   let isAutoJoin = false;
+  let chosenPlanLabel = "STARTER";
 
   if (invitation) {
     tenantId = invitation.tenantId;
@@ -88,6 +95,16 @@ export async function POST(req: NextRequest) {
       : null;
 
     if (matchedDomain) {
+      // Auto-join still respects the workspace's seat limit — a full plan
+      // must be upgraded (or pruned) before more colleagues can join.
+      const seatGate = await checkSeatAvailable(matchedDomain.tenantId);
+      if (!seatGate.ok) {
+        return jsonError(
+          `The ${matchedDomain.tenant.name} workspace has no free seats right now - ` +
+          "ask its administrator to free a seat or upgrade the plan, then sign up again.",
+          402,
+        );
+      }
       tenantId = matchedDomain.tenantId;
       membershipRole = "MEMBER";
       tenantNameForLog = matchedDomain.tenant.name;
@@ -95,15 +112,40 @@ export async function POST(req: NextRequest) {
     } else {
       if (!organization) return jsonError("Organization name is required");
       if (organization.length > 80) return jsonError("Organization name must be 80 characters or fewer");
+      // Plan selection: any self-serve plan, ENTERPRISE is never self-serve.
+      const planCode = isSelfServePlan(String(body.planCode ?? "")) ? String(body.planCode) : "STARTER";
+      chosenPlanLabel = planCode;
+      const def = planDef(planCode)!;
+      const billingMonths = VALID_BILLING_MONTHS.includes(Number(body.billingMonths)) ? Number(body.billingMonths) : 1;
+      const discountPct = billingPeriod(billingMonths).discountPct;
       const slug = `${organization.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "org"}-${Math.random().toString(36).slice(2, 8)}`;
       const trialDays = (await db.platformSetting.findUnique({ where: { id: "singleton" } }))?.trialLengthDays ?? 14;
+      const now = new Date();
       const tenant = await db.tenant.create({
         data: {
           name: organization,
           slug,
-          planCode: "STARTER",
+          planCode,
           status: "TRIAL",
           trialEndsAt: new Date(Date.now() + trialDays * 24 * 3600_000),
+          periodStartedAt: now,
+          envelopeRollover: 0,
+        },
+      });
+      // The trial runs on the real plan limits so the customer experiences
+      // exactly what they are choosing (a SOLO trial gets 50 envelopes per
+      // 35-day month, a BUSINESS trial 1,000 per month).
+      await db.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          planCode,
+          status: "TRIALING",
+          mrrEur: Math.round(def.monthlyEur * (1 - discountPct / 100)),
+          seats: 1,
+          renewalAt: new Date(now.getTime() + billingMonths * def.periodDays * 24 * 3600_000),
+          billingMonths,
+          discountPct,
+          periodStartedAt: now,
         },
       });
       tenantId = tenant.id;
@@ -166,7 +208,7 @@ export async function POST(req: NextRequest) {
       ? `Joined ${tenantNameForLog} via invitation as ${membershipRole}`
       : isAutoJoin
       ? `Auto-joined shared workspace ${tenantNameForLog} via approved company domain @${email.split("@")[1]}`
-      : `Created organization ${tenantNameForLog} (STARTER trial)`,
+      : `Created organization ${tenantNameForLog} (trial on ${chosenPlanLabel})`,
   });
   await db.securityEvent.create({
     data: {

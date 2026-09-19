@@ -10,6 +10,7 @@ import {
   Column, ConfirmDialog, CopyableCode, DataTable, PageHeader, StatusBadge, fmtDate, fmtRelative,
 } from "@/components/portal/shared";
 import { pushPath } from "@/components/portal/portal-root";
+import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -448,16 +449,26 @@ export function UserDocuments() {
               <section aria-labelledby="audit">
                 <h3 id="audit" className="mb-2 text-sm font-semibold">Audit trail</h3>
                 <ol className="relative space-y-4 border-l pl-4">
-                  {(detail.data?.events ?? []).map((ev) => (
+                  {(detail.data?.events ?? []).map((ev, i) => {
+                    const inFlight = ["SENT", "PARTIALLY_SIGNED"].includes(env.status);
+                    const isLatest = i === (detail.data?.events?.length ?? 0) - 1;
+                    return (
                     <li key={ev.id} className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" aria-hidden />
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary",
+                          inFlight && isLatest && "timeline-dot-live",
+                        )}
+                      />
                       <p className="text-sm font-medium capitalize">{ev.action.toLowerCase().replace(/_/g, " ")}</p>
                       <p className="text-xs text-muted-foreground">
                         {ev.actor} · {fmtDate(ev.at, true)}
                       </p>
                       {ev.detail && <p className="mt-0.5 text-xs text-muted-foreground">{ev.detail}</p>}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ol>
               </section>
 

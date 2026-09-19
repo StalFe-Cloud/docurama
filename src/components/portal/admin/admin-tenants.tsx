@@ -35,10 +35,13 @@ type TenantDetail = {
   statusCounts: { status: string; _count: number }[];
 };
 
+// Plan labels mirror src/lib/billing.ts — the seeded single source of truth.
 const PLANS = [
-  { code: "STARTER", label: "Starter - €19/mo · 25 envelopes · 3 seats" },
-  { code: "BUSINESS", label: "Business - €79/mo · 250 envelopes · 10 seats" },
-  { code: "ENTERPRISE", label: "Enterprise - €349/mo · 5,000 envelopes · 100 seats" },
+  { code: "SOLO", label: "Solo - €9/mo · 50 envelopes per 35-day month · 1 seat" },
+  { code: "STARTER", label: "Starter - €19/mo · 100 envelopes per 35-day month · 3 seats" },
+  { code: "SMART_TEAM", label: "Smart Team - €79/mo · 250 envelopes · 10 seats" },
+  { code: "BUSINESS", label: "Business - €249/mo · 1,000 envelopes · 50 seats" },
+  { code: "ENTERPRISE", label: "Enterprise - custom pricing · negotiated seats and volume" },
 ];
 
 export function AdminTenants() {
@@ -46,7 +49,7 @@ export function AdminTenants() {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [planDialogFor, setPlanDialogFor] = useState<TenantRow | null>(null);
-  const [plan, setPlan] = useState("BUSINESS");
+  const [plan, setPlan] = useState("SMART_TEAM");
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({

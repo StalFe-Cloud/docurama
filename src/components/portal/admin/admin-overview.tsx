@@ -24,6 +24,7 @@ type OverviewData = {
   securityEvents: { id: string; at: string; type: string; severity: string; actor: string; blocked: boolean; detail: string | null }[];
   auditEvents: { id: string; at: string; actor: string; action: string; resource: string; severity: string; tenantName: string | null }[];
   health: { certExpiryAt: string; tsaReachable: boolean; tsaUrl: string; signingConformance: string; queueDepth: number; sweeperLastRunAt: string; maintenanceMode: boolean; version: string };
+  firstRun: { smtpConfigured: boolean; plansSeeded: boolean; planCount: number; pendingLeads: number; queuedMail: number; tsaReachable: boolean; certDaysLeft: number };
 };
 
 const SEV_ICON: Record<string, typeof Lock> = { CRITICAL: Ban, HIGH: TriangleAlert, MEDIUM: Activity, LOW: Lock, INFO: BadgeCheck };
@@ -51,8 +52,22 @@ export function AdminOverview({ onNavigate }: { onNavigate: (k: AdminSectionKey)
     day: new Date(s.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
   }));
   const pieData = data.planDist.map((p) => ({ name: p.planCode, value: p._count }));
-  const PIE_COLORS: Record<string, string> = { STARTER: "#a4a097", BUSINESS: "#0f7a5a", ENTERPRISE: "#1a1a1a" };
+  const PIE_COLORS: Record<string, string> = {
+    SOLO: "#d9c8a8", STARTER: "#a4a097", SMART_TEAM: "#5b8f7e",
+    BUSINESS: "#0f7a5a", ENTERPRISE: "#1a1a1a",
+  };
   const certDays = daysUntil(data.health.certExpiryAt);
+
+  // First-run checklist: real operational checks with deep links.
+  const fr = data.firstRun;
+  const checklist: { ok: boolean; label: string; hint: string; nav?: AdminSectionKey }[] = [
+    { ok: fr.plansSeeded, label: `Plan catalogue seeded (${fr.planCount} plans)`, hint: "Five plans incl. Solo and Smart Team — run the seed if missing.", nav: "plans" },
+    { ok: fr.smtpConfigured, label: fr.smtpConfigured ? "SMTP delivery connected" : `SMTP not configured — ${fr.queuedMail} message(s) queued`, hint: "Set SMTP_URL so invitations and verifications are delivered.", nav: "settings" },
+    { ok: fr.tsaReachable, label: "RFC 3161 timestamp authority reachable", hint: "Required for long-term evidence (B-LT/B-LTA).", nav: "health" },
+    { ok: fr.certDaysLeft > 30, label: `Signing certificate: ${fr.certDaysLeft} days left`, hint: "Rotate before expiry to keep sealing uninterrupted.", nav: "health" },
+    { ok: fr.pendingLeads === 0, label: fr.pendingLeads > 0 ? `${fr.pendingLeads} new enterprise lead(s) waiting` : "Enterprise pipeline clear", hint: "Answer leads within one business day.", nav: "leads" },
+  ];
+  const openItems = checklist.filter((c) => !c.ok).length;
 
   return (
     <div className="space-y-6">
@@ -61,6 +76,38 @@ export function AdminOverview({ onNavigate }: { onNavigate: (k: AdminSectionKey)
         description="Live KPIs, signing pipeline health and security posture across every Docurama tenant."
         actions={<Button variant="outline" size="sm" onClick={() => refetch()}>Refresh</Button>}
       />
+
+      {/* First-run checklist: real operational readiness checks. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between text-base">
+            <span>Launch readiness</span>
+            <span className={cn("text-xs font-medium", openItems === 0 ? "text-success" : "text-warning")}>
+              {openItems === 0 ? "All checks green" : `${openItems} item${openItems > 1 ? "s" : ""} to resolve`}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ul className="divide-y">
+            {checklist.map((c) => (
+              <li key={c.label} className="flex items-center gap-3 px-5 py-3">
+                <span aria-hidden className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold", c.ok ? "bg-success-soft text-success" : "bg-warning-soft text-warning")}>
+                  {c.ok ? "✓" : "!"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{c.label}</p>
+                  <p className="text-xs text-muted-foreground">{c.hint}</p>
+                </div>
+                {c.nav && (
+                  <Button variant="ghost" size="sm" className="h-9 shrink-0" onClick={() => onNavigate(c.nav!)}>
+                    Open
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
 
       {/* System health strip */}
       <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4">

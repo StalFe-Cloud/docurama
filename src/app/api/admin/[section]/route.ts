@@ -10,12 +10,24 @@ import {
   parseProvisioningState, buildZoneFile,
   type ProvisioningState,
 } from "@/lib/provisioning";
+import { planDef, billingPeriod, monthlyEffectiveEur, VALID_BILLING_MONTHS } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ section: string }> };
 
-const PLAN_MRR: Record<string, number> = { STARTER: 19, BUSINESS: 79, ENTERPRISE: 349 };
+// Plan prices come from src/lib/billing.ts (seeded into the Plan table) —
+// the same single source of truth as marketing, signup and the quota engine.
+const planMrr = (code: string): number | null => {
+  const def = planDef(code);
+  return def ? def.monthlyEur : null;
+};
+
+/** Short random suffix for generated slugs (enterprise conversions). */
+const randomBytesSlug = () => Math.random().toString(36).slice(2, 8);
+
+/** Public origin of this deployment, derived from the incoming request. */
+const requestOriginSafe = (req: NextRequest) => req.nextUrl.origin;
 
 // ─────────────────────────────────────────────────────────── GET (read) ──
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -44,6 +56,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
         const subs = await db.subscription.findMany({ where: { status: "ACTIVE" } });
         const mrr = subs.reduce((a, s) => a + s.mrrEur, 0);
+        // First-run checklist: real checks, no decoration. Each item links to
+        // the console section where the operator acts on it.
+        const [planCount, pendingLeads, queuedMail] = await Promise.all([
+          db.plan.count(),
+          db.enterpriseLead.count({ where: { status: "NEW" } }),
+          db.mailOutbox.count({ where: { status: "QUEUED" } }),
+        ]);
+        const certDaysLeft = settings
+          ? Math.round((settings.certExpiryAt.getTime() - Date.now()) / 86400_000)
+          : -1;
         return jsonOk({
           kpis: {
             tenants: tenantCount, users: userCount, envelopes: envelopeCount, sealed: sealedCount,
@@ -52,6 +74,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           stats: isos(stats), planDist,
           securityEvents: isos(securityEvents), auditEvents: isos(auditEvents),
           health: iso(settings!),
+          firstRun: {
+            smtpConfigured: Boolean(process.env.SMTP_URL),
+            plansSeeded: planCount >= 5,
+            planCount,
+            pendingLeads,
+            queuedMail,
+            tsaReachable: settings?.tsaReachable ?? false,
+            certDaysLeft,
+          },
         });
       }
 
@@ -227,11 +258,34 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           db.subscription.findMany({ include: { tenant: { select: { name: true, slug: true, status: true } } }, orderBy: { renewalAt: "asc" } }),
         ]);
         const stats = await db.dailyStat.findMany({ orderBy: { date: "asc" }, take: 30, select: { date: true, mrrEur: true } });
+        // Live quota windows per tenant — reading a snapshot also lazily
+        // renews expired windows, so the console never shows stale data.
+        const tenants = await db.tenant.findMany({ select: { id: true, name: true } });
+        const quotaByTenant = new Map<string, { allowance: number; used: number; rollover: number; windowEnd: string }>();
+        for (const t of tenants.slice(0, 50)) {
+          try {
+            const snap = await import("@/lib/quota").then((m) => m.quotaSnapshot(t.id));
+            quotaByTenant.set(t.id, { allowance: snap.allowance, used: snap.used, rollover: snap.rollover, windowEnd: snap.windowEnd });
+          } catch { /* tenant vanished mid-read */ }
+        }
         return jsonOk({
           plans: isos(plans),
-          subscriptions: subs.map((s) => ({ ...iso(s), tenantName: s.tenant.name, tenantSlug: s.tenant.slug, tenantStatus: s.tenant.status })),
+          subscriptions: subs.map((s) => ({
+            ...iso(s), tenantName: s.tenant.name, tenantSlug: s.tenant.slug, tenantStatus: s.tenant.status,
+            quota: quotaByTenant.get(s.tenantId) ?? null,
+          })),
           mrrTrend: isos(stats),
         });
+      }
+
+      case "leads": {
+        const leads = await db.enterpriseLead.findMany({ orderBy: { createdAt: "desc" } });
+        return jsonOk({ leads: isos(leads) });
+      }
+
+      case "plans": {
+        const plans = await db.plan.findMany({ orderBy: { monthlyEur: "asc" } });
+        return jsonOk({ plans: isos(plans) });
       }
 
       case "integrations": {
@@ -462,18 +516,25 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       case "tenants": {
         if (op === "change-plan") {
           const plan = String(data.plan);
-          if (!PLAN_MRR[plan]) return jsonError("Invalid plan");
-          const t = await db.tenant.update({ where: { id }, data: { planCode: plan } });
-          const sub = await db.subscription.findFirst({ where: { tenantId: id } });
+          const mrr = planMrr(plan);
+          if (mrr === null) return jsonError("Invalid plan");
+          const t = await db.tenant.update({ where: { id }, data: { planCode: plan, periodStartedAt: new Date(), envelopeRollover: 0 } });
+          const sub = await db.subscription.findFirst({ where: { tenantId: id, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] } }, orderBy: { createdAt: "desc" } });
+          const months = sub?.billingMonths ?? 1;
+          const effective = monthlyEffectiveEur(mrr, months);
+          const periodDays = planDef(plan)?.periodDays ?? 30;
           if (sub) {
-            await db.subscription.update({ where: { id: sub.id }, data: { planCode: plan, mrrEur: PLAN_MRR[plan] } });
+            await db.subscription.update({
+              where: { id: sub.id },
+              data: { planCode: plan, mrrEur: effective, periodStartedAt: new Date(), renewalAt: new Date(Date.now() + months * periodDays * 86400_000) },
+            });
           } else {
             await db.subscription.create({
-              data: { tenantId: id, planCode: plan, mrrEur: PLAN_MRR[plan], status: "ACTIVE", seats: 1, renewalAt: new Date(Date.now() + 30 * 86400000) },
+              data: { tenantId: id, planCode: plan, mrrEur: effective, status: "ACTIVE", seats: 1, renewalAt: new Date(Date.now() + months * periodDays * 86400_000), periodStartedAt: new Date() },
             });
           }
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "tenant.plan_changed", resource: `tenant:${t.slug}`, severity: "WARNING", tenantName: t.name, detail: `Plan set to ${plan}` });
-          return jsonOk({ ok: true, message: `Plan changed to ${plan}` });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "tenant.plan_changed", resource: `tenant:${t.slug}`, severity: "WARNING", tenantName: t.name, detail: `Plan set to ${plan} (window restarted, rollover cleared)` });
+          return jsonOk({ ok: true, message: `Plan changed to ${planDef(plan)?.name ?? plan}` });
         }
         if (op === "suspend" || op === "restore") {
           const suspending = op === "suspend";
@@ -784,6 +845,153 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "billing.subscription_canceled", resource: `subscription:${id}`, severity: "WARNING", detail: reason });
           return jsonOk({ ok: true, message: "Subscription cancelled at period end" });
         }
+        if (op === "renew-now") {
+          // Manual renewal: close the current window, carry unused envelopes
+          // (same math as the lazy engine) and start a fresh one now.
+          const sub = await db.subscription.findUnique({ where: { id } });
+          if (!sub) return jsonError("Subscription not found", 404);
+          const tenant = await db.tenant.findUnique({ where: { id: sub.tenantId } });
+          if (!tenant) return jsonError("Tenant not found", 404);
+          const plan = await db.plan.findUnique({ where: { code: sub.planCode } });
+          const limit = sub.envelopeLimitOverride ?? plan?.envelopeLimit ?? 100;
+          const windowStart = tenant.periodStartedAt ?? tenant.createdAt;
+          const usedInWindow = await db.envelope.count({
+            where: { tenantId: tenant.id, createdAt: { gte: windowStart } },
+          });
+          const unused = Math.max(0, limit + tenant.envelopeRollover - usedInWindow);
+          const rollover = Math.min(unused, limit);
+          const now = new Date();
+          await db.tenant.update({
+            where: { id: tenant.id },
+            data: { periodStartedAt: now, envelopeRollover: rollover },
+          });
+          const periodDays = plan?.periodDays ?? 30;
+          await db.subscription.update({
+            where: { id: sub.id },
+            data: { renewalAt: new Date(now.getTime() + sub.billingMonths * periodDays * 86400_000), lastInvoiceAt: now },
+          });
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "billing.renewed_now", resource: `subscription:${id}`,
+            severity: "WARNING", tenantName: tenant.name,
+            detail: `Window renewed manually - ${rollover} unused envelopes carried over`,
+          });
+          return jsonOk({ ok: true, message: `Renewed - ${rollover} unused envelope${rollover === 1 ? "" : "s"} carried over to the new window` });
+        }
+        if (op === "set-period") {
+          // Adjust the prepaid billing period (and its discount) on a deal.
+          const sub = await db.subscription.findUnique({ where: { id } });
+          if (!sub) return jsonError("Subscription not found", 404);
+          const months = Number(data.billingMonths);
+          if (!VALID_BILLING_MONTHS.includes(months)) return jsonError("Billing period must be 1, 3, 6 or 12 months");
+          const tenant = await db.tenant.findUnique({ where: { id: sub.tenantId } });
+          const plan = await db.plan.findUnique({ where: { code: sub.planCode } });
+          const listPrice = sub.priceEurOverride ?? plan?.monthlyEur ?? 0;
+          const discount = billingPeriod(months).discountPct;
+          const periodDays = plan?.periodDays ?? 30;
+          await db.subscription.update({
+            where: { id: sub.id },
+            data: {
+              billingMonths: months, discountPct: discount,
+              mrrEur: listPrice === 0 ? sub.mrrEur : monthlyEffectiveEur(listPrice, months),
+              renewalAt: new Date(Date.now() + months * periodDays * 86400_000),
+            },
+          });
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "billing.period_changed", resource: `subscription:${id}`,
+            tenantName: tenant?.name, detail: `Billing period set to ${months} month(s) at -${discount}%`,
+          });
+          return jsonOk({ ok: true, message: `Billing period set to ${months} month${months > 1 ? "s" : ""} (-${discount}%)` });
+        }
+        return jsonError("Unsupported operation");
+      }
+
+      // ── Enterprise leads pipeline ──
+      case "leads": {
+        if (op === "status") {
+          const status = String(data.status ?? "");
+          if (!["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL", "WON", "LOST"].includes(status)) {
+            return jsonError("Invalid lead status");
+          }
+          const lead = await db.enterpriseLead.update({
+            where: { id },
+            data: { status, updatedAt: new Date(), notes: data.notes !== undefined ? String(data.notes).slice(0, 2000) : undefined },
+          });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: `lead.${status.toLowerCase()}`, resource: `lead:${id}`, detail: lead.companyName });
+          return jsonOk({ ok: true, message: `Lead marked ${status}` });
+        }
+        if (op === "convert") {
+          // Convert a WON lead into an ENTERPRISE workspace with negotiated
+          // overrides. The named contact receives an owner invitation by email.
+          const lead = await db.enterpriseLead.findUnique({ where: { id } });
+          if (!lead) return jsonError("Lead not found", 404);
+          if (lead.convertedTenantId) return jsonError("This lead was already converted");
+          const seats = Math.min(5000, Math.max(1, Number(data.seats ?? 100)));
+          const envelopes = Math.min(100000, Math.max(10, Number(data.envelopes ?? 5000)));
+          const price = Math.max(0, Number(data.priceEur ?? 0));
+          const months = VALID_BILLING_MONTHS.includes(Number(data.billingMonths)) ? Number(data.billingMonths) : 12;
+          const slug = `${lead.companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "ent"}-${randomBytesSlug()}`;
+          const now = new Date();
+          const tenant = await db.tenant.create({
+            data: {
+              name: lead.companyName, slug, planCode: "ENTERPRISE", status: "ACTIVE",
+              billingEmail: lead.workEmail, periodStartedAt: now, envelopeRollover: 0,
+            },
+          });
+          await db.subscription.create({
+            data: {
+              tenantId: tenant.id, planCode: "ENTERPRISE", status: "ACTIVE",
+              mrrEur: monthlyEffectiveEur(price, months), seats: 1,
+              renewalAt: new Date(now.getTime() + months * 30 * 86400_000),
+              billingMonths: months, discountPct: billingPeriod(months).discountPct,
+              periodStartedAt: now,
+              seatLimitOverride: seats, envelopeLimitOverride: envelopes, priceEurOverride: price || null,
+            },
+          });
+          // Owner invitation for the lead contact (creates their login).
+          const { createInvitation } = await import("@/lib/onboarding");
+          const adminUser = await db.user.findUnique({ where: { email: admin.email } });
+          await createInvitation({
+            tenantId: tenant.id, email: lead.workEmail, role: "OWNER",
+            invitedBy: actor, invitedById: adminUser?.id ?? "", origin: requestOriginSafe(req),
+          });
+          await db.enterpriseLead.update({
+            where: { id },
+            data: { status: "WON", convertedTenantId: tenant.id, updatedAt: new Date(), notes: `${lead.notes ?? ""}\n[Conversion] ${seats} seats / ${envelopes} envelopes / €${price}/mo (${months}mo term).`.trim() },
+          });
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "lead.converted", resource: `tenant:${slug}`,
+            severity: "WARNING", tenantName: lead.companyName,
+            detail: `Enterprise workspace created - ${seats} seats, ${envelopes} envelopes/mo, owner invite sent to ${lead.workEmail}`,
+          });
+          return jsonOk({ ok: true, message: `${lead.companyName} workspace created - owner invitation sent to ${lead.workEmail}` });
+        }
+        return jsonError("Unsupported operation");
+      }
+
+      // ── Plan editor ──
+      case "plans": {
+        if (op === "update") {
+          const plan = await db.plan.findUnique({ where: { id } });
+          if (!plan) return jsonError("Plan not found", 404);
+          const monthlyEur = Math.max(0, Math.min(100000, Number(data.monthlyEur ?? plan.monthlyEur)));
+          const seatLimit = Math.max(1, Math.min(5000, Number(data.seatLimit ?? plan.seatLimit)));
+          const envelopeLimit = Math.max(10, Math.min(100000, Number(data.envelopeLimit ?? plan.envelopeLimit)));
+          const storageGb = Math.max(1, Math.min(5000, Number(data.storageGb ?? plan.storageGb)));
+          const apiAccess = data.apiAccess !== undefined ? Boolean(data.apiAccess) : plan.apiAccess;
+          const periodDays = [30, 35].includes(Number(data.periodDays)) ? Number(data.periodDays) : plan.periodDays;
+          const customPricing = data.customPricing !== undefined ? Boolean(data.customPricing) : plan.customPricing;
+          const name = String(data.name ?? plan.name).trim().slice(0, 40) || plan.name;
+          await db.plan.update({
+            where: { id },
+            data: { name, monthlyEur: customPricing ? 0 : monthlyEur, seatLimit, envelopeLimit, storageGb, apiAccess, periodDays, customPricing },
+          });
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "plan.updated", resource: `plan:${plan.code}`,
+            severity: "WARNING", tenantName: "Platform",
+            detail: `${plan.code}: ${seatLimit} seats / ${envelopeLimit} envelopes / ${customPricing ? "custom pricing" : `€${monthlyEur}`}`,
+          });
+          return jsonOk({ ok: true, message: `Plan ${plan.code} updated` });
+        }
         return jsonError("Unsupported operation");
       }
 
@@ -843,8 +1051,51 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return jsonOk({ ok: true, message: "SMTP settings saved" });
         }
         if (op === "test-smtp") {
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "smtp.test_sent", resource: "platform:settings", severity: "INFO" });
-          return jsonOk({ ok: true, message: "Test email delivered - check the inbox of the from-address" });
+          // Honest test: really send through the configured transport. With no
+          // SMTP_URL the platform says so instead of claiming delivery.
+          if (!process.env.SMTP_URL) {
+            return jsonError("No SMTP transport is configured - set the SMTP_URL environment variable (e.g. smtps://user:pass@host:465) and restart", 400);
+          }
+          const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
+          const { flushMailOutbox } = await import("@/lib/mail");
+          const row = await db.mailOutbox.create({
+            data: {
+              toEmail: settings?.smtpUser || "postmaster@docurama.eu",
+              fromEmail: settings?.smtpFrom ?? "Docurama Sign <notifications@docurama.eu>",
+              subject: "Docurama SMTP test",
+              template: "TEST",
+              bodyText: `SMTP transport test initiated by ${actor} at ${new Date().toISOString()}. If you can read this, delivery works.`,
+            },
+          });
+          void row;
+          const report = await flushMailOutbox(1);
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "smtp.test_sent", resource: "platform:settings", severity: "INFO", detail: `sent=${report.sent} failed=${report.failed}` });
+          if (report.sent > 0) return jsonOk({ ok: true, message: "Test email delivered - check the inbox" });
+          return jsonError("The test message could not be delivered - check SMTP_URL credentials and the outbox for the failure", 502);
+        }
+        if (op === "mail.flush") {
+          // Deliver the oldest QUEUED messages through the real transport.
+          const { flushMailOutbox } = await import("@/lib/mail");
+          if (!process.env.SMTP_URL) {
+            return jsonError("No SMTP transport is configured - set SMTP_URL first; queued mail stays inspectable meanwhile", 400);
+          }
+          const report = await flushMailOutbox(50);
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "mail.flushed", resource: "platform:mail",
+            detail: `attempted=${report.attempted} sent=${report.sent} failed=${report.failed}`,
+          });
+          return jsonOk({
+            ok: true,
+            message: report.attempted === 0
+              ? "Outbox is empty - nothing queued"
+              : `Delivered ${report.sent} of ${report.attempted} queued message(s)${report.failed > 0 ? `, ${report.failed} failed` : ""}`,
+          });
+        }
+        if (op === "mail.requeue") {
+          const { requeueFailedMail } = await import("@/lib/mail");
+          const count = await requeueFailedMail();
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "mail.requeued", resource: "platform:mail", detail: `${count} message(s)` });
+          return jsonOk({ ok: true, message: `${count} failed message(s) requeued for the next flush` });
         }
         if (op === "save-tsa") {
           const url = String(data.tsaUrl ?? "").trim();

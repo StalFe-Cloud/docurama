@@ -35,6 +35,7 @@ model User {
   onboardingJson  String?       // { skippedInvite, skippedSecurity, completedAt }
 
   memberships Member[]
+  teamMemberships TeamMember[]
   createdDocs Envelope[] @relation("createdDocs")
   uploadedDocuments Document[] @relation("uploadedDocuments")
   sessions    Session[]
@@ -169,6 +170,15 @@ model Tenant {
   industry    String?
   companySize String?
 
+  // ── Quota window state (src/lib/quota.ts) ──
+  // Anchor of the current billing window. Advanced lazily on quota reads
+  // (no cron needed): while now >= periodStartedAt + windowMs the window
+  // rolls forward, unused envelopes carry into the next window (capped at
+  // one period's limit) and the subscription renewal stamp is synced.
+  periodStartedAt  DateTime  @default(now())
+  envelopeRollover Int       @default(0)
+
+  teams Team[]
   invitations Invitation[]
   members      Member[]
   envelopes    Envelope[]
@@ -220,6 +230,10 @@ model Envelope {
   verifiedSenderDomain String? // sender email domain was DNS-TXT-verified at seal time
   attestedAt        DateTime? // when the minimal fingerprint was pushed to the public portal
   attestStatus      String?   // PUSHED | FAILED | SKIPPED
+
+  // Optional small-team attribution (BUSINESS+ feature): which team sent this.
+  teamId String?
+  team   Team?  @relation("teamEnvelopes", fields: [teamId], references: [id], onDelete: SetNull)
 
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy  User      @relation("createdDocs", fields: [createdById], references: [id])
@@ -622,7 +636,7 @@ model McpConfig {
 
 model Plan {
   id          String  @id @default(cuid())
-  code        String  @unique // STARTER | BUSINESS | ENTERPRISE
+  code        String  @unique // SOLO | STARTER | SMART_TEAM | BUSINESS | ENTERPRISE
   name        String
   monthlyEur  Int
   seatLimit   Int
@@ -633,6 +647,10 @@ model Plan {
   support     String
   features    String // pipe-separated
   active      Boolean @default(true)
+  // 35 on entry plans: every billing month includes the weekends, on us.
+  periodDays    Int     @default(30)
+  // ENTERPRISE: price is negotiated per deal — marketing renders "Custom".
+  customPricing Boolean @default(false)
 }
 
 model Subscription {
@@ -646,6 +664,16 @@ model Subscription {
   paymentMethod  String    @default("SEPA ••4291")
   lastInvoiceAt  DateTime?
   failedPayment  Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  // Prepaid period (1 | 3 | 6 | 12 months) and its discount — optional
+  // savings, never a lock-in: monthly stays the default everywhere.
+  billingMonths  Int       @default(1)
+  discountPct    Int       @default(0)
+  periodStartedAt DateTime?
+  // Negotiated Enterprise limits override the plan defaults per deal.
+  seatLimitOverride      Int?
+  envelopeLimitOverride  Int?
+  priceEurOverride       Int?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -948,4 +976,54 @@ model PlatformSetting {
   auditChainSealedAt  DateTime @default(now())
   auditChainBlockHeight Int   @default(1842)
   updatedAt           DateTime @default(now())
+}
+
+// ─── Teams (small groups inside a workspace — BUSINESS+ feature) ──────────────
+// Teams let a 50-seat organization split envelopes into per-group views
+// (e.g. "Sales", "Procurement") without separate workspaces or extra cost.
+
+model Team {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  color     String   @default("emerald") // UI accent chip colour
+  createdAt DateTime @default(now())
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members  TeamMember[]
+  envelopes Envelope[] @relation("teamEnvelopes")
+
+  @@unique([tenantId, name])
+}
+
+model TeamMember {
+  teamId String
+  userId String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+}
+
+// ─── Enterprise pipeline ──────────────────────────────────────────────────────
+// Public /enterprise form submissions flow into this table. Admins work the
+// pipeline (status + notes) and can convert a WON lead into a real ENTERPRISE
+// workspace with negotiated seat/envelope/price overrides on the subscription.
+
+model EnterpriseLead {
+  id              String   @id @default(cuid())
+  contactName     String
+  workEmail       String
+  companyName     String
+  companySize     String?  // "1-10" | "11-50" | "51-200" | "201-1000" | "1000+"
+  country         String?
+  monthlyVolume   String?  // expected envelopes per month, free text
+  needs           String?  // what they care about (SSO, BYO cert, volume...)
+  preferredDate   String?  // preferred kickoff date, free text
+  status          String   @default("NEW") // NEW | CONTACTED | QUALIFIED | PROPOSAL | WON | LOST
+  notes           String?
+  convertedTenantId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
 }

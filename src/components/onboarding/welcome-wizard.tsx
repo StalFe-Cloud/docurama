@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowRight, Building2, Check, CheckCircle2, Circle, Copy, Eraser, KeyRound,
-  Loader2, Mail, MailCheck, PenTool, ShieldCheck, UserPlus, Users,
+  Loader2, Mail, MailCheck, PenTool, ShieldCheck, Sparkles, UserPlus, Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +25,7 @@ import { ApiError, apiGet, apiPost, setSessionToken } from "@/lib/client";
 import { BrandLogo } from "@/components/brand/logo";
 import { PortalProviders } from "@/components/portal/providers";
 import { cn } from "@/lib/utils";
+import { PLAN_DEFS, SELF_SERVE_PLANS, BILLING_PERIODS, monthlyEffectiveEur, periodDaysLabel, billingPeriod } from "@/lib/billing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,11 @@ type OnboardingData = {
   pendingInvites: number;
   inviteList: { id: string; email: string; role: string; createdAt: string }[];
   smtpTransportConfigured: boolean;
+  quota: {
+    planCode: string; planName: string; seatLimit: number; seatsUsed: number; seatsRemaining: number;
+    envelopeLimit: number; allowance: number; periodDays: number; billingMonths: number; discountPct: number;
+    workspaceRole: string;
+  } | null;
 };
 
 type InviteInfo = {
@@ -49,7 +55,7 @@ type InviteInfo = {
   invitedBy?: string;
 };
 
-type StepKey = "account" | "verify" | "org" | "signature" | "invites" | "security" | "done";
+type StepKey = "account" | "verify" | "plan" | "org" | "signature" | "invites" | "security" | "done";
 
 const SIGNATURE_FONTS = [
   { key: "signature-font-caveat", label: "Caveat" },
@@ -63,6 +69,7 @@ const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
 const stepMeta: Record<Exclude<StepKey, "done">, { label: string; hint: string; icon: typeof Mail }> = {
   account: { label: "Create your account", hint: "Name, email and password", icon: UserPlus },
   verify: { label: "Confirm your email", hint: "Activate signing & API access", icon: Mail },
+  plan: { label: "Your plan", hint: "Limits, billing period, live walkthrough", icon: Sparkles },
   org: { label: "Your organization", hint: "Name your workspace", icon: Building2 },
   signature: { label: "Your signature", hint: "Draw, type or upload a stamp", icon: PenTool },
   invites: { label: "Invite your team", hint: "Send invitations now or later", icon: Users },
@@ -133,11 +140,12 @@ function Wizard() {
   // Derived: which steps apply, which is active.
   const authed = state?.authenticated ?? false;
   const steps: Exclude<StepKey, "done">[] = authed
-    ? ["verify", "org", "signature", "invites", "security"]
+    ? ["verify", "plan", "org", "signature", "invites", "security"]
     : ["account"];
   const doneOf = (k: Exclude<StepKey, "done">): boolean => {
     if (!state) return false;
     if (k === "account") return authed;
+    if (k === "plan") return Boolean(state.quota); // a plan is always in effect once the workspace exists
     return state.steps[k];
   };
   const allDone = authed && state !== undefined && steps.every(doneOf);
@@ -307,6 +315,7 @@ function Wizard() {
               />
             )}
             {authed && active === "verify" && <VerifyStep state={state!} onDone={() => advance()} />}
+            {authed && active === "plan" && <PlanStep state={state!} onDone={() => advance()} />}
             {authed && active === "org" && <OrgStep state={state!} onDone={() => advance()} />}
             {authed && active === "signature" && <SignatureStep state={state!} onDone={() => advance()} />}
             {authed && active === "invites" && <InvitesStep state={state!} onDone={() => advance()} />}
@@ -367,6 +376,17 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
     organization: "",
     consent: false,
   });
+  // Plan preselection: /welcome?plan=SMART_TEAM&months=12 arrives from the
+  // marketing pricing cards. Invitees and domain auto-joins skip the picker.
+  const [planCode, setPlanCode] = useState(() => {
+    const p = new URLSearchParams(window.location.search).get("plan");
+    return SELF_SERVE_PLANS.some((x) => x.code === p) ? (p as string) : "STARTER";
+  });
+  const [billingMonths, setBillingMonths] = useState(() => {
+    const m = Number(new URLSearchParams(window.location.search).get("months"));
+    return [1, 3, 6, 12].includes(m) ? m : 1;
+  });
+  const chosenPlan = PLAN_DEFS.find((p) => p.code === planCode) ?? PLAN_DEFS[1];
 
   const [corporateDomain, setCorporateDomain] = useState<{
     autoJoin: boolean;
@@ -432,6 +452,8 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
       password: form.password,
       organization: corporateDomain?.autoJoin ? corporateDomain.tenantName : form.organization,
       consent: form.consent,
+      planCode,
+      billingMonths,
       ...(viaInvite ? { inviteToken: inviteTokenRef.current } : {}),
     });
   };
@@ -450,7 +472,7 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
           ? "Your teammates are already here - create your login with the invited email address."
           : corporateDomain?.autoJoin
           ? `Welcome to ${corporateDomain.tenantName}. Your corporate domain @${corporateDomain.domain} gives you direct access to your company workspace.`
-          : "You'll be the owner of a new organization on a 14-day trial of the Starter plan. No credit card required."
+          : `You'll be the owner of a new organization on a 14-day trial of the ${chosenPlan.name} plan's real limits. No credit card required.`
       }
     >
       <form onSubmit={submit} className="space-y-4" noValidate>
@@ -504,6 +526,63 @@ function AccountStep({ invite, inviteTokenRef, onDone }: { invite: InviteInfo | 
               placeholder="StålFe" className="h-11" />
             <p className="text-xs text-muted-foreground">Your workspace - teammates join it by invitation.</p>
           </div>
+        )}
+
+        {/* Plan picker: the trial runs on the chosen plan's real limits. */}
+        {!viaInvite && !corporateDomain?.autoJoin && (
+          <fieldset className="space-y-2.5">
+            <legend className="text-sm font-medium">Your plan for the 14-day trial</legend>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {SELF_SERVE_PLANS.map((p) => (
+                <label key={p.code} className={cn(
+                  "flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 transition-colors",
+                  planCode === p.code ? "border-primary bg-primary-soft/30" : "hover:border-muted-foreground/30",
+                )}>
+                  <input
+                    type="radio"
+                    name="signup-plan"
+                    value={p.code}
+                    checked={planCode === p.code}
+                    onChange={() => setPlanCode(p.code)}
+                    className="mt-0.5 h-4 w-4 accent-[#0f7a5a]"
+                  />
+                  <span className="min-w-0">
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="text-sm font-semibold">{p.name}</span>
+                      <span className="text-xs text-muted-foreground">€{monthlyEffectiveEur(p.monthlyEur, billingMonths)}/mo</span>
+                    </span>
+                    <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                      {p.seatLimit} seat{p.seatLimit > 1 ? "s" : ""} · {p.envelopeLimit} envelopes {p.periodDays === 30 ? "/ month" : `/ ${p.periodDays}-day month`}
+                    </span>
+                    <span className="block text-[11px] leading-relaxed text-muted-foreground">{p.blurb}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div>
+              <Label className="text-xs">Billing period (optional prepay saving)</Label>
+              <div role="group" aria-label="Billing period" className="mt-1.5 inline-flex rounded-lg border bg-muted/40 p-1">
+                {BILLING_PERIODS.map((bp) => (
+                  <button
+                    key={bp.months}
+                    type="button"
+                    onClick={() => setBillingMonths(bp.months)}
+                    aria-pressed={billingMonths === bp.months}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+                      billingMonths === bp.months ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {bp.label}{bp.discountPct > 0 ? ` ·−${bp.discountPct}%` : ""}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                No engagement — pay monthly by default, cancel anytime. Need SSO, bring-your-own certificates or a custom volume?{" "}
+                <a href="/enterprise" className="underline underline-offset-2">Talk to us about Enterprise</a>.
+              </p>
+            </div>
+          </fieldset>
         )}
         <label className="flex items-start gap-2.5 rounded-lg border bg-muted/50 p-3 text-sm">
           <input
@@ -613,7 +692,172 @@ function VerifyStep({ state, onDone }: { state: OnboardingData; onDone: () => vo
   );
 }
 
-// ─── Step 3: organization ─────────────────────────────────────────────────────
+// ─── Step 3: plan (trial limits, billing period, per-plan walkthrough) ───────
+
+function PlanStep({ state, onDone }: { state: OnboardingData; onDone: () => void }) {
+  const act = useOnboardingAct();
+  const current = state.quota;
+  const isEnterprise = current?.planCode === "ENTERPRISE";
+  const isOwner = current?.workspaceRole === "OWNER" || current?.workspaceRole === "ADMIN";
+  const [months, setMonths] = useState(1);
+  const [walkthrough, setWalkthrough] = useState(false);
+
+  const apply = (code: string) => {
+    act.mutate({ op: "plan.select", data: { planCode: code, billingMonths: months } });
+  };
+
+  // Enterprise workspaces see a deployment checklist instead of plan cards.
+  if (isEnterprise) {
+    return (
+      <StepPanel
+        title="Enterprise deployment checklist"
+        description="Your negotiated seats, volume and price are already applied to this workspace. Finish the rollout with your platform contact."
+      >
+        <ul className="space-y-2.5">
+          {[
+            ["SSO/SAML", "Connect your identity provider so teammates sign in with company credentials.", "/settings"],
+            ["Bring your own certificate", "Upload the qualified sealing certificate issued to your organization.", "/settings"],
+            ["Verify your sending domain", "DNS TXT verification protects deliverability and your brand.", "/settings"],
+            ["Retention policy & legal hold", "Set how long completed envelopes are kept and how holds work.", "/settings"],
+            ["Invite your teams", "Add members and organize them into teams for grouped envelope views.", "/settings"],
+          ].map(([title, body, href]) => (
+            <li key={title} className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3.5">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+              <div>
+                <p className="text-sm font-medium">{title}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">{body}</p>
+                <p className="mt-1 text-xs text-primary">{href === "/settings" ? "Settings" : href} → with your platform contact</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <Button onClick={onDone}>Continue <ArrowRight className="h-4 w-4" aria-hidden /></Button>
+      </StepPanel>
+    );
+  }
+
+  return (
+    <StepPanel
+      title="Your plan during the trial"
+      description="The trial runs on the real limits of the plan you pick — switch now or anytime in Settings → Account. No credit card, no engagement: monthly is the default and unused envelopes roll over."
+    >
+      <div className="space-y-5">
+        {/* Billing period */}
+        <div>
+          <Label>Billing period (from your first paid invoice)</Label>
+          <div role="group" aria-label="Billing period" className="mt-2 inline-flex rounded-lg border bg-muted/40 p-1">
+            {BILLING_PERIODS.map((bp) => (
+              <button
+                key={bp.months}
+                type="button"
+                onClick={() => setMonths(bp.months)}
+                aria-pressed={months === bp.months}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  months === bp.months ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {bp.label}{bp.discountPct > 0 ? ` · −${bp.discountPct}%` : ""}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            {months === 1
+              ? "No engagement — cancel anytime. Prepaid periods are optional savings, never a requirement."
+              : `Prepay ${months} months, save ${billingPeriod(months).discountPct}% on every month — cancel before it renews.`}
+          </p>
+        </div>
+
+        {/* Plan cards */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {SELF_SERVE_PLANS.map((p) => {
+            const active = current?.planCode === p.code;
+            const effective = monthlyEffectiveEur(p.monthlyEur, months);
+            return (
+              <div key={p.code} className={cn(
+                "rounded-xl border p-4 transition-colors",
+                active ? "border-primary bg-primary-soft/30" : "bg-card hover:border-muted-foreground/30",
+              )}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">{p.name}</h3>
+                  {active && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">Current</span>}
+                </div>
+                <p className="mt-1 text-lg font-semibold tracking-tight">€{effective}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                <p className="text-[11px] text-muted-foreground">{periodDaysLabel(p.periodDays)}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{p.helps}</p>
+                <ul className="mt-2.5 space-y-1">
+                  {p.features.slice(0, 4).map((f) => (
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] leading-relaxed">
+                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-primary" aria-hidden />{f}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  size="sm"
+                  variant={active ? "secondary" : "outline"}
+                  className="mt-3 w-full"
+                  disabled={active || act.isPending || !isOwner}
+                  onClick={() => apply(p.code)}
+                >
+                  {active ? "Active on your trial" : `Switch to ${p.name}`}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+        {!isOwner && (
+          <p className="text-xs text-muted-foreground">
+            Only workspace owners and admins can change the plan — ask {`an admin`} if the limits do not fit.
+          </p>
+        )}
+
+        {/* Per-plan walkthrough: what the first envelope looks like on this plan */}
+        <div className="rounded-xl border bg-muted/30 p-4">
+          <button
+            type="button"
+            onClick={() => setWalkthrough((v) => !v)}
+            aria-expanded={walkthrough}
+            className="flex w-full items-center justify-between gap-3 text-left"
+          >
+            <span className="text-sm font-medium">See how it works on {current?.planName ?? "your plan"}</span>
+            <span className="text-xs text-muted-foreground">{walkthrough ? "Hide" : "Show"}</span>
+          </button>
+          {walkthrough && (
+            <ol className="mt-3 space-y-2.5">
+              {[
+                ["Upload or pick a template", "Your documents and the built-in template library feed the same envelope builder."],
+                ["Add recipients and fields", "Each signer gets a personal, unforgeable signing link — email, SMS or passcode gated."],
+                ["Send and watch the audit timeline", `Every view, signature and seal lands in the evidence trail. On this plan you can send ${current ? current.envelopeLimit : 50} envelopes per ${current?.periodDays === 30 ? "month" : "35-day month"}.`],
+                ["Completed, sealed, verifiable", "The sealed PDF carries a PAdES conformance level and a public verification code anyone can check."],
+              ].map(([t, b], i) => (
+                <li key={t} className="flex gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold text-primary">{i + 1}</span>
+                  <div>
+                    <p className="text-sm font-medium">{t}</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">{b}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          {current && (
+            <p className="text-xs text-muted-foreground">
+              Current: <span className="font-medium text-foreground">{current.planName}</span> ·{" "}
+              {current.seatLimit} seat{current.seatLimit > 1 ? "s" : ""} · {current.envelopeLimit} envelopes{" "}
+              {current.periodDays === 30 ? "per month" : `per ${current.periodDays}-day month`}
+            </p>
+          )}
+          <Button onClick={onDone}>Continue <ArrowRight className="h-4 w-4" aria-hidden /></Button>
+        </div>
+      </div>
+    </StepPanel>
+  );
+}
+
+// ─── Step 4: organization ─────────────────────────────────────────────────────
 
 function OrgStep({ state, onDone }: { state: OnboardingData; onDone: () => void }) {
   const act = useOnboardingAct();
@@ -870,6 +1114,8 @@ function InvitesStep({ state, onDone }: { state: OnboardingData; onDone: () => v
   const act = useOnboardingAct();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("MEMBER");
+  const q = state.quota;
+  const seatsLeft = q ? q.seatsRemaining : null;
 
   return (
     <StepPanel
@@ -877,6 +1123,26 @@ function InvitesStep({ state, onDone }: { state: OnboardingData; onDone: () => v
       description="Teammates receive an invitation email from notifications@docurama.eu with a secure link - they create their own password, so you never handle credentials."
     >
       <div className="space-y-4">
+        {/* Seat meter: invites reserve seats until accepted or revoked. */}
+        {q && (
+          <div className={cn(
+            "flex items-start gap-3 rounded-lg border p-3.5 text-sm",
+            seatsLeft === 0 ? "border-destructive/40 bg-destructive/10" : "border-primary/30 bg-primary-soft/30",
+          )} role="status">
+            <Users className={cn("mt-0.5 h-5 w-5 shrink-0", seatsLeft === 0 ? "text-destructive" : "text-primary")} aria-hidden />
+            <div>
+              <p className="font-medium">
+                {q.seatsUsed} of {q.seatLimit} seats in use
+                {seatsLeft !== null && seatsLeft > 0 ? ` · ${seatsLeft} free` : ""}
+              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {seatsLeft === 0
+                  ? "Every seat is taken (pending invitations count). Revoke an invitation or switch plans in the plan step to invite more."
+                  : "A sent invitation reserves its seat until it is accepted, revoked or expires - no surprise overages."}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-1.5">
             <Label htmlFor="inv-email">Email address</Label>
@@ -893,7 +1159,7 @@ function InvitesStep({ state, onDone }: { state: OnboardingData; onDone: () => v
               </SelectContent>
             </Select>
           </div>
-          <Button className="h-11" disabled={!email.includes("@") || act.isPending}
+          <Button className="h-11" disabled={!email.includes("@") || act.isPending || seatsLeft === 0}
             onClick={() => { act.mutate({ op: "invite.send", data: { email, role } }); setEmail(""); }}>
             {act.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <UserPlus className="h-4 w-4" aria-hidden />}
             Invite

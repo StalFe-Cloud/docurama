@@ -5,11 +5,12 @@ import { requireUser, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
 import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
 import { foldForSearch } from "@/lib/search";
+import { quotaSnapshot, checkEnvelopeQuota, windowDaysRemaining } from "@/lib/quota";
+import { tryDeliverSoon } from "@/lib/mail";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ section: string }> };
-const PLAN_LIMITS: Record<string, number> = { STARTER: 25, BUSINESS: 250, ENTERPRISE: 5000 };
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -39,11 +40,13 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     switch (section) {
       case "overview": {
-        const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
         const tenant = (await db.tenant.findUnique({ where: { id: tenantId! } }))!;
         const plan = await db.plan.findUnique({ where: { code: tenant.planCode } });
+        // Quota comes from the billing engine — reading it also lazily rolls
+        // expired windows and carries unused envelopes forward.
+        const quota = await quotaSnapshot(tenantId!);
         const [sentThisMonth, completed, pending, awaitingMe, recent, mySignQueue] = await Promise.all([
-          db.envelope.count({ where: { tenantId: tenantId!, createdAt: { gte: monthStart } } }),
+          db.envelope.count({ where: { tenantId: tenantId!, createdAt: { gte: new Date(quota.windowStart) } } }),
           db.envelope.count({ where: { tenantId: tenantId!, status: "COMPLETED" } }),
           db.envelope.count({ where: { tenantId: tenantId!, status: { in: ["SENT", "PARTIALLY_SIGNED"] } } }),
           db.envelope.count({
@@ -64,10 +67,32 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const team = await db.member.findMany({
           where: { tenantId: tenantId! }, include: { user: true },
         });
+        // Small-team groups (BUSINESS+) for per-team envelope views.
+        const teams = await db.team.findMany({
+          where: { tenantId: tenantId! },
+          include: { _count: { select: { members: true, envelopes: true } } },
+          orderBy: { name: "asc" },
+        });
         return jsonOk({
+          teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color, memberCount: t._count.members, envelopeCount: t._count.envelopes })),
           plan: plan ? iso(plan) : null,
           tenant: iso(tenant),
-          quota: { used: sentThisMonth, limit: PLAN_LIMITS[tenant.planCode] ?? 25 },
+          quota: {
+            used: quota.used,
+            limit: quota.envelopeLimit,
+            allowance: quota.allowance,
+            rollover: quota.rollover,
+            remaining: quota.remaining,
+            periodDays: quota.periodDays,
+            billingMonths: quota.billingMonths,
+            discountPct: quota.discountPct,
+            windowStart: quota.windowStart,
+            windowEnd: quota.windowEnd,
+            windowDaysRemaining: windowDaysRemaining(quota),
+            seatsUsed: quota.seatsUsed,
+            seatLimit: quota.seatLimit,
+            seatsRemaining: quota.seatsRemaining,
+          },
           kpis: { sentThisMonth, completed, pending, awaitingMe },
           recent: recent.map((e) => ({
             ...iso(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
@@ -93,7 +118,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           db.envelope.findMany({
             where, orderBy: { createdAt: "desc" },
             skip: (page - 1) * perPage, take: perPage,
-            include: { recipients: true, createdBy: { select: { firstName: true, lastName: true } } },
+            include: {
+              recipients: true,
+              createdBy: { select: { firstName: true, lastName: true } },
+              team: { select: { id: true, name: true, color: true } },
+            },
           }),
           db.envelope.findMany({
             where: { recipients: { some: { email: me.email, status: "PENDING" } }, status: { in: ["SENT", "PARTIALLY_SIGNED"] } },
@@ -104,6 +133,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           total, page, perPage,
           rows: rows.map((e) => ({
             ...iso(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
+            team: e.team ? { id: e.team.id, name: e.team.name, color: e.team.color } : null,
             recipients: e.recipients.map(publicRecipient),
           })),
           myQueue: myQueue.map((e) => ({ ...iso(e), tenantName: e.tenant.name, recipients: e.recipients.map(publicRecipient) })),
@@ -268,11 +298,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           if (!title) return jsonError("Document title is required");
           const valid = recipients.filter((r) => r.email && String(r.email).includes("@"));
           if (valid.length === 0) return jsonError("At least one valid recipient email is required");
-          const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-          const used = await db.envelope.count({ where: { tenantId: tenantId!, createdAt: { gte: monthStart } } });
-          const tenant = await db.tenant.findUnique({ where: { id: tenantId! } });
-          if (used >= (PLAN_LIMITS[tenant!.planCode] ?? 25)) {
-            return jsonError(`Monthly envelope quota reached (${used}/${PLAN_LIMITS[tenant!.planCode]}). Upgrade your plan to send more.`, 402);
+          // Quota + suspension gate (lazy renewal runs inside the check).
+          const gate = await checkEnvelopeQuota(tenantId!);
+          if (!gate.ok) return jsonError(gate.message ?? "Envelope allowance reached", gate.status);
+          // Optional team attribution — the team must belong to this workspace.
+          const teamId = typeof data.teamId === "string" && data.teamId ? data.teamId : null;
+          if (teamId) {
+            const team = await db.team.findFirst({ where: { id: teamId, tenantId: tenantId! } });
+            if (!team) return jsonError("Team not found in this workspace", 404);
           }
 
           // WS3: accept documentId or templateId for real page count and SHA-256
@@ -314,6 +347,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 templateId, // evidence chain: which template produced this envelope
                 status: "SENT", message: String(data.message ?? ""),
                 pages: realPageCount, sha256: realSha256,
+                teamId, // optional per-team attribution (BUSINESS+)
               },
             });
             // WS9b: signing tokens are cryptographically random, not derived from
@@ -357,6 +391,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             });
             return envelope;
           });
+          // Opportunistic delivery: if SMTP_URL is configured the invitations
+          // queued above go out now; otherwise they stay inspectable as QUEUED.
+          await tryDeliverSoon();
           return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} - code ${code}` });
         }
         if (op === "remind") {

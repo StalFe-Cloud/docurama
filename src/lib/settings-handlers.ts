@@ -13,6 +13,8 @@ import { verifySendingDomain, checkEmailPosture } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
 import { createInvitation, requestOrigin } from "@/lib/onboarding";
+import { checkApiAccess, checkSeatAvailable } from "@/lib/quota";
+import { isSelfServePlan, planDef, billingPeriod, VALID_BILLING_MONTHS } from "@/lib/billing";
 
 /**
  * Workspace Settings API - GET sections and POST operations behind
@@ -82,6 +84,15 @@ export async function getSettingsSection(
         db.userSignature.findMany({ where: { userId: me.id }, orderBy: { createdAt: "desc" } }),
         db.invitation.findMany({ where: { tenantId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
       ]);
+      // Teams (BUSINESS+): grouped envelope views inside the workspace.
+      const teams = await db.team.findMany({
+        where: { tenantId },
+        include: {
+          members: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+          _count: { select: { envelopes: true } },
+        },
+        orderBy: { name: "asc" },
+      });
       const plan = await db.plan.findUnique({ where: { code: tenant!.planCode } });
       return jsonOk({
         profile: {
@@ -114,6 +125,15 @@ export async function getSettingsSection(
           id: m.id, role: m.role, name: `${m.user.firstName} ${m.user.lastName}`,
           email: m.user.email, status: m.user.status, totpEnabled: m.user.totpEnabled,
           lastActiveAt: m.user.lastActiveAt?.toISOString() ?? null,
+        })),
+        teams: teams.map((t) => ({
+          id: t.id, name: t.name, color: t.color,
+          envelopeCount: t._count.envelopes,
+          members: t.members.map((tm) => ({
+            userId: tm.userId,
+            name: `${tm.user.firstName} ${tm.user.lastName}`,
+            email: tm.user.email,
+          })),
         })),
         isAdmin: adminRoles(me),
       });
@@ -361,16 +381,37 @@ export async function postSettingsOp(
     if (name.length < 2) return jsonError("Organization name is required");
     const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "org";
     const slug = `${slugBase}-${randomBytes(2).toString("hex")}`;
+    const planCode = isSelfServePlan(String(data.planCode ?? "")) ? String(data.planCode) : "STARTER";
+    const def = planDef(planCode)!;
+    const billingMonths = VALID_BILLING_MONTHS.includes(Number(data.billingMonths)) ? Number(data.billingMonths) : 1;
+    const discountPct = billingPeriod(billingMonths).discountPct;
+    // Trial length comes from the platform settings singleton — the same
+    // source the signup API uses, so both paths agree.
+    const trialDays = (await db.platformSetting.findUnique({ where: { id: "singleton" } }))?.trialLengthDays ?? 14;
+    const now = new Date();
     const tenant = await db.tenant.create({
-      data: { name, slug, planCode: "STARTER", status: "TRIAL", trialEndsAt: new Date(Date.now() + 14 * 86400_000) },
+      data: {
+        name, slug, planCode, status: "TRIAL",
+        trialEndsAt: new Date(Date.now() + trialDays * 86400_000),
+        periodStartedAt: now, envelopeRollover: 0,
+      },
+    });
+    await db.subscription.create({
+      data: {
+        tenantId: tenant.id, planCode, status: "TRIALING",
+        mrrEur: Math.round(def.monthlyEur * (1 - discountPct / 100)),
+        seats: 1,
+        renewalAt: new Date(now.getTime() + billingMonths * def.periodDays * 86400_000),
+        billingMonths, discountPct, periodStartedAt: now,
+      },
     });
     await db.member.create({ data: { userId: me.id, tenantId: tenant.id, role: "OWNER", status: "ACTIVE" } });
     await db.user.update({ where: { id: me.id }, data: { activeTenantId: tenant.id } });
     await recordAudit({
       actor, actorRole: me.role, action: "organization.created", resource: `tenant:${slug}`,
-      tenantName: name, detail: "New organization created from Settings → Account",
+      tenantName: name, detail: `New organization created from Settings → Account (trial on ${planCode})`,
     });
-    return jsonOk({ ok: true, message: `Organization “${name}” created - you are the owner. 14-day trial started.` });
+    return jsonOk({ ok: true, message: `Organization “${name}” created - you are the owner. ${trialDays}-day trial on ${def.name} started.` });
   }
 
   // ── Access security ──
@@ -556,6 +597,9 @@ export async function postSettingsOp(
       const already = await db.member.findFirst({ where: { userId: exists.id, tenantId } });
       if (already) return jsonError("This person is already a member of the workspace");
     }
+    // A pending invitation reserves a seat — enforce the plan's seat limit.
+    const seatGate = await checkSeatAvailable(tenantId);
+    if (!seatGate.ok) return jsonError(seatGate.message ?? "All seats are taken", seatGate.status);
     // Real invitations: a tokenized link is emailed (queued in the outbox);
     // the invited person creates their own password at /invite/<token> - the
     // workspace never fabricates accounts or credentials on their behalf.
@@ -1019,6 +1063,9 @@ export async function postSettingsOp(
     const name = String(data.name ?? "").trim();
     const scope = ["READONLY", "ENVELOPES", "TEMPLATES", "FULL"].includes(String(data.scope)) ? String(data.scope) : "READONLY";
     if (!name) return jsonError("Key name is required");
+    // API access is included from Smart Team upward — enforced, not decorative.
+    const apiGate = await checkApiAccess(tenantId);
+    if (!apiGate.ok) return jsonError(apiGate.message ?? "API access requires a plan upgrade", apiGate.status);
     const suffix = randomBytes(4).toString("hex");
     const prefix = `dk_live_${suffix.slice(0, 4)}`;
     const fullKey = `${prefix}${suffix}${randomBytes(6).toString("hex")}`;
@@ -1056,6 +1103,69 @@ export async function postSettingsOp(
       detail: `MCP ${enabled ? "enabled" : "disabled"} (${transport}, ${tools.length} tools, ${rateLimitPerMin}/min)`,
     });
     return jsonOk({ ok: true, message: `MCP server ${enabled ? "enabled" : "disabled"} - ${tools.length} tool${tools.length === 1 ? "" : "s"} exposed at /api/mcp` });
+  }
+
+  // ── Teams (small groups inside the workspace — BUSINESS+ feature) ──
+  // Teams are organizational views: they never change permissions or quota,
+  // they group members and their envelopes for larger organizations.
+  const teamsAvailableFor = async () => {
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { planCode: true } });
+    return tenant ? ["BUSINESS", "ENTERPRISE"].includes(tenant.planCode) : false;
+  };
+
+  if (op === "team.create") {
+    const name = String(data.name ?? "").trim();
+    const color = ["emerald", "blue", "amber", "violet"].includes(String(data.color)) ? String(data.color) : "emerald";
+    if (name.length < 2 || name.length > 40) return jsonError("Team name must be 2-40 characters");
+    if (!(await teamsAvailableFor())) {
+      return jsonError("Teams within the workspace are included in the Business plan. Upgrade in Settings → Account to organize seats into teams.", 402);
+    }
+    const clash = await db.team.findFirst({ where: { tenantId, name } });
+    if (clash) return jsonError("A team with this name already exists");
+    await db.team.create({ data: { tenantId, name, color } });
+    await recordAudit({ actor, actorRole: me.role, action: "team.created", resource: `team:${name}`, tenantName: me.tenantName });
+    return jsonOk({ ok: true, message: `Team “${name}” created` });
+  }
+
+  if (op === "team.rename") {
+    const team = await db.team.findFirst({ where: { id, tenantId } });
+    if (!team) return jsonError("Team not found", 404);
+    const name = String(data.name ?? "").trim();
+    if (name.length < 2 || name.length > 40) return jsonError("Team name must be 2-40 characters");
+    const clash = await db.team.findFirst({ where: { tenantId, name, NOT: { id: team.id } } });
+    if (clash) return jsonError("A team with this name already exists");
+    await db.team.update({ where: { id: team.id }, data: { name } });
+    return jsonOk({ ok: true, message: `Team renamed to “${name}”` });
+  }
+
+  if (op === "team.delete") {
+    const team = await db.team.findFirst({ where: { id, tenantId } });
+    if (!team) return jsonError("Team not found", 404);
+    // Envelopes keep running (teamId SetNull); only the grouping disappears.
+    await db.team.delete({ where: { id: team.id } });
+    await recordAudit({ actor, actorRole: me.role, action: "team.deleted", resource: `team:${team.name}`, tenantName: me.tenantName });
+    return jsonOk({ ok: true, message: `Team “${team.name}” deleted - its envelopes stay in the workspace` });
+  }
+
+  if (op === "team.member.add") {
+    const team = await db.team.findFirst({ where: { id, tenantId } });
+    if (!team) return jsonError("Team not found", 404);
+    const member = await db.member.findFirst({ where: { id: String(data.memberId ?? ""), tenantId, status: "ACTIVE" } });
+    if (!member) return jsonError("Member not found in this workspace", 404);
+    const exists = await db.teamMember.findUnique({ where: { teamId_userId: { teamId: team.id, userId: member.userId } } });
+    if (exists) return jsonError("This member is already in the team");
+    await db.teamMember.create({ data: { teamId: team.id, userId: member.userId } });
+    return jsonOk({ ok: true, message: `Member added to “${team.name}”` });
+  }
+
+  if (op === "team.member.remove") {
+    const teamId = String(data.teamId ?? "");
+    const team = await db.team.findFirst({ where: { id: teamId, tenantId } });
+    if (!team) return jsonError("Team not found", 404);
+    const member = await db.member.findFirst({ where: { id, tenantId } });
+    if (!member) return jsonError("Member not found", 404);
+    await db.teamMember.deleteMany({ where: { teamId: team.id, userId: member.userId } });
+    return jsonOk({ ok: true, message: `Member removed from “${team.name}”` });
   }
 
   return jsonError(`Unsupported operation: ${op}`);

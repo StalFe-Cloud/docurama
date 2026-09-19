@@ -6,6 +6,8 @@ import {
   computeOnboardingState, getOnboardingFlags, setOnboardingFlags,
   createInvitation, requestOrigin, SMTP_TRANSPORT_CONFIGURED,
 } from "@/lib/onboarding";
+import { checkSeatAvailable, seatsUsed } from "@/lib/quota";
+import { isSelfServePlan, planDef, billingPeriod, VALID_BILLING_MONTHS } from "@/lib/billing";
 
 /**
  * GET  /api/onboarding - full wizard state for the signed-in user.
@@ -44,6 +46,67 @@ export async function POST(req: NextRequest) {
 
   const flags = await getOnboardingFlags(me.id);
 
+  // ── Plan selection (welcome wizard) ──
+  // Switches the trial's plan and optional prepaid period. The quota window
+  // restarts so the customer immediately sees the new limits, and the
+  // subscription row is kept in sync (never duplicated).
+  if (op === "plan.select") {
+    const planCode = String(data.planCode ?? "").trim();
+    if (!isSelfServePlan(planCode)) {
+      return jsonError("Choose Solo, Starter, Smart Team or Business - Enterprise plans are arranged through sales");
+    }
+    const def = planDef(planCode)!;
+    const billingMonths = VALID_BILLING_MONTHS.includes(Number(data.billingMonths)) ? Number(data.billingMonths) : 1;
+    const discountPct = billingPeriod(billingMonths).discountPct;
+    const tenant = await db.tenant.findUnique({ where: { id: me.tenantId } });
+    if (!tenant) return jsonError("No workspace membership for this account", 403);
+
+    // Downgrade guard: seats already in use must fit the new plan.
+    const seatUse = await seatsUsed(me.tenantId);
+    const seatsTaken = seatUse.members + seatUse.invites;
+    if (seatsTaken > def.seatLimit) {
+      return jsonError(
+        `The ${def.name} plan has ${def.seatLimit} seat${def.seatLimit > 1 ? "s" : ""} and this workspace already has ${seatsTaken} member(s) and invite(s). ` +
+        "Remove teammates or pick a larger plan.",
+        409,
+      );
+    }
+
+    const now = new Date();
+    await db.tenant.update({
+      where: { id: me.tenantId },
+      data: { planCode, periodStartedAt: now, envelopeRollover: 0 },
+    });
+    const existing = await db.subscription.findFirst({
+      where: { tenantId: me.tenantId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    const subData = {
+      planCode,
+      billingMonths,
+      discountPct,
+      mrrEur: Math.round(def.monthlyEur * (1 - discountPct / 100)),
+      periodStartedAt: now,
+      renewalAt: new Date(now.getTime() + billingMonths * def.periodDays * 86400_000),
+    };
+    if (existing) {
+      await db.subscription.update({ where: { id: existing.id }, data: subData });
+    } else {
+      await db.subscription.create({
+        data: { tenantId: me.tenantId, status: tenant.status === "TRIAL" ? "TRIALING" : "ACTIVE", seats: 1, ...subData },
+      });
+    }
+    await recordAudit({
+      actor: `${me.firstName} ${me.lastName}`, actorRole: me.role,
+      action: "subscription.plan_changed", resource: `tenant:${me.tenantSlug}`, tenantName: me.tenantName,
+      detail: `Plan set to ${def.name} (${billingMonths} month${billingMonths > 1 ? "s" : ""}, -${discountPct}%)`,
+    });
+    return jsonOk({
+      ok: true,
+      message: `${def.name} selected - ${def.envelopeLimit} envelopes per ${def.periodDays === 30 ? "month" : `${def.periodDays}-day month`}`,
+    });
+  }
+
   // ── Organization ──
   if (op === "org.update") {
     const name = String(data.name ?? "").trim();
@@ -74,6 +137,9 @@ export async function POST(req: NextRequest) {
       const already = await db.member.findFirst({ where: { userId: member.id, tenantId: me.tenantId } });
       if (already) return jsonError("This person is already a member of the workspace");
     }
+    // A pending invitation reserves one of the plan's seats — check before sending.
+    const seatGate = await checkSeatAvailable(me.tenantId);
+    if (!seatGate.ok) return jsonError(seatGate.message ?? "All seats are taken", seatGate.status);
     await createInvitation({
       tenantId: me.tenantId, email, role,
       invitedBy: `${me.firstName} ${me.lastName}`, invitedById: me.id,

@@ -102,12 +102,24 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
             </span>
             <Switch checked={smtp.smtpTls} onCheckedChange={(v) => setSmtp({ ...smtp, smtpTls: v })} aria-label="Use TLS for SMTP" />
           </label>
+          <p className="rounded-lg border border-dashed bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+            The metadata above configures the sender identity shown in the console. Real delivery runs on the
+            <span className="font-mono"> SMTP_URL </span>environment variable (nodemailer transport,
+            e.g. <span className="font-mono">smtps://user:pass@smtp.eu.mailprovider.io:465</span>). Until it is set,
+            outbound mail stays QUEUED in the ledger - honest, inspectable, never claimed as sent.
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button className="h-11" onClick={() => act.mutate({ op: "save-smtp", data: smtp })} disabled={act.isPending}>
               <Save className="h-4 w-4" aria-hidden /> Save SMTP
             </Button>
             <Button variant="outline" className="h-11" onClick={() => act.mutate({ op: "test-smtp" })} disabled={act.isPending}>
               <Send className="h-4 w-4" aria-hidden /> Send test email
+            </Button>
+            <Button variant="outline" className="h-11" onClick={() => act.mutate({ op: "mail.flush" })} disabled={act.isPending}>
+              <Send className="h-4 w-4" aria-hidden /> Flush queued mail
+            </Button>
+            <Button variant="ghost" className="h-11" onClick={() => act.mutate({ op: "mail.requeue" })} disabled={act.isPending}>
+              Requeue failed
             </Button>
           </div>
         </CardContent>
