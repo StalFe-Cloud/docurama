@@ -320,3 +320,49 @@ Stage Summary:
   clean, all suites green. Remaining items are external only: SMTP_URL
   credentials, payment provider checkout, Maestro browser E2E in a capable
   environment.
+
+---
+Task ID: 2 (session 3 — cycle 5: signer PDF embed + MCP/quota test coverage)
+Agent: main
+Task: Close the two remaining code-level improvement-plan items — signer-portal
+PDF embedding (§7.7) and MCP endpoint tests + quota-402 spent-plan test (§7.2).
+
+Work Log:
+- GET /api/sign/[token]/document (new nested route): token-authenticated PDF
+  serving with state rules mirroring the page (SENT/PARTIALLY_SIGNED only, CC
+  403, terminal/sealed 409, no-PDF 404), serve-time SHA-256 verification of
+  stored bytes, RFC 6266 inline disposition, no-store + nosniff
+  (first attempt put GET on /api/sign/[token] itself — path mismatch with the
+  UI src /api/sign/{token}/document surfaced as 404s; moved to a nested route)
+- public-sign.tsx: same-origin iframe embed under the existing digest card,
+  open-in-new-tab fallback; digest row kept as the accessible proof
+- CRITICAL catch: global XFO DENY + CSP frame-ancestors 'none' apply to the
+  FRAMED resource — the embed would have been blank in real browsers while
+  all fetch-based tests stayed green. next.config now relaxes framing to
+  SAMEORIGIN/'self' for exactly /api/sign/:token/document; regression test
+  locks both directions (relaxed there, strict elsewhere)
+- e2e/mcp.test.ts (16 tests): discovery, 401s, initialize/ping, tools/list,
+  tools/call vs real fixtures, token-leak, allowlist -32602/-32601, unknown
+  methods -32601, rate limit 429 (bucket-tolerant, dedicated fixture key)
+- e2e/quota.test.ts (4 tests): spent SMART_TEAM tenant (limit 1, used 1) →
+  send 402 with honest copy, stable refusal, v1 reads stay 200
+- e2e/seed.ts: real PDF through storeUpload (programmatic xref-correct
+  one-pager) on DOC-E2E0001 + CC recipient + VOIDED DOC-E2E0005; MCP configs
+  (main all-tools/120rpm, strict tenant envelope_list-only/10rpm with 2
+  keys); spent-quota tenant + login + key; idempotent (document sweep, tenant
+  recreate cascades)
+- smoke-pricing.sh made re-runnable: unique team name + lead email per run
+  (was colliding on second run — found via 3-consecutive-run check)
+- run.sh runs all 5 test files; IMPROVEMENT-PLAN.md §7.2/§7.7 marked done +
+  cycle 5 record appended
+- Verification: tsc ✅ eslint ✅ build ✅; 70/70 tests across 5 files (fresh
+  seed AND immediate re-run against the same server process); onboarding
+  40/40; quota engine 4/4; smoke-pricing 23/23 ×3 consecutive runs; framing
+  headers verified per-path via curl
+- Committed c33a7e2, pushed to PR #11
+
+Stage Summary:
+- Improvement plan now has ZERO remaining code-level items except visual
+  regression (#3) and CI LCP budget (#5), both of which need screenshot/LCP
+  tooling not available in this environment. Maestro browser flows still to
+  be re-run in a capable environment (the iframe embed should get a flow).
