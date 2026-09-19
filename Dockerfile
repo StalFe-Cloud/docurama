@@ -5,7 +5,7 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json bun.lock ./
 COPY prisma ./prisma
-RUN bun install
+RUN bun install --frozen-lockfile
 RUN bunx prisma generate
 
 # Build application
@@ -14,6 +14,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 RUN bunx next build
 RUN cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/ && cp -R tessdata .next/standalone/
 
@@ -38,11 +40,9 @@ RUN apt-get update \
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/content ./content
 # Prisma CLI for the entrypoint's idempotent schema push (migrations on boot).
-# Only the CLI + schema engine are carried; the app itself runs standalone.
-COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
-COPY --from=deps /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=deps /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=deps /app/node_modules ./node_modules
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh \

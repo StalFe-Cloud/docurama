@@ -44,8 +44,8 @@ services:
       # Off-switch for the in-process background worker (see scale-out note).
       # - DOCURAMA_WORKER=off
     volumes:
-      - ${DB_DIR:-./db}:/app/db
-      - ${STORAGE_DIR:-./storage}:/app/storage
+      - ${HOST_DB_DIR:-./db}:/app/db
+      - ${HOST_STORAGE_DIR:-./storage}:/app/storage
     # Compose-level health supervision on top of the image HEALTHCHECK.
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

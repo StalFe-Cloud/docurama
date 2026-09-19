@@ -37,7 +37,15 @@ function parsePost(slug: string, raw: string): BlogPost | null {
   const meta: Record<string, string> = {};
   for (const line of match[1].split("\n")) {
     const kv = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
-    if (kv) meta[kv[1].trim()] = kv[2].trim();
+    if (kv) {
+      const value = kv[2].trim();
+      // Quoted YAML scalar values must not render their quote delimiters.
+      meta[kv[1].trim()] = value.startsWith('"') && value.endsWith('"')
+        ? JSON.parse(value)
+        : value.startsWith("'") && value.endsWith("'")
+          ? value.slice(1, -1).replace(/''/g, "'")
+          : value;
+    }
   }
 
   const tags = (meta.tags ?? "")
