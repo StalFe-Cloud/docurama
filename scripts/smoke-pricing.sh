@@ -38,8 +38,10 @@ check "marketing differentiators" "35-day billing months" "$M"
 E=$(curl -s "$BASE/enterprise"); check "enterprise page" "custom price\|Custom seats" "$E"
 
 echo "· enterprise lead intake"
+# Unique email per run: intake dedups the same address (3/24h), so a re-run
+# against a live database must look like a new lead, not a duplicate.
 R=$(curl -s -X POST "$BASE/api/enterprise" -H 'content-type: application/json' \
-  -d '{"contactName":"Smoke Tester","workEmail":"smoke@test.example","companyName":"Smoke Test GmbH","companySize":"51-200","country":"Germany","monthlyVolume":"500","needs":"SSO","honey":""}')
+  -d "{\"contactName\":\"Smoke Tester\",\"workEmail\":\"smoke-$(date +%s)@test.example\",\"companyName\":\"Smoke Test GmbH\",\"companySize\":\"51-200\",\"country\":\"Germany\",\"monthlyVolume\":\"500\",\"needs\":\"SSO\",\"honey\":\"\"}")
 check "lead created" '"ok":true' "$R"
 R2=$(curl -s -X POST "$BASE/api/enterprise" -H 'content-type: application/json' \
   -d '{"contactName":"Bot","workEmail":"bot@test.example","companyName":"Bot Co","honey":"spam"}')
@@ -96,8 +98,10 @@ echo "· team creation works on Business"
 L6=$(curl -s -c "$JAR" -X POST "$BASE/api/auth/login" -H 'content-type: application/json' \
   -d '{"email":"klaus@nordwind-logistics.example","password":"demo1234"}')
 check "business re-login" '"ok":true' "$L6"
+# Unique name per run: the script is idempotent against a live database —
+# re-running must not collide with the team a previous run created.
 T2=$(curl -s -b "$JAR" -X POST "$BASE/api/workspace/settings" -H 'content-type: application/json' \
-  -d '{"op":"team.create","data":{"name":"Smoke Team"}}')
+  -d "{\"op\":\"team.create\",\"data\":{\"name\":\"Smoke Team $(date +%s)\"}}")
 check "business team created" 'created' "$T2"
 
 echo

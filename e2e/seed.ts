@@ -16,6 +16,12 @@
  *    bytes, the seed pins two so Maestro can open /sign/{token} directly.
  *  - An API key fixture (known secret, ENVELOPES scope) drives the API-layer
  *    test suite (e2e/api.test.ts).
+ *  - A real uploaded PDF (spec-correct bytes written through document-store)
+ *    on DOC-E2E0001 drives the signer-portal PDF embed + its GET endpoint.
+ *  - MCP fixtures: an enabled config on the main tenant (all tools) and a
+ *    strict tenant (allowlist of one tool, 3 req/min) for e2e/mcp.test.ts.
+ *  - A spent-quota tenant (SMART_TEAM, limit override 1, 1 envelope in the
+ *    window) for the 402 regression test in e2e/quota.test.ts.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -29,6 +35,7 @@ import {
   commitmentHash, chainEntryHash, appendPortalLogEntry,
   GENESIS_HEAD, TRANSPARENCY_FORMAT,
 } from "../src/lib/transparency";
+import { storeUpload } from "../src/lib/document-store";
 
 const run = promisify(execFile);
 
@@ -36,6 +43,39 @@ const E2E_SIGNER_TOKEN = "e2e-fixed-signer-token-0000000000000001";
 const E2E_DECLINE_TOKEN = "e2e-fixed-decline-token-0000000000000001";
 const E2E_JOURNEY_TOKEN = "e2e-fixed-journey-token-0000000000000001";
 const E2E_API_KEY_SECRET = "dk_e2e_0000000000000000000000000000000000000000";
+const E2E_CC_TOKEN = "e2e-fixed-cc-token-000000000000000000001";
+const E2E_VOIDED_TOKEN = "e2e-fixed-voided-token-0000000000000001";
+const E2E_MCP_STRICT_KEY_SECRET = "dk_e2e_mcp_strict_00000000000000000001";
+const E2E_MCP_RATE_KEY_SECRET = "dk_e2e_mcp_rate_000000000000000000000001";
+const E2E_QUOTA_KEY_SECRET = "dk_e2e_quota_000000000000000000000000000001";
+const E2E_QUOTA_USER_EMAIL = "e2e-quota@docurama.eu";
+const E2E_QUOTA_USER_PASSWORD = "e2eQuota1234!";
+
+/** Minimal, spec-correct one-page PDF with a real xref table. The
+ *  signer-portal embed renders these bytes in a real browser and the API
+ *  tests hash them — so the fixture must be a valid PDF, not a stub. */
+function buildOnePagePdf(text: string): Buffer {
+  const esc = text.replace(/([()\\])/g, "\\$1");
+  const stream = `BT /F1 18 Tf 72 770 Td (${esc}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefAt = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
 
 // Fixtures for the attested-verification flow (public portal result for a
 // code sealed on a "remote self-hosted instance" — seeded directly as if the
@@ -70,6 +110,10 @@ async function main() {
   /* ── Wipe prior E2E run artifacts (envelopes cascade to recipients/events) ── */
   const wiped = await db.envelope.deleteMany({ where: { tenantId: tenant.id } });
   await db.template.deleteMany({ where: { tenantId: tenant.id } });
+  // Uploaded-PDF fixtures: rows go, and the (small) bytes with them on the
+  // next storeUpload — document-store keys by docId so stale files are
+  // simply orphaned until then; QA-only, never production behaviour.
+  await db.document.deleteMany({ where: { tenantId: tenant.id } });
   console.log(`wiped ${wiped.count} prior E2E envelope(s)`);
 
   /* ── Users ───────────────────────────────────────────────────────── */
@@ -124,6 +168,9 @@ async function main() {
 
   /* ── Fixture envelopes (deterministic verify-portal targets) ─────── */
   // SENT, one pending recipient — verify portal must report NOT_SEALED.
+  // Carries the real uploaded PDF (linked below) and a CC recipient, so the
+  // document GET tests cover all three access shapes: signer 200 / CC 403 /
+  // no-PDF 404 on other fixtures.
   await db.envelope.create({
     data: {
       publicCode: "DOC-E2E0001",
@@ -143,6 +190,14 @@ async function main() {
             order: 1,
             status: "PENDING",
             accessToken: E2E_SIGNER_TOKEN,
+          },
+          {
+            name: "Fixture CC",
+            email: "fixture-cc@example.com",
+            role: "CC",
+            order: 2,
+            status: "PENDING",
+            accessToken: E2E_CC_TOKEN,
           },
         ],
       },
@@ -280,6 +335,192 @@ async function main() {
     },
   });
   console.log("api key: E2E Suite Key (ENVELOPES scope) for the API-layer tests");
+
+  /* ── Uploaded-PDF fixture (signer-portal embed + GET /api/sign/{t}/document) ── */
+  // Real bytes through the real store: storeUpload enforces the PDF magic
+  // check and computes the digest, so the fixture exercises the same path a
+  // workspace upload takes. Two envelopes reference it: the SENT fixture
+  // (signer may review) and a VOIDED fixture (terminal — review blocked).
+  {
+    const pdfBytes = buildOnePagePdf("E2E Fixture - Mutual NDA. Signer-portal PDF embed fixture.");
+    const stored = await storeUpload(
+      (async function* () { yield pdfBytes; })(),
+      tenant.id,
+    );
+    const doc = await db.document.create({
+      data: {
+        id: stored.docId,
+        tenantId: tenant.id,
+        uploadedById: wsUser.id,
+        filename: "e2e-mutual-nda.pdf",
+        storageKey: stored.storageKey,
+        byteSize: stored.byteSize,
+        mimeType: "application/pdf",
+        pageCount: 1,
+        sha256: stored.sha256,
+        hasTextLayer: true,
+      },
+    });
+    await db.envelope.update({
+      where: { publicCode: "DOC-E2E0001" },
+      data: { documentId: doc.id, pages: 1 },
+    });
+
+    // VOIDED + document: the GET endpoint must refuse review on terminal
+    // envelopes even though the bytes exist and the token is valid.
+    await db.envelope.create({
+      data: {
+        publicCode: "DOC-E2E0005",
+        title: "E2E Fixture — Voided Lease (PDF, review blocked)",
+        titleLower: "e2e fixture — voided lease (pdf, review blocked)",
+        tenantId: tenant.id,
+        createdById: wsUser.id,
+        status: "VOIDED",
+        message: "Fixture envelope seeded for the terminal-state document test.",
+        pages: 1,
+        documentId: doc.id,
+        voidedAt: new Date(),
+        voidReason: "E2E fixture: superseded by a newer draft",
+        recipients: {
+          create: [
+            {
+              name: "Fixture Voided",
+              email: "fixture-voided@example.com",
+              role: "SIGNER",
+              order: 1,
+              status: "PENDING",
+              accessToken: E2E_VOIDED_TOKEN,
+            },
+          ],
+        },
+        events: {
+          create: [
+            { actor: "Ella Tester", action: "CREATED", detail: "Seeded fixture" },
+            { actor: "Ella Tester", action: "VOIDED", detail: "E2E fixture: superseded by a newer draft" },
+          ],
+        },
+      },
+    });
+    console.log(`pdf fixture: DOC-E2E0001 + DOC-E2E0005 share doc ${doc.id} (sha256 ${doc.sha256.slice(0, 12)}…)`);
+  }
+
+  /* ── MCP fixtures (e2e/mcp.test.ts) ─────────────────────────────── */
+  // Main tenant: everything enabled, generous rate limit — the suite key
+  // doubles as the MCP key (the route accepts any ACTIVE workspace key).
+  await db.mcpConfig.upsert({
+    where: { tenantId: tenant.id },
+    update: { enabled: true, allowedTools: "envelope_list,envelope_detail,document_verify,template_list", rateLimitPerMin: 120 },
+    create: {
+      tenantId: tenant.id, enabled: true, transport: "streamable-http",
+      allowedTools: "envelope_list,envelope_detail,document_verify,template_list",
+      rateLimitPerMin: 120,
+    },
+  });
+
+  // Strict tenant: allowlist of exactly one real tool (plus a stale name so
+  // the unknown-tool path is covered) and a low rate limit. Two keys share
+  // the config: the functional key for allowlist tests, a dedicated rate key
+  // whose bucket may be freely exhausted — an in-memory bucket that survived
+  // a previous run must never break the functional assertions.
+  {
+    await db.tenant.deleteMany({ where: { slug: "e2e-mcp" } });
+    const mcpTenant = await db.tenant.create({
+      data: { name: "E2E MCP Ltd", slug: "e2e-mcp", planCode: "SMART_TEAM", status: "ACTIVE" },
+    });
+    const owner =
+      (await db.user.findUnique({ where: { email: "e2e-mcp@docurama.eu" } })) ??
+      (await db.user.create({
+        data: {
+          email: "e2e-mcp@docurama.eu", passwordHash: hashPassword("e2eMcp1234!"),
+          firstName: "Mia", lastName: "McPhee", role: "WORKSPACE_ADMIN", status: "ACTIVE",
+        },
+      }));
+    await db.member.create({ data: { userId: owner.id, tenantId: mcpTenant.id, role: "OWNER" } });
+    await db.mcpConfig.create({
+      data: {
+        tenantId: mcpTenant.id, enabled: true, transport: "streamable-http",
+        allowedTools: "envelope_list,teleport", rateLimitPerMin: 10,
+      },
+    });
+    await db.apiKey.createMany({
+      data: [
+        {
+          tenantId: mcpTenant.id, name: "E2E MCP Strict Key", prefix: "dk_e2e_mcp_",
+          secretHash: createHash("sha256").update(E2E_MCP_STRICT_KEY_SECRET).digest("hex"),
+          scope: "READONLY", status: "ACTIVE", createdBy: owner.id,
+        },
+        {
+          tenantId: mcpTenant.id, name: "E2E MCP Rate Key", prefix: "dk_e2e_mcp_",
+          secretHash: createHash("sha256").update(E2E_MCP_RATE_KEY_SECRET).digest("hex"),
+          scope: "READONLY", status: "ACTIVE", createdBy: owner.id,
+        },
+      ],
+    });
+    console.log("mcp fixtures: main tenant all-tools/120rpm + strict tenant e2e-mcp (envelope_list only, 10rpm, 2 keys)");
+  }
+
+  /* ── Spent-quota tenant (e2e/quota.test.ts) ─────────────────────── */
+  // SMART_TEAM with a negotiated limit of exactly ONE envelope and one
+  // envelope already sent in the current window: allowance is exhausted, so
+  // workspace send must answer 402 with the honest upgrade copy while API
+  // reads (v1) stay 200 — quota never blocks reads.
+  {
+    await db.tenant.deleteMany({ where: { slug: "e2e-quota" } });
+    const quotaTenant = await db.tenant.create({
+      data: { name: "E2E Quota Ltd", slug: "e2e-quota", planCode: "SMART_TEAM", status: "ACTIVE" },
+    });
+    const existing = await db.user.findUnique({ where: { email: E2E_QUOTA_USER_EMAIL } });
+    const quotaUser = existing
+      ? await db.user.update({
+          where: { id: existing.id },
+          data: { activeTenantId: quotaTenant.id, status: "ACTIVE" },
+        })
+      : await db.user.create({
+          data: {
+            email: E2E_QUOTA_USER_EMAIL, passwordHash: hashPassword(E2E_QUOTA_USER_PASSWORD),
+            firstName: "Quinn", lastName: "Quota", role: "WORKSPACE_ADMIN", status: "ACTIVE",
+            activeTenantId: quotaTenant.id,
+          },
+        });
+    await db.member.create({ data: { userId: quotaUser.id, tenantId: quotaTenant.id, role: "OWNER" } });
+    await db.subscription.create({
+      data: {
+        tenantId: quotaTenant.id, planCode: "SMART_TEAM", status: "ACTIVE",
+        mrrEur: 79, seats: 1, renewalAt: new Date(Date.now() + 30 * 86400000),
+        billingMonths: 1, discountPct: 0, periodStartedAt: new Date(Date.now() - 3600_000),
+        envelopeLimitOverride: 1,
+      },
+    });
+    // The one spent envelope (created inside the current window).
+    await db.envelope.create({
+      data: {
+        publicCode: "DOC-E2EQTA1",
+        title: "E2E Quota — the one envelope the plan allowed",
+        titleLower: "e2e quota — the one envelope the plan allowed",
+        tenantId: quotaTenant.id,
+        createdById: quotaUser.id,
+        status: "SENT",
+        pages: 1,
+        recipients: {
+          create: [
+            {
+              name: "Quota Spent", email: "quota-spent@example.com", role: "SIGNER",
+              order: 1, status: "PENDING", accessToken: randomBytes(32).toString("base64url"),
+            },
+          ],
+        },
+        events: { create: [{ actor: "Quinn Quota", action: "CREATED", detail: "Seeded fixture" }] },
+      },
+    });
+    await db.apiKey.create({
+      data: {
+        tenantId: quotaTenant.id, name: "E2E Quota Key", prefix: "dk_e2e_quota_",
+        secretHash: createHash("sha256").update(E2E_QUOTA_KEY_SECRET).digest("hex"),
+        scope: "ENVELOPES", status: "ACTIVE", createdBy: quotaUser.id,
+      },
+    });
+    console.log(`quota fixture: tenant e2e-quota spent (limit 1, used 1) — login ${E2E_QUOTA_USER_EMAIL}`);
+  }
 
   /* ── Attested-verification fixture (remote "self-hosted instance") ── */
   // Simulates what the portal receiver stores after a real self-hosted push:

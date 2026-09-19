@@ -22,7 +22,21 @@ const nextConfig: NextConfig = {
   // Kept clean via `bunx tsc --noEmit`, enforced in CI (.github/workflows/e2e.yml).
   reactStrictMode: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The signer portal embeds the token-authenticated PDF review endpoint
+      // in a same-origin iframe. The catch-all above would frame-block it
+      // (XFO DENY + frame-ancestors 'none' apply to the FRAMED resource),
+      // so this rule relaxes exactly that one path to SAMEORIGIN — every
+      // other response keeps the strictest framing policy.
+      {
+        source: "/api/sign/:token/document",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'" },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [

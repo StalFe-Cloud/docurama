@@ -173,7 +173,7 @@ the first two next-cycle items:
 ## 7. Next-Cycle Candidates
 
 1. ~~Signer journey E2E once the recipient signing page ships (F4).~~ **Done** (cycle 2).
-2. ~~API-level layer for v1 endpoints~~ **Done** (cycle 2, `e2e/api.test.ts`). Remaining: MCP endpoint tests, quota-402 test with a spent-plan key.
+2. ~~API-level layer for v1 endpoints~~ **Done** (cycle 2, `e2e/api.test.ts`; MCP endpoint tests + quota-402 spent-plan test **Done** in cycle 5, `e2e/mcp.test.ts` + `e2e/quota.test.ts`).
 3. **Visual regression** (screenshot diffing) for marketing surfaces.
 4. ~~Remove `ignoreBuildErrors` (F3) and add `tsc --noEmit` gate to CI.~~ **Done** (cycle 2).
 5. Performance budget: LCP check on `/` and `/marketing` in CI.
@@ -181,8 +181,10 @@ the first two next-cycle items:
    envelope (sealed document, ledger CSV, signed manifest).~~ **Done** (cycle 3,
    `docs/EVIDENCE-PACK.md` — plus bilingual certificate, offline verifier,
    X.509 evidence key with DNS SAN, and full byte-level test coverage).
-7. **PDF embedding in the signer portal** for uploaded-document envelopes
-   (currently a document card with integrity digest).
+7. ~~**PDF embedding in the signer portal** for uploaded-document envelopes~~
+   **Done** (cycle 5 — token-authenticated `GET /api/sign/{token}/document`
+   serving the stored PDF with serve-time digest verification, embedded
+   natively in the signing page with digest + open-in-tab fallback).
 8. ~~Public verification for self-hosted / on-prem instances~~ **Done** (cycle 3,
    attestation protocol — `docs/SELF-HOSTED-ATTESTATION.md`, receiver at
    `/api/attestations`, `VERIFIED_ATTESTED` result in the verify engine).
@@ -311,3 +313,50 @@ proofs + fingerprint UX; AATL/eIDAS documented as paid upgrade paths"):
   claim + portal-log witnessing; `verify-attested.yaml` asserts the registry
   lines. Full gates: tsc/eslint/build clean, 24/24 Maestro flows, 39/39
   tests, offline verifier PASS in Chromium.
+
+## 7d. Cycle 5 — Signer-portal PDF embed + MCP/quota test coverage (2026-09-19)
+
+Branch `feat/pricing-onboarding` (follow-up commit on PR #11). Closes the two
+remaining code-level items from §7: the MCP endpoint tests (#2 remainder) and
+the signer-portal PDF embedding (#7).
+
+- **PDF review in the signer portal** (roadmap #7): `GET /api/sign/{token}/document`
+  serves the envelope's uploaded PDF to the link holder — token-authenticated
+  exactly like the signing POST, with state rules that mirror what the page
+  shows (SENT/PARTIALLY_SIGNED only; CC 403; terminal/sealed 409; no-PDF 404),
+  serve-time SHA-256 verification of the stored bytes against the upload
+  digest (a mismatch is a hard 500 — the digest shown on the page never lies),
+  and hardening headers (`application/pdf`, RFC 6266 inline disposition with
+  ASCII fallback + UTF-8 `filename*`, `no-store`, `nosniff`). The signing page
+  embeds it natively via same-origin iframe (CSP `object-src 'none'` rules out
+  `<object>`; the iframe needs no relaxation), keeps the digest row as the
+  accessible copy-friendly proof, and adds an open-in-new-tab fallback for
+  browsers that render PDFs poorly.
+- **MCP endpoint tests** (`e2e/mcp.test.ts`, 16 tests): discovery GET, 401s
+  (missing/invalid key), initialize/ping, tools/list (exactly the four shipped
+  tools), tools/call against real fixtures (list/detail/verify/template),
+  token-leak regression on the agent surface, per-tenant allowlist (-32602 for
+  a real tool outside the allowlist, -32601 for an allowlisted-but-unknown
+  name, unknown JSON-RPC methods -32601), and the per-key rate limit (429,
+  tolerant of a bucket already exhausted by a previous run against the same
+  server process — dedicated fixture key so functional assertions can never
+  be starved by the limiter).
+- **Quota-402 spent-plan regression** (`e2e/quota.test.ts`, 4 tests): a
+  SMART_TEAM fixture tenant with a negotiated limit of exactly one envelope
+  and one envelope already sent — workspace send answers 402 with the honest
+  copy (used/allowance, rollover note, upgrade path), the refusal is stable
+  across attempts, and v1 reads with the same tenant's API key stay 200
+  (quota gates sending, never reading).
+- **Seed**: real uploaded PDF through `storeUpload` (spec-correct one-page
+  PDF with a genuine xref table, built programmatically) shared by the SENT
+  fixture (signer reviews it) and a new VOIDED fixture DOC-E2E0005 (review
+  refused); CC recipient on the SENT fixture; MCP configs for the main tenant
+  (all tools, 120/min) and a strict tenant (allowlist of one real tool + a
+  stale name, 10/min, two keys); the spent-quota tenant with subscription
+  override + login + API key. All idempotent (tenant recreate cascades,
+  document rows swept per cycle).
+- **`e2e/api.test.ts` +8 tests**: document GET coverage — headers + PDF
+  magic, byte-determinism across requests, page-shown digest prefix matches
+  the served bytes' real hash, CC 403, voided 409, no-PDF 404, bad token 404.
+- Suites now 67 tests across 5 files (`run.sh` runs all five); full gates
+  tsc/eslint/build clean.

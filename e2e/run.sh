@@ -87,8 +87,8 @@ fi
 
 # ── 2c. API-layer + evidence-layer + transparency-layer suites ──────────────
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
-  echo "── e2e: API-layer + evidence-layer + transparency-layer tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts || { echo "!! API/evidence/transparency tests failed"; exit 1; }
+  echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + quota tests"
+  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/mcp.test.ts e2e/quota.test.ts || { echo "!! API/evidence/transparency/MCP/quota tests failed"; exit 1; }
 fi
 
 # ── 3. Discover flows and run them ────────────────────────────────────────────

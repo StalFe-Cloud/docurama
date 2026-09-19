@@ -300,14 +300,42 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                 )}
 
                 {state.document && (
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{state.document.filename}</p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">SHA-256 {state.document.sha256.slice(0, 32)}…</p>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-4">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{state.document.filename}</p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">SHA-256 {state.document.sha256.slice(0, 32)}…</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600">
+                        <ShieldCheck className="h-3 w-3" aria-hidden /> Integrity verified
+                      </span>
                     </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600">
-                      <ShieldCheck className="h-3 w-3" aria-hidden /> Integrity verified
-                    </span>
+                    {/* The actual PDF: the signer reviews the real bytes, not a
+                        summary. Native browser rendering via same-origin iframe
+                        (object-src is CSP-blocked on this app); the digest row
+                        above stays as the accessible, copy-friendly proof, and
+                        the link covers browsers that render PDFs poorly. */}
+                    <div className="overflow-hidden rounded-lg border bg-muted/30">
+                      <iframe
+                        src={`/api/sign/${token}/document`}
+                        title={`Document preview: ${state.document.filename}`}
+                        className="h-[70vh] w-full"
+                        loading="lazy"
+                      />
+                      <div className="flex items-center justify-between gap-2 border-t bg-card px-3 py-2">
+                        <p className="text-[11px] text-muted-foreground">
+                          Review every page above before signing — the seal covers these exact bytes.
+                        </p>
+                        <a
+                          href={`/api/sign/${token}/document`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-xs font-medium underline underline-offset-2"
+                        >
+                          Open PDF in a new tab
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 )}
 
