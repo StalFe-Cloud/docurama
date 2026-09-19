@@ -25,7 +25,7 @@ tags:
 
 # The promotional term switch applies the 12-month discount
 - tapOn: "12 months.*"
-- assertVisible: ".*15%.*"
+- assertVisible: ".*20%.*"
 
 # Back to the no-engagement monthly default
 - tapOn: "Monthly.*"

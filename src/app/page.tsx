@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PortalRoot } from "@/components/portal/portal-root";
 import { MarketingPage } from "@/components/marketing/marketing-page";
 import { getSessionUser } from "@/lib/auth";
+import { PLAN_CATALOG, PLAN_ORDER } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,39 @@ export default async function Home() {
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        // Structured product data: one Offer per plan, generated from the
+        // live catalogue so the markup can never drift from the pricing grid.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            name: "Docurama eSignature",
+            description:
+              "EU-built eSignatures with cryptographic evidence: X.509 sealing, RFC 3161 timestamps, GDPR, eIDAS-aligned and 21 CFR Part 11 workflows.",
+            brand: { "@type": "Brand", name: "Docurama" },
+            offers: PLAN_ORDER.filter((c) => c !== "ENTERPRISE").map((code) => {
+              const p = PLAN_CATALOG[code];
+              return {
+                "@type": "Offer",
+                name: `${p.name} plan`,
+                price: p.monthlyEur.toFixed(2),
+                priceCurrency: "EUR",
+                url: "https://docurama.eu/#pricing",
+                availability: "https://schema.org/InStock",
+                priceSpecification: {
+                  "@type": "UnitPriceSpecification",
+                  price: p.monthlyEur.toFixed(2),
+                  priceCurrency: "EUR",
+                  billingIncrement: 1,
+                  unitCode: "MON",
+                },
+              };
+            }),
+          }),
+        }}
+      />
       <script
         type="application/ld+json"
         // Structured data limited to verifiable facts about the organization.

@@ -119,6 +119,10 @@ const COMPLIANCE = [
 
 const FAQS = [
   {
+    q: "What's the difference between Solo and Starter?",
+    a: "Solo includes one seat and 30 envelopes for €12/month. Starter includes three seats and 100 envelopes for €29/month. Both include 35 sending days and rollover; Business supports larger teams.",
+  },
+  {
     q: "Is Docurama an EU company, and where is my data?",
     a: "Docurama SAS is registered at 1 Rue Marguerin, 75014 Paris, France. Customer data is processed and stored in the European Union, with no transatlantic transfers of your documents.",
   },
@@ -433,7 +437,7 @@ export function MarketingPage() {
             Every plan starts with a 14-day trial, no credit card required.
             Monthly billing has no engagement — cancel anytime. Commit to a
             term and the discount grows: 3 months −5%, 6 months −10%, 12
-            months −15%. Prices exclude VAT.
+            months −20%. Prices exclude VAT.
           </p>
 
           {/* Promotional billing-term switch */}
@@ -476,6 +480,10 @@ export function MarketingPage() {
             ))}
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
+            <strong className="font-semibold text-foreground">Choose the allowance your team needs</strong> —
+            Solo includes 30 envelopes and one seat; Starter includes 100 envelopes and three seats.
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
             Unused envelopes roll over to the next period on renewal (up to one
             monthly allowance) — a quiet month is never a lost month. Need more
             envelopes, self-hosting or on-premises deployment?{" "}
@@ -536,7 +544,7 @@ export function MarketingPage() {
           <nav aria-label="Product">
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Product</p>
             <ul className="space-y-2.5 text-sm">
-              {[["Features", "#product"], ["Live examples", "#examples"], ["Compliance", "#compliance"], ["Pricing", "#pricing"], ["Contract templates", "/modeles-de-contrats"], ["Developers", "/developers"], ["Verify a document", "/verify"], ["Documentation", "/docs"], ["Create account", "/welcome"]].map(([l, h]) => (
+              {[["Features", "#product"], ["Live examples", "#examples"], ["Compliance", "#compliance"], ["Pricing", "#pricing"], ["Contract templates", "/modeles-de-contrats"], ["Developers", "/developers"], ["Verify a document", "/verify"], ["Documentation", "/docs"], ["Blog", "/blog"], ["Create account", "/welcome"]].map(([l, h]) => (
                 <li key={l}><a className="text-muted-foreground transition-colors hover:text-foreground" href={h}>{l}</a></li>
               ))}
             </ul>
