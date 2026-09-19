@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     });
     return jsonError("Invalid email or password", 401);
   }
-  if (user.status === "SUSPENDED") {
+  if (user.status !== "ACTIVE") {
     return jsonError("This account has been deactivated. Contact your administrator.", 403);
   }
 

@@ -7,7 +7,7 @@ tags: [product, onboarding, teams]
 draft: false
 ---
 
-You do not need a project plan to adopt eSignatures — you need one focused afternoon. Here is the 45-minute rollout we recommend to new Smart Team and Business workspaces; the same shape works for Starter with three seats.
+You do not need a project plan to adopt eSignatures — you need one focused afternoon. Here is the 45-minute rollout we recommend to new Business and Business workspaces; the same shape works for Starter with three seats.
 
 ## Minutes 0–10: workspace and signature
 
@@ -15,7 +15,7 @@ Sign up and the wizard walks you through the essentials — name your organizati
 
 ## Minutes 10–20: invite the team
 
-Settings → Users → invite your teammates by email, assigning roles as you go: `OWNER` or `ADMIN` for people who manage billing and templates, `MEMBER` for senders. Pending invitations hold a seat from the moment you send them, so your seat count stays honest. On Smart Team and above, organize members into small teams — Sales, HR, Legal — so templates and envelope visibility follow your org chart instead of fighting it.
+Settings → Users → invite your teammates by email, assigning roles as you go: `OWNER` or `ADMIN` for people who manage billing and templates, `MEMBER` for senders. Pending invitations hold a seat from the moment you send them, so your seat count stays honest. On Business and above, organize members into small teams — Sales, HR, Legal — so templates and envelope visibility follow your org chart instead of fighting it.
 
 ## Minutes 20–35: look like yourselves
 

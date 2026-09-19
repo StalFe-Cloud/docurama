@@ -1,4 +1,6 @@
-import { createHash, createHmac, randomBytes } from "crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { domainToASCII } from "node:url";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { SESSION_COOKIE, sessionCookieAttributes } from "@/lib/auth";
 import * as jose from "jose";
@@ -28,55 +30,104 @@ export interface SsoTxn {
   /** OIDC only. */
   codeVerifier?: string;
   nonce?: string;
+  samlRequestId?: string;
+  expiresAt?: number;
   /** Where to land after a successful login. */
   postLogin: string;
 }
 
+const ephemeralTxnSecret = randomBytes(32).toString("hex");
+const TXN_TTL_MS = 10 * 60_000;
 function txnSecret(): string {
-  return (
-    process.env.SSO_TXN_SECRET ??
-    process.env.AUTH_SECRET ??
-    `docurama-sso-${process.env.DATABASE_URL ?? "dev"}` // per-instance fallback; set SSO_TXN_SECRET in production
-  );
+  const configured = process.env.SSO_TXN_SECRET || process.env.AUTH_SECRET;
+  if (process.env.NODE_ENV === "production" && (!configured || configured.length < 32)) {
+    throw new Error("SSO requires a random SSO_TXN_SECRET of at least 32 characters");
+  }
+  return configured || ephemeralTxnSecret;
 }
 
 export function encodeSsoTxn(txn: SsoTxn): string {
-  const body = Buffer.from(JSON.stringify(txn), "utf8").toString("base64url");
+  const body = Buffer.from(JSON.stringify({ ...txn, expiresAt: txn.expiresAt ?? Date.now() + TXN_TTL_MS }), "utf8").toString("base64url");
   const mac = createHmac("sha256", txnSecret()).update(body).digest("base64url");
   return `${body}.${mac}`;
 }
 
 export function decodeSsoTxn(cookie: string | undefined): SsoTxn | null {
   if (!cookie) return null;
-  const [body, mac] = cookie.split(".");
-  if (!body || !mac) return null;
+  const [body, mac, extra] = cookie.split(".");
+  if (!body || !mac || extra !== undefined) return null;
   const expected = createHmac("sha256", txnSecret()).update(body).digest("base64url");
-  if (expected.length !== mac.length || !timingSafeEqual(expected, mac)) return null;
+  if (expected.length !== mac.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(mac))) return null;
   try {
-    return JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as SsoTxn;
+    const txn = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as SsoTxn;
+    if (!txn || typeof txn.state !== "string" || !txn.state || typeof txn.connectionId !== "string" || !txn.connectionId ||
+        typeof txn.postLogin !== "string" || typeof txn.expiresAt !== "number" ||
+        txn.expiresAt <= Date.now() || txn.expiresAt > Date.now() + TXN_TTL_MS) return null;
+    return txn;
   } catch {
     return null;
   }
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ab.length !== bb.length) return false;
-  return ab.equals(bb); // constant-time for equal lengths
+export async function createSsoTxn(txn: SsoTxn): Promise<string> {
+  const expiresAt = Date.now() + TXN_TTL_MS;
+  const encoded = encodeSsoTxn({ ...txn, expiresAt });
+  await db.ssoTransaction.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600_000) } } });
+  await db.ssoTransaction.create({ data: {
+    id: createHash("sha256").update(txn.state).digest("hex"),
+    connectionId: txn.connectionId,
+    expiresAt: new Date(expiresAt),
+  } });
+  return encoded;
+}
+
+/** Atomically consume state across processes; clearing a browser cookie alone cannot prevent replay. */
+export async function consumeSsoTxn(txn: SsoTxn): Promise<boolean> {
+  const consumed = await db.ssoTransaction.updateMany({
+    where: { id: createHash("sha256").update(txn.state).digest("hex"), connectionId: txn.connectionId,
+      consumedAt: null, expiresAt: { gt: new Date() } },
+    data: { consumedAt: new Date() },
+  });
+  return consumed.count === 1;
 }
 
 export const SSO_TXN_COOKIE = "docurama_sso_txn";
 
-export function txnCookieAttributes(): string {
-  const secure = process.env.NODE_ENV === "production" ? " Secure;" : "";
-  return `Path=/; HttpOnly; SameSite=Lax; Max-Age=600;${secure}`;
+export function txnCookieAttributes(protocol: "OIDC" | "SAML" = "OIDC", isHttps = process.env.NODE_ENV === "production"): string {
+  // SAML arrives via a cross-site POST; browsers require None + Secure for that cookie.
+  if (protocol === "SAML") return "Path=/; HttpOnly; SameSite=None; Secure; Max-Age=600";
+  return `Path=/; HttpOnly; SameSite=Lax; Max-Age=600${isHttps ? "; Secure" : ""}`;
 }
 
 // ─── Connection lookup ───────────────────────────────────────────────────────
 
+export function normalizeSsoDomain(value: string): string {
+  const domain = domainToASCII(value.trim().toLowerCase());
+  if (!domain || domain.length > 253 || !domain.includes(".") || !domain.split(".").every(
+    (label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label),
+  )) return "";
+  return domain;
+}
+
 export function emailDomain(email: string): string {
-  return email.trim().toLowerCase().split("@")[1] ?? "";
+  const parts = email.trim().split("@");
+  return parts.length === 2 && parts[0] && !/\s/.test(parts[0]) ? normalizeSsoDomain(parts[1]) : "";
+}
+
+/** A connection may assert identities only for an unambiguous verified tenant-owned domain. */
+export async function ownsVerifiedSsoDomain(tenantId: string | null, domain: string, client: Prisma.TransactionClient = db): Promise<boolean> {
+  if (!tenantId || !domain || normalizeSsoDomain(domain) !== domain) return false;
+  const owners = await client.domain.findMany({
+    where: { domain, status: "VERIFIED", verifiedAt: { not: null } },
+    select: { tenantId: true },
+  });
+  return owners.length > 0 && owners.every((owner) => owner.tenantId === tenantId);
+}
+
+export async function isTrustedSsoConnection(connection: { tenantId: string | null; emailDomain: string; status: string }, client: Prisma.TransactionClient = db): Promise<boolean> {
+  if (connection.status !== "ACTIVE" || !await ownsVerifiedSsoDomain(connection.tenantId, connection.emailDomain, client)) return false;
+  const tenant = await client.tenant.findUnique({ where: { id: connection.tenantId! }, select: { status: true } });
+  return tenant?.status === "ACTIVE" || tenant?.status === "TRIAL";
 }
 
 export async function findSsoConnection(email: string) {
@@ -84,9 +135,13 @@ export async function findSsoConnection(email: string) {
   if (!domain) return null;
   const connections = await db.ssoConnection.findMany({
     where: { emailDomain: domain, status: "ACTIVE" },
-    orderBy: [{ tenantId: { sort: "desc" } }], // tenant-specific first, platform-wide (null tenant) last
   });
-  return connections[0] ?? null;
+  const trusted: typeof connections = [];
+  for (const connection of connections) {
+    if (await isTrustedSsoConnection(connection)) trusted.push(connection);
+  }
+  // Ambiguous authorities fail closed, including records created outside this UI.
+  return trusted.length === 1 ? trusted[0] : null;
 }
 
 // ─── OIDC ────────────────────────────────────────────────────────────────────
@@ -106,7 +161,9 @@ export async function oidcDiscovery(issuerUrl: string): Promise<OidcDiscovery> {
   if (cached && Date.now() - cached.at < DISCOVERY_TTL_MS) return cached.doc;
 
   const wellKnown = new URL(issuerUrl);
-  if (!/^https?:\/\//.test(wellKnown.toString())) throw new Error("issuerUrl must be an absolute http(s) URL");
+  if (wellKnown.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && wellKnown.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(wellKnown.hostname))) {
+    throw new Error("OIDC issuer must use HTTPS");
+  }
   // Well-known resolution per OIDC Discovery: strip trailing slash, append path.
   const base = issuerUrl.replace(/\/+$/, "");
   const res = await fetch(`${base}/.well-known/openid-configuration`, {
@@ -115,8 +172,13 @@ export async function oidcDiscovery(issuerUrl: string): Promise<OidcDiscovery> {
   });
   if (!res.ok) throw new Error(`Discovery document unavailable (HTTP ${res.status})`);
   const doc = (await res.json()) as OidcDiscovery;
+  if (doc.issuer !== issuerUrl) throw new Error("Discovery issuer does not match the configured authority");
   for (const key of ["authorization_endpoint", "token_endpoint", "jwks_uri"] as const) {
     if (!doc[key]) throw new Error(`Discovery document missing ${key}`);
+    const endpoint = new URL(doc[key]);
+    if (endpoint.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && endpoint.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(endpoint.hostname))) {
+      throw new Error("OIDC endpoints must use HTTPS");
+    }
   }
   discoveryCache.set(issuerUrl, { doc, at: Date.now() });
   return doc;
@@ -190,9 +252,10 @@ export async function verifyOidcCallback(input: {
     clockTolerance: 60,
   });
 
-  const payload = claims.payload as { nonce?: string; email?: string; name?: string; preferred_username?: string };
+  const payload = claims.payload as { nonce?: string; email?: string; email_verified?: boolean; name?: string; preferred_username?: string };
   if (payload.nonce !== input.nonce) throw new Error("id_token nonce mismatch — possible replay");
   if (!payload.email) throw new Error("id_token carries no email claim (require the 'email' scope)");
+  if (payload.email_verified === false) throw new Error("id_token email is not verified");
 
   return {
     email: String(payload.email).toLowerCase(),
@@ -235,14 +298,15 @@ export async function buildSamlLoginUrl(input: {
   idpMetadataXml: string;
   origin: string;
   relayState: string;
-}): Promise<string> {
+}): Promise<{ url: string; requestId: string }> {
   const samlify = await getSamlify();
   const sp = samlify.ServiceProvider({ metadata: spMetadataXml(input.origin) });
   const idp = samlify.IdentityProvider({ metadata: input.idpMetadataXml });
-  const { context } = await sp.createLoginRequest(idp, "redirect");
+  const { context, id } = await sp.createLoginRequest(idp, "redirect");
   const url = new URL(String(context));
   url.searchParams.set("RelayState", input.relayState);
-  return url.toString();
+  if (!id) throw new Error("SAML request has no ID");
+  return { url: url.toString(), requestId: id };
 }
 
 export interface SamlIdentity {
@@ -255,6 +319,7 @@ export async function verifySamlResponse(input: {
   idpMetadataXml: string;
   origin: string;
   samlResponse: string;
+  requestId: string;
 }): Promise<SamlIdentity> {
   const samlify = await getSamlify();
   const sp = samlify.ServiceProvider({ metadata: spMetadataXml(input.origin) });
@@ -263,6 +328,22 @@ export async function verifySamlResponse(input: {
     body: { SAMLResponse: input.samlResponse },
   });
   const extracted = result.extract ?? {};
+  // samlify validates the signature and conditions but leaves SP request,
+  // audience and bearer-recipient correlation to the application.
+  const [verified, assertion] = samlify.SamlLib.verifySignature(result.samlContent, { metadata: idp.entityMeta });
+  if (!verified || !assertion || !input.requestId) throw new Error("SAML assertion is not correlated to a login request");
+  const confirmation = samlify.Extractor.extract(assertion, [{
+    key: "confirmation", localPath: ["Assertion", "Subject", "SubjectConfirmation", "SubjectConfirmationData"],
+    attributes: ["InResponseTo", "Recipient", "NotOnOrAfter"],
+  }]).confirmation as Record<string, string> | undefined;
+  const acs = `${input.origin}/api/auth/sso/callback/saml`;
+  if (extracted.response?.inResponseTo !== input.requestId || confirmation?.inResponseTo !== input.requestId) {
+    throw new Error("SAML InResponseTo does not match the login request");
+  }
+  if (extracted.response?.destination !== acs || confirmation?.recipient !== acs) throw new Error("SAML recipient mismatch");
+  if (extracted.audience !== `${input.origin}/api/auth/sso/metadata/saml`) throw new Error("SAML audience mismatch");
+  const deadline = Date.parse(confirmation.notOnOrAfter);
+  if (!Number.isFinite(deadline) || deadline <= Date.now() || !extracted.conditions?.notOnOrAfter) throw new Error("SAML assertion has expired or is missing an expiry");
 
   const attrs = (extracted.attributes ?? {}) as Record<string, string | string[]>;
   const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -311,42 +392,52 @@ export async function jitSsoLogin(input: {
   provider: "OIDC" | "SAML";
   issuer: string;
 }): Promise<SsoLoginResult> {
-  const connection = await db.ssoConnection.findUnique({ where: { id: input.connectionId } });
-  if (!connection || connection.status !== "ACTIVE") throw new Error("SSO connection is no longer active");
+  return db.$transaction(async (tx) => {
+  const connection = await tx.ssoConnection.findUnique({ where: { id: input.connectionId }, include: { tenant: true } });
+  if (!connection || !await isTrustedSsoConnection(connection, tx) || connection.protocol !== input.provider) throw new Error("SSO connection is not a trusted active authority");
+  const domain = emailDomain(input.email);
+  if (domain !== connection.emailDomain) throw new Error("SSO identity does not belong to the trusted domain");
+  const email = `${input.email.trim().split("@")[0].toLowerCase()}@${domain}`;
+  if (connection.tenant!.enforceTwoFactor) throw new Error("Use password sign-in with the required second factor");
 
-  let user = await db.user.findUnique({ where: { email: input.email } });
+  let user = await tx.user.findUnique({ where: { email } });
   let created = false;
   if (!user) {
     const [firstName, ...rest] = input.name.trim().split(/\s+/);
-    user = await db.user.create({
+    user = await tx.user.create({
       data: {
-        email: input.email,
+        email,
         passwordHash: `sso!${randomBytes(24).toString("hex")}`, // not a valid argon/bcrypt hash — password login disabled
         firstName: firstName || input.email.split("@")[0],
         lastName: rest.join(" ") || "",
         role: "MEMBER",
         status: "ACTIVE",
         emailVerifiedAt: new Date(), // the IdP asserted mailbox control
+        activeTenantId: connection.tenantId,
       },
     });
     created = true;
-  } else if (user.status === "SUSPENDED") {
-    throw new Error("This account is suspended — contact your workspace admin.");
-  } else if (!user.emailVerifiedAt) {
-    await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+  } else {
+    // A tenant IdP is not an authority over platform admins or accounts that
+    // can access another tenant. Existing accounts must be explicitly enrolled.
+    const memberships = await tx.member.findMany({ where: { userId: user.id } });
+    if (user.role === "PLATFORM_ADMIN" || user.status !== "ACTIVE" || !user.emailVerifiedAt ||
+        user.totpEnabled || memberships.length !== 1 || memberships[0].tenantId !== connection.tenantId || memberships[0].status !== "ACTIVE") {
+      throw new Error("This account cannot be linked automatically to this SSO authority; use password sign-in");
+    }
   }
 
   // Tenant enrollment for tenant-bound connections.
   if (connection.tenantId) {
-    const existing = await db.member.findFirst({ where: { userId: user.id, tenantId: connection.tenantId } });
+    const existing = await tx.member.findFirst({ where: { userId: user.id, tenantId: connection.tenantId } });
     if (!existing) {
-      await db.member.create({
+      await tx.member.create({
         data: { userId: user.id, tenantId: connection.tenantId, role: "MEMBER", status: "ACTIVE" },
       });
     }
   }
 
-  const session = await db.session.create({
+  const session = await tx.session.create({
     data: {
       userId: user.id,
       ip: input.ip,
@@ -354,8 +445,8 @@ export async function jitSsoLogin(input: {
       expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
     },
   });
-  await db.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
-  await db.auditEvent.create({
+  await tx.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date(), activeTenantId: connection.tenantId } });
+  await tx.auditEvent.create({
     data: {
       actor: `${user.firstName} ${user.lastName}`.trim(),
       actorRole: user.role,
@@ -367,13 +458,18 @@ export async function jitSsoLogin(input: {
   });
 
   return { ok: true, userId: user.id, email: user.email, sessionId: session.id, created };
+  });
 }
 
 /** A redirect Response that carries the freshly-minted session cookie. */
 export function ssoSessionRedirect(sessionId: string, postLogin: string, req: Request): Response {
-  const target = postLogin.startsWith("/") ? postLogin : "/";
+  const target = safeSsoRedirect(postLogin);
   const res = new Response(null, { status: 302, headers: { location: target } });
   res.headers.append("set-cookie", `${SESSION_COOKIE}=${sessionId}; ${sessionCookieAttributes(req as never)}`);
   res.headers.append("set-cookie", `${SSO_TXN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
   return res;
+}
+
+export function safeSsoRedirect(path: string): string {
+  return path.startsWith("/") && !path.startsWith("//") && !/[\\\r\n]/.test(path) ? path : "/";
 }

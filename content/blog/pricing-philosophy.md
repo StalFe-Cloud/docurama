@@ -1,6 +1,6 @@
 ---
 title: "Our pricing philosophy: 35-day months, rollover, and why Solo and Starter cost differently"
-description: "Why Docurama counts 35 sending days a month, rolls unused envelopes into the next period, keeps Solo and Starter on the same allowance, and prices terms instead of lock-in."
+description: "Why Docurama counts 35 sending days a month, rolls unused envelopes into the next period, and offers plans for individuals and growing teams."
 date: 2026-09-15
 author: "Docurama Team"
 tags: [product, pricing]
@@ -13,13 +13,12 @@ eSignature pricing in Europe tends toward two failure modes: enterprise opacity 
 
 | Plan | Price | Seats | Envelopes / month |
 |---|---|---|---|
-| Solo | €12 | 1 | 50 |
-| Starter | €19 | 3 | 50 |
-| Smart Team | €79 | 10 | 250 |
-| Business | €199 | 50 | 1,000 |
+| Solo | €12 | 1 | 30 |
+| Starter | €29 | 3 | 100 |
+| Business | €79 | 10 | 250 |
 | Enterprise | Custom | Custom | Custom |
 
-**Solo and Starter are the same product.** Same 50-envelope allowance, same sealing levels, same verification portal, same everything — except seats. If you are one person, you should not pay for chairs nobody sits in. When the second and third teammate arrive, Starter is €7 more, not a sales call.
+**Solo is sized for individuals; Starter adds capacity and collaboration.** Solo is €12/month for one seat and 30 envelopes. Starter is €29/month for three seats and 100 envelopes. Both include rollover and 35 sending days per billing month.
 
 Signers never cost anything and never need an account — you could run your entire supplier network through a Solo plan. Seats are for people who *send* and *manage*.
 
@@ -29,11 +28,11 @@ A calendar month has 28–31 days, and roughly 8–9 of them are weekends when n
 
 ## Rollover: a quiet month is never a lost month
 
-Contract volume is lumpy — procurement happens in waves, hiring happens in bursts. Unused envelopes roll into the next period when your term renews, capped at one monthly allowance. Use 20 of 50 in October, and November gives you 80. The cap keeps the economics sane for us; below the cap, your prudence is your credit.
+Unused envelopes roll into the next period when your term renews, capped at one monthly allowance. Use 20 of Solo's 30 envelopes, and the next period starts with 40. The cap prevents unused allowances from accumulating indefinitely.
 
 ## Terms are a discount, never a lock-in
 
-Commit to 3, 6 or 12 months and the whole term is discounted — 5, 10 or 15 percent respectively. But there is no cancellation penalty, no "contact us to leave", and no dark pattern in the billing portal. Monthly stays the default because a product you have to trap is a product worth leaving.
+Commit to 3, 6 or 12 months and the whole term is discounted by 5, 10 or 20 percent respectively. Monthly remains the default option.
 
 ## What every plan includes, always
 

@@ -196,7 +196,7 @@ export default function DocsPage() {
               Five plans from €12 a month, one allowance rule: buy seats, never surprises.
               Solo and Starter share the same 50-envelope monthly allowance (the only
               difference is seats), unused envelopes roll over on renewal, and committed
-              terms take 5–15% off. Checkout runs on Stripe where configured, or by bank
+              terms take 5–20% off. Checkout runs on Stripe where configured, or by bank
               transfer with admin approval on self-hosted instances.
             </p>
             <ul className="mt-3 space-y-1.5 text-sm">

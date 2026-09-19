@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { db } from "@/lib/db";
 import {
-  buildOidcAuthorizeUrl, buildSamlLoginUrl, encodeSsoTxn, findSsoConnection,
-  oidcDiscovery, pkcePair, SSO_TXN_COOKIE, txnCookieAttributes,
+  buildOidcAuthorizeUrl, buildSamlLoginUrl, createSsoTxn, findSsoConnection,
+  oidcDiscovery, pkcePair, safeSsoRedirect, SSO_TXN_COOKIE, txnCookieAttributes,
 } from "@/lib/sso";
 
 export const dynamic = "force-dynamic";
@@ -36,32 +35,35 @@ export async function GET(req: NextRequest) {
       const discovery = await oidcDiscovery(connection.issuerUrl);
       const pkce = pkcePair();
       const nonce = randomBytes(24).toString("base64url");
-      const txn = encodeSsoTxn({
+      const txn = await createSsoTxn({
         state, connectionId: connection.id, codeVerifier: pkce.verifier, nonce,
-        postLogin: postLogin.startsWith("/") ? postLogin : "/",
+        postLogin: safeSsoRedirect(postLogin),
       });
       const url = buildOidcAuthorizeUrl({
         discovery, clientId: connection.clientId, origin, state, nonce,
         codeChallenge: pkce.challenge, loginHint: email,
       });
       const res = NextResponse.redirect(url);
-      res.headers.append("set-cookie", `${SSO_TXN_COOKIE}=${txn}; ${txnCookieAttributes()}`);
+      res.headers.append("set-cookie", `${SSO_TXN_COOKIE}=${txn}; ${txnCookieAttributes("OIDC", origin.startsWith("https:"))}`);
       return res;
     }
 
     if (connection.protocol === "SAML") {
+      if (!origin.startsWith("https:")) {
+        return NextResponse.redirect(new URL("/login?sso=https-required", origin));
+      }
       if (!connection.idpMetadataXml) {
         return NextResponse.redirect(new URL("/login?sso=misconfigured", new URL(req.url).origin));
       }
-      const txn = encodeSsoTxn({
-        state, connectionId: connection.id,
-        postLogin: postLogin.startsWith("/") ? postLogin : "/",
-      });
-      const url = await buildSamlLoginUrl({
+      const { url, requestId } = await buildSamlLoginUrl({
         idpMetadataXml: connection.idpMetadataXml, origin, relayState: state,
       });
+      const txn = await createSsoTxn({
+        state, connectionId: connection.id, samlRequestId: requestId,
+        postLogin: safeSsoRedirect(postLogin),
+      });
       const res = NextResponse.redirect(url);
-      res.headers.append("set-cookie", `${SSO_TXN_COOKIE}=${txn}; ${txnCookieAttributes()}`);
+      res.headers.append("set-cookie", `${SSO_TXN_COOKIE}=${txn}; ${txnCookieAttributes("SAML", true)}`);
       return res;
     }
 

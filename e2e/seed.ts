@@ -30,6 +30,7 @@ import {
   GENESIS_HEAD, TRANSPARENCY_FORMAT,
 } from "../src/lib/transparency";
 import { storeUpload } from "../src/lib/document-store";
+import { PLAN_CATALOG, PLAN_ORDER } from "../src/lib/plans";
 
 const run = promisify(execFile);
 
@@ -135,6 +136,16 @@ const E2E_ADMIN_EMAIL = "e2e-admin@docurama.eu";
 const E2E_ADMIN_PASSWORD = "e2eAdmin1234!";
 
 async function main() {
+  // Catalog rows are fixtures too: branch-local committed DBs can contain
+  // an older catalogue. Do not rewrite existing subscriptions here.
+  for (const code of PLAN_ORDER) {
+    const p = PLAN_CATALOG[code];
+    const data = { name: p.name, monthlyEur: p.monthlyEur, seatLimit: p.seatLimit,
+      envelopeLimit: p.envelopeLimit, storageGb: p.storageGb, apiAccess: p.apiAccess,
+      slaUptime: p.slaUptime, support: p.support,
+      features: p.features.join("|"), outcomes: p.outcomes.join("|") };
+    await db.plan.upsert({ where: { code }, create: { code, ...data }, update: data });
+  }
   /* ── Tenant ──────────────────────────────────────────────────────── */
   const tenant =
     (await db.tenant.findUnique({ where: { slug: E2E_TENANT_SLUG } })) ??

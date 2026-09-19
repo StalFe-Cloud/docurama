@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { oidcDiscovery } from "@/lib/sso";
+import { normalizeSsoDomain, ownsVerifiedSsoDomain, oidcDiscovery } from "@/lib/sso";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export async function GET() {
     const denied = requireWorkspaceAdmin(me);
     if (denied) return NextResponse.json({ error: denied }, { status: 403 });
     const connections = await db.ssoConnection.findMany({
-      where: { OR: [{ tenantId: me.tenantId }, { tenantId: null }] },
+      where: { tenantId: me.tenantId },
       orderBy: { createdAt: "asc" },
     });
     return NextResponse.json({
@@ -87,13 +87,16 @@ export async function POST(req: NextRequest) {
 
     const protocol = String(data.protocol ?? "").toUpperCase();
     const label = String(data.label ?? "").trim();
-    const emailDomain = String(data.emailDomain ?? "").trim().toLowerCase();
+    const emailDomain = normalizeSsoDomain(String(data.emailDomain ?? ""));
 
     if (op === "create" || op === "update") {
       if (!PROTOCOLS.includes(protocol)) return NextResponse.json({ error: "Protocol must be OIDC or SAML" }, { status: 400 });
       if (label.length < 2) return NextResponse.json({ error: "A display label is required (e.g. 'Microsoft Entra ID')" }, { status: 400 });
-      if (!/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(emailDomain)) {
+      if (!emailDomain) {
         return NextResponse.json({ error: "Email domain must look like company.com" }, { status: 400 });
+      }
+      if (!await ownsVerifiedSsoDomain(me.tenantId, emailDomain)) {
+        return NextResponse.json({ error: "Verify ownership of this domain for your workspace before configuring SSO" }, { status: 403 });
       }
 
       const issuerUrl = protocol === "OIDC" ? String(data.issuerUrl ?? "").trim() : null;
@@ -135,7 +138,7 @@ export async function POST(req: NextRequest) {
       }
 
       const existing = await db.ssoConnection.findUnique({ where: { id: String(body.id ?? "") } });
-      if (!existing || (existing.tenantId !== me.tenantId && me.role !== "PLATFORM_ADMIN")) {
+      if (!existing || existing.tenantId !== me.tenantId) {
         return NextResponse.json({ error: "Connection not found" }, { status: 404 });
       }
       await db.ssoConnection.update({
@@ -152,12 +155,15 @@ export async function POST(req: NextRequest) {
 
     if (op === "toggle" || op === "delete") {
       const existing = await db.ssoConnection.findUnique({ where: { id: String(body.id ?? "") } });
-      if (!existing || (existing.tenantId !== me.tenantId && me.role !== "PLATFORM_ADMIN")) {
+      if (!existing || existing.tenantId !== me.tenantId) {
         return NextResponse.json({ error: "Connection not found" }, { status: 404 });
       }
       if (op === "toggle") {
         const next = existing.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
         if (next === "ACTIVE") {
+          if (!await ownsVerifiedSsoDomain(existing.tenantId, existing.emailDomain)) {
+            return NextResponse.json({ error: "The workspace must own a verified domain before SSO can be enabled" }, { status: 403 });
+          }
           const clash = await db.ssoConnection.findFirst({
             where: { emailDomain: existing.emailDomain, status: "ACTIVE", id: { not: existing.id } },
           });

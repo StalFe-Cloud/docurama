@@ -22,14 +22,13 @@ The route verifies every event's signature (`constructEventAsync` over the raw b
 
 `termCents = monthlyEur × (100 − discountPct) × months` (already euro-cents):
 
-| Plan | Monthly | 3 mo (−5%) | 6 mo (−10%) | 12 mo (−15%) |
+| Plan | Monthly | 3 mo (−5%) | 6 mo (−10%) | 12 mo (−20%) |
 |---|---|---|---|---|
-| Solo | €12 | €34.20 | €64.80 | €122.40 |
-| Starter | €19 | €54.15 | €102.60 | 19×85×12 = **19380 c = €193.80** |
-| Smart Team | €79 | €225.15 | €426.60 | €805.80 |
-| Business | €199 | €567.15 | €1,074.60 | €2,029.80 |
+| Solo | €12 | €34.20 | €64.80 | €115.20 |
+| Starter | €29 | €82.65 | €156.60 | 29×80×12 = **27840 c = €278.40** |
+| Business | €79 | €225.15 | €426.60 | €758.40 |
 
-Enterprise is sales-led (custom contracts; catalog anchor €349). Billing terms: monthly (no engagement) / 3 mo −5% / 6 mo −10% / 12 mo −15%, discounts applied to the whole term.
+Enterprise is sales-led (custom contracts; catalog anchor €349). Billing terms: monthly (no engagement) / 3 mo −5% / 6 mo −10% / 12 mo −20%, discounts applied to the whole term. The approved catalogue remains in src/lib/plans.ts; existing customer subscriptions are not silently repriced by this integration.
 
 ## 3. Renewal model
 
@@ -57,7 +56,7 @@ Watch the PAST_DUE queue daily post-launch (admin Billing section); sending paus
 
 ## 6. Testing
 
-`e2e/billing.test.ts` is fully hermetic — it runs against a scratch copy of `db/custom.db`, stubs the Stripe API with an in-process server pointed at by **`STRIPE_API_BASE`**, and signs webhook payloads with `stripe.webhooks.generateTestHeaderStringAsync()`. Covered: the money-math ladder (Solo €12 … Business €199), the full manual path (checkout → PENDING → approval/activation → PAID, audit, receipt mail, idempotency), Stripe checkout/customer/portal against the stub, and every webhook branch (not-configured 400, bad signature 400, activation, renewal with rollover, PAST_DUE + dunning mail, CANCELED).
+`e2e/billing.test.ts` is fully hermetic — it runs against a scratch copy of `db/custom.db`, stubs the Stripe API with an in-process server pointed at by **`STRIPE_API_BASE`**, and signs webhook payloads with `stripe.webhooks.generateTestHeaderStringAsync()`. Covered: the money-math ladder (Solo €12 … Business €79), the full manual path (checkout → PENDING → approval/activation → PAID, audit, receipt mail, idempotency), Stripe checkout/customer/portal against the stub, and every webhook branch (not-configured 400, bad signature 400, activation, renewal with rollover, PAST_DUE + dunning mail, CANCELED).
 
 ```bash
 bun test e2e/billing.test.ts     # via e2e/run.sh (wired with scratch DATABASE_URL)

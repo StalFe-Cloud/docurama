@@ -8,7 +8,7 @@
  * call time by design.
  *
  * Covered:
- *  1. money math for the final ladder (Solo €12 … Business €199);
+ *  1. money math for the final ladder (Solo €12 … Business €79);
  *  2. manual mode end-to-end: checkout → PENDING payment + bank reference
  *     → activation (the exact path an admin approval runs) → PAID, audit,
  *     receipt mail, idempotent payment status;
@@ -99,24 +99,25 @@ beforeAll(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await (await import("../src/lib/db")).db.$disconnect();
   stub.stop(true);
-  rmSync(join(SCRATCH, ".."), { recursive: true, force: true });
+  rmSync(join(SCRATCH, ".."), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 /* ── 1. Money math for the final ladder ────────────────────────────────────── */
 
 describe("payment money math (final ladder)", () => {
-  test("Solo monthly is €12.00, Starter monthly €19.00", () => {
+  test("Solo monthly is €12.00, Starter monthly €29.00", () => {
     expect(plans.PLAN_CATALOG.SOLO.monthlyEur).toBe(12);
     expect(lib.termCents("SOLO", 1)).toBe(1200);
-    expect(plans.PLAN_CATALOG.STARTER.monthlyEur).toBe(19);
-    expect(lib.termCents("STARTER", 1)).toBe(1900);
+    expect(plans.PLAN_CATALOG.STARTER.monthlyEur).toBe(29);
+    expect(lib.termCents("STARTER", 1)).toBe(2900);
   });
 
-  test("committed terms apply the incremental discount: Starter 12mo €193.80, Smart 3mo €225.15, Business 6mo €1,074.60", () => {
-    expect(lib.termCents("STARTER", 12)).toBe(19380);
-    expect(lib.termCents("SMART", 3)).toBe(22515);
-    expect(lib.termCents("BUSINESS", 6)).toBe(107460);
+  test("committed terms apply the incremental discount: Starter 12mo €278.40, Business 3mo €225.15, Business 6mo €426.60", () => {
+    expect(lib.termCents("STARTER", 12)).toBe(27840);
+    expect(lib.termCents("BUSINESS", 3)).toBe(22515);
+    expect(lib.termCents("BUSINESS", 6)).toBe(42660);
   });
 });
 
@@ -134,7 +135,7 @@ describe("manual mode (bank transfer, out-of-band)", () => {
     const result = await lib.createCheckout({
       tenantId: tenant.id, tenantName: tenant.name,
       userEmail: "billing-e2e@docurama.eu", userName: "Billing E2E",
-      planCode: "SMART", termMonths: 3, origin: "http://127.0.0.1:3000",
+      planCode: "BUSINESS", termMonths: 3, origin: "http://127.0.0.1:3000",
     });
     expect(result.mode).toBe("manual");
     expect(result.amountCents).toBe(22515);
@@ -145,7 +146,7 @@ describe("manual mode (bank transfer, out-of-band)", () => {
     const row = await db.payment.findFirst({ where: { reference } });
     expect(row?.status).toBe("PENDING");
     expect(row?.provider).toBe("manual");
-    expect(row?.planCode).toBe("SMART");
+    expect(row?.planCode).toBe("BUSINESS");
     paymentId = row!.id;
   });
 
@@ -154,23 +155,23 @@ describe("manual mode (bank transfer, out-of-band)", () => {
     expect(before?.provider).not.toBe("stripe");
 
     const out = await lib.activateSubscription({
-      tenantId: tenant.id, planCode: "SMART", termMonths: 3,
+      tenantId: tenant.id, planCode: "BUSINESS", termMonths: 3,
       provider: "manual", paymentId,
       actor: "billing-e2e admin", actorRole: "PLATFORM_ADMIN",
       note: "BANK-REF-7731",
     });
-    expect(out.planCode).toBe("SMART");
+    expect(out.planCode).toBe("BUSINESS");
     // 3-month term → renewal ≈ +3 months from now.
     const diffDays = (out.renewalAt.getTime() - Date.now()) / 86_400_000;
     expect(diffDays).toBeGreaterThan(89);
     expect(diffDays).toBeLessThan(93);
 
     const t = await db.tenant.findUnique({ where: { id: tenant.id } });
-    expect(t?.planCode).toBe("SMART");
+    expect(t?.planCode).toBe("BUSINESS");
 
     const sub = await db.subscription.findFirst({ where: { tenantId: tenant.id }, orderBy: { renewalAt: "desc" } });
     expect(sub?.status).toBe("ACTIVE");
-    expect(sub?.planCode).toBe("SMART");
+    expect(sub?.planCode).toBe("BUSINESS");
     expect(sub?.provider).toBe("manual");
     expect(sub?.discountPct).toBe(5);
 
@@ -180,15 +181,15 @@ describe("manual mode (bank transfer, out-of-band)", () => {
     expect(payment?.approverNote).toBe("BANK-REF-7731");
 
     const audit = await db.auditEvent.findFirst({ where: { action: "subscription.activated", resource: `tenant:${t!.slug}` }, orderBy: { at: "desc" } });
-    expect(audit?.detail).toContain("Smart Team");
+    expect(audit?.detail).toContain("Business");
 
-    const receipt = await db.mailOutbox.findFirst({ where: { subject: { contains: "Smart Team activated" } }, orderBy: { createdAt: "desc" } });
+    const receipt = await db.mailOutbox.findFirst({ where: { subject: { contains: "Business activated" } }, orderBy: { createdAt: "desc" } });
     expect(receipt?.template).toBe("BILLING");
   });
 
   test("re-approving the same payment is idempotent (no second PAID flip, no dup rows)", async () => {
     await lib.activateSubscription({
-      tenantId: tenant.id, planCode: "SMART", termMonths: 3,
+      tenantId: tenant.id, planCode: "BUSINESS", termMonths: 3,
       provider: "manual", paymentId,
       actor: "billing-e2e admin", actorRole: "PLATFORM_ADMIN",
       note: "duplicate replay",
@@ -225,7 +226,7 @@ describe("stripe mode against a stub API + webhook route", () => {
     });
     expect(result.mode).toBe("stripe");
     expect(result.url).toBe("https://checkout.stripe.test/pay/cs_test_9");
-    expect(result.amountCents).toBe(12240); // 12 × €12 −15%
+    expect(result.amountCents).toBe(11520); // 12 × €12 −20%
 
     const customer = await db.paymentCustomer.findUnique({ where: { tenantId_provider: { tenantId: tenant.id, provider: "stripe" } } });
     expect(customer?.externalId).toBe("cus_test_1");
@@ -266,7 +267,7 @@ describe("stripe mode against a stub API + webhook route", () => {
     expect(sub?.providerRef).toBe("sub_test_9");
     expect(sub?.status).toBe("ACTIVE");
     expect(sub?.termMonths).toBe(12);
-    expect(sub?.discountPct).toBe(15);
+    expect(sub?.discountPct).toBe(20);
 
     const payment = await db.payment.findFirst({ where: { reference: "cs_test_9" } });
     expect(payment?.status).toBe("PAID");

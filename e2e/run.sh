@@ -121,6 +121,11 @@ if [[ "${E2E_SKIP_TSC:-0}" != "1" ]]; then
 fi
 
 # ── 2c. API-layer + evidence-layer + transparency-layer + MCP + visual suites ──
+# Security tests use mocked request context and a fresh database. Keep them
+# in their own process so mocks cannot affect the HTTP regression suites.
+bun test e2e/auth-security.test.ts || { echo "!! authentication security tests failed"; exit 1; }
+bun test e2e/quota-security.test.ts || { echo "!! quota and API entitlement tests failed"; exit 1; }
+bun test e2e/blog.test.ts e2e/storage-config.test.ts || { echo "!! content/storage tests failed"; exit 1; }
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
   echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + visual tests"
   MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/plans.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/plans/webhooks/visual tests failed"; exit 1; }
@@ -175,6 +180,10 @@ fi
 export MAESTRO_BASE_URL="$BASE_URL"
 export MAESTRO_CLI_NO_ANALYTICS=1
 export PATH="$HOME/.maestro/bin:$PATH"
+
+# Compile each public signer route before launching a fresh browser. This
+# avoids a cold Turbopack navigation stalling Maestro's CDP initialization.
+curl -fsS -o /dev/null "$BASE_URL/sign/e2e-fixed-decline-token-0000000000000001"
 
 if ! command -v maestro >/dev/null 2>&1; then
   if [[ "${E2E_SKIP_MAESTRO:-0}" == "1" ]]; then

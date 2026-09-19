@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import {
-  decodeSsoTxn, jitSsoLogin, ssoSessionRedirect, SSO_TXN_COOKIE, verifySamlResponse,
+  consumeSsoTxn, decodeSsoTxn, emailDomain, isTrustedSsoConnection, jitSsoLogin, ssoSessionRedirect, SSO_TXN_COOKIE, verifySamlResponse,
 } from "@/lib/sso";
 
 export const dynamic = "force-dynamic";
@@ -13,32 +12,33 @@ export const dynamic = "force-dynamic";
  * assertion JIT-logs the matching user in.
  */
 export async function POST(req: NextRequest) {
-  const jar = await cookies();
-  const txn = decodeSsoTxn(jar.get(SSO_TXN_COOKIE)?.value);
+  const txn = decodeSsoTxn(req.cookies.get(SSO_TXN_COOKIE)?.value);
 
   const form = await req.formData().catch(() => null);
   const samlResponse = String(form?.get("SAMLResponse") ?? "");
   const relayState = String(form?.get("RelayState") ?? "");
 
-  if (!txn || !samlResponse) {
+  if (!txn || !samlResponse || !txn.samlRequestId) {
     return NextResponse.redirect(new URL("/login?sso=expired", new URL(req.url).origin), { status: 303 });
   }
-  if (relayState && relayState !== txn.state) {
+  if (!relayState || relayState !== txn.state) {
     return NextResponse.redirect(new URL("/login?sso=state-mismatch", new URL(req.url).origin), { status: 303 });
   }
 
   const connection = await db.ssoConnection.findUnique({ where: { id: txn.connectionId } });
-  if (!connection || connection.status !== "ACTIVE" || connection.protocol !== "SAML" || !connection.idpMetadataXml) {
+  if (!connection || !await isTrustedSsoConnection(connection) || connection.protocol !== "SAML" || !connection.idpMetadataXml) {
     return NextResponse.redirect(new URL("/login?sso=misconfigured", new URL(req.url).origin), { status: 303 });
   }
 
   try {
+    if (!await consumeSsoTxn(txn)) return NextResponse.redirect(new URL("/login?sso=expired", new URL(req.url).origin), { status: 303 });
     const identity = await verifySamlResponse({
       idpMetadataXml: connection.idpMetadataXml,
       origin: new URL(req.url).origin,
       samlResponse,
+      requestId: txn.samlRequestId,
     });
-    if (!identity.email.endsWith(`@${connection.emailDomain}`)) {
+    if (emailDomain(identity.email) !== connection.emailDomain) {
       return NextResponse.redirect(new URL("/login?sso=domain-mismatch", new URL(req.url).origin), { status: 303 });
     }
 

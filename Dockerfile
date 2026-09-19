@@ -18,6 +18,7 @@ ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 RUN bunx next build
 RUN cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/ && cp -R tessdata .next/standalone/
+RUN bun build scripts/bootstrap-admin.ts --target=bun --packages=external --outfile=.next/standalone/bootstrap-admin.js
 
 # Production runner — hardened, non-root, self-migrating
 FROM base AS runner

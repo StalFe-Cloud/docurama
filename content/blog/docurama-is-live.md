@@ -1,6 +1,6 @@
 ---
 title: "Docurama is live: sign documents, prove everything"
-description: "After two years of building evidence-grade eSignatures in Paris, Docurama is publicly available — five plans from €12/mo, a public verification portal, and a self-host option for enterprises."
+description: "After two years of building evidence-grade eSignatures in Paris, Docurama is publicly available — four plans from €12/mo, a public verification portal, and a self-host option for enterprises."
 date: 2026-09-19
 author: "Docurama Team"
 tags: [product, announcement]
@@ -24,10 +24,9 @@ We spent a long time on pricing, because eSignature pricing in Europe is either 
 
 | Plan | Price | Seats | Envelopes / month |
 |---|---|---|---|
-| Solo | €12 | 1 | 50 |
-| Starter | €19 | 3 | 50 |
-| Smart Team | €79 | 10 | 250 |
-| Business | €199 | 50 | 1,000 |
+| Solo | €12 | 1 | 30 |
+| Starter | €29 | 3 | 100 |
+| Business | €79 | 10 | 250 |
 | Enterprise | Custom | Custom | Custom |
 
 Solo and Starter include exactly the same allowance and features — the only difference is seats. Every plan rolls unused envelopes into the next period (capped at one monthly allowance), and committing to 3, 6 or 12 months takes 5, 10 or 15 percent off. We explain the philosophy in a [separate post](/blog/pricing-philosophy).

@@ -1,6 +1,6 @@
 ---
 title: Reminders and Quiet Hours
-description: The three reminder mechanisms, quiet hours and weekend settings, and SMS or WhatsApp escalation on Smart Team and above.
+description: The three reminder mechanisms, quiet hours and weekend settings, and SMS or WhatsApp escalation on Business and above.
 group: Notifications
 order: 1
 tags: [notifications, reminders, quiet-hours, sms]
@@ -40,7 +40,7 @@ The weekend setting keeps **Saturday and Sunday silent**. Combined with quiet ho
 
 ## SMS and WhatsApp escalation
 
-On **Smart Team and above**, you can escalate a pending recipient by **SMS or WhatsApp** when email is not getting through — ideal for site managers, external partners and executives who answer texts within minutes and emails within weeks. SMS settings live in **Settings → SMS**.
+On **Business and above**, you can escalate a pending recipient by **SMS or WhatsApp** when email is not getting through — ideal for site managers, external partners and executives who answer texts within minutes and emails within weeks. SMS settings live in **Settings → SMS**.
 
 Escalated messages carry the same personal signing link as the email invitation. One caution: the link is **personal to that recipient** — never paste one signer's link into a group chat, and never let one recipient sign for another.
 

@@ -40,11 +40,11 @@ CC recipients are not part of the routing order — they receive a copy of the c
 | --- | --- |
 | Solo | 2 |
 | Starter | 2 |
-| Smart Team | Unlimited |
+| Business | Unlimited |
 | Business | Unlimited |
 | Enterprise | Unlimited |
 
-If you hit the two-template limit on Solo or Starter, clean up templates you no longer send, or upgrade from **Settings → Billing** — Smart Team and above include unlimited templates.
+If you hit the two-template limit on Solo or Starter, clean up templates you no longer send, or upgrade from **Settings → Billing** — Business and above include unlimited templates.
 
 ## Sending from a template
 

@@ -10,7 +10,7 @@ Docurama has two payment modes: **Stripe Checkout**, the default on the cloud se
 
 ## Choosing a plan and term
 
-All purchases start in **Settings → Billing**. The plan and term picker shows the five plans with their seat and envelope allowances, plus the committed-term discounts (3 months −5%, 6 months −10%, 12 months −15%; monthly is the default with no engagement). Pick a plan and a term, then continue to payment.
+All purchases start in **Settings → Billing**. The plan and term picker shows the four plans with their seat and envelope allowances, plus the committed-term discounts (3 months −5%, 6 months −10%, 12 months −20%; monthly is the default with no engagement). Pick a plan and a term, then continue to payment.
 
 ## Stripe Checkout
 

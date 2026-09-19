@@ -76,7 +76,7 @@ export function termCents(planCode: string, termMonths: number): number {
   const plan = planDef(planCode);
   const term = termFor(termMonths);
   // monthlyEur × (100 − discountPct) × months is already euro-cents:
-  // Starter 12mo → 19 × 85 × 12 = 19380 cents = €193.80.
+  // Starter 12mo → 29 × 80 × 12 = 27840 cents = €278.40.
   return Math.round(plan.monthlyEur * (100 - term.discountPct) * term.months);
 }
 

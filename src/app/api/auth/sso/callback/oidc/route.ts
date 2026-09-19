@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import {
-  decodeSsoTxn, jitSsoLogin, oidcDiscovery, ssoSessionRedirect, SSO_TXN_COOKIE, verifyOidcCallback,
+  consumeSsoTxn, decodeSsoTxn, emailDomain, isTrustedSsoConnection, jitSsoLogin, oidcDiscovery, ssoSessionRedirect, SSO_TXN_COOKIE, verifyOidcCallback,
 } from "@/lib/sso";
 
 export const dynamic = "force-dynamic";
@@ -14,12 +13,11 @@ export const dynamic = "force-dynamic";
  * user in with a session cookie.
  */
 export async function GET(req: NextRequest) {
-  const jar = await cookies();
-  const txn = decodeSsoTxn(jar.get(SSO_TXN_COOKIE)?.value);
+  const txn = decodeSsoTxn(req.cookies.get(SSO_TXN_COOKIE)?.value);
   const code = new URL(req.url).searchParams.get("code");
   const state = new URL(req.url).searchParams.get("state");
 
-  if (!txn || !code) {
+  if (!txn || !code || !txn.nonce || !txn.codeVerifier) {
     return NextResponse.redirect(new URL("/login?sso=expired", new URL(req.url).origin));
   }
   if (state !== txn.state) {
@@ -27,11 +25,12 @@ export async function GET(req: NextRequest) {
   }
 
   const connection = await db.ssoConnection.findUnique({ where: { id: txn.connectionId } });
-  if (!connection || connection.status !== "ACTIVE" || connection.protocol !== "OIDC" || !connection.issuerUrl || !connection.clientId) {
+  if (!connection || !await isTrustedSsoConnection(connection) || connection.protocol !== "OIDC" || !connection.issuerUrl || !connection.clientId) {
     return NextResponse.redirect(new URL("/login?sso=misconfigured", new URL(req.url).origin));
   }
 
   try {
+    if (!await consumeSsoTxn(txn)) return NextResponse.redirect(new URL("/login?sso=expired", new URL(req.url).origin));
     const discovery = await oidcDiscovery(connection.issuerUrl);
     const identity = await verifyOidcCallback({
       discovery,
@@ -45,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     // The authenticated email must belong to the connection's domain — a
     // mismatching IdP account cannot pivot into another tenant.
-    if (!identity.email.endsWith(`@${connection.emailDomain}`)) {
+    if (emailDomain(identity.email) !== connection.emailDomain) {
       return NextResponse.redirect(new URL("/login?sso=domain-mismatch", new URL(req.url).origin));
     }
 

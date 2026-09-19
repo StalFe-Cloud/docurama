@@ -14,10 +14,9 @@ tags:
     visible: Simple, EU-priced plans
     timeout: 20000
 
-# Five plans from the catalogue
+# Four plans from the catalogue
 - assertVisible: Solo
 - assertVisible: Starter
-- assertVisible: Smart Team
 - assertVisible: Business
 - assertVisible: Enterprise
 
@@ -26,7 +25,7 @@ tags:
 
 # The promotional term switch applies the 12-month discount
 - tapOn: "12 months.*"
-- assertVisible: ".*15%.*"
+- assertVisible: ".*20%.*"
 
 # Back to the no-engagement monthly default
 - tapOn: "Monthly.*"

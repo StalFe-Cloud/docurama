@@ -51,7 +51,7 @@ export async function checkBotGuard(input: BotGuardInput): Promise<BotGuardVerdi
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
   const startedAt = Number(input.formStartedAt ?? 0);
   if (!demoMode) {
-    if (startedAt > 0) {
+    if (Number.isFinite(startedAt) && startedAt > 0) {
       const elapsed = Date.now() - startedAt;
       // A timestamp from the far future (> 1h) means the field was forged.
       if (elapsed < -3_600_000) {
@@ -75,7 +75,7 @@ export async function checkBotGuard(input: BotGuardInput): Promise<BotGuardVerdi
   const secret = process.env.TURNSTILE_SECRET_KEY;
   if (secret) {
     const token = String(input.turnstileToken ?? "").trim();
-    if (!token) return { ok: false, status: 400, error: "Please complete the human verification" };
+    if (!token || token.length > 2048) return { ok: false, status: 400, error: "Please complete the human verification" };
     const verdict = await verifyTurnstile(token, secret, input.ip);
     if (!verdict) return { ok: false, status: 403, error: "Human verification failed — please retry" };
   }
@@ -91,12 +91,12 @@ async function verifyTurnstile(token: string, secret: string, ip?: string): Prom
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ secret, token, ...(ip ? { remoteip: ip } : {}) }),
+      body: new URLSearchParams({ secret, response: token, ...(ip ? { remoteip: ip } : {}) }),
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return false;
     const data = (await res.json()) as { success?: boolean };
-    return Boolean(data.success);
+    return data.success === true;
   } catch {
     // Network failure → fail closed for the CAPTCHA layer but let the other
     // guards decide? No: when Turnstile is explicitly configured, fail closed.

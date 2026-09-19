@@ -58,6 +58,17 @@ model EmailVerification {
   @@index([userId])
 }
 
+// Single-use SSO state, consumed atomically before issuing a session.
+model SsoTransaction {
+  id           String   @id
+  connectionId String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
 model Session {
   id         String    @id @default(cuid())
   userId     String

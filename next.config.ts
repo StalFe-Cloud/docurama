@@ -5,16 +5,18 @@ import type { NextConfig } from "next";
 // (Tailwind/runtime theming), inline scripts (the Next.js bootstrap hydration
 // payload), data:/blob: images (generated QR codes, canvas page previews).
 // 'unsafe-eval' is only required by the dev-mode React refresh runtime.
-// connect-src stays 'self': the browser app never calls third parties; TSA and
-// DNS checks happen server-side only.
+// Turnstile's script and iframe are allowed only when its public site key is
+// configured. Verification, TSA and DNS calls remain server-side.
 const isDev = process.env.NODE_ENV !== "production";
+const turnstileSource = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? " https://challenges.cloudflare.com" : "";
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}${turnstileSource}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  `frame-src 'self'${turnstileSource}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

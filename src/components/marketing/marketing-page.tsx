@@ -120,7 +120,7 @@ const COMPLIANCE = [
 const FAQS = [
   {
     q: "What's the difference between Solo and Starter?",
-    a: "Nothing except seats. Both plans include the same 50-envelope monthly allowance, the same 35 sending days, rollover, sealing level and features — Solo is sized for one person at €12/mo, Starter adds two more seats for your team at €19/mo. When a fourth teammate joins, Smart Team is the next step.",
+    a: "Solo includes one seat and 30 envelopes for €12/month. Starter includes three seats and 100 envelopes for €29/month. Both include 35 sending days and rollover; Business supports larger teams.",
   },
   {
     q: "Is Docurama an EU company, and where is my data?",
@@ -474,14 +474,14 @@ export function MarketingPage() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {PLAN_ORDER.map((code) => (
               <PricingCard key={code} code={code} term={termChoice} />
             ))}
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
-            <strong className="font-semibold text-foreground">Solo and Starter include the same allowance</strong> —
-            50 envelopes a month and every feature; the only difference is the number of seats (1 vs 3).
+            <strong className="font-semibold text-foreground">Choose the allowance your team needs</strong> —
+            Solo includes 30 envelopes and one seat; Starter includes 100 envelopes and three seats.
           </p>
           <p className="mt-3 text-xs text-muted-foreground">
             Unused envelopes roll over to the next period on renewal (up to one

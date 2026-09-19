@@ -18,22 +18,29 @@
  *     endpoint serves valid XML.
  */
 
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { PrismaClient } from "@prisma/client";
-import { cpSync, rmSync, mkdtempSync } from "node:fs";
+import { describe, expect, test, mock, afterAll } from "bun:test";
+import { rmSync, mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import * as jose from "jose";
+import { NextRequest } from "next/server";
+import { Database } from "bun:sqlite";
 
 /* ── Scratch database ──────────────────────────────────────────────────────── */
 
 const SCRATCH = join(mkdtempSync(join(tmpdir(), "sso-e2e-")), "scratch.db");
-cpSync("db/custom.db", SCRATCH);
-process.env.DATABASE_URL = `file:${SCRATCH}`;
+process.env.DATABASE_URL = `file:${SCRATCH.replace(/\\/g, "/")}`;
+new Database(SCRATCH, { create: true }).close();
+execFileSync("node", ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"], { env: process.env, stdio: "pipe" });
 process.env.SSO_TXN_SECRET = "sso-e2e-secret";
 
-const db = new PrismaClient();
+let sessionToken: string | undefined;
+mock.module("next/headers", () => ({
+  cookies: async () => ({ get: () => sessionToken ? { value: sessionToken } : undefined }),
+  headers: async () => new Headers(),
+}));
+const { db } = await import("../src/lib/db");
 
 const lib = await import("../src/lib/sso");
 
@@ -93,10 +100,12 @@ async function issueOidcToken(code: string, claims: Record<string, unknown>) {
 
 /* ── Fixtures: tenant + SSO connections ────────────────────────────────────── */
 
-const tenant = await db.tenant.findUnique({ where: { slug: "solstice-media" } });
-if (!tenant) throw new Error("seed tenant solstice-media missing — run bun run test:e2e:seed first");
+const tenant = await db.tenant.create({ data: { name: "SSO test", slug: "sso-test", status: "ACTIVE" } });
 
 const SSO_DOMAIN = "ssotest.example";
+for (const domain of [SSO_DOMAIN, "samlexample.test"]) {
+  await db.domain.create({ data: { tenantId: tenant.id, domain, token: "test-domain-proof", status: "VERIFIED", verifiedAt: new Date() } });
+}
 
 await db.ssoConnection.create({
   data: {
@@ -115,7 +124,8 @@ await db.ssoConnection.create({
 const tmp = mkdtempSync(join(tmpdir(), "sso-idp-"));
 const keyPath = join(tmp, "idp-key.pem");
 const certPath = join(tmp, "idp-cert.pem");
-execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath,
+const openssl = process.platform === "win32" && existsSync("C:/Program Files/Git/usr/bin/openssl.exe") ? "C:/Program Files/Git/usr/bin/openssl.exe" : "openssl";
+execFileSync(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath,
   "-nodes", "-subj", "/CN=idp.ssotest.example", "-days", "2"], { stdio: "pipe" });
 const idpKey = await Bun.file(keyPath).text();
 const idpCertMod = (await Bun.file(certPath).text())
@@ -150,19 +160,38 @@ afterAll(async () => {
   oidcStub.stop(true);
   rmSync(join(SCRATCH, ".."), { recursive: true, force: true });
   rmSync(tmp, { recursive: true, force: true });
+  mock.restore();
 });
 
 /* ── 1. Transaction cookie ─────────────────────────────────────────────────── */
 
 describe("sso transaction cookie", () => {
   test("round-trips and rejects tampering", () => {
-    const txn = { state: "abc", connectionId: "c1", postLogin: "/welcome", nonce: "n", codeVerifier: "v" };
+    const txn = { state: "abc", connectionId: "c1", postLogin: "/welcome", nonce: "n", codeVerifier: "v", expiresAt: Date.now() + 60_000 };
     const encoded = lib.encodeSsoTxn(txn);
     expect(lib.decodeSsoTxn(encoded)).toEqual(txn);
     expect(lib.decodeSsoTxn(undefined)).toBeNull();
     expect(lib.decodeSsoTxn("garbage")).toBeNull();
     const [body] = encoded.split(".");
     expect(lib.decodeSsoTxn(`${body}.forged`)).toBeNull();
+  });
+
+  test("expired, malformed and replayed transactions are rejected", async () => {
+    expect(lib.decodeSsoTxn(lib.encodeSsoTxn({ state: "expired", connectionId: "c1", postLogin: "/", expiresAt: Date.now() - 1 }))).toBeNull();
+    expect(lib.decodeSsoTxn(`${lib.encodeSsoTxn({ state: "abc", connectionId: "c1", postLogin: "/" })}.extra`)).toBeNull();
+    const encoded = await lib.createSsoTxn({ state: "single-use-state", connectionId: "c1", postLogin: "/" });
+    const txn = lib.decodeSsoTxn(encoded)!;
+    const results = await Promise.all([lib.consumeSsoTxn(txn), lib.consumeSsoTxn(txn)]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  test("SAML cookies support cross-site POST and redirects remain local", () => {
+    expect(lib.txnCookieAttributes("SAML", true)).toContain("SameSite=None; Secure");
+    expect(lib.txnCookieAttributes("OIDC", true)).toContain("SameSite=Lax");
+    for (const path of ["//evil.example", "/\\evil.example", "https://evil.example", "/\r\nLocation: evil"]) {
+      expect(lib.safeSsoRedirect(path)).toBe("/");
+    }
+    expect(lib.safeSsoRedirect("/welcome?step=verify")).toBe("/welcome?step=verify");
   });
 });
 
@@ -225,6 +254,14 @@ describe("oidc flow", () => {
     })).rejects.toThrow(/nonce/);
   });
 
+  test("an explicitly unverified OIDC email cannot establish mailbox control", async () => {
+    await issueOidcToken("unverified-code", { email: `eve@${SSO_DOMAIN}`, email_verified: false, nonce: "n" });
+    await expect(lib.verifyOidcCallback({
+      discovery: await lib.oidcDiscovery(ISSUER), clientId: "sso-e2e-client", clientSecret: "test",
+      code: "unverified-code", codeVerifier: "v", nonce: "n", origin: "http://127.0.0.1:3000",
+    })).rejects.toThrow(/not verified/);
+  });
+
   test("JIT login provisions the user, enrolls them in the tenant and opens a session", async () => {
     const conn = await lib.findSsoConnection(`grace@${SSO_DOMAIN}`);
     expect(conn).toBeTruthy();
@@ -277,7 +314,7 @@ describe("saml flow", () => {
     const idp = samlify.IdentityProvider({ metadata: idpMetadataXml, privateKey: idpKey });
     const { context } = await idp.createLoginResponse(
       sp,
-      null as never,
+      { extract: { request: { id: "request-123" } } },
       "post",
       { email: "alan@samlexample.test" },
       undefined as never,
@@ -286,7 +323,7 @@ describe("saml flow", () => {
     const samlResponse = String(context);
 
     const identity = await lib.verifySamlResponse({
-      idpMetadataXml, origin: "http://127.0.0.1:3000", samlResponse,
+      idpMetadataXml, origin: "http://127.0.0.1:3000", samlResponse, requestId: "request-123",
     });
     // The default template maps user.email to the NameID; the lib falls back
     // to the email-format NameID when no attribute statement is present.
@@ -316,14 +353,138 @@ describe("saml flow", () => {
       .replace("alan@samlexample.test", "mallory@samlexample.test");
     const tampered = Buffer.from(xml, "utf8").toString("base64");
     await expect(lib.verifySamlResponse({
-      idpMetadataXml, origin: "http://127.0.0.1:3000", samlResponse: tampered,
+      idpMetadataXml, origin: "http://127.0.0.1:3000", samlResponse: tampered, requestId: "request-123",
     })).rejects.toThrow();
+  });
+
+  test("signed assertions are bound to their request, audience and recipient", async () => {
+    const samlify = await import("samlify");
+    const sp = samlify.ServiceProvider({ metadata: lib.spMetadataXml("https://docurama.test") });
+    const idp = samlify.IdentityProvider({ metadata: idpMetadataXml, privateKey: idpKey });
+    const { context } = await idp.createLoginResponse(sp, { extract: { request: { id: "original-request" } } }, "post", { email: "alan@samlexample.test" }, undefined as never);
+    await expect(lib.verifySamlResponse({ idpMetadataXml, origin: "https://docurama.test", samlResponse: String(context), requestId: "other-request" })).rejects.toThrow(/InResponseTo/);
+    await expect(lib.verifySamlResponse({ idpMetadataXml, origin: "https://other.test", samlResponse: String(context), requestId: "original-request" })).rejects.toThrow(/recipient|audience/);
+    // Alter only the unsigned response wrapper: the signed bearer confirmation
+    // must still bind the assertion to the original request.
+    const forgedWrapper = Buffer.from(Buffer.from(String(context), "base64").toString("utf8")
+      .replace('InResponseTo="original-request"', 'InResponseTo="other-request"')).toString("base64");
+    await expect(lib.verifySamlResponse({ idpMetadataXml, origin: "https://docurama.test", samlResponse: forgedWrapper, requestId: "other-request" })).rejects.toThrow();
+  });
+});
+
+describe("SSO tenant trust boundary", () => {
+  const login = async (email: string, connectionId?: string) => lib.jitSsoLogin({
+    email, name: "Security Test", connectionId: connectionId ?? (await lib.findSsoConnection(`a@${SSO_DOMAIN}`))!.id,
+    ip: "127.0.0.1", userAgent: "test", provider: "OIDC", issuer: ISSUER,
+  });
+
+  test("unverified, revoked, foreign and ambiguous domain authority is refused at runtime", async () => {
+    const foreign = await db.tenant.create({ data: { name: "Foreign", slug: "foreign", status: "ACTIVE" } });
+    const conn = await db.ssoConnection.create({ data: { tenantId: foreign.id, protocol: "OIDC", label: "Attacker", emailDomain: "unowned.test", issuerUrl: ISSUER } });
+    expect(await lib.findSsoConnection("victim@unowned.test")).toBeNull();
+    await expect(login("victim@unowned.test", conn.id)).rejects.toThrow(/trusted/);
+    const claim = await db.domain.create({ data: { tenantId: foreign.id, domain: "unowned.test", status: "VERIFIED", token: "unproven" } });
+    expect(await lib.findSsoConnection("victim@unowned.test")).toBeNull();
+    await db.domain.update({ where: { id: claim.id }, data: { verifiedAt: new Date() } });
+    expect(await lib.findSsoConnection("victim@unowned.test")).not.toBeNull();
+    await db.domain.update({ where: { id: claim.id }, data: { status: "FAILED" } });
+    await expect(login("victim@unowned.test", conn.id)).rejects.toThrow(/trusted/);
+    const ambiguous = await db.domain.create({ data: { tenantId: foreign.id, domain: SSO_DOMAIN, status: "VERIFIED", verifiedAt: new Date(), token: "ambiguous" } });
+    expect(await lib.findSsoConnection(`victim@${SSO_DOMAIN}`)).toBeNull();
+    await db.domain.delete({ where: { id: ambiguous.id } });
+    expect(await db.user.count({ where: { email: "victim@unowned.test" } })).toBe(0);
+  });
+
+  test("existing platform admins and accounts outside the authorized tenant cannot be impersonated", async () => {
+    const otherTenant = await db.tenant.create({ data: { name: "Other", slug: "other-accounts", status: "ACTIVE" } });
+    const cases = [
+      { name: "platform", role: "PLATFORM_ADMIN", memberships: [{ tenantId: tenant.id, status: "ACTIVE" }] },
+      { name: "foreign", memberships: [{ tenantId: otherTenant.id, status: "ACTIVE" }] },
+      { name: "multi", memberships: [{ tenantId: tenant.id, status: "ACTIVE" }, { tenantId: otherTenant.id, status: "ACTIVE" }] },
+      { name: "unaffiliated", memberships: [] },
+      { name: "pending", memberships: [{ tenantId: tenant.id, status: "PENDING_VERIFICATION" }] },
+      { name: "suspended", status: "SUSPENDED", memberships: [{ tenantId: tenant.id, status: "ACTIVE" }] },
+      { name: "mfa", totpEnabled: true, memberships: [{ tenantId: tenant.id, status: "ACTIVE" }] },
+      { name: "unverified", emailVerifiedAt: null, memberships: [{ tenantId: tenant.id, status: "ACTIVE" }] },
+    ];
+    for (const item of cases) {
+      const { name, memberships, ...overrides } = item;
+      const user = await db.user.create({ data: {
+        email: `${name}@${SSO_DOMAIN}`, firstName: "Protected", lastName: name, passwordHash: "not-a-password",
+        emailVerifiedAt: new Date(), ...overrides, memberships: { create: memberships },
+      } });
+      await expect(login(user.email)).rejects.toThrow(/cannot be linked/);
+      expect(await db.session.count({ where: { userId: user.id } })).toBe(0);
+    }
+  });
+
+  test("the core login boundary rejects mismatched domains and inactive tenants", async () => {
+    const conn = (await lib.findSsoConnection(`person@${SSO_DOMAIN}`))!;
+    await expect(login("victim@other.example", conn.id)).rejects.toThrow(/trusted domain/);
+    await db.tenant.update({ where: { id: tenant.id }, data: { status: "SUSPENDED" } });
+    try { await expect(login(`victim@${SSO_DOMAIN}`, conn.id)).rejects.toThrow(/trusted/); }
+    finally { await db.tenant.update({ where: { id: tenant.id }, data: { status: "ACTIVE" } }); }
+    expect(await db.user.count({ where: { email: "victim@other.example" } })).toBe(0);
+  });
+
+  test("workspace configuration create, update and re-enable require verified domain ownership", async () => {
+    const admin = await db.user.create({ data: { email: "owner@configuration.test", firstName: "Owner", lastName: "Test", passwordHash: "test", emailVerifiedAt: new Date(), memberships: { create: { tenantId: tenant.id, role: "OWNER" } } } });
+    sessionToken = (await db.session.create({ data: { userId: admin.id, expiresAt: new Date(Date.now() + 60_000) } })).id;
+    const route = await import("../src/app/api/workspace/sso/route");
+    const post = (op: string, data: Record<string, unknown> = {}, id?: string) => route.POST(new NextRequest("https://docurama.test/api/workspace/sso", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op, data, id }),
+    }));
+    const data = { protocol: "OIDC", label: "Test config", emailDomain: "unowned-config.test", issuerUrl: ISSUER, clientId: "client", clientSecret: "test" };
+    try {
+      expect((await post("create", data)).status).toBe(403);
+      const proof = await db.domain.create({ data: { tenantId: tenant.id, domain: "owned-config.test", token: "proof", status: "VERIFIED", verifiedAt: new Date() } });
+      const created = await post("create", { ...data, emailDomain: " OWNED-CONFIG.TEST " });
+      expect(created.status).toBe(200);
+      const { id } = await created.json() as { id: string };
+      expect((await post("update", data, id)).status).toBe(403);
+      expect((await db.ssoConnection.findUnique({ where: { id } }))?.emailDomain).toBe("owned-config.test");
+      expect((await post("toggle", {}, id)).status).toBe(200);
+      await db.domain.delete({ where: { id: proof.id } });
+      expect((await post("toggle", {}, id)).status).toBe(403);
+      expect((await db.ssoConnection.findUnique({ where: { id } }))?.status).toBe("DISABLED");
+    } finally { sessionToken = undefined; }
   });
 });
 
 /* ── 4. Routes (cookie-free ones, invoked directly) ────────────────────────── */
 
 describe("sso routes", () => {
+  test("SAML start sets a cross-site cookie and callback requires matching, single-use state", async () => {
+    const start = await import("../src/app/api/auth/sso/start/route");
+    const callback = await import("../src/app/api/auth/sso/callback/saml/route");
+    const res = await start.GET(new NextRequest("https://docurama.test/api/auth/sso/start?email=route@samlexample.test&post=//evil.example"));
+    expect(res.status).toBe(307);
+    const cookie = res.headers.get("set-cookie")!;
+    expect(cookie).toContain("SameSite=None; Secure");
+    const value = cookie.split(";")[0].split("=")[1];
+    const txn = lib.decodeSsoTxn(value)!;
+    expect(txn.postLogin).toBe("/");
+    expect(txn.samlRequestId).toBeTruthy();
+    const samlify = await import("samlify");
+    const sp = samlify.ServiceProvider({ metadata: lib.spMetadataXml("https://docurama.test") });
+    const idp = samlify.IdentityProvider({ metadata: idpMetadataXml, privateKey: idpKey });
+    const { context } = await idp.createLoginResponse(sp, { extract: { request: { id: txn.samlRequestId! } } }, "post", { email: "route@samlexample.test" }, undefined as never);
+    const post = (relayState?: string) => callback.POST(new NextRequest("https://docurama.test/api/auth/sso/callback/saml", {
+      method: "POST", headers: { cookie: cookie.split(";")[0], "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ SAMLResponse: String(context), ...(relayState ? { RelayState: relayState } : {}) }),
+    }));
+    expect((await post()).headers.get("location")).toContain("state-mismatch");
+    expect((await post("forged-state")).headers.get("location")).toContain("state-mismatch");
+    const success = await post(txn.state);
+    expect(success.status).toBe(302);
+    expect(success.headers.get("location")).toBe("/");
+    expect(success.headers.get("set-cookie")).toContain("docurama_session=");
+    expect((await post(txn.state)).headers.get("location")).toContain("expired");
+    expect(await db.session.count({ where: { user: { email: "route@samlexample.test" } } })).toBe(1);
+    const httpStart = await start.GET(new NextRequest("http://docurama.test/api/auth/sso/start?email=route@samlexample.test"));
+    expect(httpStart.headers.get("location")).toContain("https-required");
+  });
+
   test("lookup answers for a configured domain and stays silent otherwise", async () => {
     const route = await import("../src/app/api/auth/sso/lookup/route");
     const req = new Request(`http://127.0.0.1:3000/api/auth/sso/lookup?email=ada@${SSO_DOMAIN}`) as never;

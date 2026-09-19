@@ -1,6 +1,6 @@
 ---
 title: Team Groups
-description: Organize members into small groups such as Sales, HR and Legal, available from Smart Team and above.
+description: Organize members into small groups such as Sales, HR and Legal, available from Business and above.
 group: Teams and roles
 order: 2
 tags: [teams, groups, organization]
@@ -14,7 +14,7 @@ A team group is a named set of workspace members. Groups are small by design —
 
 ## Availability
 
-Team groups are available on **Smart Team and above** (Smart Team, Business, Enterprise). On Solo and Starter the member list is small enough that groups would be ceremony: Solo has one member, Starter three.
+Team groups are available on **Business and above** (Business, Business, Enterprise). On Solo and Starter the member list is small enough that groups would be ceremony: Solo has one member, Starter three.
 
 ## Creating and managing groups
 

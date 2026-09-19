@@ -42,7 +42,7 @@ Starter has three seats:
 - Revoke the stale invite → a seat frees up → you can invite again.
 - Genuinely need more senders? Change the plan in **Settings → Billing**.
 
-Smart Team (10 seats) and Business (50 seats) exist for exactly this moment.
+Business (10 seats) and Business (50 seats) exist for exactly this moment.
 
 ## Seats vs recipients
 

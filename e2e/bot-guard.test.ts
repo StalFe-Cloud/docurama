@@ -9,29 +9,37 @@
  * NEXT_PUBLIC_DEMO_MODE and TURNSTILE_SECRET_KEY.
  */
 
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { cpSync, rmSync, mkdtempSync } from "node:fs";
+import { describe, expect, test, afterAll } from "bun:test";
+import { rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PrismaClient } from "@prisma/client";
+import { execFileSync } from "node:child_process";
+import { Database } from "bun:sqlite";
 
 const SCRATCH = join(mkdtempSync(join(tmpdir(), "botguard-e2e-")), "scratch.db");
-cpSync("db/custom.db", SCRATCH);
-process.env.DATABASE_URL = `file:${SCRATCH}`;
+process.env.DATABASE_URL = `file:${SCRATCH.replace(/\\/g, "/")}`;
+new Database(SCRATCH, { create: true }).close();
+execFileSync("node", ["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"], { env: process.env, stdio: "pipe" });
 process.env.NEXT_PUBLIC_DEMO_MODE = "false"; // the timing path stays ON here
 delete process.env.TURNSTILE_SECRET_KEY;
 
 const lib = await import("../src/lib/bot-guard");
 const leadRoute = await import("../src/app/api/enterprise-lead/route");
-const db = new PrismaClient();
+const { db } = await import("../src/lib/db");
 
 // A local siteverify stub for the Turnstile layer.
 const turnstileStub = Bun.serve({
   port: 0,
-  fetch(req) {
+  async fetch(req) {
     const url = new URL(req.url);
+    const body = new URLSearchParams(await req.text());
+    if (req.method !== "POST" || body.get("secret") !== "stub-secret" || !body.get("response") || body.has("token")) {
+      return Response.json({ success: false, "error-codes": ["invalid-input-response"] });
+    }
     if (url.pathname === "/siteverify-ok") return Response.json({ success: true });
     if (url.pathname === "/siteverify-fail") return Response.json({ success: false, "error-codes": ["invalid-input-response"] });
+    if (url.pathname === "/siteverify-malformed") return Response.json({ success: "false" });
+    if (url.pathname === "/siteverify-network-fail") return new Response("unavailable", { status: 503 });
     return new Response("not found", { status: 404 });
   },
 });
@@ -92,6 +100,13 @@ describe("bot guard (lib)", () => {
     const bad = await lib.checkBotGuard({ website: "", formStartedAt: startedAgo(8_000), turnstileToken: "tok" });
     expect(bad.ok).toBe(false);
     expect(bad.status).toBe(403);
+
+    for (const path of ["siteverify-malformed", "siteverify-network-fail"]) {
+      process.env.TURNSTILE_SITEVERIFY_URL = `http://127.0.0.1:${turnstileStub.port}/${path}`;
+      expect((await lib.checkBotGuard({ formStartedAt: startedAgo(8_000), turnstileToken: "tok" })).ok).toBe(false);
+    }
+    expect((await lib.checkBotGuard({ formStartedAt: startedAgo(8_000) })).status).toBe(400);
+    expect((await lib.checkBotGuard({ formStartedAt: startedAgo(8_000), turnstileToken: "x".repeat(2049) })).status).toBe(400);
 
     delete process.env.TURNSTILE_SITEVERIFY_URL;
     delete process.env.TURNSTILE_SECRET_KEY;
