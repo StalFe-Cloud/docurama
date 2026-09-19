@@ -134,6 +134,9 @@ const E2E_TENANT_SLUG = "e2e-testing";
 const E2E_USER_EMAIL = "e2e@docurama.eu";
 const E2E_USER_PASSWORD = "e2ePass1234!";
 const E2E_ADMIN_EMAIL = "e2e-admin@docurama.eu";
+// Submitted by the public enterprise-lead browser flow; wiped below so the
+// endpoint's 10-minute duplicate throttle cannot fail a re-run.
+const E2E_LEAD_PREFIX = "e2e-lead-";
 const E2E_ADMIN_PASSWORD = "e2eAdmin1234!";
 
 async function main() {
@@ -608,6 +611,16 @@ async function main() {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
+
+  /* ── Enterprise lead fixture (public enterprise-lead browser flow) ── */
+  // The public form soft-throttles a repeat submission from the same address
+  // for 10 minutes (src/app/api/enterprise-lead/route.ts) and answers 429, so
+  // the browser flow submits a unique e2e-lead-<ts>@example.com each run.
+  // Sweep the prefix here so those rows do not accumulate in a long-lived
+  // database — the old Maestro runner never needed this because it started
+  // from a fresh copy of db/custom.db every time.
+  const leadsWiped = await db.enterpriseLead.deleteMany({ where: { email: { startsWith: E2E_LEAD_PREFIX } } });
+  if (leadsWiped.count) console.log(`enterprise lead: cleared ${leadsWiped.count} prior ${E2E_LEAD_PREFIX}* submission(s)`);
 
   /* ── Summary ─────────────────────────────────────────────────────── */
   const envelopes = await db.envelope.count({ where: { tenantId: tenant.id } });
