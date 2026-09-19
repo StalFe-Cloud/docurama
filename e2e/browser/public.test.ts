@@ -36,10 +36,14 @@ describe("public surfaces", () => {
     browser = await launchBrowser();
   }, 90_000);
 
+  // 30s: bun:test's default hook timeout is 5s, but closing Chromium races a
+  // 10s guard (see closeBrowser) and on Windows the close itself can exceed
+  // 5s — which surfaced as an "(unnamed)" afterAll failure plus a dangling
+  // process, with every actual flow green.
   afterAll(async () => {
     await closeBrowser(browser);
     browser = null;
-  });
+  }, 30_000);
 
   const flow = (name: string, fn: (b: Browser) => Promise<void>, timeout = 120_000) =>
     test(name, async () => {

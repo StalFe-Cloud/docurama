@@ -192,9 +192,18 @@ export async function textGone(page: Page, text: string | RegExp, timeout = 30_0
   await page.getByText(text).first().waitFor({ state: "hidden", timeout });
 }
 
-/** Wait for an accessible control (button/link) and click it. */
+/**
+ * Wait for an accessible control and click it.
+ *
+ * Covers button, link and menuitem: both portal shells put "Sign out" in a
+ * Radix DropdownMenuItem (role=menuitem), not a button.
+ */
 export async function clickByName(page: Page, name: string | RegExp, timeout = 15_000): Promise<void> {
-  const control = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
+  const control = page
+    .getByRole("button", { name })
+    .or(page.getByRole("link", { name }))
+    .or(page.getByRole("menuitem", { name }))
+    .first();
   await control.waitFor({ state: "visible", timeout });
   await control.scrollIntoViewIfNeeded();
   await control.click();
