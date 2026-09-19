@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Docurama E2E runner — one command to a green (or red) Maestro suite.
+# Docurama E2E runner — one command to a green (or red) suite.
 #
-#   bash e2e/run.sh                          # full suite against a local dev server
-#   bash e2e/run.sh <flow.yaml> [more.yaml…] # one or more specific flows
+#   bash e2e/run.sh    # everything, against a local dev server
+#
+# To run one browser suite directly (server must already be up):
+#   E2E_BASE_URL=http://127.0.0.1:3000 bun test e2e/browser/public.test.ts
 #
 # Environment:
 #   MAESTRO_BASE_URL   target origin (default http://127.0.0.1:3000)
-#   MAESTRO_SCREEN     headless viewport (default 1440x1000 — tall enough for
-#                      the send-envelope dialog; smaller viewports put the
-#                      recipient row at the screen edge and taps misfire)
-#   E2E_SKIP_SEED=1    skip the seed step (flows need it for fixtures)
+#   E2E_SKIP_SEED=1    skip the seed step (the suites need it for fixtures)
 #   E2E_START_SERVER=0 don't boot/stop a dev server (CI or remote targets)
+#   E2E_SKIP_BROWSER=1 skip the Playwright browser suites (no Chromium)
 #   E2E_SKIP_VISUAL=1  skip the visual-regression file (no Chromium available)
-#   CHROME_BIN         explicit Chromium/Chrome path for e2e/visual.test.ts
+#   CHROME_BIN         explicit Chromium/Chrome path for the browser suites
 #   UPDATE_BASELINES=1 regenerate (don't compare) the visual baselines
 #
-# Exit code: 0 iff every flow passed.
+# Exit code: 0 iff every suite passed.
 
 set -euo pipefail
 
@@ -23,8 +23,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 BASE_URL="${MAESTRO_BASE_URL:-http://127.0.0.1:3000}"
-SCREEN="${MAESTRO_SCREEN:-1440x1000}"
-FLOWS_DIR="$ROOT/e2e/flows"
 
 # ── 0. Sanity + isolation: the suite runs on a COPY of the committed db. ─────
 # A globally exported DATABASE_URL silently overrides .env and every DB route
@@ -177,72 +175,16 @@ if [[ "${E2E_SKIP_S3:-0}" != "1" ]]; then
   fi
 fi
 
-# ── 2f. Browser suites (Playwright) ───────────────────────────────────────────
-# The replacement for the Maestro flows in section 3; all 29 flows are ported.
-# Both run during the transition — Maestro goes away once these have been green
-# on CI. E2E_SKIP_BROWSER=1 forces them off (also honoured inside the suites).
+# ── 3. Browser suites (Playwright) ────────────────────────────────────────────
+# The critical user journeys, driven through Chromium via Playwright. These
+# replaced a Maestro flow runner (e2e/flows/*.yaml): Maestro drove its own
+# bundled browser over CDP and flaked on roughly one flow per CI run, a
+# different one each time, while these ran green. See e2e/browser/harness.ts.
 if [[ "${E2E_SKIP_BROWSER:-0}" != "1" ]]; then
   echo "── e2e: browser suites (Playwright)"
   E2E_BASE_URL="$BASE_URL" bun test e2e/browser/ || { echo "!! browser suites failed"; exit 1; }
-
-  # Re-seed before handing over to Maestro. The workspace browser suite mutates
-  # the same fixtures the Maestro flows expect untouched — it declines
-  # DOC-E2E0003 and signs/seals DOC-E2E0004 — so signer-decline.yaml and
-  # signer-journey.yaml would otherwise fail against already-spent fixtures.
-  # The seed wipes and recreates its own envelopes, which resets both.
-  # This whole step disappears with section 3.
-  if [[ "${E2E_SKIP_SEED:-0}" != "1" ]]; then
-    echo "── e2e: re-seeding before the Maestro flows"
-    bun e2e/seed.ts > /dev/null
-  fi
 fi
-
-# ── 3. Discover flows and run them ────────────────────────────────────────────
-export MAESTRO_BASE_URL="$BASE_URL"
-export MAESTRO_CLI_NO_ANALYTICS=1
-export PATH="$HOME/.maestro/bin:$PATH"
-
-# Compile each public signer route before launching a fresh browser. This
-# avoids a cold Turbopack navigation stalling Maestro's CDP initialization.
-curl -fsS -o /dev/null "$BASE_URL/sign/e2e-fixed-decline-token-0000000000000001"
-
-if ! command -v maestro >/dev/null 2>&1; then
-  if [[ "${E2E_SKIP_MAESTRO:-0}" == "1" ]]; then
-    echo "── e2e: maestro skipped (E2E_SKIP_MAESTRO=1)"
-    exit 0
-  fi
-  echo "!! maestro not found — install with: curl -Ls 'https://get.maestro.mobile.dev' | bash"
-  exit 1
-fi
-
-if [[ $# -gt 0 ]]; then
-  FLOWS=("$@")
-else
-  mapfile -t FLOWS < <(find "$FLOWS_DIR" -name '*.yaml' | sort)
-fi
-
-echo "── e2e: running ${#FLOWS[@]} flow(s) at ${SCREEN} against $MAESTRO_BASE_URL"
-FAILED=()
-i=0
-for flow in "${FLOWS[@]}"; do
-  i=$((i + 1))
-  name="$(basename "$flow" .yaml)"
-  echo ""
-  echo "══ [$i/${#FLOWS[@]}] $name ══"
-  if maestro test --headless --screen-size "$SCREEN" "$flow"; then
-    echo "   ✔ $name"
-  else
-    echo "   ✘ $name"
-    FAILED+=("$name")
-  fi
-done
 
 echo ""
 echo "────────────────────────────────────────────"
-if [[ ${#FAILED[@]} -eq 0 ]]; then
-  echo "E2E: all ${#FLOWS[@]} flows passed"
-else
-  echo "E2E: ${#FAILED[@]}/${#FLOWS[@]} flows FAILED:"
-  for f in "${FAILED[@]}"; do echo "   ✘ $f"; done
-  exit 1
-fi
+echo "E2E: all suites passed"

@@ -1,4 +1,4 @@
-name: E2E (Maestro)
+name: E2E
 
 on:
   push:
@@ -44,11 +44,10 @@ jobs:
         if: always()
         run: docker rm -f docurama-ci || true
 
-  maestro:
+  e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
-      MAESTRO_CLI_NO_ANALYTICS: "1"
       MAESTRO_BASE_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_DEMO_MODE: "true"
     steps:
@@ -72,15 +71,10 @@ jobs:
           mkdir -p db && touch db/custom.db
           bunx prisma db push --accept-data-loss
 
-      - name: Install Maestro
-        run: |
-          curl -Ls 'https://get.maestro.mobile.dev' | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
-
       - name: Install Chrome + no-sandbox wrapper
         run: |
-          # Maestro web needs a `chromium`/`google-chrome` binary. GH runners
-          # ship Chrome; we wrap it to inject container-safe flags.
+          # The browser suites need a `chromium`/`google-chrome` binary. GH
+          # runners ship Chrome; we wrap it to inject container-safe flags.
           CHROME_BIN="$(readlink -f "$(which google-chrome || which chromium || which chromium-browser)")"
           echo "Chrome at: $CHROME_BIN"
           mkdir -p "$HOME/.local/bin"
@@ -90,7 +84,8 @@ jobs:
           EOF
           chmod +x "$HOME/.local/bin/chromium"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          # The visual-regression suite drives the same binary via Playwright.
+          # The browser and visual-regression suites both drive this binary
+          # via Playwright; CHROME_BIN is what e2e/browser/harness.ts checks first.
           echo "CHROME_BIN=$CHROME_BIN" >> "$GITHUB_ENV"
 
       - name: Install SeaweedFS (S3 backend E2E)
@@ -107,13 +102,6 @@ jobs:
       - name: Run E2E suite
         run: bash e2e/run.sh
 
-      - name: Upload Maestro debug artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: maestro-debug
-          path: ~/.maestro/tests/
-          retention-days: 7
 
   # ── Schema portability gate (PRODUCTION-PLAN §9) ──────────────────────────
   # This validates schema shape only. A PostgreSQL release also needs a
