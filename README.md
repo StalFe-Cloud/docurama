@@ -421,8 +421,8 @@ Docurama has undergone 10 continuous engineering cycles, graduating from early p
 9. **S3-Compatible Scalable Object Storage (Cycle 9):**
    - Native dual-engine document store supporting local POSIX storage or S3-compatible backends (Apache-2.0 SeaweedFS, MinIO, Ceph, AWS S3, Cloudflare R2).
    - Real SeaweedFS test integration in CI and Docker Compose (`--profile s3`).
-10. **Repriced Commercial Catalogue & Guided Onboarding (Cycle 10):**
-    - Multi-tier catalogue (SOLO 1-seat €19/mo, STARTER 5-seat €49/mo, BUSINESS 15-seat €149/mo, ENTERPRISE custom).
+10. **Repriced Commercial Catalogue & Guided Onboarding (Cycle 10, final ladder):**
+    - Five-plan catalogue: SOLO 1-seat €12/mo · 50 envelopes, STARTER 3-seat €19/mo · 50 envelopes (same allowance as Solo), SMART TEAM 10-seat €79/mo · 250 envelopes, BUSINESS 50-seat €199/mo · 1,000 envelopes, ENTERPRISE custom.
     - Unused envelope rollover on renewal, committed-term billing discounts, and small team organizational groups.
     - Public `/enterprise` intake pipeline (`/api/enterprise-lead`) with platform admin triage console.
 

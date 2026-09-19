@@ -36,9 +36,10 @@ type TenantDetail = {
 };
 
 const PLANS = [
-  { code: "SOLO", label: "Solo - €19/mo · 50 envelopes · 1 seat" },
+  { code: "SOLO", label: "Solo - €12/mo · 50 envelopes · 1 seat" },
   { code: "STARTER", label: "Starter - €19/mo · 50 envelopes · 3 seats" },
-  { code: "BUSINESS", label: "Business - €79/mo · 250 envelopes · 10 seats" },
+  { code: "SMART", label: "Smart Team - €79/mo · 250 envelopes · 10 seats" },
+  { code: "BUSINESS", label: "Business - €199/mo · 1,000 envelopes · 50 seats" },
   { code: "ENTERPRISE", label: "Enterprise - €349/mo · 5,000 envelopes · 100 seats" },
 ];
 

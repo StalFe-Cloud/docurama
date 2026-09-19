@@ -14,9 +14,10 @@ tags:
     visible: Simple, EU-priced plans
     timeout: 20000
 
-# Four plans from the catalogue
+# Five plans from the catalogue
 - assertVisible: Solo
 - assertVisible: Starter
+- assertVisible: Smart Team
 - assertVisible: Business
 - assertVisible: Enterprise
 

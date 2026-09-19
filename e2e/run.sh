@@ -136,6 +136,27 @@ if [[ "${E2E_SKIP_MAIL:-0}" != "1" ]]; then
   bun test e2e/mail.test.ts || { echo "!! mail delivery tests failed"; exit 1; }
 fi
 
+# ── 2d-bis. Payment rails (own process: it owns PAYMENT_PROVIDER + STRIPE_*
+#        env and runs a stub Stripe API in-process). ──────────────────────────
+if [[ "${E2E_SKIP_BILLING:-0}" != "1" ]]; then
+  echo "── e2e: payment rails (manual mode + stub Stripe + signed webhooks)"
+  bun test e2e/billing.test.ts || { echo "!! payment rails tests failed"; exit 1; }
+fi
+
+# ── 2d-ter. SSO (own process: it owns SSO_TXN_SECRET, spawns a stub OIDC
+#        provider and openssl-generates a SAML IdP keypair). ──────────────────
+if [[ "${E2E_SKIP_SSO:-0}" != "1" ]]; then
+  echo "── e2e: SSO (stub OIDC provider + samlify round-trip)"
+  bun test e2e/sso.test.ts || { echo "!! SSO tests failed"; exit 1; }
+fi
+
+# ── 2d-quater. Bot guard (own process: it owns NEXT_PUBLIC_DEMO_MODE +
+#        TURNSTILE_* env). ────────────────────────────────────────────────────
+if [[ "${E2E_SKIP_BOTGUARD:-0}" != "1" ]]; then
+  echo "── e2e: bot guard (honeypot, time trap, Turnstile stub)"
+  bun test e2e/bot-guard.test.ts || { echo "!! bot guard tests failed"; exit 1; }
+fi
+
 # ── 2e. S3 storage backend (own process: spawns a REAL SeaweedFS `weed
 #        server -s3` on scratch ports). Requires the weed binary — skipped
 #        honestly when absent so CI without it stays green.

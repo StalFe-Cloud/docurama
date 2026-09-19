@@ -24,7 +24,7 @@
  *    what they need to achieve.
  */
 
-export type PlanCode = "SOLO" | "STARTER" | "BUSINESS" | "ENTERPRISE";
+export type PlanCode = "SOLO" | "STARTER" | "SMART" | "BUSINESS" | "ENTERPRISE";
 
 export interface PlanDef {
   code: PlanCode;
@@ -50,7 +50,7 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
   SOLO: {
     code: "SOLO",
     name: "Solo",
-    monthlyEur: 19,
+    monthlyEur: 12,
     seatLimit: 1,
     envelopeLimit: 50,
     storageGb: 5,
@@ -103,17 +103,17 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
       "Give clients a verifiable, EU-compliant signing experience without IT help",
     ],
   },
-  BUSINESS: {
-    code: "BUSINESS",
-    name: "Business",
+  SMART: {
+    code: "SMART",
+    name: "Smart Team",
     monthlyEur: 79,
     seatLimit: 10,
     envelopeLimit: 250,
-    storageGb: 50,
+    storageGb: 25,
     apiAccess: true,
     slaUptime: "99.9%",
     support: "Priority email support",
-    bestFor: "Growing operations that live in documents.",
+    bestFor: "Teams signing at volume who need their own domain and API access.",
     seatLabel: "10 seats",
     features: [
       "10 seats",
@@ -127,6 +127,34 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
     ],
     outcomes: [
       "Run your whole contract operation — sales, HR, procurement — in one place",
+      "Automate signing into your own tools with the REST API and webhooks",
+      "Send from your own verified domain so every invitation carries your brand",
+    ],
+  },
+  BUSINESS: {
+    code: "BUSINESS",
+    name: "Business",
+    monthlyEur: 199,
+    seatLimit: 50,
+    envelopeLimit: 1000,
+    storageGb: 200,
+    apiAccess: true,
+    slaUptime: "99.95%",
+    support: "Priority support with a named contact",
+    bestFor: "Departments and multi-team operations at scale.",
+    seatLabel: "50 seats",
+    features: [
+      "50 seats",
+      "1,000 envelopes / month (rollover on renewal, up to 1,000)",
+      "PAdES B-LT sealing",
+      "SMS + WhatsApp delivery",
+      "API access and webhooks",
+      "DNS domain attestation",
+      "Unlimited templates and shared team groups",
+      "99.95% uptime SLA",
+    ],
+    outcomes: [
+      "Give every department its own signing workflow under one audit roof",
       "Automate signing into your own tools with the REST API and webhooks",
       "Send from your own verified domain so every invitation carries your brand",
     ],
@@ -161,7 +189,7 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
   },
 };
 
-export const PLAN_ORDER: PlanCode[] = ["SOLO", "STARTER", "BUSINESS", "ENTERPRISE"];
+export const PLAN_ORDER: PlanCode[] = ["SOLO", "STARTER", "SMART", "BUSINESS", "ENTERPRISE"];
 
 /** Plan codes a new signup can self-select on /welcome (ENTERPRISE goes through sales). */
 export const SELF_SERVE_PLANS: PlanCode[] = ["SOLO", "STARTER"];
@@ -255,8 +283,20 @@ export const PLAN_GUIDES: Record<PlanCode, PlanGuide> = {
       { label: "Contract template library", href: "/modeles-de-contrats", desc: "Start from a French-law template instead of a blank page." },
     ],
   },
+  SMART: {
+    headline: "You're on Smart Team — 10 seats, 250 envelopes, your own domain",
+    steps: [
+      { label: "Connect your sending domain so invitations come from you (Settings → Account)", href: "/settings/account" },
+      { label: "Invite the team to the shared seats (Settings → Users)", href: "/settings/users" },
+      { label: "Create an API key and wire the envelope API into your stack (Settings → API)", href: "/settings/api" },
+    ],
+    demos: [
+      { label: "Developers: API + webhooks demo", href: "/developers", desc: "Envelope endpoints, signed webhooks and the MCP server, live." },
+      { label: "Live example: a quotation approval flow", href: "/#examples", desc: "Multi-recipient business flow with routing and reminders." },
+    ],
+  },
   BUSINESS: {
-    headline: "You're on Business — automation, your domain, SMS delivery",
+    headline: "You're on Business — every department, one audit roof",
     steps: [
       { label: "Connect your sending domain so invitations come from you (Settings → Account)", href: "/settings/account" },
       { label: "Create an API key and wire the envelope API into your stack (Settings → API)", href: "/settings/api" },

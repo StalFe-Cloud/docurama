@@ -377,6 +377,9 @@ function AccountStep({ invite, inviteTokenRef, planRef, onDone }: { invite: Invi
     organization: "",
     consent: false,
   });
+  // Bot guard: the moment this step rendered + an offscreen honeypot.
+  const [signupStartedAt] = useState(() => Date.now());
+  const [honeypot, setHoneypot] = useState("");
 
   const [corporateDomain, setCorporateDomain] = useState<{
     autoJoin: boolean;
@@ -442,6 +445,9 @@ function AccountStep({ invite, inviteTokenRef, planRef, onDone }: { invite: Invi
       password: form.password,
       organization: corporateDomain?.autoJoin ? corporateDomain.tenantName : form.organization,
       consent: form.consent,
+      // Bot guard (src/lib/bot-guard.ts): honeypot + render timestamp.
+      website: honeypot,
+      formStartedAt: signupStartedAt,
       ...(viaInvite ? { inviteToken: inviteTokenRef.current } : {}),
       // ?plan= prefill from the pricing page (SOLO). Ignored when joining
       // via invitation or corporate domain — the existing workspace wins.
@@ -467,6 +473,14 @@ function AccountStep({ invite, inviteTokenRef, planRef, onDone }: { invite: Invi
       }
     >
       <form onSubmit={submit} className="space-y-4" noValidate>
+        {/* Honeypot: invisible to humans, irresistible to bots. */}
+        <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+          <label htmlFor="su-website">Website</label>
+          <input
+            id="su-website" name="website" type="text" tabIndex={-1} autoComplete="off"
+            value={honeypot} onChange={(e) => setHoneypot(e.target.value)}
+          />
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="su-first">First name</Label>

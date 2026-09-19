@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { SESSION_COOKIE, hashPassword, recordAudit, sessionCookieAttributes } from "@/lib/auth";
 import { jsonError, jsonOk } from "@/lib/serializers";
 import { issueEmailVerification, requestOrigin } from "@/lib/onboarding";
+import { checkBotGuard } from "@/lib/bot-guard";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -12,18 +13,30 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  * Creates the account + organization (or joins via invitation token), opens a
  * session immediately (the wizard continues at /welcome), queues the email
  * verification message from notifications@docurama.eu and records GDPR consent.
+ * Bot protection (go-live cycle): honeypot + time trap + optional Turnstile —
+ * see src/lib/bot-guard.ts.
  */
 export async function POST(req: NextRequest) {
   let body: {
     firstName?: string; lastName?: string; email?: string; password?: string;
     organization?: string; inviteToken?: string; consent?: boolean;
     planCode?: string; // ?plan= prefill from the pricing page (SOLO | STARTER)
+    website?: string; formStartedAt?: number; turnstileToken?: string; // bot guard
   };
   try {
     body = await req.json();
   } catch {
     return jsonError("Invalid request body");
   }
+
+  // Bot guard runs before any validation or DB work.
+  const guard = await checkBotGuard({
+    website: body.website,
+    formStartedAt: Number(body.formStartedAt ?? 0),
+    turnstileToken: body.turnstileToken,
+    ip: req.headers.get("x-forwarded-for")?.split(",")[0].trim(),
+  });
+  if (!guard.ok) return jsonError(guard.error, guard.status);
 
   const firstName = (body.firstName ?? "").trim();
   const lastName = (body.lastName ?? "").trim();

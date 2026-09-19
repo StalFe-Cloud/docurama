@@ -86,7 +86,13 @@ export interface RenewalOutcome {
  */
 export async function renewDueSubscriptions(limit = 50): Promise<RenewalOutcome[]> {
   const due = await db.subscription.findMany({
-    where: { status: "ACTIVE", renewalAt: { lte: new Date() } },
+    // Stripe-managed subscriptions renew via webhook (invoice.paid) — the
+    // worker only advances manual/out-of-band subscriptions.
+    where: {
+      status: "ACTIVE",
+      renewalAt: { lte: new Date() },
+      OR: [{ provider: null }, { provider: "manual" }],
+    },
     include: { tenant: { select: { id: true, slug: true, planCode: true, name: true } } },
     take: limit,
   });
