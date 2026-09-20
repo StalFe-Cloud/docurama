@@ -62,9 +62,12 @@ export async function currentAllowance(tenantId: string): Promise<Allowance> {
   const used = await db.envelope.count({
     where: { tenantId, createdAt: { gte: periodStart(sub) } },
   });
-  const total = ENVELOPE_LIMITS[tenant.planCode] ?? plan.envelopeLimit;
+  // A negotiated envelope allowance wins over the catalogue for sales-led
+  // deals; null falls back to the existing ENVELOPE_LIMITS-or-catalogue chain.
+  const catalogue = ENVELOPE_LIMITS[tenant.planCode] ?? plan.envelopeLimit;
+  const total = sub?.envelopeLimitOverride ?? catalogue;
   return {
-    limit: plan.envelopeLimit,
+    limit: sub?.envelopeLimitOverride ?? plan.envelopeLimit,
     carriedForward,
     total: total + carriedForward,
     used,
@@ -119,7 +122,7 @@ export async function renewDueSubscriptions(limit = 50, tenantId?: string): Prom
       usedInPeriod = await tx.envelope.count({
         where: { tenantId: sub.tenantId, createdAt: { gte: periodStart({ renewalAt, termMonths: sub.termMonths }), lt: renewalAt } },
       });
-      allowance = (ENVELOPE_LIMITS[sub.planCode] ?? plan.envelopeLimit) + carriedForward;
+      allowance = (sub.envelopeLimitOverride ?? ENVELOPE_LIMITS[sub.planCode] ?? plan.envelopeLimit) + carriedForward;
       carriedForward = Math.min(Math.max(0, allowance - usedInPeriod), rolloverCap(plan));
       const next = new Date(renewalAt);
       next.setMonth(next.getMonth() + Math.max(1, sub.termMonths));
@@ -184,20 +187,27 @@ export interface SeatCapacity {
 export async function seatCapacity(tenantId: string, client: Prisma.TransactionClient = db): Promise<SeatCapacity> {
   const tenant = await client.tenant.findUnique({ where: { id: tenantId } });
   const plan = planDef(tenant?.planCode ?? "STARTER");
-  const [members, pendingInvites] = await Promise.all([
+  const [members, pendingInvites, sub] = await Promise.all([
     // Pending mailbox proof reserves a seat but grants no access. Disabled
     // memberships release their seat; reactivation must re-check capacity.
     client.member.count({ where: { tenantId, status: { in: ["ACTIVE", "PENDING_VERIFICATION"] } } }),
     client.invitation.count({ where: { tenantId, status: "PENDING", expiresAt: { gt: new Date() } } }),
+    // A negotiated seat count wins over the catalogue for sales-led deals.
+    client.subscription.findFirst({
+      where: { tenantId, status: { in: ["ACTIVE", "TRIALING"] } },
+      orderBy: { renewalAt: "desc" },
+      select: { seatLimitOverride: true },
+    }),
   ]);
+  const seatLimit = sub?.seatLimitOverride ?? plan.seatLimit;
   const used = members + pendingInvites;
   return {
     planCode: plan.code,
-    seatLimit: plan.seatLimit,
+    seatLimit,
     members,
     pendingInvites,
     used,
-    remaining: Math.max(0, plan.seatLimit - used),
+    remaining: Math.max(0, seatLimit - used),
   };
 }
 
