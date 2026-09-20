@@ -12,7 +12,7 @@ export async function serializableTransaction<T>(work: (tx: Prisma.TransactionCl
       });
     } catch (error) {
       const code = (error as { code?: string })?.code;
-      if (attempt >= 5 || !["P2034", "P2002", "P1008", "P2028"].includes(code ?? "")) throw error;
+      if (attempt >= 5 || !["P2034", "P2002"].includes(code ?? "")) throw error;
       await new Promise((resolve) => setTimeout(resolve, 15 * 2 ** attempt));
     }
   }

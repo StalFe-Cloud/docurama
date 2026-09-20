@@ -14,14 +14,26 @@ export function shiftUtcMonth(anchor: Date, months: number): Date {
   const result = new Date(anchor);
   result.setUTCDate(1);
   result.setUTCMonth(result.getUTCMonth() + months);
-  const lastDay = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate();
-  result.setUTCDate(Math.min(anchor.getUTCDate(), lastDay));
+  if (!Number.isFinite(result.getTime())) throw new RangeError("Monthly boundary is outside the Date range");
+  const monthEnd = new Date(result);
+  monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1, 0);
+  if (!Number.isFinite(monthEnd.getTime())) throw new RangeError("Monthly boundary is outside the Date range");
+  result.setUTCDate(Math.min(anchor.getUTCDate(), monthEnd.getUTCDate()));
   return result;
 }
 
 export function usageAnchor(subscription: MeteredSubscription | null, now = new Date()): Date {
-  if (!subscription) return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  if (subscription.usageAnchorAt) return new Date(subscription.usageAnchorAt);
+  if (!Number.isFinite(now.getTime())) throw new Error("Invalid metering time");
+  if (!subscription) {
+    const start = new Date(now);
+    start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0);
+    return start;
+  }
+  if (subscription.usageAnchorAt) {
+    const anchor = new Date(subscription.usageAnchorAt);
+    if (!Number.isFinite(anchor.getTime())) throw new Error("Invalid metering anchor");
+    return anchor;
+  }
   const months = [1, 3, 6, 12].includes(subscription.termMonths) ? subscription.termMonths : 1;
   return shiftUtcMonth(subscription.renewalAt, -months);
 }
@@ -43,5 +55,6 @@ export function periodStart(subscription: MeteredSubscription | null, now = new 
 
 /** Calendar key for reporting; reservations use the full anniversary timestamp. */
 export function periodKey(now = new Date()): string {
+  if (!Number.isFinite(now.getTime())) throw new Error("Invalid metering time");
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }

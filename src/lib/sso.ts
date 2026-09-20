@@ -480,7 +480,7 @@ export async function jitSsoLogin(input: {
   });
   await tx.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date(), activeTenantId: connection.tenantId } });
   await tx.auditEvent.create({
-    data: {
+    data: { actorUserId: user.id, subjectUserId: user.id, tenantId: connection.tenantId,
       actor: `${user.firstName} ${user.lastName}`.trim(),
       actorRole: user.role,
       action: `user.login.sso_${input.provider.toLowerCase()}`,

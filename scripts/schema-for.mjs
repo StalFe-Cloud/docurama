@@ -16,7 +16,7 @@
  * portability job asserts: if the schema ever needs provider-specific
  * attributes, this script fails loudly rather than silently diverging the two.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const PROVIDERS = ["sqlite", "postgresql"];
@@ -85,4 +85,6 @@ if (violations.length) {
 }
 
 writeFileSync(outPath, out);
+mkdirSync(join(root, "prisma", target), { recursive: true });
+writeFileSync(join(root, "prisma", target, "schema.prisma"), out);
 console.log(`schema-for: ${from} -> ${target}  (prisma/schema.${target}.prisma)`);

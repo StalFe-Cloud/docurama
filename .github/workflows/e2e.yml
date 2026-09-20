@@ -2,9 +2,9 @@ name: E2E
 
 on:
   push:
-    branches: [main, quality]
+    branches: [main, quality, quality-remediation-20260920]
   pull_request:
-    branches: [main, quality]
+    branches: [main, quality, quality-remediation-20260920]
   workflow_dispatch:
 
 jobs:
@@ -133,6 +133,7 @@ jobs:
           --health-retries 10
     env:
       PGURL: postgresql://docurama:docurama@localhost:5432/docurama_test
+      DOCURAMA_ALLOW_PRIVATE_WEBHOOKS: "1"
     steps:
       - uses: actions/checkout@v4
 

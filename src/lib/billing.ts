@@ -18,7 +18,7 @@ async function advanceUsage(tx: Prisma.TransactionClient, sub: Subscription, lim
   const anchor = usageAnchor(sub, now);
   // Legacy subscriptions with an elapsed term retain their final closed month
   // so its unused capacity is carried once. Never guess an earlier audit identity.
-  const initialAt = new Date(Math.min(now.getTime(), sub.renewalAt.getTime() - 1));
+  const initialAt = new Date(Math.min(now.getTime(), anchor.getTime()));
   const initial = monthlyWindow({ ...sub, usageAnchorAt: anchor }, initialAt);
   let start = sub.usagePeriodStart ?? initial.start;
   let end = sub.usagePeriodEnd ?? initial.end;
@@ -117,15 +117,16 @@ export async function renewDueSubscriptions(limit = 50, tenantId?: string, now =
       const allowance = sub.envelopeLimitOverride ?? ENVELOPE_LIMITS[sub.planCode] ?? plan.envelopeLimit;
       const usage = await advanceUsage(tx, sub, allowance, now);
       const term = termFor(sub.termMonths).months;
+      const paymentAnchor = sub.paymentAnchorAt ?? shiftUtcMonth(sub.renewalAt, -term);
       let count = 1;
-      let renewalAt = shiftUtcMonth(sub.renewalAt, term);
+      let renewalAt = shiftUtcMonth(paymentAnchor, term);
       while (renewalAt <= now) {
         if (++count > 1200) throw new Error("Subscription renewal history exceeds the supported migration window");
-        renewalAt = shiftUtcMonth(sub.renewalAt, term * count);
+        renewalAt = shiftUtcMonth(paymentAnchor, term * count);
       }
       const updated = await tx.subscription.updateMany({
         where: { id: sub.id, renewalAt: sub.renewalAt, status: "ACTIVE" },
-        data: { renewalAt, lastInvoiceAt: now },
+        data: { renewalAt, paymentAnchorAt: paymentAnchor, lastInvoiceAt: now },
       });
       if (updated.count !== 1) return null;
       await tx.auditEvent.create({ data: {

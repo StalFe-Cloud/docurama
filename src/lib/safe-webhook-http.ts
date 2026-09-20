@@ -50,6 +50,7 @@ async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T
 }
 
 export async function resolveWebhookTarget(raw: string, signal = AbortSignal.timeout(WEBHOOK_TIMEOUT_MS)) {
+  signal.throwIfAborted();
   const url = new URL(raw);
   if (url.username || url.password || url.hash) throw new Error("Webhook URLs must not contain credentials or fragments");
   const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
@@ -66,6 +67,7 @@ export async function resolveWebhookTarget(raw: string, signal = AbortSignal.tim
   const addresses = isIP(hostname)
     ? [{ address: hostname, family: isIP(hostname) }]
     : await abortable(dns.lookup(hostname, { all: true, verbatim: true }), signal);
+  signal.throwIfAborted();
   if (!addresses.length || (!internal && addresses.some((item) => !isPublicAddress(item.address)))) {
     throw new Error("Webhook destination must resolve exclusively to public addresses");
   }
@@ -82,7 +84,7 @@ export async function postWebhook(raw: string, body: string, headers: Record<str
   const target = await resolveWebhookTarget(raw, signal);
   return new Promise((resolve, reject) => {
     const request = (target.url.protocol === "https:" ? https : http).request(target.url, {
-      method: "POST", agent: false, family: target.family, autoSelectFamily: false,
+      method: "POST", agent: false, family: target.family,
       // The original hostname remains the TLS/Host identity; the socket uses
       // exactly the address checked above, never a second DNS resolution.
       lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
