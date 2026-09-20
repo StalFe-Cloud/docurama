@@ -187,6 +187,9 @@ describe("failure handling + retry pass", () => {
       expect(bodies.length).toBe(2);
       expect(bodies[0]).toBe(bodies[1]);
       expect(bodies[0]).toBe(originalBody);
+      const attempts = received.filter((x) => x.headers["x-docurama-event"] === "envelope.completed");
+      expect(attempts[0].headers["x-docurama-delivery"]).toBe(attempts[1].headers["x-docurama-delivery"]);
+      expect(JSON.parse(attempts[0].body).id).toBe(attempts[0].headers["x-docurama-delivery"]);
     } finally {
       respondWith = 200;
     }
