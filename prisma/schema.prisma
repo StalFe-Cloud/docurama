@@ -149,11 +149,14 @@ model MailOutbox {
   // Delivery engine (SMTP transport). Attempts and backoff survive restarts:
   // the worker (or an inline pass after send) re-reads QUEUED rows whose
   // nextAttemptAt has come due. FAILED is terminal after 5 attempts.
-  attempts     Int       @default(0)
-  lastError    String?
+  attempts      Int       @default(0)
+  lastError     String?
   nextAttemptAt DateTime? // null = due immediately
+  claimToken    String?
+  claimUntil    DateTime?
 
   @@index([status, nextAttemptAt])
+  @@index([claimUntil])
   @@index([toEmail])
 }
 
@@ -1093,21 +1096,37 @@ model WebhookDelivery {
   // HMAC). Nullable for additive migration: pre-engine rows have no snapshot
   // and are skipped by the retry pass. attempts < 5 with nextAttemptAt in
   // the past = due for retry.
-  payload      String?
-  attempts     Int       @default(1)
+  payload       String?
+  attempts      Int       @default(1)
   nextAttemptAt DateTime?
+  claimToken    String?
+  claimUntil    DateTime?
 
   endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
   @@index([success, attempts, nextAttemptAt])
+  @@index([claimUntil])
+}
+
+model EnvelopeQuotaUsage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  periodKey String
+  used      Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, periodKey])
+  @@index([tenantId, periodKey])
 }
 
 // ─── Audit & Ops ──────────────────────────────────────────────────────────────
 
 model AuditEvent {
-  id         String   @id @default(cuid())
-  at         DateTime @default(now())
-  actor      String
+  id          String   @id @default(cuid())
+  at          DateTime @default(now())
+  actorUserId String?
+  tenantId    String?
+  actor       String
   actorRole  String
   action     String
   resource   String
@@ -1118,9 +1137,11 @@ model AuditEvent {
 }
 
 model SecurityEvent {
-  id       String   @id @default(cuid())
-  at       DateTime @default(now())
-  type     String
+  id          String   @id @default(cuid())
+  at          DateTime @default(now())
+  actorUserId String?
+  tenantId    String?
+  type        String
   severity String   @default("INFO") // INFO | LOW | MEDIUM | HIGH | CRITICAL
   actor    String
   ip       String
