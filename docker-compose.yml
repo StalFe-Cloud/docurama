@@ -4,26 +4,37 @@
 #   docker compose up -d                        # app only (local filesystem storage)
 #   docker compose --profile s3 up -d           # + SeaweedFS S3 object storage
 #   docker compose --profile mail up -d         # + Mailpit SMTP sink (dev inbox UI)
+#   docker compose --profile postgres up -d --build   # + PostgreSQL (see below)
 #   docker compose --profile s3 --profile mail up -d
 #
-# Scale-out note: the background worker (mail retries + webhook retries) runs
-# in-process. Run exactly ONE replica; multi-replica tiers need Postgres +
-# object storage (PRODUCTION-PLAN §9, now supported — set the S3_* env below)
-# and DOCURAMA_WORKER=off on all but one replica.
+# PostgreSQL: the provider is fixed when the image is built, because Prisma
+# cannot read datasource.provider from an env var. The postgres profile sets
+# the DB_PROVIDER build arg, so it needs --build on first use (or after
+# switching back from SQLite).
+#
+# Scale-out note: Postgres is necessary for multi-replica but NOT sufficient.
+# The background worker (mail retries + webhook retries) runs in-process, so
+# it must be off on all but one replica — set DOCURAMA_WORKER=off everywhere
+# else. Object storage is the third piece (PRODUCTION-PLAN §9; set S3_* below).
 
 services:
   docurama:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # sqlite (default) or postgresql — see the PostgreSQL note above.
+        DB_PROVIDER: ${DB_PROVIDER:-sqlite}
     container_name: ${CONTAINER_NAME:-docurama-cloud}
     restart: always
     ports:
       - "${PORT_BIND:-0.0.0.0:3002}:3000"
     environment:
       - NODE_ENV=production
-      # SQLite file inside the persistent volume (absolute path required by Prisma).
-      - DATABASE_URL=file:/app/db/custom.db
+      # SQLite file inside the persistent volume (absolute path required by
+      # Prisma). With the postgres profile, override both this and DB_PROVIDER:
+      #   DB_PROVIDER=postgresql       #   DATABASE_URL=postgresql://docurama:docurama@postgres:5432/docurama       #   docker compose --profile postgres up -d --build
+      - DATABASE_URL=${DATABASE_URL:-file:/app/db/custom.db}
       - STORAGE_DIR=/app/storage
       - NEXT_PUBLIC_DEMO_MODE=false
       # Base domain for the vanity sub-domain routing (status./docs./verify./…).
@@ -77,6 +88,31 @@ services:
       retries: 3
       start_period: 15s
 
+  # ── PostgreSQL (profile: postgres) ──────────────────────────────────────────
+  # The scale-out database. SQLite stays the single-node default; the schema is
+  # identical either way (scripts/schema-for.mjs swaps only the provider line,
+  # and CI's postgres job asserts that stays true).
+  postgres:
+    image: postgres:16-alpine
+    container_name: docurama-postgres
+    restart: always
+    profiles: ["postgres"]
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-docurama}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-docurama}
+      - POSTGRES_DB=${POSTGRES_DB:-docurama}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      # Loopback only: the app reaches it over the compose network.
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docurama}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # ── SMTP sink for local evaluation (profile: mail) ──────────────────────────
   # Mailpit accepts everything on :1025 and shows it at http://127.0.0.1:8025.
   # Wire the app with: SMTP_URL=smtp://mailpit:1025?tls=off
@@ -94,3 +130,4 @@ volumes:
   docurama-db:
   docurama-storage:
   seaweed-data:
+  postgres-data:
