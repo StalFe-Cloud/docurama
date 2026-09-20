@@ -13,6 +13,7 @@ import { verifySendingDomain, checkEmailPosture } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
 import { WEBHOOK_EVENTS } from "@/lib/api-reference";
+import { assertSafeWebhookUrl } from "@/lib/webhooks";
 import { createInvitation, requestOrigin, slugifyOrg } from "@/lib/onboarding";
 import { seatCapacity, apiAccessAllowed } from "@/lib/billing";
 import { planDef } from "@/lib/plans";
@@ -1191,16 +1192,10 @@ export async function postSettingsOp(
   if (op === "webhook.create") {
     const url = String(data.url ?? "").trim();
     const events = Array.isArray(data.events) ? (data.events as unknown[]).map(String).filter((e) => WEBHOOK_EVENTS.some((w) => w.event === e) || e === "*") : [];
-    let parsed: URL;
     try {
-      parsed = new URL(url);
-    } catch {
-      return jsonError("Endpoint URL is not a valid URL");
-    }
-    // https only, except loopback hosts (local testing / internal networks).
-    const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) || parsed.hostname.endsWith(".local") || parsed.hostname.endsWith(".internal");
-    if (parsed.protocol !== "https:" && !loopback) {
-      return jsonError("Endpoint URL must use https (http is allowed for localhost only)");
+      await assertSafeWebhookUrl(url);
+    } catch (err) {
+      return jsonError(err instanceof Error ? err.message : "Endpoint URL is not allowed");
     }
     if (events.length === 0) return jsonError("Subscribe to at least one event");
     const secret = `whsec_${randomBytes(24).toString("hex")}`;
