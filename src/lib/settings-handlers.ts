@@ -13,7 +13,7 @@ import { verifySendingDomain, checkEmailPosture } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
 import { WEBHOOK_EVENTS } from "@/lib/api-reference";
-import { createInvitation, requestOrigin } from "@/lib/onboarding";
+import { createInvitation, requestOrigin, slugifyOrg } from "@/lib/onboarding";
 import { seatCapacity, apiAccessAllowed } from "@/lib/billing";
 import { planDef } from "@/lib/plans";
 import { tenantCreationAllowed } from "@/lib/deployment-policy";
@@ -401,8 +401,9 @@ export async function postSettingsOp(
   if (op === "org.create") {
     const name = String(data.name ?? "").trim();
     if (name.length < 2) return jsonError("Organization name is required");
-    const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "org";
-    const slug = `${slugBase}-${randomBytes(2).toString("hex")}`;
+    // slugifyOrg (src/lib/onboarding.ts) already does this and is now shared
+    // with the enterprise lead conversion, so both paths mint slugs the same way.
+    const slug = slugifyOrg(name);
     const tenant = await db.$transaction(async (tx) => {
       if (!tenantCreationAllowed(me.role, await tx.tenant.count())) return null;
       const created = await tx.tenant.create({

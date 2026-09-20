@@ -733,6 +733,15 @@ model Subscription {
   provider    String? @default("manual")
   providerRef String? // Stripe subscription id (sub_...) when provider = stripe
 
+  // Negotiated entitlements for sales-led deals. BUSINESS and ENTERPRISE are
+  // not self-serve (SELF_SERVE_PLANS in src/lib/plans.ts), so their seat and
+  // envelope numbers are agreed per contract rather than taken from the plan
+  // catalogue. Null means "use the catalogue value" — the same
+  // override-or-fall-back shape as ENVELOPE_LIMITS in src/lib/plans.ts.
+  seatLimitOverride     Int?
+  envelopeLimitOverride Int?
+  monthlyEurOverride    Int?
+
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
@@ -823,6 +832,14 @@ model EnterpriseLead {
   notes       String    @default("") // admin-visible triage notes
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  // Set when a WON lead is converted into a tenant. Presence is what makes
+  // the conversion idempotent — a double-submit returns the existing tenant
+  // instead of minting a second one.
+  convertedTenantId String?
+  convertedAt       DateTime?
+
+  @@index([convertedTenantId])
 }
 
 // ─── Legal, Privacy & Compliance ──────────────────────────────────────────────
