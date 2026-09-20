@@ -50,6 +50,7 @@ jobs:
     env:
       E2E_BASE_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_DEMO_MODE: "true"
+      DOCURAMA_ALLOW_PRIVATE_WEBHOOKS: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -184,7 +185,7 @@ jobs:
       - name: Boot the app against PostgreSQL
         run: |
           cp .env.example .env
-          REKOR_WITNESS=off NEXT_PUBLIC_DEMO_MODE=true DOCURAMA_WORKER=off             DATABASE_URL="$PGURL" bun run dev > /tmp/pg-dev.log 2>&1 &
+          REKOR_WITNESS=off NEXT_PUBLIC_DEMO_MODE=true DOCURAMA_WORKER=off DOCURAMA_ALLOW_PRIVATE_WEBHOOKS=1             DATABASE_URL="$PGURL" bun run dev > /tmp/pg-dev.log 2>&1 &
           for _ in $(seq 1 60); do
             curl -sf -o /dev/null http://127.0.0.1:3000/login && break
             sleep 2
