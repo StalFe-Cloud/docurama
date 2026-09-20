@@ -23,7 +23,7 @@ import {
   webhookBackoffMs,
 } from "../src/lib/webhooks";
 
-const BASE = process.env.MAESTRO_BASE_URL ?? "http://127.0.0.1:3000";
+const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000";
 const E2E_USER_EMAIL = "e2e@docurama.eu";
 const E2E_USER_PASSWORD = "e2ePass1234!";
 const SECRET = "whsec_e2e_dispatcher_test";

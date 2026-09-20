@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      MAESTRO_BASE_URL: http://127.0.0.1:3000
+      E2E_BASE_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_DEMO_MODE: "true"
     steps:
       - uses: actions/checkout@v4

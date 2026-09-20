@@ -26,9 +26,8 @@ import { homedir } from "os";
 import { join } from "path";
 import type { Browser, Page } from "playwright";
 
-/** Target origin. E2E_BASE_URL is canonical; MAESTRO_BASE_URL is the legacy name. */
-export const BASE =
-  process.env.E2E_BASE_URL ?? process.env.MAESTRO_BASE_URL ?? "http://127.0.0.1:3000";
+/** Target origin. */
+export const BASE = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000";
 
 /**
  * Matches the old MAESTRO_SCREEN default. Tall enough for the send-envelope

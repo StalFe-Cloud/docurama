@@ -39,7 +39,7 @@ e2e/
                  public/auth/workspace/admin.test.ts cover the four surfaces.
                  The workspace suite mutates seeded fixtures and needs a fresh
                  `bun e2e/seed.ts` per run. E2E_SKIP_BROWSER=1 skips them.
-                 Target origin: E2E_BASE_URL (MAESTRO_BASE_URL still honoured).
+                 Target origin: E2E_BASE_URL.
   seed.ts        Idempotent Prisma seed. Dedicated "E2E Testing" tenant,
                  e2e@docurama.eu / e2ePass1234! (workspace) and
                  e2e-admin@docurama.eu / e2eAdmin1234! (platform admin),

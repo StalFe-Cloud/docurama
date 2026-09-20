@@ -7,7 +7,7 @@
 #   E2E_BASE_URL=http://127.0.0.1:3000 bun test e2e/browser/public.test.ts
 #
 # Environment:
-#   MAESTRO_BASE_URL   target origin (default http://127.0.0.1:3000)
+#   E2E_BASE_URL       target origin (default http://127.0.0.1:3000)
 #   E2E_SKIP_SEED=1    skip the seed step (the suites need it for fixtures)
 #   E2E_START_SERVER=0 don't boot/stop a dev server (CI or remote targets)
 #   E2E_SKIP_BROWSER=1 skip the Playwright browser suites (no Chromium)
@@ -22,7 +22,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-BASE_URL="${MAESTRO_BASE_URL:-http://127.0.0.1:3000}"
+BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:3000}"
 
 # ── 0. Sanity + isolation: the suite runs on a COPY of the committed db. ─────
 # A globally exported DATABASE_URL silently overrides .env and every DB route
@@ -127,12 +127,12 @@ bun test e2e/quota-security.test.ts || { echo "!! quota and API entitlement test
 bun test e2e/blog.test.ts e2e/storage-config.test.ts || { echo "!! content/storage tests failed"; exit 1; }
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
   echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + visual tests"
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/plans.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/plans/webhooks/visual tests failed"; exit 1; }
+  E2E_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/plans.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/plans/webhooks/visual tests failed"; exit 1; }
 fi
 
 # ── 2c-bis. MCP server (own process: the per-key rate-limit test needs a
 #         deterministic bucket state, which parallel sibling files disturb) ──
-  MAESTRO_BASE_URL="$BASE_URL" bun test e2e/mcp.test.ts || { echo "!! MCP server tests failed"; exit 1; }
+  E2E_BASE_URL="$BASE_URL" bun test e2e/mcp.test.ts || { echo "!! MCP server tests failed"; exit 1; }
 
 # ── 2d. Mail delivery engine (own process: it owns DATABASE_URL + SMTP_URL) ───
 if [[ "${E2E_SKIP_MAIL:-0}" != "1" ]]; then
