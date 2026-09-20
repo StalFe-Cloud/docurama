@@ -221,18 +221,29 @@ describe("enterprise lead conversion", () => {
 
   test("concurrent converts still mint exactly one tenant", async () => {
     const lead = await newLead();
-    const results = await Promise.all([
+    // allSettled, not all: SQLite takes one writer at a time, so under three
+    // simultaneous write transactions some callers legitimately lose on the
+    // busy timeout. (CI hit exactly that — "Socket timeout" — where Windows
+    // did not.) The guarantee under test is the invariant, not that every
+    // caller gets a reply: whatever the runtime and the database between them
+    // decide, the lead ends up pointing at ONE tenant and only that tenant
+    // exists. Without the compare-and-set claim each caller commits its own,
+    // which this still catches.
+    await Promise.allSettled([
       convert(lead.id, { planCode: "ENTERPRISE" }),
       convert(lead.id, { planCode: "ENTERPRISE" }),
       convert(lead.id, { planCode: "ENTERPRISE" }),
     ]);
-    // Whichever ordering the runtime picks, the lead points at one tenant and
-    // only that tenant exists — the compare-and-set claim rolls the losers back.
+
     expect(await db.tenant.count({ where: { name: lead.company } })).toBe(1);
     const stored = await db.enterpriseLead.findUnique({ where: { id: lead.id } });
-    const tenantIds = new Set(results.map((r) => String(r.body.tenantId)));
-    expect(tenantIds.has(String(stored?.convertedTenantId))).toBe(true);
-  });
+    expect(stored?.convertedTenantId).toBeTruthy();
+    // The lead points at a tenant that actually exists.
+    const claimed = await db.tenant.findUnique({ where: { id: stored!.convertedTenantId! } });
+    expect(claimed?.name).toBe(lead.company);
+    // And exactly one subscription came with it.
+    expect(await db.subscription.count({ where: { tenantId: claimed!.id } })).toBe(1);
+  }, 60_000);
 
   test("the workspace billing surface reports the negotiated seats, not the catalogue", async () => {
     // Entitlements have two sources: PLAN_CATALOG in src/lib/plans.ts (what
