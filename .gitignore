@@ -74,3 +74,15 @@ Archieve - Do not touch/
 # prisma/schema.prisma. Build artefacts — the source schema is the SQLite one.
 /prisma/schema.sqlite.prisma
 /prisma/schema.postgresql.prisma
+
+# graphify knowledge graph. Only the readable artefacts are tracked: the report
+# and the interactive graph, so the map is browsable on GitHub without a local
+# build. graph.json (16MB) and cache/ (15MB) are rebuildable derived data that
+# would rewrite whole on every rebuild and bloat history permanently.
+#
+# The query commands (god-nodes, affected, explain, path, query) read
+# graph.json, so run `graphify update .` once per clone before using them
+# (~1 min, AST-only, no API cost).
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
+!graphify-out/graph.html
