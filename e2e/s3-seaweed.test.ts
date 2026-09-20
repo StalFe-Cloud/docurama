@@ -12,15 +12,19 @@ import { S3Client, HeadBucketCommand, CreateBucketCommand } from "@aws-sdk/clien
 
 const RUN_S3_E2E = process.env.S3_E2E === "1";
 const WEED_BIN = process.env.WEED_BIN || "weed";
+/** Bun.spawn on Windows drops backslashes from arguments (weed sees
+ * -mdir="C:Users…" and exits 255), and file: URLs are cleaner with '/'.
+ * Everything that crosses a process boundary uses forward slashes. */
+const posix = (p: string) => p.replace(/\\/g, "/");
 const SCRATCH_DIR = mkdtempSync(path.join(tmpdir(), "docurama-s3-test-"));
 const SCRATCH = path.join(SCRATCH_DIR, "fixture.db");
 const STORAGE_SCRATCH = mkdtempSync(path.join(tmpdir(), "docurama-s3-storage-"));
 if (RUN_S3_E2E) {
   cpSync("db/custom.db", SCRATCH);
-  process.env.DATABASE_URL = `file:${SCRATCH}`;
-  process.env.STORAGE_DIR = STORAGE_SCRATCH;
+  process.env.DATABASE_URL = `file:${posix(SCRATCH)}`;
+  process.env.STORAGE_DIR = posix(STORAGE_SCRATCH);
 }
-const db = RUN_S3_E2E ? new PrismaClient({ datasources: { db: { url: `file:${SCRATCH}` } } }) : null;
+const db = RUN_S3_E2E ? new PrismaClient({ datasources: { db: { url: `file:${posix(SCRATCH)}` } } }) : null;
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -36,7 +40,7 @@ type Weed = { s3Port: number; dataDir: string; proc: ReturnType<typeof Bun.spawn
 async function startWeed(): Promise<Weed> {
   const s3Port = await freePort();
   const dataDir = mkdtempSync(path.join(tmpdir(), "docurama-weed-"));
-  const proc = Bun.spawn([WEED_BIN, "server", `-dir=${dataDir}`, "-ip=127.0.0.1", "-ip.bind=127.0.0.1",
+  const proc = Bun.spawn([WEED_BIN, "server", `-dir=${posix(dataDir)}`, "-ip=127.0.0.1", "-ip.bind=127.0.0.1",
     `-master.port=${s3Port + 1}`, `-volume.port=${s3Port + 2}`, `-filer.port=${s3Port + 3}`,
     "-s3", `-s3.port=${s3Port}`, "-master.volumeSizeLimitMB=1024"],
     { stdin: "ignore", stdout: "ignore", stderr: "ignore" });

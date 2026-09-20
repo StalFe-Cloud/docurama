@@ -24,7 +24,19 @@ cd "$ROOT"
 
 BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:3000}"
 
+# CI exports this at the job level; a bare local `bash e2e/run.sh` needs it
+# too, or the loopback webhook fixtures are blocked by the SSRF guard
+# (observed as delivered=0 / statusCode=0 in webhooks.test.ts).
+export DOCURAMA_ALLOW_PRIVATE_WEBHOOKS="${DOCURAMA_ALLOW_PRIVATE_WEBHOOKS:-1}"
+
 # ── 0. Sanity + isolation: the suite runs on a COPY of the committed db. ─────
+# CI's e2e job pushes the schema onto db/custom.db before invoking this
+# script; do the same here so a fresh clone runs green without that step —
+# mail.test.ts copies db/custom.db directly and the seed needs current
+# columns (e.g. EnterpriseLead.companyLower, MailOutbox.claimToken).
+# Pinned to the fixture via the schema-relative path the tests also use, so
+# an ambient DATABASE_URL can't redirect the push.
+DATABASE_URL="file:../db/custom.db" bunx prisma db push --accept-data-loss --skip-generate > /dev/null
 # A globally exported DATABASE_URL silently overrides .env and every DB route
 # 500s (found the hard way). Beyond pinning, the suite writes a LOT (events,
 # seals, seed cycles) — writing to db/custom.db INSIDE the repo makes
