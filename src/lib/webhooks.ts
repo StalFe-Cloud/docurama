@@ -25,10 +25,41 @@
  */
 
 import { createHmac, randomUUID } from "crypto";
+import dns from "node:dns/promises";
+import net from "node:net";
 import { db } from "@/lib/db";
 
 export const MAX_WEBHOOK_ATTEMPTS = 5;
 const DELIVERY_TIMEOUT_MS = 8_000;
+const DELIVERY_LEASE_MS = 30_000;
+const MAX_RESPONSE_BYTES = 64 * 1024;
+
+function blockedIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const p = ip.split(".").map(Number);
+    return p[0] === 10 || p[0] === 127 || p[0] === 0 ||
+      (p[0] === 169 && p[1] === 254) || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+      (p[0] === 192 && p[1] === 168) || (p[0] === 100 && p[1] >= 64 && p[1] <= 127);
+  }
+  const x = ip.toLowerCase().split("%")[0];
+  return x === "::1" || x === "::" || x.startsWith("fc") || x.startsWith("fd") || x.startsWith("fe8") || x.startsWith("fe9") || x.startsWith("fea") || x.startsWith("feb") || x.startsWith("::ffff:127.") || x.startsWith("::ffff:10.") || x.startsWith("::ffff:192.168.");
+}
+
+export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
+  const url = new URL(raw);
+  if (url.protocol !== "https:" && process.env.NODE_ENV === "production") throw new Error("webhook endpoints must use HTTPS");
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error("unsupported webhook scheme");
+  if (url.username || url.password) throw new Error("webhook URLs must not contain credentials");
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) throw new Error("internal webhook host is not allowed");
+  if (net.isIP(host)) {
+    if (blockedIp(host)) throw new Error("private webhook address is not allowed");
+  } else {
+    const answers = await dns.lookup(host, { all: true, verbatim: true });
+    if (!answers.length || answers.some((a) => blockedIp(a.address))) throw new Error("webhook host resolves to a private address");
+  }
+  return url;
+}
 
 /** Documented schedule: 1m, 5m, 15m, then flat 30m for later attempts. */
 const WEBHOOK_BACKOFF_MS = [60_000, 300_000, 900_000, 1_800_000];
@@ -64,15 +95,28 @@ export async function postOnce(
   body: string,
   headers: Record<string, string>,
 ): Promise<{ statusCode: number }> {
+  await assertSafeWebhookUrl(url);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body,
     signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+    redirect: "error",
   });
   if (!res.ok) throw Object.assign(new Error(`endpoint returned ${res.status}`), { statusCode: res.status });
   // Drain the body so the socket is reusable, then report the real code.
-  await res.arrayBuffer().catch(() => undefined);
+  const len = Number(res.headers.get("content-length") ?? "0");
+  if (len > MAX_RESPONSE_BYTES) await res.body?.cancel().catch(() => undefined);
+  else {
+    const reader = res.body?.getReader();
+    let seen = 0;
+    while (reader) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      seen += value.byteLength;
+      if (seen > MAX_RESPONSE_BYTES) { await reader.cancel(); break; }
+    }
+  }
   return { statusCode: res.status };
 }
 
@@ -124,6 +168,7 @@ export async function dispatchEnvelopeEvent(
 
       await db.webhookDelivery.create({
         data: {
+          id: deliveryId,
           endpointId: ep.id,
           event,
           statusCode,
@@ -185,13 +230,14 @@ export type RetryResult = { retried: number; recovered: number; exhausted: numbe
  * stable). Attempts beyond the budget are closed out (nextAttemptAt = null).
  */
 export async function retryFailedDeliveries(limit = 10): Promise<RetryResult> {
-  const due = await db.webhookDelivery.findMany({
+  const candidates = await db.webhookDelivery.findMany({
     where: {
       success: false,
       payload: { not: null },
       attempts: { lt: MAX_WEBHOOK_ATTEMPTS },
       nextAttemptAt: { lte: new Date() },
       endpoint: { status: { not: "PAUSED" } },
+      OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }],
     },
     include: { endpoint: true },
     orderBy: { at: "asc" },
@@ -199,7 +245,15 @@ export async function retryFailedDeliveries(limit = 10): Promise<RetryResult> {
   });
 
   const out: RetryResult = { retried: 0, recovered: 0, exhausted: 0 };
-  for (const d of due) {
+  for (const candidate of candidates) {
+    const claimToken = randomUUID();
+    const claimed = await db.webhookDelivery.updateMany({
+      where: { id: candidate.id, success: false, OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }] },
+      data: { claimToken, claimUntil: new Date(Date.now() + DELIVERY_LEASE_MS) },
+    });
+    if (claimed.count !== 1) continue;
+    const d = await db.webhookDelivery.findUnique({ where: { id: candidate.id }, include: { endpoint: true } });
+    if (!d || d.claimToken !== claimToken) continue;
     const attempt = d.attempts + 1;
     const headers: Record<string, string> = {
       "X-Docurama-Event": d.event,
@@ -230,6 +284,8 @@ export async function retryFailedDeliveries(limit = 10): Promise<RetryResult> {
         nextAttemptAt:
           success || terminalFail ? null : new Date(Date.now() + webhookBackoffMs(attempt)),
         at: new Date(),
+        claimToken: null,
+        claimUntil: null,
       },
     });
     out.retried++;
