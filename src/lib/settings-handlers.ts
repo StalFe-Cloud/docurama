@@ -33,6 +33,19 @@ const HOSTNAME_RE = /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const adminRoles = (me: SessionUser) => me.workspaceRole === "OWNER" || me.workspaceRole === "ADMIN" || me.role === "PLATFORM_ADMIN";
+const ADMIN_ONLY_OPS = new Set([
+  "enforce-2fa","domain.add","domain.posture","domain.verify","domain.delete",
+  "member.role","invite-member","invite-revoke","remove-member",
+  "team.create","team.rename","team.delete","member.team",
+  "tsa.save","tsa.test","part11.save","esign.save","notifications.save","smtp.test",
+  "reminders.run","envelope.auto-remind","sms.save","sms.test",
+  "create-key","revoke-key","webhook.create","webhook.delete","webhook.toggle","mcp.save",
+]);
+function requireSettingsPermission(me: SessionUser, op: string): Response | null {
+  return ADMIN_ONLY_OPS.has(op) && !adminRoles(me)
+    ? jsonError("Workspace administrator access required", 403)
+    : null;
+}
 
 // ── Lazy per-tenant config rows (created with defaults on first read) ────────
 
@@ -140,11 +153,11 @@ export async function getSettingsSection(
           orderBy: { lastSeenAt: "desc" }, take: 20,
         }),
         db.securityEvent.findMany({
-          where: { OR: [{ actor: me.email }, { actor: `${user.firstName} ${user.lastName}` }] },
+          where: { actorUserId: me.id },
           orderBy: { at: "desc" }, take: 10,
         }),
         db.auditEvent.findMany({
-          where: { OR: [{ resource: `user:${me.email}` }, { actor: `${user.firstName} ${user.lastName}` }] },
+          where: { actorUserId: me.id },
           orderBy: { at: "desc" }, take: 8,
         }),
         db.tenant.findUnique({ where: { id: tenantId } }),
@@ -318,6 +331,8 @@ export async function postSettingsOp(
   const id = body.id ?? "";
   const data = body.data ?? {};
   const actor = `${me.firstName} ${me.lastName}`;
+  const denied = requireSettingsPermission(me, op);
+  if (denied) return denied;
   const tenantId = me.tenantId!;
   const user = await db.user.findUnique({ where: { id: me.id } });
   if (!user) return jsonError("Account not found", 404);
@@ -750,6 +765,7 @@ export async function postSettingsOp(
   if (op === "cert.provision") {
     const cert = await db.signingCertificate.findFirst({ where: { id, tenantId } });
     if (!cert) return jsonError("Certificate not found", 404);
+    if (cert.userId !== me.id && !adminRoles(me)) return jsonError("Only the certificate owner or a workspace admin can provision it", 403);
     if (cert.status !== "PENDING") return jsonError("Only pending certificates can be provisioned");
     const passphrase = String(data.passphrase ?? "");
     try {
@@ -810,6 +826,7 @@ export async function postSettingsOp(
   if (op === "cert.revoke") {
     const cert = await db.signingCertificate.findFirst({ where: { id, tenantId } });
     if (!cert) return jsonError("Certificate not found", 404);
+    if (cert.userId !== me.id && !adminRoles(me)) return jsonError("Only the certificate owner or a workspace admin can revoke it", 403);
     if (!["ISSUED", "ACTIVE"].includes(cert.status)) return jsonError("Only issued or active certificates can be revoked");
     await db.signingCertificate.update({ where: { id }, data: { status: "REVOKED", revokedAt: new Date(), pkcs12Base64: null } });
     await recordAudit({
@@ -822,6 +839,7 @@ export async function postSettingsOp(
   if (op === "cert.delete") {
     const cert = await db.signingCertificate.findFirst({ where: { id, tenantId } });
     if (!cert) return jsonError("Certificate not found", 404);
+    if (cert.userId !== me.id && !adminRoles(me)) return jsonError("Only the certificate owner or a workspace admin can delete it", 403);
     if (cert.status === "ACTIVE") return jsonError("Revoke the certificate before deleting it");
     await db.signingCertificate.delete({ where: { id } });
     return jsonOk({ ok: true, message: "Certificate deleted" });
