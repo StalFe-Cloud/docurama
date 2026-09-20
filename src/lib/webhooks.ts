@@ -47,10 +47,12 @@ function blockedIp(ip: string): boolean {
 
 export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
   const url = new URL(raw);
-  if (url.protocol !== "https:" && process.env.NODE_ENV === "production") throw new Error("webhook endpoints must use HTTPS");
+  const devLoopback = process.env.NODE_ENV !== "production" && process.env.DOCURAMA_ALLOW_PRIVATE_WEBHOOKS === "1";
+  if (url.protocol !== "https:" && !devLoopback) throw new Error("webhook endpoints must use HTTPS");
   if (!["https:", "http:"].includes(url.protocol)) throw new Error("unsupported webhook scheme");
   if (url.username || url.password) throw new Error("webhook URLs must not contain credentials");
   const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (devLoopback && (host === "localhost" || host === "127.0.0.1" || host === "::1")) return url;
   if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) throw new Error("internal webhook host is not allowed");
   if (net.isIP(host)) {
     if (blockedIp(host)) throw new Error("private webhook address is not allowed");
