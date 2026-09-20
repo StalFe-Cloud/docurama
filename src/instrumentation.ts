@@ -68,7 +68,15 @@ export async function register() {
   // then a steady cadence. Unref'd: the loop never keeps the process alive.
   const boot = setTimeout(() => void tick(), 5_000);
   boot.unref?.();
-  const loop = setInterval(() => void tick(), WORKER_INTERVAL_MS);
-  loop.unref?.();
+  let stopped = false;
+  const schedule = () => {
+    if (stopped) return;
+    const timer = setTimeout(async () => {
+      await tick();
+      schedule();
+    }, WORKER_INTERVAL_MS);
+    timer.unref?.();
+  };
+  schedule();
   console.log("[worker] background worker started (mail + webhook retries + subscription renewals)");
 }
