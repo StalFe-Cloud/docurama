@@ -37,6 +37,7 @@ mock.module("next/headers", () => ({
 const { db } = await import("../src/lib/db");
 const billing = await import("../src/lib/billing");
 const { planDef } = await import("../src/lib/plans");
+const { foldForSearch } = await import("../src/lib/search");
 const { resolveSessionUser } = await import("../src/lib/auth");
 const { getSettingsSection } = await import("../src/lib/settings-handlers");
 const adminRoute = await import("../src/app/api/admin/[section]/route");
@@ -312,6 +313,45 @@ describe("enterprise lead conversion", () => {
     // accident — resolving the two sources is a separate change.
     expect(payload.plan?.seatLimit).toBe(planDef("BUSINESS").seatLimit);
     expect(payload.plan?.seatLimit).not.toBe(175);
+  });
+
+  test("admin lead search folds case, and the folded columns are populated", async () => {
+    // PostgreSQL LIKE is case-sensitive and SQLite's is not, so matching the
+    // lowercased query against the raw company column found rows on SQLite and
+    // silently returned nothing on PostgreSQL. The folded columns are what
+    // makes it provider-agnostic; if the write path stops populating them the
+    // search breaks on BOTH, which is what this pins.
+    const lead = await db.enterpriseLead.create({
+      data: {
+        company: "Groupe Médical Sainte-Thérèse",
+        contactName: "Éloïse Beaumont",
+        companyLower: foldForSearch("Groupe Médical Sainte-Thérèse"),
+        contactNameLower: foldForSearch("Éloïse Beaumont"),
+        email: `${unique()}@example.test`,
+        status: "NEW",
+      },
+    });
+
+    // Folding lowercases and strips accents.
+    expect(lead.companyLower).toBe("groupe medical sainte-therese");
+    expect(lead.contactNameLower).toBe("eloise beaumont");
+
+    const search = async (q: string) => {
+      const res = await adminRoute.GET(
+        new NextRequest(`http://127.0.0.1:3000/api/admin/leads?q=${encodeURIComponent(q)}`),
+        ctx,
+      );
+      const body = (await res.json()) as { leads: { id: string }[] };
+      return body.leads.some((l) => l.id === lead.id);
+    };
+
+    // Lowercase, original case and an unaccented spelling all find it.
+    expect(await search("groupe medical")).toBe(true);
+    expect(await search("Groupe Médical")).toBe(true);
+    expect(await search("SAINTE-THERESE")).toBe(true);
+    expect(await search("eloise")).toBe(true);
+    // And a term that genuinely does not match still does not.
+    expect(await search("definitely-not-present")).toBe(false);
   });
 
   test("an unknown plan is refused before anything is created", async () => {

@@ -56,6 +56,16 @@ worker (mail and webhook retries) runs in-process, so exactly one replica may
 have it enabled; set `DOCURAMA_WORKER=off` on all the others. Object storage is
 the third requirement — see docs/STORAGE-OPTIONS.md.
 
+**Upgrading to the folded lead-search columns.** `EnterpriseLead` gained
+`companyLower`/`contactNameLower` so admin lead search works on PostgreSQL
+(PostgreSQL `LIKE` is case-sensitive; SQLite's is not, which hid the bug).
+`db push` adds them with their `""` default rather than computing them, so run
+once after upgrading, or existing leads stay unsearchable:
+
+```bash
+bun scripts/backfill-lead-search.ts
+```
+
 **Schema changes are applied with `prisma db push`, not migrations.**
 `prisma/migrations/` is empty and the entrypoint pushes the schema at boot,
 which is additive-only and refuses anything requiring data loss. Adopting a

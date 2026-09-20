@@ -10,6 +10,7 @@ import {
   type ProvisioningState,
 } from "@/lib/provisioning";
 import { createInvitation, requestOrigin, slugifyOrg } from "@/lib/onboarding";
+import { foldForSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -244,9 +245,14 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       case "leads": {
         // Enterprise pipeline (cycle 10): public /enterprise form intake.
         const leadWhere: Record<string, unknown> = {};
+        // Match the folded columns, not the raw ones: `search` is lowercased,
+        // and PostgreSQL LIKE is case-sensitive where SQLite's is not, so
+        // `company: { contains: search }` found rows on SQLite and nothing on
+        // PostgreSQL. (email is already stored lowercased on write.)
+        const leadSearch = foldForSearch(search);
         if (search) leadWhere.OR = [
-          { company: { contains: search } },
-          { contactName: { contains: search } },
+          { companyLower: { contains: leadSearch } },
+          { contactNameLower: { contains: leadSearch } },
           { email: { contains: search } },
         ];
         const status = q.get("status");

@@ -823,6 +823,12 @@ model EnterpriseLead {
   id          String    @id @default(cuid())
   company     String
   contactName String
+  // Folded copies for search. PostgreSQL LIKE is case-sensitive and SQLite's
+  // is not, so matching a lowercased query against the raw columns worked on
+  // SQLite and silently returned nothing on PostgreSQL. Same denormalised
+  // pattern as Template.nameLower / Envelope.titleLower; see foldForSearch.
+  companyLower     String @default("")
+  contactNameLower String @default("")
   email       String
   phone       String?
   seats       Int       @default(0) // expected seat count
@@ -840,6 +846,7 @@ model EnterpriseLead {
   convertedAt       DateTime?
 
   @@index([convertedTenantId])
+  @@index([companyLower])
 }
 
 // ─── Legal, Privacy & Compliance ──────────────────────────────────────────────

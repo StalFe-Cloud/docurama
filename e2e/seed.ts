@@ -33,6 +33,7 @@ import {
 import { storeUpload } from "../src/lib/document-store";
 import { PLAN_CATALOG, PLAN_ORDER } from "../src/lib/plans";
 import { syncTemplateLibrary } from "../scripts/sync-template-library";
+import { backfillLeadSearch } from "../scripts/backfill-lead-search";
 
 const run = promisify(execFile);
 
@@ -296,6 +297,12 @@ async function main() {
   // served an empty /modeles-de-contrats and an empty workspace template list.
   const builtIns = await syncTemplateLibrary();
   console.log(`templates: ${builtIns} built-in French template(s) present`);
+
+  /* ── Lead search columns ─────────────────────────────────────────── */
+  // Rows created before companyLower/contactNameLower existed carry the ""
+  // default and are unsearchable until folded. Idempotent.
+  const leadsFixed = await backfillLeadSearch();
+  if (leadsFixed) console.log(`leads: backfilled search columns on ${leadsFixed} lead(s)`);
 
   /* ── Platform settings singleton ─────────────────────────────────── */
   // Nothing in the application creates this row; it only ever came from the
