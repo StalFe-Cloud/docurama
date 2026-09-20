@@ -31,48 +31,61 @@ export interface Allowance {
   remaining: number;
 }
 
-/** Start of the metering window: the subscription's current period, or the calendar month as fallback. */
-export function periodStart(subscription: { renewalAt: Date; termMonths: number } | null): Date {
-  if (!subscription || subscription.termMonths <= 0) {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
-  // Current period = [renewalAt - termMonths, renewalAt)
-  const start = new Date(subscription.renewalAt);
-  start.setMonth(start.getMonth() - subscription.termMonths);
-  return start;
+/** Calendar-month usage window. Payment commitment length never changes monthly entitlements. */
+export function periodStart(_subscription: { renewalAt: Date; termMonths: number } | null, now = new Date()): Date {
+  const d = new Date(now);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function periodKey(now = new Date()): string {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")`;
 }
 
 export async function currentAllowance(tenantId: string): Promise<Allowance> {
-  // A stopped worker must not freeze manual subscriptions in an expired window.
-  // Provider-managed subscriptions remain webhook-driven.
   await renewDueSubscriptions(50, tenantId);
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     include: { subscriptions: { orderBy: { renewalAt: "desc" }, take: 1 } },
   });
-  if (!tenant) {
-    return { limit: 0, carriedForward: 0, total: 0, used: 0, remaining: 0 };
-  }
+  if (!tenant) return { limit: 0, carriedForward: 0, total: 0, used: 0, remaining: 0 };
   const plan = planDef(tenant.planCode);
   const sub = tenant.subscriptions[0] ?? null;
   const carriedForward = sub?.carriedForwardEnvelopes ?? 0;
-  const used = await db.envelope.count({
-    where: { tenantId, createdAt: { gte: periodStart(sub) } },
-  });
-  // A negotiated envelope allowance wins over the catalogue for sales-led
-  // deals; null falls back to the existing ENVELOPE_LIMITS-or-catalogue chain.
+  const start = periodStart(sub);
+  const [usage, actual] = await Promise.all([
+    db.envelopeQuotaUsage.findUnique({ where: { tenantId_periodKey: { tenantId, periodKey: periodKey() } } }),
+    db.envelope.count({ where: { tenantId, createdAt: { gte: start } } }),
+  ]);
+  const used = Math.max(usage?.used ?? 0, actual);
   const catalogue = ENVELOPE_LIMITS[tenant.planCode] ?? plan.envelopeLimit;
-  const total = sub?.envelopeLimitOverride ?? catalogue;
-  return {
-    limit: sub?.envelopeLimitOverride ?? plan.envelopeLimit,
-    carriedForward,
-    total: total + carriedForward,
-    used,
-    remaining: Math.max(0, total + carriedForward - used),
-  };
+  const limit = sub?.envelopeLimitOverride ?? catalogue;
+  return { limit, carriedForward, total: limit + carriedForward, used, remaining: Math.max(0, limit + carriedForward - used) };
+}
+
+/** Reserve one monthly envelope slot atomically inside the caller's transaction. */
+export async function reserveEnvelopeAllowance(tenantId: string, client: Prisma.TransactionClient): Promise<Allowance | null> {
+  const tenant = await client.tenant.findUnique({ where: { id: tenantId }, include: { subscriptions: { orderBy: { renewalAt: "desc" }, take: 1 } } });
+  if (!tenant) return null;
+  const plan = planDef(tenant.planCode);
+  const sub = tenant.subscriptions[0] ?? null;
+  const limit = sub?.envelopeLimitOverride ?? ENVELOPE_LIMITS[tenant.planCode] ?? plan.envelopeLimit;
+  const carriedForward = sub?.carriedForwardEnvelopes ?? 0;
+  const total = limit + carriedForward;
+  const key = periodKey();
+  const actual = await client.envelope.count({ where: { tenantId, createdAt: { gte: periodStart(sub) } } });
+  await client.envelopeQuotaUsage.upsert({
+    where: { tenantId_periodKey: { tenantId, periodKey: key } },
+    create: { tenantId, periodKey: key, used: actual },
+    update: { used: { increment: 0 } },
+  });
+  await client.envelopeQuotaUsage.updateMany({ where: { tenantId, periodKey: key, used: { lt: actual } }, data: { used: actual } });
+  const reserved = await client.envelopeQuotaUsage.updateMany({ where: { tenantId, periodKey: key, used: { lt: total } }, data: { used: { increment: 1 } } });
+  if (reserved.count !== 1) return null;
+  const row = await client.envelopeQuotaUsage.findUnique({ where: { tenantId_periodKey: { tenantId, periodKey: key } } });
+  const used = row?.used ?? actual + 1;
+  return { limit, carriedForward, total, used, remaining: Math.max(0, total - used) };
 }
 
 export interface RenewalOutcome {
@@ -120,7 +133,7 @@ export async function renewDueSubscriptions(limit = 50, tenantId?: string): Prom
     let allowance = 0;
     while (renewalAt <= now) {
       usedInPeriod = await tx.envelope.count({
-        where: { tenantId: sub.tenantId, createdAt: { gte: periodStart({ renewalAt, termMonths: sub.termMonths }), lt: renewalAt } },
+        where: { tenantId: sub.tenantId, createdAt: { gte: new Date(renewalAt.getFullYear(), renewalAt.getMonth() - 1, 1), lt: renewalAt } },
       });
       allowance = (sub.envelopeLimitOverride ?? ENVELOPE_LIMITS[sub.planCode] ?? plan.envelopeLimit) + carriedForward;
       carriedForward = Math.min(Math.max(0, allowance - usedInPeriod), rolloverCap(plan));
