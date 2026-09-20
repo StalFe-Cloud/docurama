@@ -37,6 +37,8 @@ mock.module("next/headers", () => ({
 const { db } = await import("../src/lib/db");
 const billing = await import("../src/lib/billing");
 const { planDef } = await import("../src/lib/plans");
+const { resolveSessionUser } = await import("../src/lib/auth");
+const { getSettingsSection } = await import("../src/lib/settings-handlers");
 const adminRoute = await import("../src/app/api/admin/[section]/route");
 
 let sequence = 0;
@@ -230,6 +232,65 @@ describe("enterprise lead conversion", () => {
     const stored = await db.enterpriseLead.findUnique({ where: { id: lead.id } });
     const tenantIds = new Set(results.map((r) => String(r.body.tenantId)));
     expect(tenantIds.has(String(stored?.convertedTenantId))).toBe(true);
+  });
+
+  test("the workspace billing surface reports the negotiated seats, not the catalogue", async () => {
+    // Entitlements have two sources: PLAN_CATALOG in src/lib/plans.ts (what
+    // planDef reads) and the Plan database rows the settings payload carries.
+    // The overrides hang off the billing layer, so this pins which number the
+    // UI meter actually receives — settings-billing.tsx renders seats.limit,
+    // not plan.seatLimit.
+    // The Plan rows are the other source of truth; this scratch database has
+    // none, so mirror the catalogue into one the way a real deployment does.
+    const businessPlan = planDef("BUSINESS");
+    await db.plan.upsert({
+      where: { code: "BUSINESS" },
+      update: {},
+      create: {
+        code: "BUSINESS",
+        name: businessPlan.name,
+        monthlyEur: businessPlan.monthlyEur,
+        seatLimit: businessPlan.seatLimit,
+        envelopeLimit: businessPlan.envelopeLimit,
+        storageGb: businessPlan.storageGb,
+        apiAccess: businessPlan.apiAccess,
+        support: businessPlan.support,
+        features: businessPlan.features.join("|"),
+      },
+    });
+
+    const lead = await newLead();
+    const { body } = await convert(lead.id, { planCode: "BUSINESS", seatLimitOverride: 175 });
+    const tenantId = String(body.tenantId);
+
+    const owner = await db.user.create({
+      data: {
+        email: `${unique()}-owner@example.test`,
+        firstName: "Neg",
+        lastName: "Otiated",
+        passwordHash: "unused",
+        activeTenantId: tenantId,
+      },
+    });
+    await db.member.create({ data: { userId: owner.id, tenantId, role: "OWNER", status: "ACTIVE" } });
+    const ownerSession = await db.session.create({
+      data: { userId: owner.id, expiresAt: new Date(Date.now() + 3600_000) },
+    });
+    const me = (await resolveSessionUser(ownerSession.id))!;
+
+    const res = await getSettingsSection("settings", me);
+    const payload = (await res.json()) as {
+      seats: { limit: number };
+      plan: { seatLimit: number } | null;
+    };
+
+    // What the meter renders: the contracted number.
+    expect(payload.seats.limit).toBe(175);
+    // The Plan row alongside it still carries the catalogue number. Pinned so
+    // that surfacing plan.seatLimit to a user is a deliberate decision, not an
+    // accident — resolving the two sources is a separate change.
+    expect(payload.plan?.seatLimit).toBe(planDef("BUSINESS").seatLimit);
+    expect(payload.plan?.seatLimit).not.toBe(175);
   });
 
   test("an unknown plan is refused before anything is created", async () => {
