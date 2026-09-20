@@ -47,6 +47,8 @@ jobs:
         with:
           bun-version: "1.2.22"
       - run: bun install --frozen-lockfile
+      - name: Install native backup and restore clients
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 postgresql-client
       - name: Select an empty disposable database
         run: |
           if [ '${{ matrix.provider }}' = sqlite ]; then
@@ -54,11 +56,14 @@ jobs:
           else
             echo 'DATABASE_URL=postgresql://docurama:fixture-only@127.0.0.1:5432/docurama_verification' >> "$GITHUB_ENV"
           fi
-      - name: Apply committed migration history and generate matching client
+      - name: Generate the provider-specific client
         run: |
           node scripts/schema-for.mjs '${{ matrix.provider }}'
-          bunx prisma migrate deploy --schema 'prisma/${{ matrix.provider }}/schema.prisma'
           bunx prisma generate --schema 'prisma/${{ matrix.provider }}/schema.prisma'
+      - name: Upgrade populated baseline and verify native backup restoration
+        run: node scripts/verify-migration-upgrade.mjs '${{ matrix.provider }}'
+      - name: Verify committed migration history is up to date
+        run: bunx prisma migrate deploy --schema 'prisma/${{ matrix.provider }}/schema.prisma'
       - run: bunx tsc --noEmit
       - run: bun run lint
       - name: Boot real HTTP application with demo mode disabled
@@ -74,7 +79,11 @@ jobs:
       - name: Real route, transaction, isolation and delivery assertions
         run: |
           set -o pipefail
-          bun test --timeout 60000 e2e/quality-verification.test.ts 2>&1 | tee "$RUNNER_TEMP/verification-tests.log"
+          bun test --timeout 60000 e2e/quality-verification.test.ts e2e/transaction-gate.test.ts 2>&1 | tee "$RUNNER_TEMP/verification-tests.log"
+          bun test --timeout 60000 e2e/mail-invariants.test.ts 2>&1 | tee -a "$RUNNER_TEMP/verification-tests.log"
+      - name: Application diagnostics on failure
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/verification-server.log" || true
       - name: Stop test process
         if: always()
         run: |
@@ -115,7 +124,7 @@ jobs:
       - name: Boot isolated production runtime with the worker enabled
         run: |
           mkdir -p "$RUNNER_TEMP/quality-verification-runtime"
-          # Permissions below apply only to this disposable CI volume, shared
+          # These permissions apply only to this disposable CI volume shared
           # between the non-root image and the host-side fixture process.
           touch "$RUNNER_TEMP/quality-verification-runtime/runtime.db"
           chmod 777 "$RUNNER_TEMP/quality-verification-runtime"
@@ -134,7 +143,7 @@ jobs:
           done
           docker logs "$DOCURAMA_RUNTIME_CONTAINER"
           exit 1
-      - name: Login, signing, live fixture transports and restart recovery
+      - name: Login, signing, local transports and periodic worker-only delivery
         run: |
           set -o pipefail
           bun test --timeout 180000 e2e/production-worker.test.ts 2>&1 | tee "$RUNNER_TEMP/production-worker-tests.log"
@@ -142,6 +151,7 @@ jobs:
         if: always()
         run: |
           docker logs "$DOCURAMA_RUNTIME_CONTAINER" > "$RUNNER_TEMP/production-worker-server.log" 2>&1 || true
+          if [ '${{ job.status }}' != success ]; then tail -n 200 "$RUNNER_TEMP/production-worker-server.log"; fi
           docker rm -f "$DOCURAMA_RUNTIME_CONTAINER" || true
       - uses: actions/upload-artifact@v4
         if: always()
