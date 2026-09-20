@@ -115,7 +115,6 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
   const candidates = await db.mailOutbox.findMany({
     where: {
       status: "QUEUED",
-      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
       attempts: { lt: MAX_MAIL_ATTEMPTS },
       OR: [
         { claimUntil: null, nextAttemptAt: null },
