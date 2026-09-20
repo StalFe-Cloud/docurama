@@ -24,9 +24,11 @@
  */
 
 import { createTransport, type Transporter } from "nodemailer";
+import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 
 export const MAX_MAIL_ATTEMPTS = 5;
+const MAIL_LEASE_MS = 60_000;
 
 /** Backoff for attempt n (1-based): 30s, 2m, 8m, 30m — capped at 30m. */
 export function mailBackoffMs(attempt: number): number {
@@ -110,11 +112,17 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
   const mode = smtpMode();
   if (!mode.configured) return { mode: "outbox-only", processed: 0, sent: 0, failed: 0, deferred: 0 };
 
-  const due = await db.mailOutbox.findMany({
+  const candidates = await db.mailOutbox.findMany({
     where: {
       status: "QUEUED",
       OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
       attempts: { lt: MAX_MAIL_ATTEMPTS },
+      OR: [
+        { claimUntil: null, nextAttemptAt: null },
+        { claimUntil: null, nextAttemptAt: { lte: new Date() } },
+        { claimUntil: { lt: new Date() }, nextAttemptAt: null },
+        { claimUntil: { lt: new Date() }, nextAttemptAt: { lte: new Date() } },
+      ],
     },
     orderBy: { createdAt: "asc" },
     take: limit,
@@ -124,7 +132,17 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
   let failed = 0;
   let deferred = 0;
 
-  for (const row of due) {
+  let processed = 0;
+  for (const candidate of candidates) {
+    const claimToken = randomUUID();
+    const claimed = await db.mailOutbox.updateMany({
+      where: { id: candidate.id, status: "QUEUED", OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }] },
+      data: { claimToken, claimUntil: new Date(Date.now() + MAIL_LEASE_MS) },
+    });
+    if (claimed.count !== 1) continue;
+    const row = await db.mailOutbox.findUnique({ where: { id: candidate.id } });
+    if (!row || row.claimToken !== claimToken) continue;
+    processed++;
     const attempt = row.attempts + 1;
     try {
       await sendViaSmtp(mode, {
@@ -136,7 +154,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
       });
       await db.mailOutbox.update({
         where: { id: row.id },
-        data: { status: "SENT", sentAt: new Date(), attempts: attempt, lastError: null },
+        data: { status: "SENT", sentAt: new Date(), attempts: attempt, lastError: null, claimToken: null, claimUntil: null },
       });
       sent++;
     } catch (err) {
@@ -149,6 +167,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
           attempts: attempt,
           lastError: message.slice(0, 500),
           nextAttemptAt: terminal ? null : new Date(Date.now() + mailBackoffMs(attempt)),
+          claimToken: null, claimUntil: null,
         },
       });
       if (terminal) failed++;
@@ -157,7 +176,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
     }
   }
 
-  return { mode: "smtp", processed: due.length, sent, failed, deferred };
+  return { mode: "smtp", processed, sent, failed, deferred };
 }
 
 /** Queue depth for the health endpoint / admin console. */
