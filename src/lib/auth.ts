@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { db } from "@/lib/db";
 
@@ -180,14 +180,16 @@ export async function requireUser(): Promise<SessionUser> {
 
 export async function recordAudit(input: {
   actor: string; actorRole: string; action: string; resource: string;
+  actorUserId?: string | null; tenantId?: string | null;
   severity?: string; tenantName?: string | null; detail?: string; ip?: string;
 }) {
   await db.auditEvent.create({
     data: {
+      actorUserId: input.actorUserId ?? null, tenantId: input.tenantId ?? null,
       actor: input.actor, actorRole: input.actorRole, action: input.action,
       resource: input.resource, severity: input.severity ?? "INFO",
       tenantName: input.tenantName ?? null, detail: input.detail ?? null,
-      ip: input.ip ?? "10.42.0.7",
+      ip: input.ip ?? "unknown",
     },
   });
 }
