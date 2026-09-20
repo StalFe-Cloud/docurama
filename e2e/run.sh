@@ -67,6 +67,7 @@ if [[ "${E2E_START_SERVER:-1}" == "1" ]]; then
     REKOR_WITNESS="${E2E_REKOR_WITNESS:-off}" \
       NEXT_PUBLIC_DEMO_MODE="${E2E_DEMO_MODE:-true}" \
       DOCURAMA_WORKER="${E2E_DOCURAMA_WORKER:-off}" \
+      DOCURAMA_ALLOW_PRIVATE_WEBHOOKS="1" \
       bun run dev > /tmp/docurama-e2e-dev.log 2>&1 &
     SERVER_PID=$!
     for i in $(seq 1 60); do

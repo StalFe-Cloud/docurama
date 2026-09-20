@@ -2,9 +2,9 @@ name: E2E
 
 on:
   push:
-    branches: [main, quality]
+    branches: [main, quality, quality-remediation-20260920]
   pull_request:
-    branches: [main, quality]
+    branches: [main, quality, quality-remediation-20260920]
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.2.22"
       - run: bun install --frozen-lockfile
       - run: bunx prisma generate
       - run: bun run lint
@@ -50,12 +50,13 @@ jobs:
     env:
       E2E_BASE_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_DEMO_MODE: "true"
+      DOCURAMA_ALLOW_PRIVATE_WEBHOOKS: "1"
     steps:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.2.22"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -132,12 +133,13 @@ jobs:
           --health-retries 10
     env:
       PGURL: postgresql://docurama:docurama@localhost:5432/docurama_test
+      DOCURAMA_ALLOW_PRIVATE_WEBHOOKS: "1"
     steps:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.2.22"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -184,7 +186,7 @@ jobs:
       - name: Boot the app against PostgreSQL
         run: |
           cp .env.example .env
-          REKOR_WITNESS=off NEXT_PUBLIC_DEMO_MODE=true DOCURAMA_WORKER=off             DATABASE_URL="$PGURL" bun run dev > /tmp/pg-dev.log 2>&1 &
+          REKOR_WITNESS=off NEXT_PUBLIC_DEMO_MODE=true DOCURAMA_WORKER=off DOCURAMA_ALLOW_PRIVATE_WEBHOOKS=1             DATABASE_URL="$PGURL" bun run dev > /tmp/pg-dev.log 2>&1 &
           for _ in $(seq 1 60); do
             curl -sf -o /dev/null http://127.0.0.1:3000/login && break
             sleep 2
