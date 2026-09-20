@@ -103,11 +103,7 @@ jobs:
         run: bash e2e/run.sh
 
 
-  # ── Schema portability gate (PRODUCTION-PLAN §9) ──────────────────────────
-  # This validates schema shape only. A PostgreSQL release also needs a
-  # provider-specific generated client and the full runtime regression suite.
-  # The supplied SQLite image must not be pointed at PostgreSQL unchanged.
-  # ── PostgreSQL runtime gate ───────────────────────────────────────────────
+  # ── PostgreSQL runtime gate (PRODUCTION-PLAN §9) ──────────────────────────
   # Was a schema-shape check only ("do the tables exist"). It now generates the
   # PostgreSQL client, seeds, boots the app against PostgreSQL and runs the
   # HTTP-level and browser suites — i.e. the runtime regression the old comment
