@@ -7,6 +7,15 @@ on:
     branches: [main, quality, quality-remediation-20260920]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# Superseded commits must not keep consuming runners or produce misleading
+# old-revision results while the pull request is being corrected.
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   production-image:
     runs-on: ubuntu-latest
@@ -104,16 +113,9 @@ jobs:
         run: bash e2e/run.sh
 
 
-  # ── PostgreSQL runtime gate (PRODUCTION-PLAN §9) ──────────────────────────
-  # Was a schema-shape check only ("do the tables exist"). It now generates the
-  # PostgreSQL client, seeds, boots the app against PostgreSQL and runs the
-  # HTTP-level and browser suites — i.e. the runtime regression the old comment
-  # here said a PostgreSQL release would still need.
-  #
-  # Not covered: the suites that provision their own scratch SQLite file
-  # (auth-security, password-security, quota-security, billing, bot-guard,
-  # mail, sso). They exercise library code against a private database rather
-  # than the running server, so they stay on SQLite; the sqlite job covers them.
+  # The HTTP/browser tier covers PostgreSQL. Additional provider-independent
+  # transaction, mail and migration cases run in release-verification.yml.
+  # Suites that deliberately create their own SQLite files remain in e2e.
   postgres:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -127,7 +129,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U docurama -d docurama_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -146,11 +148,7 @@ jobs:
 
       - name: Generate the PostgreSQL schema and client
         run: |
-          # scripts/schema-for.mjs replaces the inline sed this job used to
-          # carry, so CI and local development share one code path. It also
-          # rejects schema constructs that a provider swap cannot carry across
-          # (@db.* native types, Unsupported(), dbgenerated(), enum blocks,
-          # scalar lists, @@index(type:)) — that is the portability assertion.
+          # scripts/schema-for.mjs rejects non-portable schema constructs.
           node scripts/schema-for.mjs postgresql
           bunx prisma generate --schema prisma/schema.postgresql.prisma
         env:
