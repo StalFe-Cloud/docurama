@@ -59,22 +59,34 @@ One in-process loop (src/instrumentation.ts), first pass ~5 s after boot, then e
 
 Single-instance rule: exactly one replica must run the worker. Multi-replica tiers set `DOCURAMA_WORKER=off` on all but one. Health `checks.webhooks.failing` > 0 for more than an hour means a consumer is down — check the delivery log in Settings → API & Webhooks.
 
-## 5. Backups and restore drills
+## 5. Backups, database isolation, and restore drills
 
 `scripts/backup.sh` produces, under `BACKUP_DIR` (default `/var/backups/docurama`):
 
-- `db-YYYYmmdd-HHMMSS.sqlite` — consistent snapshot via `sqlite3 .backup` (safe while the server runs)
+- `db-YYYYmmdd-HHMMSS.sqlite` — consistent snapshot via `sqlite3 .backup` (safe while the server runs; falls back to containerized execution if host lacks `sqlite3`)
+- `db-YYYYmmdd-HHMMSS.sql.gz` (optional via `--dump-sql`) — portable SQL text dump
 - `storage-YYYYmmdd-HHMMSS.tar.gz` — the document tree (`STORAGE_DIR`)
+- **Dud prevention**: Enforces `set -euo pipefail` and validates size > 1024 bytes (prevents 20-byte empty `.sql.gz` duds).
 - Retention pruning past `KEEP_DAYS` (default 30), optional GPG encryption (`--gpg <recipient>`) and off-site rsync (`--remote backup@host:/path`)
 
 ```bash
-# Cron (03:15 nightly):  15 3 * * * /opt/docurama/scripts/backup.sh >> /var/log/docurama-backup.log 2>&1
+# Cron (03:15 nightly, with SQL dump + container fallback):
+15 3 * * * /opt/docurama/scripts/backup.sh --dump-sql --container docurama-cloud >> /var/log/docurama-backup.log 2>&1
+
 # Restore drill (quarterly):
-systemctl stop docurama
-gpg -d db-….sqlite.gpg > /opt/docurama/db/custom.db      # if encrypted
-tar xzf storage-….tar.gz -C /opt/docurama/storage --strip-components=2
-systemctl start docurama && curl -fsS https://app.example.com/api/health
+docker compose -p docurama-cloud stop
+gpg -d db-….sqlite.gpg > /var/lib/docurama/db/custom.db      # if encrypted
+tar xzf storage-….tar.gz -C /var/lib/docurama/storage --strip-components=2
+docker compose -p docurama-cloud up -d && curl -fsS http://127.0.0.1:3002/api/health
 ```
+
+### Zero-risk database decoupling
+To completely eliminate the risk of `git checkout -f` or `git clean` overwriting the live database (as happened on 2026-09-21), decouple the database directory from the git checkout tree by setting in the host's untracked `.env`:
+```bash
+HOST_DB_DIR=/var/lib/docurama/db
+HOST_STORAGE_DIR=/var/lib/docurama/storage
+```
+This ensures the live database file resides outside the repository working copy.
 
 Run the drill against a **copy** first. The standard test trick (used by every E2E suite): copy `db/custom.db` to a scratch path and point `DATABASE_URL` at the copy — tests never mutate the committed seed. S3-backed deployments: snapshot the bucket (versioning/lifecycle) in addition to the DB backup; document bytes are not in the SQLite file.
 

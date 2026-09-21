@@ -137,7 +137,7 @@ const db = new PrismaClient({ datasources: { db: { url: `file:${SCRATCH}` } } })
 // completely, so every count is exact.
 await db.mailOutbox.deleteMany({});
 
-const { processOutbox, smtpMode, mailBackoffMs, MAX_MAIL_ATTEMPTS } = await import("../src/lib/mail");
+const { processOutbox, smtpMode, mailBackoffMs, isRateLimitError, MAX_MAIL_ATTEMPTS } = await import("../src/lib/mail");
 
 let relay: Awaited<ReturnType<typeof startFakeSmtp>>;
 
@@ -250,7 +250,7 @@ describe("SMTP delivery", () => {
     expect(row?.attempts).toBe(2);
   });
 
-  test("five failures terminally FAIL the message with the last error kept", async () => {
+  test("ten failures terminally FAIL the message with the last error kept", async () => {
     const m = await queueMail("Never deliverable");
     relay.rejectNextMailFrom(99); // always reject
 
@@ -277,11 +277,32 @@ describe("SMTP delivery", () => {
     expect(again.processed).toBe(0);
   });
 
-  test("backoff schedule is capped at 30 minutes", () => {
+  test("backoff schedule expands up to 12 hours for general errors", () => {
     expect(mailBackoffMs(1)).toBe(30_000);
     expect(mailBackoffMs(2)).toBe(120_000);
     expect(mailBackoffMs(3)).toBe(480_000);
     expect(mailBackoffMs(4)).toBe(1_800_000);
-    expect(mailBackoffMs(5)).toBe(1_800_000); // cap
+    expect(mailBackoffMs(5)).toBe(3_600_000);
+    expect(mailBackoffMs(6)).toBe(7_200_000);
+    expect(mailBackoffMs(7)).toBe(14_400_000);
+    expect(mailBackoffMs(10)).toBe(43_200_000);
+    expect(mailBackoffMs(15)).toBe(43_200_000); // capped at attempt 10
+  });
+
+  test("rate-limit errors back off up to 24 hours to survive 24h quotas", () => {
+    expect(isRateLimitError("450 mailbox temporarily unavailable")).toBe(true);
+    expect(isRateLimitError("451 4.7.0 Rate limit exceeded")).toBe(true);
+    expect(isRateLimitError("452 4.5.3 Daily user sending quota exceeded")).toBe(true);
+    expect(isRateLimitError("Too many messages sent")).toBe(true);
+    expect(isRateLimitError("550 User not found")).toBe(false);
+    expect(isRateLimitError(null)).toBe(false);
+
+    expect(mailBackoffMs(1, "450 rate limit")).toBe(3_600_000); // 1h
+    expect(mailBackoffMs(2, "450 rate limit")).toBe(7_200_000); // 2h
+    expect(mailBackoffMs(3, "450 rate limit")).toBe(14_400_000); // 4h
+    expect(mailBackoffMs(4, "450 rate limit")).toBe(28_800_000); // 8h
+    expect(mailBackoffMs(5, "450 rate limit")).toBe(43_200_000); // 12h
+    expect(mailBackoffMs(6, "450 rate limit")).toBe(86_400_000); // 24h
+    expect(mailBackoffMs(10, "450 rate limit")).toBe(86_400_000); // 24h cap
   });
 });

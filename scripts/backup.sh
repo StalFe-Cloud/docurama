@@ -30,6 +30,10 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/docurama}"
 KEEP_DAYS="${KEEP_DAYS:-30}"
 REMOTE_TARGET="${REMOTE_TARGET:-}"
 GPG_RECIPIENT="${GPG_RECIPIENT:-}"
+DB_FILE="${DATABASE_FILE:-}"
+STORAGE_DIR="${STORAGE_DIR:-}"
+DUMP_SQL="${DUMP_SQL:-false}"
+CONTAINER_NAME="${CONTAINER_NAME:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,11 +42,13 @@ while [[ $# -gt 0 ]]; do
     --keep-days) KEEP_DAYS="$2"; shift 2 ;;
     --remote) REMOTE_TARGET="$2"; shift 2 ;;
     --gpg) GPG_RECIPIENT="$2"; shift 2 ;;
+    --dump-sql) DUMP_SQL=true; shift 1 ;;
+    --container) CONTAINER_NAME="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
 
-DB_FILE="${DATABASE_FILE:-$APP_DIR/db/custom.db}"
+DB_FILE="${DB_FILE:-$APP_DIR/db/custom.db}"
 STORAGE_DIR="${STORAGE_DIR:-$APP_DIR/storage}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -53,13 +59,42 @@ if [[ -f "$DB_FILE" ]]; then
   echo "── backup: snapshotting $DB_FILE"
   if command -v sqlite3 >/dev/null 2>&1; then
     sqlite3 "$DB_FILE" ".backup '$BACKUP_DIR/db-$STAMP.sqlite'"
+  elif [[ -n "$CONTAINER_NAME" ]] && command -v docker >/dev/null 2>&1 && docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
+    echo "   Using docker container $CONTAINER_NAME for sqlite3 snapshot"
+    docker exec "$CONTAINER_NAME" sqlite3 /app/db/custom.db ".backup '/tmp/db-$STAMP.sqlite'"
+    docker cp "$CONTAINER_NAME:/tmp/db-$STAMP.sqlite" "$BACKUP_DIR/db-$STAMP.sqlite"
+    docker exec "$CONTAINER_NAME" rm -f "/tmp/db-$STAMP.sqlite"
   else
-    # No sqlite3 CLI: fall back to the Prisma-carried engine via the app dir,
-    # else a plain copy with a clear warning (stop the app for full safety).
+    # No sqlite3 CLI: fall back to plain copy with a clear warning.
     echo "   WARNING: sqlite3 CLI not found — falling back to plain copy." >&2
     echo "            For guaranteed consistency, install sqlite3 or stop the app first." >&2
     cp "$DB_FILE" "$BACKUP_DIR/db-$STAMP.sqlite"
   fi
+
+  # Optional portable SQL text dump (.sql.gz)
+  if [[ "$DUMP_SQL" = true ]]; then
+    echo "── backup: exporting portable SQL dump to $BACKUP_DIR/db-$STAMP.sql.gz"
+    if command -v sqlite3 >/dev/null 2>&1; then
+      sqlite3 "$DB_FILE" ".dump" | gzip -c > "$BACKUP_DIR/db-$STAMP.sql.gz"
+    elif [[ -n "$CONTAINER_NAME" ]] && command -v docker >/dev/null 2>&1 && docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
+      docker exec "$CONTAINER_NAME" sqlite3 /app/db/custom.db ".dump" | gzip -c > "$BACKUP_DIR/db-$STAMP.sql.gz"
+    else
+      echo "   WARNING: cannot create SQL dump; neither sqlite3 nor docker container available" >&2
+    fi
+  fi
+
+  # Validate generated database backups are NOT duds (e.g. 20-byte empty gzip streams)
+  MIN_SIZE_BYTES=1024
+  for dump_file in "$BACKUP_DIR/db-$STAMP.sqlite" "$BACKUP_DIR/db-$STAMP.sql.gz"; do
+    [[ -f "$dump_file" ]] || continue
+    size=$(wc -c < "$dump_file" | tr -d ' ')
+    if [[ "$size" -lt "$MIN_SIZE_BYTES" ]]; then
+      echo "FATAL: $dump_file is only $size bytes (dud dump / empty stream). Removing and aborting." >&2
+      rm -f "$dump_file"
+      exit 1
+    fi
+    echo "── backup: validated $(basename "$dump_file") ($size bytes)"
+  done
 else
   echo "── backup: no database at $DB_FILE (skipped)" >&2
   exit 1
@@ -75,7 +110,7 @@ fi
 
 # ── 3. Optional encryption ───────────────────────────────────────────────────
 if [[ -n "$GPG_RECIPIENT" ]] && command -v gpg >/dev/null 2>&1; then
-  for f in "$BACKUP_DIR/db-$STAMP.sqlite" "$BACKUP_DIR/storage-$STAMP.tar.gz"; do
+  for f in "$BACKUP_DIR/db-$STAMP.sqlite" "$BACKUP_DIR/db-$STAMP.sql.gz" "$BACKUP_DIR/storage-$STAMP.tar.gz"; do
     [[ -f "$f" ]] || continue
     gpg --batch --yes --recipient "$GPG_RECIPIENT" --encrypt "$f"
     rm -f "$f"
@@ -86,7 +121,7 @@ fi
 # ── 4. Retention ─────────────────────────────────────────────────────────────
 echo "── backup: pruning artifacts older than $KEEP_DAYS days"
 find "$BACKUP_DIR" -maxdepth 1 -type f \
-  \( -name 'db-*.sqlite' -o -name 'db-*.sqlite.gpg' -o -name 'storage-*.tar.gz' -o -name 'storage-*.tar.gz.gpg' \) \
+  \( -name 'db-*.sqlite' -o -name 'db-*.sqlite.gpg' -o -name 'db-*.sql.gz' -o -name 'db-*.sql.gz.gpg' -o -name 'storage-*.tar.gz' -o -name 'storage-*.tar.gz.gpg' \) \
   -mtime "+$KEEP_DAYS" -delete
 
 # ── 5. Optional off-site copy ────────────────────────────────────────────────

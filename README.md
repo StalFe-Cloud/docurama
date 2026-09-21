@@ -159,11 +159,9 @@ To prevent broken links across marketing assets, the middleware permanently hand
 
 The dedicated enterprise deployment at **`https://docurama.stalfe.com`** provides an isolated tenant environment for **StålFe Industrial Heavy Engineering**:
 
-| Login Email | Organization | Role | Plan Tier | Password | Capabilities |
+| Login Email | Organization | Role | Plan Tier | Initial Password | Capabilities |
 |---|---|---|---|---|---|
-| **`alex@stalfe.example`** | StålFe | `WORKSPACE_ADMIN` (Owner) | **ENTERPRISE** | `demo1234` | Full workspace governance, BYO certificate upload, team management, billing, signing |
-| **`marco@stalfe.example`** | StålFe | `MEMBER` (Admin) | **ENTERPRISE** | `demo1234` | Document authoring, template creation, audit log export, envelope sealing |
-| **`sofia@stalfe.example`** | StålFe | `MEMBER` (Signer) | **ENTERPRISE** | `demo1234` | Document review, cryptographic signing, certificate verification |
+| **`sriram.rajan@stalfe.com`** | StålFe | `WORKSPACE_ADMIN` / `PLATFORM_ADMIN` (Owner) | **ENTERPRISE** | `StalFe2026!Admin` | Full workspace governance, BYO certificate upload, team management, billing, signing |
 
 #### Direct Access Links:
 - **Sign In:** [`https://docurama.stalfe.com/login`](https://docurama.stalfe.com/login)
@@ -178,28 +176,7 @@ Platform administrators have root oversight across all tenants, global audit log
 
 | Email | Role | Operator Name | Initial Password | 2FA Status | Permissions |
 |---|---|---|---|---|---|
-| **`admin@docurama.eu`** | `PLATFORM_ADMIN` | Elena Marchetti | `admin1234` | Enabled (TOTP) | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits |
-| **`ops@docurama.eu`** | `PLATFORM_ADMIN` | Jonas Weber | `admin1234` | Enabled (TOTP) | Infrastructure Operations: telemetry, rate-limiting, TSA configuration |
-
----
-
-### 5.3 Enterprise Tenant Accounts Directory
-
-Pre-configured tenant accounts across various subscription tiers for quality assurance and staging:
-
-| Email | Organization | Role | Plan | Initial Password |
-|---|---|---|---|---|
-| `pietro@aurora-legal.example` | Aurora Legal LLP | `WORKSPACE_ADMIN` (Owner) | **BUSINESS** | `demo1234` |
-| `hannah@helios-energy.example`| Helios Energy Group | `WORKSPACE_ADMIN` (Owner) | **ENTERPRISE** | `demo1234` |
-| `lucas@bayern-immo.example` | Bayern Immobilien AG | `MEMBER` (Admin) | **BUSINESS** | `demo1234` |
-| `amara@meteora-health.example`| Meteora Health Clinics | `MEMBER` (Owner) | **BUSINESS (Trial)** | `demo1234` |
-| `tomas@solstice-media.example`| Solstice Media Ltd | `MEMBER` (Owner) | **STARTER** | `demo1234` |
-| `greta@corvus-mfg.example` | Corvus Manufacturing | `MEMBER` (Owner) | **ENTERPRISE (Suspended)** | `demo1234` |
-| `dmitri@atlas-freight.example`| Atlas Freight Systems | `MEMBER` (Admin) | **BUSINESS** | `demo1234` |
-| `leila@verdant-agri.example` | Verdant Agriculture | `MEMBER` (Owner) | **STARTER** | `demo1234` |
-
-> [!NOTE]
-> All passwords in the database are hashed using SHA-256 with tenant-scoped cryptographic salts. Custom workspace users can be provisioned through **Settings → Team** or onboarded automatically via corporate domain matching.
+| **`sriram.rajan@stalfe.com`** | `PLATFORM_ADMIN` | Sriram Rajan | `StalFe2026!Admin` | Configurable | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits, billing, telemetry |
 
 ---
 
@@ -543,7 +520,7 @@ Rotate initial demonstration credentials for production deployment:
   - Change default password for `admin@docurama.eu` and `ops@docurama.eu` (default was `admin1234`) via [https://admin.docurama.eu](https://admin.docurama.eu) or direct `/reset-password`.
   - Configure TOTP Two-Factor Authentication (Google Authenticator / 1Password) on the platform operator account.
 - [ ] **Rotate StålFe Dedicated Enterprise Passwords:**
-  - Change initial passwords for `alex@stalfe.example`, `marco@stalfe.example`, and `sofia@stalfe.example` (default was `demo1234`) via [https://docurama.stalfe.com/login](https://docurama.stalfe.com/login).
+  - Change initial password for `sriram.rajan@stalfe.com` (initial: `StalFe2026!Admin`) via [https://docurama.stalfe.com/login](https://docurama.stalfe.com/login).
 - [ ] **Rotate Production Environment Encryption Salts:**
   - Verify `/opt/docurama-cloud/.env` and `/opt/docurama-enterprise/.env` on `nexa-vps` have unique, random 64-character hex values for `SESSION_SECRET`, `ENCRYPTION_KEY`, and `NEXTAUTH_SECRET`.
 

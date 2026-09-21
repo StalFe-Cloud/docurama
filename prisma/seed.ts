@@ -65,22 +65,7 @@ async function main() {
 
   // ── Users & memberships ────────────────────────────────────────────────
   const usersData = [
-    { email: "admin@docurama.eu", first: "Elena", last: "Marchetti", role: "PLATFORM_ADMIN", pw: "admin1234", tenant: null, mrole: null, totp: true },
-    { email: "ops@docurama.eu", first: "Jonas", last: "Weber", role: "PLATFORM_ADMIN", pw: "admin1234", tenant: null, mrole: null, totp: true },
-    { email: "alex@stalfe.example", first: "Alexandra", last: "Fischer", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "stalfe", mrole: "OWNER", totp: true },
-    { email: "marco@stalfe.example", first: "Marco", last: "Bianchi", role: "MEMBER", pw: "demo1234", tenant: "stalfe", mrole: "ADMIN", totp: false },
-    { email: "sofia@stalfe.example", first: "Sofia", last: "Lindqvist", role: "MEMBER", pw: "demo1234", tenant: "stalfe", mrole: "MEMBER", totp: false },
-    { email: "lars@nordjarm.example", first: "Lars", last: "Bergström", role: "MEMBER", pw: "demo1234", tenant: "stalfe", mrole: "MEMBER", totp: false },
-    { email: "pietro@aurora-legal.example", first: "Pietro", last: "Rinaldi", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "aurora-legal", mrole: "OWNER", totp: true },
-    { email: "hannah@helios-energy.example", first: "Hannah", last: "Schulz", role: "WORKSPACE_ADMIN", pw: "demo1234", tenant: "helios-energy", mrole: "OWNER", totp: true },
-    { email: "lucas@bayern-immo.example", first: "Lucas", last: "Huber", role: "MEMBER", pw: "demo1234", tenant: "bayern-immo", mrole: "ADMIN", totp: false },
-    { email: "amara@meteora-health.example", first: "Amara", last: "Okafor", role: "MEMBER", pw: "demo1234", tenant: "meteora-health", mrole: "OWNER", totp: false },
-    { email: "tomas@solstice-media.example", first: "Tomás", last: "Alvarez", role: "MEMBER", pw: "demo1234", tenant: "solstice-media", mrole: "OWNER", totp: false },
-    { email: "greta@corvus-mfg.example", first: "Greta", last: "Neumann", role: "MEMBER", pw: "demo1234", tenant: "corvus-mfg", mrole: "OWNER", totp: true },
-    { email: "yuki@lumen-research.example", first: "Yuki", last: "Tanaka", role: "MEMBER", pw: "demo1234", tenant: "lumen-research", mrole: "OWNER", totp: false },
-    { email: "dmitri@atlas-freight.example", first: "Dmitri", last: "Volkov", role: "MEMBER", pw: "demo1234", tenant: "atlas-freight", mrole: "ADMIN", totp: true },
-    { email: "leila@verdant-agri.example", first: "Leila", last: "Haddad", role: "MEMBER", pw: "demo1234", tenant: "verdant-agri", mrole: "OWNER", totp: false },
-    { email: "arnaud@lefebvre.example", first: "Arnaud", last: "Lefebvre", role: "MEMBER", pw: "demo1234", tenant: "lefebvre-consulting", mrole: "OWNER", totp: false },
+    { email: "sriram.rajan@stalfe.com", first: "Sriram", last: "Rajan", role: "PLATFORM_ADMIN", pw: "StalFe2026!Admin", tenant: "stalfe", mrole: "OWNER", totp: false },
   ];
   const users: Record<string, string> = {};
   for (const u of usersData) {
@@ -136,11 +121,7 @@ async function main() {
     }
   }
   // Assign StålFe members to their groups (owner stays ungrouped).
-  const teamAssign: [string, string][] = [
-    ["marco@stalfe.example", "Sales"],
-    ["sofia@stalfe.example", "Engineering"],
-    ["lars@nordjarm.example", "Legal"],
-  ];
+  const teamAssign: [string, string][] = [];
   for (const [email, teamName] of teamAssign) {
     const team = await db.team.findFirst({ where: { tenantId: tenants.stalfe, name: teamName } });
     if (team) {
@@ -179,12 +160,9 @@ async function main() {
   ];
   const statuses = ["COMPLETED", "COMPLETED", "COMPLETED", "SENT", "SENT", "PARTIALLY_SIGNED", "PARTIALLY_SIGNED", "DRAFT", "VOIDED", "DECLINED", "EXPIRED", "COMPLETED"];
   const signers = [
-    ["Alexandra Fischer", "alex@stalfe.example"], ["Marco Bianchi", "marco@stalfe.example"],
-    ["Lars Bergström", "lars@nordjarm.example"], ["Elisa Righi", "elisa@fonderia-padana.example"],
-    ["Hannah Schulz", "hannah@helios-energy.example"], ["Pietro Rinaldi", "pietro@aurora-legal.example"],
-    ["Dmitri Volkov", "dmitri@atlas-freight.example"], ["Sofia Lindqvist", "sofia@stalfe.example"],
+    ["Sriram Rajan", "sriram.rajan@stalfe.com"],
   ];
-  const creatorPool = ["alex@stalfe.example", "pietro@aurora-legal.example", "hannah@helios-energy.example", "dmitri@atlas-freight.example", "lucas@bayern-immo.example"];
+  const creatorPool = ["sriram.rajan@stalfe.com", "pietro@aurora-legal.example", "hannah@helios-energy.example", "dmitri@atlas-freight.example", "lucas@bayern-immo.example"];
   // Weighted pool (StålFe twice) with a coprime step so every tenant gets envelopes.
   const tenantPool = ["stalfe", "stalfe", "aurora-legal", "helios-energy", "bayern-immo", "atlas-freight", "meteora-health", "lumen-research", "solstice-media", "verdant-agri"];
 

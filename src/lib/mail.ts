@@ -2,11 +2,44 @@ import { createTransport } from "nodemailer";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 
-export const MAX_MAIL_ATTEMPTS = 5;
+export const MAX_MAIL_ATTEMPTS = 10;
 const MAIL_LEASE_MS = 90_000;
 const SEND_DEADLINE_MS = 30_000;
-export function mailBackoffMs(attempt: number): number {
-  return Math.min(30_000 * 4 ** Math.max(0, attempt - 1), 30 * 60_000);
+
+export const GENERAL_BACKOFF_MS = [
+  30_000,      // attempt 1: 30s
+  120_000,     // attempt 2: 2m
+  480_000,     // attempt 3: 8m
+  1_800_000,   // attempt 4: 30m
+  3_600_000,   // attempt 5: 1h
+  7_200_000,   // attempt 6: 2h
+  14_400_000,  // attempt 7: 4h
+  21_600_000,  // attempt 8: 6h
+  28_800_000,  // attempt 9: 8h
+  43_200_000,  // attempt 10: 12h
+];
+
+export const RATE_LIMIT_BACKOFF_MS = [
+  3_600_000,   // attempt 1: 1h
+  7_200_000,   // attempt 2: 2h
+  14_400_000,  // attempt 3: 4h
+  28_800_000,  // attempt 4: 8h
+  43_200_000,  // attempt 5: 12h
+  86_400_000,  // attempt 6+: 24h
+];
+
+export function isRateLimitError(err?: string | null): boolean {
+  if (!err) return false;
+  return /45[0-2]|rate|quota|too many|limit|exceeded|try again later/i.test(err);
+}
+
+export function mailBackoffMs(attempt: number, lastError?: string | null): number {
+  if (isRateLimitError(lastError)) {
+    const idx = Math.max(0, Math.min(attempt - 1, RATE_LIMIT_BACKOFF_MS.length - 1));
+    return RATE_LIMIT_BACKOFF_MS[idx];
+  }
+  const idx = Math.max(0, Math.min(attempt - 1, GENERAL_BACKOFF_MS.length - 1));
+  return GENERAL_BACKOFF_MS[idx];
 }
 export type SmtpMode = { configured: true; url: URL; tls: boolean } | { configured: false };
 export function smtpMode(): SmtpMode {
@@ -86,7 +119,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
     const acknowledged = await db.mailOutbox.updateMany({ where: { id: row.id, claimToken, status: "QUEUED" }, data: {
       status: success ? "SENT" : terminal ? "FAILED" : "QUEUED",
       sentAt: success ? new Date() : null, lastError,
-      nextAttemptAt: success || terminal ? null : new Date(Date.now() + mailBackoffMs(attempt)),
+      nextAttemptAt: success || terminal ? null : new Date(Date.now() + mailBackoffMs(attempt, lastError)),
       claimToken: null, claimUntil: null,
     } });
     if (acknowledged.count !== 1) continue;
