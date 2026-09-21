@@ -186,7 +186,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           db.dmcaNotice.findMany({ orderBy: { receivedAt: "desc" } }),
           db.dsarRequest.findMany({ orderBy: { requestedAt: "desc" } }),
           db.legalHold.findMany({ include: { tenant: { select: { name: true } } }, orderBy: { issuedAt: "desc" } }),
-          db.tenant.findMany({ select: { id: true, name: true } }),
+          db.tenant.findMany({ select: { id: true, name: true, slug: true }, orderBy: { name: "asc" } }),
         ]);
         const tenantName = (id: string | null) =>
           id ? tenantsById.find((t) => t.id === id)?.name ?? "Unknown tenant" : "Unassigned";
@@ -194,6 +194,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           dmca: isos(dmca),
           dsar: isos(dsar).map((r) => ({ ...r, tenantName: tenantName(r.tenantId) })),
           holds: isos(holds).map((h, i) => ({ ...h, tenantName: holds[i].tenant.name })),
+          allTenants: isos(tenantsById),
         });
       }
 
@@ -277,9 +278,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       }
 
       case "integrations": {
-        const [keys, hooks] = await Promise.all([
+        const [keys, hooks, allTenants] = await Promise.all([
           db.apiKey.findMany({ include: { tenant: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
           db.webhookEndpoint.findMany({ include: { tenant: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
+          db.tenant.findMany({ select: { id: true, name: true, slug: true }, orderBy: { name: "asc" } }),
         ]);
         const deliveries = await db.webhookDelivery.findMany({
           include: { endpoint: { select: { url: true } } }, orderBy: { at: "desc" }, take: 40,
@@ -288,6 +290,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           apiKeys: keys.map((k) => ({ ...iso(k), tenantName: k.tenant?.name ?? "Docurama Platform" })),
           webhooks: hooks.map((h) => ({ ...iso(h), tenantName: h.tenant.name })),
           deliveries: deliveries.map((dl) => ({ ...iso(dl), url: dl.endpoint.url })),
+          allTenants: isos(allTenants),
         });
       }
 
@@ -884,6 +887,97 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
       // ── Legal & DSAR ──
       case "legal": {
+        if (op === "hold.create") {
+          const tenantId = String(data.tenantId ?? "").trim();
+          const reason = String(data.reason ?? "").trim();
+          const scope = String(data.scope ?? "").trim();
+          if (!tenantId || !reason || !scope) return jsonError("Workspace, reason, and scope are required for a legal hold");
+          const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+          if (!tenant) return jsonError("Workspace not found", 404);
+
+          const hold = await db.legalHold.create({
+            data: {
+              tenantId,
+              reason,
+              scope,
+              issuedBy: actor,
+              status: "ACTIVE",
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "legal_hold.issued",
+            resource: `hold:${hold.id}`, severity: "WARNING",
+            tenantName: tenant.name, detail: `Issued legal hold: ${reason}`,
+          });
+
+          return jsonOk({ ok: true, message: `Legal hold issued for ${tenant.name}`, hold: iso(hold) });
+        }
+
+        if (op === "release-hold") {
+          const h = await db.legalHold.findUnique({ where: { id } });
+          if (!h) return jsonError("Legal hold not found", 404);
+          await db.legalHold.update({ where: { id }, data: { status: "RELEASED", releasedAt: new Date() } });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "legal_hold.released", resource: `hold:${id}`, severity: "WARNING" });
+          return jsonOk({ ok: true, message: "Legal hold released" });
+        }
+
+        if (op === "dsar.create") {
+          const subjectEmail = String(data.subjectEmail ?? "").trim().toLowerCase();
+          const type = String(data.type ?? "ACCESS").toUpperCase();
+          const tenantId = data.tenantId ? String(data.tenantId).trim() : null;
+          const notes = data.notes ? String(data.notes).trim() : null;
+          const dueDays = Number(data.dueDays ?? 30);
+          if (!subjectEmail || !subjectEmail.includes("@")) return jsonError("Valid subject email is required");
+
+          const dsar = await db.dsarRequest.create({
+            data: {
+              subjectEmail,
+              type,
+              tenantId,
+              notes,
+              status: "OPEN",
+              dueAt: new Date(Date.now() + dueDays * 86400000),
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "dsar.recorded",
+            resource: `dsar:${subjectEmail}`, severity: "INFO",
+            detail: `Recorded ${type} request for ${subjectEmail}`,
+          });
+
+          return jsonOk({ ok: true, message: `DSAR request recorded for ${subjectEmail}`, dsar: iso(dsar) });
+        }
+
+        if (op === "dmca.create") {
+          const complainant = String(data.complainant ?? "").trim();
+          const targetUrl = String(data.targetUrl ?? "").trim();
+          const works = String(data.works ?? "").trim();
+          const severity = String(data.severity ?? "NORMAL").toUpperCase();
+          const slaDays = Number(data.slaDays ?? 14);
+          if (!complainant || !targetUrl || !works) return jsonError("Complainant, target URL, and works description are required");
+
+          const dmca = await db.dmcaNotice.create({
+            data: {
+              complainant,
+              targetUrl,
+              works,
+              severity,
+              status: "OPEN",
+              slaDueAt: new Date(Date.now() + slaDays * 86400000),
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "dmca.recorded",
+            resource: `dmca:${dmca.id}`, severity: severity === "HIGH" ? "CRITICAL" : "WARNING",
+            detail: `Notice from ${complainant} for ${targetUrl}`,
+          });
+
+          return jsonOk({ ok: true, message: `DMCA notice recorded from ${complainant}`, dmca: iso(dmca) });
+        }
+
         if (op === "resolve-dmca") {
           const note = String(data.note ?? "").trim();
           if (!note) return jsonError("A resolution note is required");
@@ -1168,6 +1262,121 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           }
         }
 
+        if (op === "vendor-save") {
+          const name = String(data.name ?? "").trim();
+          const service = String(data.service ?? "").trim();
+          const riskLevel = String(data.riskLevel ?? "LOW").toUpperCase();
+          const dpdSigned = Boolean(data.dpdSigned ?? false);
+          const status = String(data.status ?? "APPROVED").toUpperCase();
+          if (!name || !service) return jsonError("Vendor name and service are required");
+
+          if (id) {
+            await db.vendor.update({
+              where: { id },
+              data: { name, service, riskLevel, dpdSigned, status, lastAuditAt: new Date() },
+            });
+            await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "vendor.updated", resource: `vendor:${name}`, severity: "INFO" });
+            return jsonOk({ ok: true, message: `Vendor "${name}" updated` });
+          } else {
+            await db.vendor.create({
+              data: { name, service, riskLevel, dpdSigned, status, lastAuditAt: new Date() },
+            });
+            await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "vendor.created", resource: `vendor:${name}`, severity: "INFO" });
+            return jsonOk({ ok: true, message: `Vendor "${name}" created` });
+          }
+        }
+
+        if (op === "vendor-delete") {
+          const v = await db.vendor.findUnique({ where: { id } });
+          if (!v) return jsonError("Vendor not found", 404);
+          await db.vendor.delete({ where: { id } });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "vendor.deleted", resource: `vendor:${v.name}`, severity: "WARNING" });
+          return jsonOk({ ok: true, message: `Vendor "${v.name}" deleted` });
+        }
+
+        if (op === "subprocessor-save") {
+          const name = String(data.name ?? "").trim();
+          const purpose = String(data.purpose ?? "").trim();
+          const location = String(data.location ?? "EU").trim();
+          const transferMechanism = String(data.transferMechanism ?? "SCC").trim();
+          const dpaSigned = Boolean(data.dpaSigned ?? true);
+          if (!name || !purpose) return jsonError("Subprocessor name and purpose are required");
+
+          if (id) {
+            await db.subprocessor.update({
+              where: { id },
+              data: { name, purpose, location, transferMechanism, dpaSigned },
+            });
+            await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "subprocessor.updated", resource: `subprocessor:${name}`, severity: "INFO" });
+            return jsonOk({ ok: true, message: `Subprocessor "${name}" updated` });
+          } else {
+            await db.subprocessor.create({
+              data: { name, purpose, location, transferMechanism, dpaSigned },
+            });
+            await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "subprocessor.created", resource: `subprocessor:${name}`, severity: "INFO" });
+            return jsonOk({ ok: true, message: `Subprocessor "${name}" created` });
+          }
+        }
+
+        if (op === "subprocessor-delete") {
+          const s = await db.subprocessor.findUnique({ where: { id } });
+          if (!s) return jsonError("Subprocessor not found", 404);
+          await db.subprocessor.delete({ where: { id } });
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "subprocessor.deleted", resource: `subprocessor:${s.name}`, severity: "WARNING" });
+          return jsonOk({ ok: true, message: `Subprocessor "${s.name}" deleted` });
+        }
+
+        if (op === "change-create") {
+          const title = String(data.title ?? "").trim();
+          const type = String(data.type ?? "STANDARD").toUpperCase();
+          const description = String(data.description ?? "").trim();
+          const requestedBy = String(data.requestedBy ?? actor).trim();
+          if (!title || !description) return jsonError("Change title and description are required");
+
+          const ch = await db.change.create({
+            data: {
+              title,
+              type,
+              description,
+              requestedBy,
+              status: "PENDING",
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "change.requested",
+            resource: `change:${ch.id}`, severity: type === "EMERGENCY" ? "CRITICAL" : "INFO",
+            detail: `${type}: ${title}`,
+          });
+
+          return jsonOk({ ok: true, message: `Change "${title}" submitted for review`, change: iso(ch) });
+        }
+
+        if (op === "review-create") {
+          const quarter = String(data.quarter ?? "").trim();
+          const reviewer = String(data.reviewer ?? actor).trim();
+          const scope = String(data.scope ?? "All production access").trim();
+          if (!quarter || !reviewer) return jsonError("Quarter and reviewer are required");
+
+          const rev = await db.accessReview.create({
+            data: {
+              quarter,
+              reviewer,
+              scope,
+              status: "PENDING",
+              findings: 0,
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "access_review.scheduled",
+            resource: `review:${quarter}`, severity: "INFO",
+            detail: `Quarter: ${quarter}, Reviewer: ${reviewer}`,
+          });
+
+          return jsonOk({ ok: true, message: `Access review for ${quarter} scheduled`, review: iso(rev) });
+        }
+
         return jsonError("Unsupported operation");
       }
 
@@ -1433,11 +1642,81 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           });
         }
 
+        if (op === "lead.create") {
+          const company = String(data.company ?? "").trim();
+          const contactName = String(data.contactName ?? "").trim();
+          const email = String(data.email ?? "").trim().toLowerCase();
+          const phone = data.phone ? String(data.phone).trim() : null;
+          const seats = Number(data.seats ?? 0);
+          const monthlyEnvelopes = Number(data.monthlyEnvelopes ?? 0);
+          const requirements = String(data.requirements ?? "").trim();
+          const status = String(data.status ?? "NEW").toUpperCase();
+
+          if (!company || !contactName || !email) return jsonError("Company, contact name, and email are required");
+
+          const lead = await db.enterpriseLead.create({
+            data: {
+              company,
+              companyLower: foldForSearch(company),
+              contactName,
+              contactNameLower: foldForSearch(contactName),
+              email,
+              phone,
+              seats,
+              monthlyEnvelopes,
+              requirements,
+              status,
+              notes: data.notes ? String(data.notes).trim() : "",
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "enterprise.lead.created_admin",
+            resource: `lead:${lead.id}`, tenantName: company,
+            detail: `Created lead ${company} (${contactName} <${email}>)`,
+          });
+
+          return jsonOk({ ok: true, message: `Lead "${company}" created successfully`, lead: iso(lead) });
+        }
+
         return jsonError("Unsupported operation");
       }
 
       // ── Integrations ──
       case "integrations": {
+        if (op === "create-webhook") {
+          const url = String(data.url ?? "").trim();
+          const tenantId = String(data.tenantId ?? "").trim();
+          const events = String(data.events ?? "*").trim();
+          if (!url || !url.startsWith("https://")) return jsonError("A valid HTTPS webhook URL is required");
+          if (!tenantId) return jsonError("A target workspace is required");
+
+          const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+          if (!tenant) return jsonError("Workspace not found", 404);
+
+          const rawSecret = `whsec_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+          const secretMasked = `${rawSecret.slice(0, 10)}••••••••`;
+
+          const endpoint = await db.webhookEndpoint.create({
+            data: {
+              tenantId,
+              url,
+              events,
+              status: "ACTIVE",
+              secret: rawSecret,
+              secretMasked,
+              successRate: 100,
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "webhook.created",
+            resource: `webhook:${url}`, severity: "INFO",
+            tenantName: tenant.name, detail: `Events: ${events}`,
+          });
+
+          return jsonOk({ ok: true, message: `Webhook registered for ${tenant.name}`, endpoint: iso(endpoint), rawSecret });
+        }
         if (op === "revoke-key") {
           const k = await db.apiKey.findUnique({ where: { id } });
           if (!k) return jsonError("Key not found", 404);

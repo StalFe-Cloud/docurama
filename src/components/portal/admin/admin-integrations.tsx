@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { KeyRound, Webhook, Zap, Pause, Play, Trash2, Send, Copy } from "lucide-react";
+import { KeyRound, Webhook, Zap, Pause, Play, Trash2, Send, Copy, Plus } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import { ConfirmDialog, CopyableCode, ErrorState, PageHeader, StatusBadge, fmtRelative } from "@/components/portal/shared";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ type IntegrationsData = {
   apiKeys: { id: string; tenantName: string; name: string; prefix: string; scope: string; status: string; createdBy: string; lastUsedAt: string | null; createdAt: string }[];
   webhooks: { id: string; tenantName: string; url: string; events: string; status: string; secretMasked: string; successRate: number; lastDeliveryAt: string | null; createdAt: string }[];
   deliveries: { id: string; url: string; event: string; statusCode: number; durationMs: number; success: boolean; at: string }[];
+  allTenants?: { id: string; name: string; slug: string }[];
 };
 
 const EVENT_TYPES = ["envelope.created", "envelope.sent", "recipient.signed", "envelope.completed", "envelope.declined", "envelope.voided", "template.used"];
@@ -29,6 +30,12 @@ export function AdminIntegrations() {
   const [keyDialog, setKeyDialog] = useState(false);
   const [keyName, setKeyName] = useState("");
   const [keyScope, setKeyScope] = useState("READONLY");
+
+  const [webhookDialog, setWebhookDialog] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookTenantId, setWebhookTenantId] = useState("");
+  const [webhookEvents, setWebhookEvents] = useState("*");
+
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -57,7 +64,31 @@ export function AdminIntegrations() {
     onError: (err: ApiError) => toast.error(err.message),
   });
 
+  const createWebhook = useMutation({
+    mutationFn: () =>
+      apiPost<{ ok: boolean; message: string; rawSecret?: string }>("/api/admin/integrations", {
+        op: "create-webhook",
+        data: {
+          url: webhookUrl,
+          tenantId: webhookTenantId || (data?.allTenants?.[0]?.id ?? ""),
+          events: webhookEvents,
+        },
+      }),
+    onSuccess: (res) => {
+      toast.success(res.message);
+      if (res.rawSecret) {
+        toast.info(`Signing secret: ${res.rawSecret}`, { duration: 10000 });
+      }
+      setWebhookDialog(false);
+      setWebhookUrl("");
+      queryClient.invalidateQueries({ queryKey: ["admin", "integrations"] });
+    },
+    onError: (err: ApiError) => toast.error(err.message),
+  });
+
   if (error) return <ErrorState message={(error as Error).message} onRetry={() => refetch()} />;
+
+  const tenants = data?.allTenants ?? [];
 
   return (
     <div className="space-y-6">
@@ -65,9 +96,14 @@ export function AdminIntegrations() {
         title="API & Webhooks"
         description="Per-key credential lifecycle and webhook delivery operations. Revocation is per-key - never a destructive bulk rotation."
         actions={
-          <Button size="sm" className="h-11" onClick={() => setKeyDialog(true)}>
-            <KeyRound className="h-4 w-4" aria-hidden /> New API key
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-11" onClick={() => setWebhookDialog(true)}>
+              <Webhook className="h-4 w-4" aria-hidden /> Register endpoint
+            </Button>
+            <Button size="sm" className="h-11" onClick={() => setKeyDialog(true)}>
+              <KeyRound className="h-4 w-4" aria-hidden /> New API key
+            </Button>
+          </div>
         }
       />
 
@@ -125,6 +161,12 @@ export function AdminIntegrations() {
         {/* Webhooks */}
         <TabsContent value="webhooks">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base">Configured Webhook Endpoints</CardTitle>
+              <Button size="sm" className="h-9 gap-1.5" onClick={() => setWebhookDialog(true)}>
+                <Plus className="h-4 w-4" /> Register Endpoint
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
                 <div className="space-y-2 p-6" aria-busy>{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />)}</div>
@@ -261,6 +303,65 @@ export function AdminIntegrations() {
             <Button variant="outline" onClick={() => setKeyDialog(false)}>Cancel</Button>
             <Button onClick={() => createKey.mutate()} disabled={!keyName.trim() || createKey.isPending}>
               {createKey.isPending ? "Creating…" : "Create key"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Register Webhook Dialog */}
+      <Dialog open={webhookDialog} onOpenChange={setWebhookDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Register Webhook Endpoint</DialogTitle>
+            <DialogDescription>
+              Receive real-time HTTPS HMAC-signed event notifications for signing activities and workflow events.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="hook-tenant">Target Workspace</Label>
+              <select
+                id="hook-tenant"
+                value={webhookTenantId || (tenants[0]?.id ?? "")}
+                onChange={(e) => setWebhookTenantId(e.target.value)}
+                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="hook-url">Payload HTTPS URL</Label>
+              <Input
+                id="hook-url"
+                placeholder="https://api.yourcompany.com/webhooks/docurama"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="hook-events">Events to Subscribe</Label>
+              <Input
+                id="hook-events"
+                placeholder="* or envelope.completed|recipient.signed"
+                value={webhookEvents}
+                onChange={(e) => setWebhookEvents(e.target.value)}
+                className="h-11 font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use <code className="text-foreground font-mono">*</code> for all events, or pipe-separate types like <code className="text-foreground font-mono">envelope.completed|recipient.signed</code>.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWebhookDialog(false)}>Cancel</Button>
+            <Button
+              disabled={createWebhook.isPending || !webhookUrl.trim() || !webhookUrl.startsWith("https://")}
+              onClick={() => createWebhook.mutate()}
+            >
+              {createWebhook.isPending ? "Registering…" : "Register Endpoint"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -83,6 +83,30 @@ export function AdminCompliance() {
   }>({
     open: false, form: { title: "", severity: "MEDIUM", status: "OPEN", assignee: "Security Lead", description: "" },
   });
+
+  const [vendorDialog, setVendorDialog] = useState<{
+    open: boolean; id?: string; form: { name: string; service: string; riskLevel: string; dpdSigned: boolean; status: string };
+  }>({
+    open: false, form: { name: "", service: "", riskLevel: "LOW", dpdSigned: false, status: "APPROVED" },
+  });
+
+  const [subprocessorDialog, setSubprocessorDialog] = useState<{
+    open: boolean; id?: string; form: { name: string; purpose: string; location: string; transferMechanism: string; dpaSigned: boolean };
+  }>({
+    open: false, form: { name: "", purpose: "", location: "EU", transferMechanism: "SCC", dpaSigned: true },
+  });
+
+  const [changeDialog, setChangeDialog] = useState<{
+    open: boolean; form: { title: string; type: string; description: string; requestedBy: string };
+  }>({
+    open: false, form: { title: "", type: "STANDARD", description: "", requestedBy: "Security Lead" },
+  });
+
+  const [reviewDialog, setReviewDialog] = useState<{
+    open: boolean; form: { quarter: string; reviewer: string; scope: string };
+  }>({
+    open: false, form: { quarter: "2026-Q3", reviewer: "Security Lead", scope: "All production access" },
+  });
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -470,6 +494,19 @@ export function AdminCompliance() {
         {/* Access reviews */}
         <TabsContent value="reviews">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base">Access & Privilege Reviews</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Quarterly reviews of admin, developer, and infrastructure access.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => setReviewDialog({ open: true, form: { quarter: "2026-Q3", reviewer: "Security Lead", scope: "All production access" } })}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Schedule Review
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.reviews.map((r) => (
@@ -582,6 +619,19 @@ export function AdminCompliance() {
         {/* Change control */}
         <TabsContent value="changes">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base">Change Management & Control</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Formal RFC / standard and emergency change approvals.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => setChangeDialog({ open: true, form: { title: "", type: "STANDARD", description: "", requestedBy: "Security Lead" } })}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Request Change
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.changes.map((c) => (
@@ -627,6 +677,19 @@ export function AdminCompliance() {
         {/* Vendors */}
         <TabsContent value="vendors">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base">Critical Third-Party Vendors</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Vendor risk assessment and DPA status.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => setVendorDialog({ open: true, form: { name: "", service: "", riskLevel: "LOW", dpdSigned: false, status: "APPROVED" } })}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add Vendor
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.vendors.map((v) => (
@@ -642,6 +705,32 @@ export function AdminCompliance() {
                         {v.dpdSigned ? "DPA signed" : "DPA missing"}
                       </span>
                       <StatusBadge status={v.status} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 text-muted-foreground hover:text-foreground gap-1"
+                        onClick={() => setVendorDialog({
+                          open: true,
+                          id: v.id,
+                          form: {
+                            name: v.name,
+                            service: v.service,
+                            riskLevel: v.riskLevel,
+                            dpdSigned: v.dpdSigned,
+                            status: v.status,
+                          },
+                        })}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive hover:text-destructive"
+                        onClick={() => act.mutate({ op: "vendor-delete", id: v.id })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
                     </div>
                   </li>
                 ))}
@@ -683,6 +772,19 @@ export function AdminCompliance() {
         {/* Subprocessors */}
         <TabsContent value="subprocessors">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="text-base">GDPR Article 28 Subprocessors</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Authorized subprocessors handling customer personal data.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => setSubprocessorDialog({ open: true, form: { name: "", purpose: "", location: "EU", transferMechanism: "SCC", dpaSigned: true } })}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add Subprocessor
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.subprocessors.map((s) => (
@@ -693,9 +795,37 @@ export function AdminCompliance() {
                       </p>
                       <p className="text-xs text-muted-foreground">{s.purpose} · {s.location} · transfer: {s.transferMechanism}</p>
                     </div>
-                    <span className={s.dpaSigned ? "text-xs text-success" : "text-xs text-destructive"}>
-                      {s.dpaSigned ? "DPA signed" : "DPA pending"}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={s.dpaSigned ? "text-xs text-success" : "text-xs text-destructive"}>
+                        {s.dpaSigned ? "DPA signed" : "DPA pending"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 text-muted-foreground hover:text-foreground gap-1"
+                        onClick={() => setSubprocessorDialog({
+                          open: true,
+                          id: s.id,
+                          form: {
+                            name: s.name,
+                            purpose: s.purpose,
+                            location: s.location,
+                            transferMechanism: s.transferMechanism,
+                            dpaSigned: s.dpaSigned,
+                          },
+                        })}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive hover:text-destructive"
+                        onClick={() => act.mutate({ op: "subprocessor-delete", id: s.id })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -1223,6 +1353,290 @@ export function AdminCompliance() {
               disabled={act.isPending || !riskDialog.form.title.trim()}
             >
               Save Risk
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Vendor Dialog */}
+      <Dialog open={vendorDialog.open} onOpenChange={(v) => !v && setVendorDialog({ ...vendorDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{vendorDialog.id ? "Edit Vendor Assessment" : "Add Third-Party Vendor"}</DialogTitle>
+            <DialogDescription>Track critical supply chain vendor risk and Data Processing Agreements (DPA).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="vnd-name">Vendor Legal Name</Label>
+              <Input
+                id="vnd-name"
+                value={vendorDialog.form.name}
+                onChange={(e) => setVendorDialog({ ...vendorDialog, form: { ...vendorDialog.form, name: e.target.value } })}
+                placeholder="e.g. Hetzner Online GmbH"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="vnd-svc">Service Provided</Label>
+              <Input
+                id="vnd-svc"
+                value={vendorDialog.form.service}
+                onChange={(e) => setVendorDialog({ ...vendorDialog, form: { ...vendorDialog.form, service: e.target.value } })}
+                placeholder="Primary infrastructure (eu-west-1)"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="vnd-risk">Risk Level</Label>
+                <select
+                  id="vnd-risk"
+                  value={vendorDialog.form.riskLevel}
+                  onChange={(e) => setVendorDialog({ ...vendorDialog, form: { ...vendorDialog.form, riskLevel: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="LOW">LOW</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HIGH">HIGH</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="vnd-st">Status</Label>
+                <select
+                  id="vnd-st"
+                  value={vendorDialog.form.status}
+                  onChange={(e) => setVendorDialog({ ...vendorDialog, form: { ...vendorDialog.form, status: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="APPROVED">APPROVED</option>
+                  <option value="REVIEW">REVIEW</option>
+                  <option value="REJECTED">REJECTED</option>
+                </select>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={vendorDialog.form.dpdSigned}
+                onChange={(e) => setVendorDialog({ ...vendorDialog, form: { ...vendorDialog.form, dpdSigned: e.target.checked } })}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              <span>DPA (Data Processing Agreement) signed &amp; executed</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVendorDialog({ ...vendorDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "vendor-save", id: vendorDialog.id, data: vendorDialog.form });
+                setVendorDialog({ ...vendorDialog, open: false });
+              }}
+              disabled={act.isPending || !vendorDialog.form.name.trim() || !vendorDialog.form.service.trim()}
+            >
+              {vendorDialog.id ? "Save Changes" : "Create Vendor"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Subprocessor Dialog */}
+      <Dialog open={subprocessorDialog.open} onOpenChange={(v) => !v && setSubprocessorDialog({ ...subprocessorDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{subprocessorDialog.id ? "Edit Subprocessor" : "Add Subprocessor (GDPR Art. 28)"}</DialogTitle>
+            <DialogDescription>Maintain the public subprocessor register required under GDPR/SOC 2.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="sub-name">Entity Name</Label>
+              <Input
+                id="sub-name"
+                value={subprocessorDialog.form.name}
+                onChange={(e) => setSubprocessorDialog({ ...subprocessorDialog, form: { ...subprocessorDialog.form, name: e.target.value } })}
+                placeholder="e.g. DigiCert Inc."
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sub-purp">Processing Purpose</Label>
+              <Input
+                id="sub-purp"
+                value={subprocessorDialog.form.purpose}
+                onChange={(e) => setSubprocessorDialog({ ...subprocessorDialog, form: { ...subprocessorDialog.form, purpose: e.target.value } })}
+                placeholder="RFC 3161 trusted timestamps"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="sub-loc">Data Location</Label>
+                <Input
+                  id="sub-loc"
+                  value={subprocessorDialog.form.location}
+                  onChange={(e) => setSubprocessorDialog({ ...subprocessorDialog, form: { ...subprocessorDialog.form, location: e.target.value } })}
+                  placeholder="EU (Germany, France)"
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sub-tr">Transfer Mechanism</Label>
+                <select
+                  id="sub-tr"
+                  value={subprocessorDialog.form.transferMechanism}
+                  onChange={(e) => setSubprocessorDialog({ ...subprocessorDialog, form: { ...subprocessorDialog.form, transferMechanism: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="EU_ADEQUACY">EU Adequacy Decision</option>
+                  <option value="SCC">Standard Contractual Clauses (SCC)</option>
+                  <option value="BCR">Binding Corporate Rules (BCR)</option>
+                  <option value="LOCAL_EU">Local EU Processing</option>
+                </select>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={subprocessorDialog.form.dpaSigned}
+                onChange={(e) => setSubprocessorDialog({ ...subprocessorDialog, form: { ...subprocessorDialog.form, dpaSigned: e.target.checked } })}
+                className="h-4 w-4 rounded border-input accent-primary"
+              />
+              <span>DPA with Standard Contractual Clauses executed</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubprocessorDialog({ ...subprocessorDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "subprocessor-save", id: subprocessorDialog.id, data: subprocessorDialog.form });
+                setSubprocessorDialog({ ...subprocessorDialog, open: false });
+              }}
+              disabled={act.isPending || !subprocessorDialog.form.name.trim() || !subprocessorDialog.form.purpose.trim()}
+            >
+              {subprocessorDialog.id ? "Save Changes" : "Create Subprocessor"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Request Dialog */}
+      <Dialog open={changeDialog.open} onOpenChange={(v) => !v && setChangeDialog({ ...changeDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Change / RFC</DialogTitle>
+            <DialogDescription>Submit a formal change control request for peer or admin review.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="chg-title">Change Title</Label>
+              <Input
+                id="chg-title"
+                value={changeDialog.form.title}
+                onChange={(e) => setChangeDialog({ ...changeDialog, form: { ...changeDialog.form, title: e.target.value } })}
+                placeholder="e.g. Upgrade PostgreSQL engine to 16.2"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="chg-type">Change Type</Label>
+                <select
+                  id="chg-type"
+                  value={changeDialog.form.type}
+                  onChange={(e) => setChangeDialog({ ...changeDialog, form: { ...changeDialog.form, type: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="STANDARD">STANDARD (Scheduled)</option>
+                  <option value="EMERGENCY">EMERGENCY (Hotfix)</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="chg-req">Requested By</Label>
+                <Input
+                  id="chg-req"
+                  value={changeDialog.form.requestedBy}
+                  onChange={(e) => setChangeDialog({ ...changeDialog, form: { ...changeDialog.form, requestedBy: e.target.value } })}
+                  className="h-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="chg-desc">Change Description &amp; Rollback Plan</Label>
+              <textarea
+                id="chg-desc"
+                rows={3}
+                value={changeDialog.form.description}
+                onChange={(e) => setChangeDialog({ ...changeDialog, form: { ...changeDialog.form, description: e.target.value } })}
+                placeholder="Technical scope, testing results, and step-by-step rollback procedures."
+                className="flex w-full rounded-md border border-input bg-background p-2.5 text-xs ring-offset-background"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeDialog({ ...changeDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "change-create", data: changeDialog.form });
+                setChangeDialog({ ...changeDialog, open: false });
+              }}
+              disabled={act.isPending || !changeDialog.form.title.trim() || !changeDialog.form.description.trim()}
+            >
+              Submit Change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Access Review Dialog */}
+      <Dialog open={reviewDialog.open} onOpenChange={(v) => !v && setReviewDialog({ ...reviewDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule Access Review</DialogTitle>
+            <DialogDescription>Initiate a formal quarterly audit of user privileges and admin roles.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rev-q">Quarter</Label>
+                <Input
+                  id="rev-q"
+                  value={reviewDialog.form.quarter}
+                  onChange={(e) => setReviewDialog({ ...reviewDialog, form: { ...reviewDialog.form, quarter: e.target.value } })}
+                  placeholder="2026-Q3"
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rev-rev">Lead Reviewer</Label>
+                <Input
+                  id="rev-rev"
+                  value={reviewDialog.form.reviewer}
+                  onChange={(e) => setReviewDialog({ ...reviewDialog, form: { ...reviewDialog.form, reviewer: e.target.value } })}
+                  className="h-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rev-scope">Audit Scope</Label>
+              <textarea
+                id="rev-scope"
+                rows={2}
+                value={reviewDialog.form.scope}
+                onChange={(e) => setReviewDialog({ ...reviewDialog, form: { ...reviewDialog.form, scope: e.target.value } })}
+                placeholder="All platform administrators, database access keys, and production SSH bastions."
+                className="flex w-full rounded-md border border-input bg-background p-2.5 text-xs ring-offset-background"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewDialog({ ...reviewDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "review-create", data: reviewDialog.form });
+                setReviewDialog({ ...reviewDialog, open: false });
+              }}
+              disabled={act.isPending || !reviewDialog.form.quarter.trim() || !reviewDialog.form.reviewer.trim()}
+            >
+              Schedule Review
             </Button>
           </DialogFooter>
         </DialogContent>

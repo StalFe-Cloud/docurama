@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Handshake, Search, Sparkles } from "lucide-react";
+import { Handshake, Search, Sparkles, Plus } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import { ErrorState, KpiCard, PageHeader, StatusBadge, fmtDate } from "@/components/portal/shared";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 type Lead = {
   id: string; company: string; contactName: string; email: string; phone: string | null;
@@ -29,8 +32,8 @@ const STATUSES = ["NEW", "CONTACTED", "QUALIFIED", "WON", "LOST"];
 
 /**
  * Enterprise pipeline console (cycle 10): leads submitted from the public
- * /enterprise onboarding page. Triage statuses + notes; every change is
- * audited server-side.
+ * /enterprise onboarding page or recorded directly by platform admin.
+ * Triage statuses + notes; every change is audited server-side.
  */
 export function AdminLeads() {
   const queryClient = useQueryClient();
@@ -39,6 +42,18 @@ export function AdminLeads() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
 
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    company: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    seats: 10,
+    monthlyEnvelopes: 500,
+    requirements: "",
+    status: "NEW",
+  });
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "leads", search, statusFilter],
     queryFn: () =>
@@ -46,10 +61,12 @@ export function AdminLeads() {
   });
 
   const act = useMutation({
-    mutationFn: (vars: { op: string; id: string; data?: Record<string, unknown> }) =>
+    mutationFn: (vars: { op: string; id?: string; data?: Record<string, unknown> }) =>
       apiPost<{ ok: boolean; message: string }>("/api/admin/leads", vars),
     onSuccess: (res) => {
       toast.success(res.message);
+      setAddOpen(false);
+      setForm({ company: "", contactName: "", email: "", phone: "", seats: 10, monthlyEnvelopes: 500, requirements: "", status: "NEW" });
       queryClient.invalidateQueries({ queryKey: ["admin", "leads"] });
     },
     onError: (err: ApiError) => toast.error(err.message),
@@ -69,7 +86,12 @@ export function AdminLeads() {
     <div className="space-y-6">
       <PageHeader
         title="Enterprise leads"
-        description="Prospects from the /enterprise onboarding page. Triage them through the guided-onboarding pipeline: contact → pilot → security review → rollout."
+        description="Prospects from the /enterprise onboarding page or inbound sales. Triage them through the guided-onboarding pipeline: contact → pilot → security review → rollout."
+        actions={
+          <Button size="sm" className="h-11 gap-1.5" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4" /> Add Lead
+          </Button>
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -104,7 +126,7 @@ export function AdminLeads() {
         <CardContent>
           {data.leads.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No leads yet. The public /enterprise page feeds this pipeline; sales@ gets an outbox copy of every submission.
+              No leads yet. The public /enterprise page feeds this pipeline, or you can record inbound leads above.
             </p>
           ) : (
             <ul className="divide-y rounded-lg border">
@@ -171,6 +193,106 @@ export function AdminLeads() {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Lead Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Enterprise Lead</DialogTitle>
+            <DialogDescription>
+              Record an inbound enterprise or partner prospect into the sales triage pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="lead-co">Company Name</Label>
+              <Input
+                id="lead-co"
+                placeholder="e.g. TotalEnergies Renewables SAS"
+                value={form.company}
+                onChange={(e) => setForm({ ...form, company: e.target.value })}
+                className="h-11"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-contact">Contact Name</Label>
+                <Input
+                  id="lead-contact"
+                  placeholder="Claire Dupont"
+                  value={form.contactName}
+                  onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-email">Work Email</Label>
+                <Input
+                  id="lead-email"
+                  type="email"
+                  placeholder="claire@totalenergies.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-phone">Phone</Label>
+                <Input
+                  id="lead-phone"
+                  placeholder="+33 1 47 44 45 46"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-seats">Seats</Label>
+                <Input
+                  id="lead-seats"
+                  type="number"
+                  min={1}
+                  value={form.seats}
+                  onChange={(e) => setForm({ ...form, seats: Number(e.target.value) })}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lead-vol">Monthly Volume</Label>
+                <Input
+                  id="lead-vol"
+                  type="number"
+                  min={10}
+                  value={form.monthlyEnvelopes}
+                  onChange={(e) => setForm({ ...form, monthlyEnvelopes: Number(e.target.value) })}
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lead-req">Requirements / Notes</Label>
+              <Textarea
+                id="lead-req"
+                rows={2}
+                placeholder="e.g. Dedicated Azure France tenant, Entra ID SSO, eIDAS Qualified signatures."
+                value={form.requirements}
+                onChange={(e) => setForm({ ...form, requirements: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button
+              disabled={act.isPending || !form.company.trim() || !form.contactName.trim() || !form.email.trim()}
+              onClick={() => act.mutate({ op: "lead.create", data: form })}
+            >
+              {act.isPending ? "Adding…" : "Add Lead"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
