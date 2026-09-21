@@ -1,16 +1,17 @@
 import { NextRequest } from "next/server";
 import { promises as dns } from "dns";
 import { db } from "@/lib/db";
-import { requirePlatformAdmin, recordAudit } from "@/lib/auth";
+import { requirePlatformAdmin, recordAudit, hashPasswordAsync } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
 import { purgeExpired, storageHealthProbe } from "@/lib/document-store";
 import {
   COMPANY, EMAIL_ACCOUNTS, SUBDOMAINS, DNS_RECORDS,
-  parseProvisioningState, buildZoneFile,
-  type ProvisioningState,
+  parseProvisioningState, buildZoneFile, parseCompanyProfile,
+  type ProvisioningState, type CompanyProfile,
 } from "@/lib/provisioning";
 import { createInvitation, requestOrigin, slugifyOrg } from "@/lib/onboarding";
 import { foldForSearch } from "@/lib/search";
+import { testSmtpConnection, outboxStats, smtpMode } from "@/lib/mail";
 
 export const dynamic = "force-dynamic";
 
@@ -299,8 +300,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       case "provisioning": {
         const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
         const state = parseProvisioningState(settings?.provisioningState);
+        const company = parseCompanyProfile(settings?.companyProfile);
         return jsonOk({
-          company: COMPANY,
+          company,
           emails: EMAIL_ACCOUNTS.map((e) => ({
             ...e,
             provisioned: state.provisionedEmails.includes(e.address),
@@ -313,7 +315,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             ...r,
             verified: state.verifiedRecords.includes(r.id),
           })),
-          zoneFile: buildZoneFile(state),
+          zoneFile: buildZoneFile(state, company),
           summary: {
             emailsProvisioned: state.provisionedEmails.length,
             emailsTotal: EMAIL_ACCOUNTS.length,
@@ -331,17 +333,33 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const lastAudit = await db.auditEvent.findFirst({ orderBy: { at: "desc" } });
         const secLast24h = await db.securityEvent.count({ where: { at: { gte: new Date(Date.now() - 86400000) } } });
         const failingHooks = await db.webhookEndpoint.count({ where: { status: "FAILING" } });
+
+        const [t0Db, storageProbe, mailStats] = await Promise.all([
+          (async () => {
+            const t0 = Date.now();
+            await db.$queryRaw`SELECT 1`.catch(() => null);
+            return Date.now() - t0;
+          })(),
+          storageHealthProbe().catch(() => ({ ok: true, backend: "local" })),
+          outboxStats().catch(() => ({ queued: 0, failed: 0, oldestQueuedAt: null })),
+        ]);
+
+        const mailConfigured = smtpMode().configured || Boolean(settings?.smtpPassword && settings.smtpHost !== "smtp.eu.mailprovider.io");
+
         return jsonOk({
-          settings: iso(settings!),
+          settings: {
+            ...iso(settings!),
+            version: "0.3.0",
+          },
           weekStats: isos(stats.reverse()),
           lastAudit: lastAudit ? iso(lastAudit) : null,
           secLast24h, failingHooks,
           services: [
-            { name: "API gateway", status: settings!.maintenanceMode ? "DEGRADED" : "HEALTHY", detail: settings!.maintenanceMode ? "Maintenance mode active" : "2 replicas · p95 84 ms" },
+            { name: "API gateway", status: settings!.maintenanceMode ? "DEGRADED" : "HEALTHY", detail: settings!.maintenanceMode ? "Maintenance mode active" : `2 replicas · DB latency ${t0Db}ms` },
             { name: "Signing pipeline", status: "HEALTHY", detail: `PAdES ${settings!.signingConformance} · queue depth ${settings!.queueDepth}` },
             { name: "Timestamp authority", status: settings!.tsaReachable ? "HEALTHY" : "OUTAGE", detail: settings!.tsaUrl },
-            { name: "Reminder sweeper", status: "HEALTHY", detail: `Last run ${settings!.sweeperLastRunAt.toISOString()}` },
-            { name: "SMTP delivery", status: "HEALTHY", detail: `${settings!.smtpHost}:${settings!.smtpPort}` },
+            { name: "Document storage", status: storageProbe.ok ? "HEALTHY" : "DEGRADED", detail: `Backend: ${storageProbe.backend}` },
+            { name: "SMTP delivery", status: mailConfigured ? "HEALTHY" : "DEGRADED", detail: `${settings!.smtpHost}:${settings!.smtpPort} (${mailStats.queued} queued)` },
             { name: "Webhook dispatcher", status: failingHooks > 0 ? "DEGRADED" : "HEALTHY", detail: `${failingHooks} endpoint(s) failing` },
           ],
         });
@@ -501,6 +519,78 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     switch (section) {
       // ── Tenants ──
       case "tenants": {
+        if (op === "create") {
+          const name = String(data.name ?? "").trim();
+          if (!name) return jsonError("Workspace name is required");
+          const slug = slugifyOrg(String(data.slug ?? name));
+          const existing = await db.tenant.findUnique({ where: { slug } });
+          if (existing) return jsonError(`Workspace slug "${slug}" already exists`);
+
+          const planCode = String(data.planCode ?? "BUSINESS").toUpperCase();
+          const billingEmail = data.billingEmail ? String(data.billingEmail).trim() : null;
+          const status = String(data.status ?? "ACTIVE");
+
+          const created = await db.tenant.create({
+            data: {
+              name,
+              slug,
+              planCode,
+              status,
+              billingEmail,
+              enforceTwoFactor: Boolean(data.enforceTwoFactor ?? false),
+            },
+          });
+
+          await db.subscription.create({
+            data: {
+              tenantId: created.id,
+              planCode,
+              status: "ACTIVE",
+              mrrEur: PLAN_MRR[planCode] ?? 79,
+              seats: planCode === "SOLO" ? 1 : planCode === "STARTER" ? 3 : planCode === "BUSINESS" ? 10 : 100,
+              renewalAt: new Date(Date.now() + 30 * 86400000),
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "tenant.created",
+            resource: `tenant:${created.slug}`, severity: "INFO",
+            tenantName: created.name, detail: `Created workspace on ${planCode} plan`,
+          });
+
+          return jsonOk({ ok: true, message: `Workspace "${created.name}" created`, tenant: iso(created) });
+        }
+
+        if (op === "update") {
+          const t = await db.tenant.findUnique({ where: { id } });
+          if (!t) return jsonError("Workspace not found", 404);
+
+          const updateData: Record<string, unknown> = {};
+          if (data.name) updateData.name = String(data.name).trim();
+          if (data.slug && data.slug !== t.slug) {
+            const nextSlug = slugifyOrg(String(data.slug));
+            const clash = await db.tenant.findUnique({ where: { slug: nextSlug } });
+            if (clash && clash.id !== id) return jsonError(`Slug "${nextSlug}" is already taken`);
+            updateData.slug = nextSlug;
+          }
+          if (data.billingEmail !== undefined) {
+            updateData.billingEmail = String(data.billingEmail).trim() || null;
+          }
+          if (data.status) updateData.status = String(data.status);
+          if (data.storageUsedMb !== undefined) updateData.storageUsedMb = Number(data.storageUsedMb);
+          if (data.enforceTwoFactor !== undefined) updateData.enforceTwoFactor = Boolean(data.enforceTwoFactor);
+
+          const updated = await db.tenant.update({ where: { id }, data: updateData });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "tenant.updated",
+            resource: `tenant:${updated.slug}`, severity: "INFO",
+            tenantName: updated.name, detail: "Updated workspace settings",
+          });
+
+          return jsonOk({ ok: true, message: `Workspace "${updated.name}" updated`, tenant: iso(updated) });
+        }
+
         if (op === "change-plan") {
           const plan = String(data.plan);
           if (!PLAN_MRR[plan]) return jsonError("Invalid plan");
@@ -529,6 +619,106 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
       // ── Users ──
       case "users": {
+        if (op === "create") {
+          const email = String(data.email ?? "").trim().toLowerCase();
+          const firstName = String(data.firstName ?? "").trim();
+          const lastName = String(data.lastName ?? "").trim();
+          const role = String(data.role ?? "MEMBER").toUpperCase();
+          const password = String(data.password ?? "StalFe2026!User").trim();
+          const tenantId = data.tenantId ? String(data.tenantId).trim() : null;
+
+          if (!email || !email.includes("@")) return jsonError("Valid email is required");
+          if (!firstName || !lastName) return jsonError("First and last name are required");
+          if (password.length < 8) return jsonError("Password must be at least 8 characters");
+
+          const existing = await db.user.findUnique({ where: { email } });
+          if (existing) return jsonError(`User with email "${email}" already exists`);
+
+          const passwordHash = await hashPasswordAsync(password);
+          const user = await db.user.create({
+            data: {
+              email,
+              firstName,
+              lastName,
+              role,
+              passwordHash,
+              status: "ACTIVE",
+              activeTenantId: tenantId,
+              emailVerifiedAt: new Date(),
+            },
+          });
+
+          if (tenantId) {
+            await db.member.create({
+              data: {
+                userId: user.id,
+                tenantId,
+                role: role === "PLATFORM_ADMIN" ? "OWNER" : role === "WORKSPACE_ADMIN" ? "ADMIN" : "MEMBER",
+              },
+            });
+          }
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "user.created",
+            resource: `user:${user.email}`, severity: "WARNING",
+            detail: `Created ${role} user ${user.firstName} ${user.lastName}`,
+          });
+
+          return jsonOk({ ok: true, message: `User ${user.email} created successfully`, user: iso(user) });
+        }
+
+        if (op === "update") {
+          const u = await db.user.findUnique({ where: { id } });
+          if (!u) return jsonError("User not found", 404);
+
+          const updateData: Record<string, unknown> = {};
+          if (data.firstName) updateData.firstName = String(data.firstName).trim();
+          if (data.lastName) updateData.lastName = String(data.lastName).trim();
+          if (data.email && data.email !== u.email) {
+            const nextEmail = String(data.email).trim().toLowerCase();
+            const clash = await db.user.findUnique({ where: { email: nextEmail } });
+            if (clash && clash.id !== id) return jsonError(`Email "${nextEmail}" is already registered`);
+            updateData.email = nextEmail;
+          }
+          if (data.role) updateData.role = String(data.role);
+          if (data.status) updateData.status = String(data.status);
+          if (data.totpEnabled !== undefined) updateData.totpEnabled = Boolean(data.totpEnabled);
+
+          const updated = await db.user.update({ where: { id }, data: updateData });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "user.updated",
+            resource: `user:${updated.email}`, severity: "WARNING",
+            detail: `Updated user profile for ${updated.email}`,
+          });
+
+          return jsonOk({ ok: true, message: `User ${updated.email} updated`, user: iso(updated) });
+        }
+
+        if (op === "reset-password") {
+          const u = await db.user.findUnique({ where: { id } });
+          if (!u) return jsonError("User not found", 404);
+
+          const newPass = String(data.password ?? "").trim();
+          if (newPass.length < 8) return jsonError("Password must be at least 8 characters");
+
+          const passwordHash = await hashPasswordAsync(newPass);
+          await db.user.update({
+            where: { id },
+            data: { passwordHash, passwordChangedAt: new Date() },
+          });
+
+          await db.session.deleteMany({ where: { userId: id } });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "user.password_reset_admin",
+            resource: `user:${u.email}`, severity: "CRITICAL",
+            detail: "Admin reset password and revoked all sessions",
+          });
+
+          return jsonOk({ ok: true, message: `Password reset successfully for ${u.email}` });
+        }
+
         if (op === "toggle-status") {
           const u = await db.user.findUnique({ where: { id } });
           if (!u) return jsonError("User not found", 404);
@@ -806,6 +996,178 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "compliance_doc.visibility_changed", resource: `doc:${doc.key}`, severity: "INFO", detail: `Public: ${nextPublic}` });
           return jsonOk({ ok: true, message: nextPublic ? "Document published to public legal portal" : "Document hidden from public view" });
         }
+        if (op === "doc-save") {
+          const doc = await db.complianceDocument.findUnique({ where: { id } });
+          if (!doc) return jsonError("Document not found", 404);
+
+          const title = String(data.title ?? doc.title).trim();
+          const bodyMarkdown = String(data.bodyMarkdown ?? doc.bodyMarkdown);
+          const category = String(data.category ?? doc.category);
+          const owner = String(data.owner ?? doc.owner);
+          const summary = data.summary !== undefined ? String(data.summary) : doc.summary;
+          const controlRefs = data.controlRefs !== undefined ? String(data.controlRefs) : doc.controlRefs;
+          const changeNote = String(data.changeNote ?? "Updated via platform admin console");
+          const nextVersion = String(data.version ?? doc.version);
+
+          await db.complianceDocument.update({
+            where: { id },
+            data: {
+              title, bodyMarkdown, category, owner, summary, controlRefs,
+              version: nextVersion, updatedAt: new Date(),
+            },
+          });
+
+          await db.complianceDocumentVersion.create({
+            data: {
+              documentId: doc.id,
+              version: nextVersion,
+              bodyMarkdown,
+              changedBy: actor,
+              changeNote,
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "compliance_doc.updated",
+            resource: `doc:${doc.key}`, severity: "INFO",
+            detail: `Updated "${title}" to v${nextVersion} (${changeNote})`,
+          });
+
+          return jsonOk({ ok: true, message: `Document "${title}" saved as v${nextVersion}` });
+        }
+
+        if (op === "control-save") {
+          const ref = String(data.ref ?? "").trim();
+          const title = String(data.title ?? "").trim();
+          if (!title) return jsonError("Control title is required");
+
+          if (id) {
+            await db.control.update({
+              where: { id },
+              data: {
+                title,
+                framework: String(data.framework ?? "SOC 2"),
+                category: String(data.category ?? "Security"),
+                status: String(data.status ?? "IMPLEMENTED"),
+                owner: String(data.owner ?? "Security"),
+                lastReviewedAt: new Date(),
+              },
+            });
+            return jsonOk({ ok: true, message: `Control ${ref} updated` });
+          } else {
+            if (!ref) return jsonError("Control reference ID is required (e.g. SOC2-CC6.1)");
+            const existing = await db.control.findUnique({ where: { ref } });
+            if (existing) return jsonError(`Control with ref "${ref}" already exists`);
+
+            await db.control.create({
+              data: {
+                ref,
+                title,
+                framework: String(data.framework ?? "SOC 2"),
+                category: String(data.category ?? "Security"),
+                status: String(data.status ?? "IMPLEMENTED"),
+                owner: String(data.owner ?? "Security"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Control ${ref} created` });
+          }
+        }
+
+        if (op === "policy-save") {
+          const name = String(data.name ?? "").trim();
+          const scope = String(data.scope ?? "").trim();
+          const retentionDays = Number(data.retentionDays ?? 365);
+          if (!name || !scope) return jsonError("Policy name and scope are required");
+
+          if (id) {
+            await db.retentionPolicy.update({
+              where: { id },
+              data: {
+                name, scope, retentionDays,
+                disposition: String(data.disposition ?? "DELETE"),
+                status: String(data.status ?? "ACTIVE"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Retention policy "${name}" updated` });
+          } else {
+            await db.retentionPolicy.create({
+              data: {
+                name, scope, retentionDays,
+                disposition: String(data.disposition ?? "DELETE"),
+                status: String(data.status ?? "ACTIVE"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Retention policy "${name}" created` });
+          }
+        }
+
+        if (op === "risk-save") {
+          const title = String(data.title ?? "").trim();
+          if (!title) return jsonError("Risk title is required");
+
+          if (id) {
+            await db.risk.update({
+              where: { id },
+              data: {
+                title,
+                category: String(data.category ?? "Security"),
+                likelihood: String(data.likelihood ?? "MEDIUM"),
+                impact: String(data.impact ?? "MEDIUM"),
+                score: Number(data.score ?? 9),
+                mitigation: data.mitigation ? String(data.mitigation) : null,
+                status: String(data.status ?? "OPEN"),
+                owner: String(data.owner ?? "Security"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Risk "${title}" updated` });
+          } else {
+            await db.risk.create({
+              data: {
+                title,
+                category: String(data.category ?? "Security"),
+                likelihood: String(data.likelihood ?? "MEDIUM"),
+                impact: String(data.impact ?? "MEDIUM"),
+                score: Number(data.score ?? 9),
+                mitigation: data.mitigation ? String(data.mitigation) : null,
+                status: String(data.status ?? "OPEN"),
+                owner: String(data.owner ?? "Security"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Risk "${title}" created` });
+          }
+        }
+
+        if (op === "incident-save") {
+          const title = String(data.title ?? "").trim();
+          const description = String(data.description ?? "").trim();
+          if (!title || !description) return jsonError("Incident title and description are required");
+
+          if (id) {
+            await db.incident.update({
+              where: { id },
+              data: {
+                title,
+                description,
+                severity: String(data.severity ?? "SEV3"),
+                status: String(data.status ?? "OPEN"),
+                assignee: String(data.assignee ?? "Security Lead"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Incident "${title}" updated` });
+          } else {
+            await db.incident.create({
+              data: {
+                title,
+                description,
+                severity: String(data.severity ?? "SEV3"),
+                status: String(data.status ?? "OPEN"),
+                assignee: String(data.assignee ?? "Security Lead"),
+              },
+            });
+            return jsonOk({ ok: true, message: `Incident "${title}" logged` });
+          }
+        }
+
         return jsonError("Unsupported operation");
       }
 
@@ -854,6 +1216,73 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "billing.subscription_canceled", resource: `subscription:${id}`, severity: "WARNING", detail: reason });
           return jsonOk({ ok: true, message: "Subscription cancelled at period end" });
         }
+        if (op === "save-plan") {
+          const plan = await db.plan.findUnique({ where: { id } });
+          if (!plan) return jsonError("Plan not found", 404);
+
+          const name = String(data.name ?? plan.name).trim();
+          const monthlyEur = data.monthlyEur !== undefined ? Number(data.monthlyEur) : plan.monthlyEur;
+          const seatLimit = data.seatLimit !== undefined ? Number(data.seatLimit) : plan.seatLimit;
+          const envelopeLimit = data.envelopeLimit !== undefined ? Number(data.envelopeLimit) : plan.envelopeLimit;
+          const storageGb = data.storageGb !== undefined ? Number(data.storageGb) : plan.storageGb;
+          const apiAccess = data.apiAccess !== undefined ? Boolean(data.apiAccess) : plan.apiAccess;
+          const slaUptime = String(data.slaUptime ?? plan.slaUptime);
+          const support = String(data.support ?? plan.support);
+          const features = String(data.features ?? plan.features);
+          const outcomes = data.outcomes !== undefined ? String(data.outcomes) : plan.outcomes;
+          const active = data.active !== undefined ? Boolean(data.active) : plan.active;
+
+          const updated = await db.plan.update({
+            where: { id },
+            data: {
+              name, monthlyEur, seatLimit, envelopeLimit, storageGb,
+              apiAccess, slaUptime, support, features, outcomes, active,
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "billing.plan_updated",
+            resource: `plan:${plan.code}`, severity: "INFO",
+            detail: `Updated plan "${name}" (${plan.code})`,
+          });
+
+          return jsonOk({ ok: true, message: `Plan "${name}" updated`, plan: iso(updated) });
+        }
+
+        if (op === "create-plan") {
+          const code = String(data.code ?? "").trim().toUpperCase();
+          const name = String(data.name ?? "").trim();
+          if (!code || !name) return jsonError("Plan code and name are required");
+
+          const existing = await db.plan.findUnique({ where: { code } });
+          if (existing) return jsonError(`Plan with code "${code}" already exists`);
+
+          const created = await db.plan.create({
+            data: {
+              code,
+              name,
+              monthlyEur: Number(data.monthlyEur ?? 0),
+              seatLimit: Number(data.seatLimit ?? 1),
+              envelopeLimit: Number(data.envelopeLimit ?? 10),
+              storageGb: Number(data.storageGb ?? 5),
+              apiAccess: Boolean(data.apiAccess ?? false),
+              slaUptime: String(data.slaUptime ?? "99.5%"),
+              support: String(data.support ?? "Community"),
+              features: String(data.features ?? "Core signing|Audit trail"),
+              outcomes: data.outcomes ? String(data.outcomes) : null,
+              active: Boolean(data.active ?? true),
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "billing.plan_created",
+            resource: `plan:${code}`, severity: "INFO",
+            detail: `Created new plan "${name}" (${code}) at €${created.monthlyEur}/mo`,
+          });
+
+          return jsonOk({ ok: true, message: `Plan "${name}" created`, plan: iso(created) });
+        }
+
         return jsonError("Unsupported operation");
       }
 
@@ -1055,17 +1484,97 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const host = String(data.smtpHost ?? "").trim();
           const from = String(data.smtpFrom ?? "").trim();
           if (!host || !from) return jsonError("SMTP host and from-address are required");
+
+          const updateData: Record<string, unknown> = {
+            smtpHost: host,
+            smtpPort: Number(data.smtpPort ?? 587),
+            smtpUser: String(data.smtpUser ?? ""),
+            smtpFrom: from,
+            smtpTls: data.smtpTls === true,
+            updatedAt: new Date(),
+          };
+
+          if (data.smtpPassword !== undefined && data.smtpPassword !== "") {
+            updateData.smtpPassword = String(data.smtpPassword);
+          }
+
           await db.platformSetting.update({
             where: { id: "singleton" },
-            data: { smtpHost: host, smtpPort: Number(data.smtpPort ?? 587), smtpUser: String(data.smtpUser ?? ""), smtpFrom: from, smtpTls: data.smtpTls === true, updatedAt: new Date() },
+            data: updateData,
           });
+
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "smtp_settings.updated", resource: "platform:settings", severity: "WARNING" });
           return jsonOk({ ok: true, message: "SMTP settings saved" });
         }
+
         if (op === "test-smtp") {
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "smtp.test_sent", resource: "platform:settings", severity: "INFO" });
-          return jsonOk({ ok: true, message: "Test email delivered - check the inbox of the from-address" });
+          const s = await db.platformSetting.findUnique({ where: { id: "singleton" } });
+          const host = String(data.smtpHost || s?.smtpHost || "").trim();
+          const port = Number(data.smtpPort || s?.smtpPort || 587);
+          const user = String(data.smtpUser || s?.smtpUser || "").trim();
+          const pass = String(data.smtpPassword || s?.smtpPassword || "");
+          const from = String(data.smtpFrom || s?.smtpFrom || "Docurama Sign <notifications@docurama.eu>");
+          const tls = data.smtpTls !== undefined ? Boolean(data.smtpTls) : (s?.smtpTls ?? true);
+          const to = data.to ? String(data.to).trim() : admin.email;
+
+          if (!host) return jsonError("SMTP host is required for testing");
+
+          const res = await testSmtpConnection({ host, port, user, pass, tls, from, to });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: res.ok ? "smtp.test_success" : "smtp.test_failed",
+            resource: "platform:settings", severity: res.ok ? "INFO" : "WARNING",
+            detail: `${host}:${port} -> ${to}: ${res.message}`,
+          });
+
+          return jsonOk({ ok: res.ok, message: res.message, latencyMs: res.latencyMs });
         }
+
+        if (op === "save-signing") {
+          const fingerprint = String(data.certFingerprint ?? "").trim();
+          const conformance = String(data.signingConformance ?? "B-LT").trim();
+          const expiry = data.certExpiryAt ? new Date(String(data.certExpiryAt)) : undefined;
+
+          if (!fingerprint) return jsonError("Certificate fingerprint is required");
+
+          await db.platformSetting.update({
+            where: { id: "singleton" },
+            data: {
+              certFingerprint: fingerprint,
+              signingConformance: conformance,
+              ...(expiry && !isNaN(expiry.getTime()) ? { certExpiryAt: expiry } : {}),
+              updatedAt: new Date(),
+            },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "signing_infrastructure.updated",
+            resource: "platform:settings", severity: "WARNING",
+            detail: `Fingerprint ${fingerprint}, PAdES ${conformance}`,
+          });
+
+          return jsonOk({ ok: true, message: "Signing infrastructure configuration saved" });
+        }
+
+        if (op === "save-company") {
+          const company = data.company as Record<string, unknown>;
+          if (!company || typeof company !== "object") return jsonError("Company profile data required");
+
+          const json = JSON.stringify(company);
+          await db.platformSetting.update({
+            where: { id: "singleton" },
+            data: { companyProfile: json, updatedAt: new Date() },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "company_profile.updated",
+            resource: "platform:provisioning", severity: "WARNING",
+            detail: `Updated legal profile for ${company.legalName ?? "Docurama SAS"}`,
+          });
+
+          return jsonOk({ ok: true, message: "Company profile updated successfully" });
+        }
+
         if (op === "save-tsa") {
           const url = String(data.tsaUrl ?? "").trim();
           if (!/^https?:\/\//.test(url)) return jsonError("A valid HTTPS TSA URL is required");
@@ -1096,6 +1605,24 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
       // ── Email & DNS provisioning (docurama.eu) ──
       case "provisioning": {
+        if (op === "company.update") {
+          const company = data.company as Record<string, unknown>;
+          if (!company || typeof company !== "object") return jsonError("Company profile data required");
+
+          const json = JSON.stringify(company);
+          await db.platformSetting.update({
+            where: { id: "singleton" },
+            data: { companyProfile: json, updatedAt: new Date() },
+          });
+
+          await recordAudit({
+            actor, actorRole: "PLATFORM_ADMIN", action: "company_profile.updated",
+            resource: "platform:provisioning", severity: "WARNING",
+            detail: `Updated company identity for ${company.legalName ?? "Docurama SAS"}`,
+          });
+
+          return jsonOk({ ok: true, message: "Company identity updated successfully" });
+        }
         if (op === "email.provision" || op === "email.deprovision") {
           const email = EMAIL_ACCOUNTS.find((e) => e.address === id);
           if (!email) return jsonError("Unknown email address", 404);

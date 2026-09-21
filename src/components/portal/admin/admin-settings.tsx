@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Mail, Timer, Flag, Send, Save, Lock } from "lucide-react";
+import { Mail, Timer, Flag, Send, Save, Lock, Eye, EyeOff, KeyRound } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import { ConfirmDialog, CopyableCode, ErrorState, PageHeader, daysUntil } from "@/components/portal/shared";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 
 type PlatformSettings = {
-  smtpHost: string; smtpPort: number; smtpUser: string; smtpFrom: string; smtpTls: boolean;
+  smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword?: string; smtpFrom: string; smtpTls: boolean;
   tsaUrl: string; tsaReachable: boolean; certFingerprint: string; certExpiryAt: string;
   signingConformance: string; trialLengthDays: number; maintenanceMode: boolean;
   featureFlags: string; sweeperLastRunAt: string; version: string;
@@ -50,9 +50,17 @@ function useAct() {
 function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act }) {
   const [smtp, setSmtp] = useState({
     smtpHost: settings.smtpHost, smtpPort: settings.smtpPort,
-    smtpUser: settings.smtpUser, smtpFrom: settings.smtpFrom, smtpTls: settings.smtpTls,
+    smtpUser: settings.smtpUser, smtpPassword: settings.smtpPassword ?? "", smtpFrom: settings.smtpFrom, smtpTls: settings.smtpTls,
   });
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+
   const [tsaUrl, setTsaUrl] = useState(settings.tsaUrl);
+  const [certSettings, setCertSettings] = useState({
+    certFingerprint: settings.certFingerprint,
+    certExpiryAt: settings.certExpiryAt ? new Date(settings.certExpiryAt).toISOString().split("T")[0] : "",
+    signingConformance: settings.signingConformance || "B-LT",
+  });
+
   const [trialDays, setTrialDays] = useState(settings.trialLengthDays);
   const [maintenance, setMaintenance] = useState(settings.maintenanceMode);
   const [flags, setFlags] = useState<FeatureFlags>(() => {
@@ -88,6 +96,28 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               <Input id="smtp-user" value={smtp.smtpUser} onChange={(e) => setSmtp({ ...smtp, smtpUser: e.target.value })} className="h-11" autoComplete="off" />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="smtp-pass">Password / App Key</Label>
+              <div className="relative">
+                <Input
+                  id="smtp-pass"
+                  type={showSmtpPassword ? "text" : "password"}
+                  value={smtp.smtpPassword}
+                  onChange={(e) => setSmtp({ ...smtp, smtpPassword: e.target.value })}
+                  placeholder={settings.smtpPassword ? "••••••••" : "Leave blank to keep current"}
+                  className="h-11 pr-10"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+                  aria-label={showSmtpPassword ? "Hide password" : "Show password"}
+                >
+                  {showSmtpPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="smtp-from">Sender identity</Label>
               <Input id="smtp-from" value={smtp.smtpFrom} onChange={(e) => setSmtp({ ...smtp, smtpFrom: e.target.value })} className="h-11" />
               <p className="text-xs text-muted-foreground">
@@ -107,7 +137,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               <Save className="h-4 w-4" aria-hidden /> Save SMTP
             </Button>
             <Button variant="outline" className="h-11" onClick={() => act.mutate({ op: "test-smtp" })} disabled={act.isPending}>
-              <Send className="h-4 w-4" aria-hidden /> Send test email
+              <Send className="h-4 w-4" aria-hidden /> Test connection &amp; send probe
             </Button>
           </div>
         </CardContent>
@@ -121,7 +151,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
           </CardTitle>
           <CardDescription>Timestamp authority and platform sealing certificate.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="space-y-1.5">
             <Label htmlFor="tsa-url">RFC 3161 timestamp authority URL</Label>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -134,25 +164,61 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               Current status: {settings.tsaReachable ? "reachable - timestamps applied to every seal" : "unreachable - seals fall back to B-B conformance"}
             </p>
           </div>
+
           <Separator />
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Sealing certificate</p>
-            <div className="space-y-1.5 rounded-lg border p-3 text-sm">
-              <p className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-muted-foreground">Fingerprint</span>
-                <CopyableCode value={settings.certFingerprint} max={28} />
-              </p>
-              <p className="flex justify-between">
-                <span className="text-muted-foreground">Expires</span>
-                <span className={certDays > 30 ? "" : "font-medium text-warning"}>
-                  {new Date(settings.certExpiryAt).toLocaleDateString("en-GB")} · {certDays} days
-                </span>
-              </p>
-              <p className="flex justify-between">
-                <span className="text-muted-foreground">Conformance</span>
-                <span>PAdES {settings.signingConformance}</span>
-              </p>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Sealing certificate</p>
+              <span className={certDays > 30 ? "text-xs text-muted-foreground" : "text-xs font-medium text-warning"}>
+                Expires in {certDays} days ({new Date(settings.certExpiryAt).toLocaleDateString("en-GB")})
+              </span>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="cert-fingerprint">SHA-256 Fingerprint</Label>
+                <Input
+                  id="cert-fingerprint"
+                  value={certSettings.certFingerprint}
+                  onChange={(e) => setCertSettings({ ...certSettings, certFingerprint: e.target.value })}
+                  className="font-mono text-xs h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cert-expiry">Expiry Date</Label>
+                <Input
+                  id="cert-expiry"
+                  type="date"
+                  value={certSettings.certExpiryAt}
+                  onChange={(e) => setCertSettings({ ...certSettings, certExpiryAt: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cert-conformance">Target Conformance Level</Label>
+                <select
+                  id="cert-conformance"
+                  value={certSettings.signingConformance}
+                  onChange={(e) => setCertSettings({ ...certSettings, signingConformance: e.target.value })}
+                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="B-LT">PAdES B-LT (Long-Term Validation)</option>
+                  <option value="B-LTA">PAdES B-LTA (Long-Term Archival with TSA)</option>
+                  <option value="B-T">PAdES B-T (Electronic Timestamp)</option>
+                  <option value="B-B">PAdES B-B (Basic Signature)</option>
+                </select>
+              </div>
+            </div>
+
+            <Button
+              className="h-11"
+              onClick={() => act.mutate({ op: "save-signing", data: certSettings })}
+              disabled={act.isPending}
+            >
+              <KeyRound className="h-4 w-4" aria-hidden /> Save Certificate Settings
+            </Button>
+
             <p className="text-xs text-muted-foreground">
               The achieved level is always re-read from the sealed file and recorded per envelope - never claimed from configuration alone.
             </p>

@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BadgeCheck, Ban, CreditCard, Loader2, RotateCcw, TrendingUp } from "lucide-react";
+import { BadgeCheck, Ban, CreditCard, Loader2, RotateCcw, TrendingUp, Plus, Pencil } from "lucide-react";
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
 } from "recharts";
@@ -11,9 +12,19 @@ import { ConfirmDialog, ErrorState, KpiCard, PageHeader, StatusBadge, fmtDate } 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+
+type PlanItem = {
+  id: string; code: string; name: string; monthlyEur: number; seatLimit: number;
+  envelopeLimit: number; storageGb: number; apiAccess: boolean; slaUptime: string;
+  support: string; features: string; outcomes?: string | null; active?: boolean;
+};
 
 type BillingData = {
-  plans: { id: string; code: string; name: string; monthlyEur: number; seatLimit: number; envelopeLimit: number; storageGb: number; apiAccess: boolean; slaUptime: string; support: string; features: string }[];
+  plans: PlanItem[];
   subscriptions: { id: string; tenantName: string; tenantSlug: string; tenantStatus: string; planCode: string; status: string; mrrEur: number; seats: number; renewalAt: string; paymentMethod: string; lastInvoiceAt: string | null; failedPayment: boolean }[];
   mrrTrend: { date: string; mrrEur: number }[];
   payments: {
@@ -25,6 +36,20 @@ type BillingData = {
 };
 
 export function AdminBilling() {
+  const [createPlanOpen, setCreatePlanOpen] = useState(false);
+  const [createPlanForm, setCreatePlanForm] = useState({
+    code: "", name: "", monthlyEur: 49, seatLimit: 5, envelopeLimit: 150, storageGb: 15,
+    apiAccess: false, slaUptime: "99.5%", support: "Email", features: "Core signing|Audit trail",
+    outcomes: "Accelerate standard contract workflows", active: true,
+  });
+
+  const [editPlan, setEditPlan] = useState<PlanItem | null>(null);
+  const [editPlanForm, setEditPlanForm] = useState({
+    name: "", monthlyEur: 0, seatLimit: 1, envelopeLimit: 10, storageGb: 5,
+    apiAccess: false, slaUptime: "99.5%", support: "Community", features: "",
+    outcomes: "", active: true,
+  });
+
   const queryClient = useQueryClient();
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "billing"],
@@ -239,28 +264,385 @@ export function AdminBilling() {
 
       {/* Plans */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Plan catalogue</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Plan catalogue</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Pricing tiers, envelope quotas, and feature allocations.</p>
+          </div>
+          <Button
+            size="sm"
+            className="h-10 gap-1.5"
+            onClick={() => {
+              setCreatePlanForm({
+                code: "", name: "", monthlyEur: 49, seatLimit: 5, envelopeLimit: 150, storageGb: 15,
+                apiAccess: false, slaUptime: "99.5%", support: "Email", features: "Core signing|Audit trail",
+                outcomes: "Accelerate standard contract workflows", active: true,
+              });
+              setCreatePlanOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" aria-hidden /> New Plan
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
             {data.plans.map((p) => (
-              <div key={p.id} className="space-y-3 rounded-xl border bg-card p-5">
-                <div className="flex items-center justify-between">
-                  <StatusBadge status={p.code} />
-                  <p className="text-lg font-semibold">€{p.monthlyEur}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+              <div key={p.id} className="flex flex-col justify-between space-y-3 rounded-xl border bg-card p-5">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <StatusBadge status={p.code} />
+                    <p className="text-lg font-semibold">€{p.monthlyEur}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm">{p.name}</h4>
+                    {p.outcomes && <p className="text-xs text-muted-foreground mt-0.5">{p.outcomes}</p>}
+                  </div>
+                  <ul className="space-y-1.5 text-sm text-muted-foreground">
+                    <li>{p.envelopeLimit.toLocaleString()} envelopes / month</li>
+                    <li>{p.seatLimit} seats · {p.storageGb} GB storage</li>
+                    <li>{p.apiAccess ? "API + webhooks" : "No API access"}</li>
+                    <li>{p.slaUptime} SLA · {p.support}</li>
+                  </ul>
+                  {p.features && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {p.features.split("|").map((f) => (
+                        <span key={f} className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  <li>{p.envelopeLimit.toLocaleString()} envelopes / month</li>
-                  <li>{p.seatLimit} seats · {p.storageGb} GB storage</li>
-                  <li>{p.apiAccess ? "API + webhooks" : "No API access"}</li>
-                  <li>{p.slaUptime} SLA · {p.support}</li>
-                </ul>
+
+                <div className="pt-2 border-t flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1 text-xs"
+                    onClick={() => {
+                      setEditPlan(p);
+                      setEditPlanForm({
+                        name: p.name,
+                        monthlyEur: p.monthlyEur,
+                        seatLimit: p.seatLimit,
+                        envelopeLimit: p.envelopeLimit,
+                        storageGb: p.storageGb,
+                        apiAccess: p.apiAccess,
+                        slaUptime: p.slaUptime,
+                        support: p.support,
+                        features: p.features,
+                        outcomes: p.outcomes || "",
+                        active: p.active ?? true,
+                      });
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit Plan
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Create Plan Dialog */}
+      <Dialog open={createPlanOpen} onOpenChange={setCreatePlanOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Subscription Plan</DialogTitle>
+            <DialogDescription>
+              Define a new commercial or custom tier with specific quotas and feature flags.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-code">Plan Code</Label>
+                <Input
+                  id="cp-code"
+                  value={createPlanForm.code}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, code: e.target.value.toUpperCase() })}
+                  placeholder="GROWTH"
+                  className="h-10 font-mono text-xs uppercase"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-name">Plan Name</Label>
+                <Input
+                  id="cp-name"
+                  value={createPlanForm.name}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, name: e.target.value })}
+                  placeholder="Growth Tier"
+                  className="h-10"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-eur">Monthly Price (€)</Label>
+                <Input
+                  id="cp-eur"
+                  type="number"
+                  value={createPlanForm.monthlyEur}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, monthlyEur: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-seats">Seat Limit</Label>
+                <Input
+                  id="cp-seats"
+                  type="number"
+                  value={createPlanForm.seatLimit}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, seatLimit: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-env">Envelopes / Month</Label>
+                <Input
+                  id="cp-env"
+                  type="number"
+                  value={createPlanForm.envelopeLimit}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, envelopeLimit: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-storage">Storage (GB)</Label>
+                <Input
+                  id="cp-storage"
+                  type="number"
+                  value={createPlanForm.storageGb}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, storageGb: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-sla">SLA Uptime</Label>
+                <Input
+                  id="cp-sla"
+                  value={createPlanForm.slaUptime}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, slaUptime: e.target.value })}
+                  placeholder="99.9%"
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cp-support">Support Tier</Label>
+                <Input
+                  id="cp-support"
+                  value={createPlanForm.support}
+                  onChange={(e) => setCreatePlanForm({ ...createPlanForm, support: e.target.value })}
+                  placeholder="Priority Email"
+                  className="h-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-features">Features (pipe-separated)</Label>
+              <Input
+                id="cp-features"
+                value={createPlanForm.features}
+                onChange={(e) => setCreatePlanForm({ ...createPlanForm, features: e.target.value })}
+                placeholder="Core signing|Audit trail|API access|Dedicated IP"
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-outcomes">Outcome Summary</Label>
+              <Input
+                id="cp-outcomes"
+                value={createPlanForm.outcomes}
+                onChange={(e) => setCreatePlanForm({ ...createPlanForm, outcomes: e.target.value })}
+                placeholder="Accelerate high-volume contract execution"
+                className="h-10 text-xs"
+              />
+            </div>
+
+            <label className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm font-medium">REST API &amp; Webhooks Access</span>
+              <Switch
+                checked={createPlanForm.apiAccess}
+                onCheckedChange={(v) => setCreatePlanForm({ ...createPlanForm, apiAccess: v })}
+              />
+            </label>
+
+            <label className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm font-medium">Active (Visible in Portal)</span>
+              <Switch
+                checked={createPlanForm.active}
+                onCheckedChange={(v) => setCreatePlanForm({ ...createPlanForm, active: v })}
+              />
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreatePlanOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "create-plan", id: "", data: createPlanForm });
+                setCreatePlanOpen(false);
+              }}
+              disabled={act.isPending || !createPlanForm.code.trim() || !createPlanForm.name.trim()}
+            >
+              Create Plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Plan Dialog */}
+      <Dialog open={!!editPlan} onOpenChange={(v) => !v && setEditPlan(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Plan - {editPlan?.name} ({editPlan?.code})</DialogTitle>
+            <DialogDescription>
+              Update pricing, capacity limits, and capabilities for this tier.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ep-name">Plan Name</Label>
+              <Input
+                id="ep-name"
+                value={editPlanForm.name}
+                onChange={(e) => setEditPlanForm({ ...editPlanForm, name: e.target.value })}
+                className="h-10"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-eur">Monthly Price (€)</Label>
+                <Input
+                  id="ep-eur"
+                  type="number"
+                  value={editPlanForm.monthlyEur}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, monthlyEur: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-seats">Seat Limit</Label>
+                <Input
+                  id="ep-seats"
+                  type="number"
+                  value={editPlanForm.seatLimit}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, seatLimit: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-env">Envelopes / Month</Label>
+                <Input
+                  id="ep-env"
+                  type="number"
+                  value={editPlanForm.envelopeLimit}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, envelopeLimit: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-storage">Storage (GB)</Label>
+                <Input
+                  id="ep-storage"
+                  type="number"
+                  value={editPlanForm.storageGb}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, storageGb: Number(e.target.value) })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-sla">SLA Uptime</Label>
+                <Input
+                  id="ep-sla"
+                  value={editPlanForm.slaUptime}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, slaUptime: e.target.value })}
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ep-support">Support Tier</Label>
+                <Input
+                  id="ep-support"
+                  value={editPlanForm.support}
+                  onChange={(e) => setEditPlanForm({ ...editPlanForm, support: e.target.value })}
+                  className="h-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ep-features">Features (pipe-separated)</Label>
+              <Input
+                id="ep-features"
+                value={editPlanForm.features}
+                onChange={(e) => setEditPlanForm({ ...editPlanForm, features: e.target.value })}
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ep-outcomes">Outcome Summary</Label>
+              <Input
+                id="ep-outcomes"
+                value={editPlanForm.outcomes}
+                onChange={(e) => setEditPlanForm({ ...editPlanForm, outcomes: e.target.value })}
+                className="h-10 text-xs"
+              />
+            </div>
+
+            <label className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm font-medium">REST API &amp; Webhooks Access</span>
+              <Switch
+                checked={editPlanForm.apiAccess}
+                onCheckedChange={(v) => setEditPlanForm({ ...editPlanForm, apiAccess: v })}
+              />
+            </label>
+
+            <label className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm font-medium">Active (Visible in Portal)</span>
+              <Switch
+                checked={editPlanForm.active}
+                onCheckedChange={(v) => setEditPlanForm({ ...editPlanForm, active: v })}
+              />
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditPlan(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (editPlan) {
+                  act.mutate({ op: "save-plan", id: editPlan.id, data: editPlanForm });
+                }
+                setEditPlan(null);
+              }}
+              disabled={act.isPending || !editPlanForm.name.trim()}
+            >
+              Save Plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

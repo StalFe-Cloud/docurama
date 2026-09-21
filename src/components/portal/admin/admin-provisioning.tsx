@@ -13,11 +13,12 @@
  *  - The generated BIND zone file - copy or download, ready for the registrar.
  */
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Mail, Globe2, ShieldCheck, FileCode2, RefreshCw, Send, CheckCircle2,
-  Building2, MapPin, Hash, Landmark, Phone, Download, ArrowRight,
+  Building2, MapPin, Hash, Landmark, Phone, Download, ArrowRight, Pencil,
 } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import {
@@ -26,6 +27,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 type EmailRow = {
@@ -85,7 +89,7 @@ const PRIORITY_STYLE: Record<EmailRow["priority"], string> = {
 /** Structural type for the provisioning action mutation shared by all tabs. */
 type ActMutation = {
   isPending: boolean;
-  mutate: (vars: { op: string; id?: string }) => void;
+  mutate: (vars: { op: string; id?: string; data?: Record<string, unknown> }) => void;
 };
 
 export function AdminProvisioning() {
@@ -96,7 +100,7 @@ export function AdminProvisioning() {
   });
 
   const act = useMutation({
-    mutationFn: (vars: { op: string; id?: string }) =>
+    mutationFn: (vars: { op: string; id?: string; data?: Record<string, unknown> }) =>
       apiPost<{ ok: boolean; message: string }>("/api/admin/provisioning", vars),
     onSuccess: (res) => {
       toast.success(res.message);
@@ -179,7 +183,7 @@ export function AdminProvisioning() {
           <DnsTab rows={data?.dnsRecords ?? []} act={act} loading={isLoading} />
         </TabsContent>
         <TabsContent value="zone" className="mt-4">
-          <ZoneTab data={data} />
+          <ZoneTab data={data} act={act} />
         </TabsContent>
       </Tabs>
     </div>
@@ -437,12 +441,52 @@ function DnsTab({
 
 // ─── Tab: Zone file & company identity ───────────────────────────────────────
 
-function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
+function ZoneTab({ data, act }: { data: ProvisioningData | undefined; act: ActMutation }) {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    legalName: "",
+    address: "",
+    country: "FR",
+    registrationNumber: "",
+    vatNumber: "",
+    shareCapital: "",
+    phone: "",
+    dpoEmail: "",
+    legalEmail: "",
+    securityEmail: "",
+    adminEmail: "",
+    dataResidency: "",
+  });
+
   if (!data) {
     return <Card><CardContent className="p-10 text-center text-sm text-muted-foreground">Loading zone file…</CardContent></Card>;
   }
 
   const c = data.company;
+
+  const onOpenEdit = () => {
+    setFormData({
+      legalName: c.legalName,
+      address: c.address,
+      country: c.country,
+      registrationNumber: c.registrationNumber,
+      vatNumber: c.vatNumber,
+      shareCapital: c.shareCapital,
+      phone: c.phone,
+      dpoEmail: c.dpoEmail,
+      legalEmail: c.legalEmail,
+      securityEmail: c.securityEmail,
+      adminEmail: c.adminEmail,
+      dataResidency: c.dataResidency,
+    });
+    setOpen(true);
+  };
+
+  const handleSave = () => {
+    act.mutate({ op: "company.update", data: formData });
+    setOpen(false);
+  };
+
   const downloadZone = () => {
     const blob = new Blob([data.zoneFile], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -463,14 +507,18 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
     { icon: <Mail className="h-4 w-4" aria-hidden />, label: "DPO / privacy", value: c.dpoEmail, mono: true },
     { icon: <Mail className="h-4 w-4" aria-hidden />, label: "Legal", value: c.legalEmail, mono: true },
     { icon: <Mail className="h-4 w-4" aria-hidden />, label: "Security", value: c.securityEmail, mono: true },
+    { icon: <Mail className="h-4 w-4" aria-hidden />, label: "Platform Admin", value: c.adminEmail, mono: true },
     { icon: <Globe2 className="h-4 w-4" aria-hidden />, label: "Data residency", value: c.dataResidency },
   ];
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Company identity - Docurama SAS</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Company identity - {c.legalName}</CardTitle>
+          <Button variant="outline" size="sm" className="h-10 gap-1.5" onClick={onOpenEdit}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit Identity
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -487,8 +535,8 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
             ))}
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Fields marked “to be updated” are placeholders - complete them with the registry values (SIREN, VAT, capital, phone)
-            from the company's Kbis; they flow into the legal footer, invoices and DSAR responses.
+            Complete and update with real French registry values (SIREN, VAT, capital, phone) from the company's Kbis;
+            these flow dynamically into the legal footer, invoices, zone file, and DSAR responses.
           </p>
         </CardContent>
       </Card>
@@ -509,10 +557,135 @@ function ZoneTab({ data }: { data: ProvisioningData | undefined }) {
           </pre>
           <p className="mt-3 text-xs text-muted-foreground">
             Apply at the registrar (or Infoblox/Cloudflare via API) - the zone regenerates live from the provisioning state above.
-            Replace the placeholder origin IPs and mail-relay targets with production values before publishing.
+            Origin IPs and mail-relay targets are updated dynamically when company details or records change.
           </p>
         </CardContent>
       </Card>
+
+      {/* Edit Company Modal */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Company Identity</DialogTitle>
+            <DialogDescription>
+              Update official corporate registry and contact details. Changes immediately reflect in DNS zone generation, legal notices, and email headers.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-3 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="c-name">Legal Name</Label>
+              <Input
+                id="c-name"
+                value={formData.legalName}
+                onChange={(e) => setFormData({ ...formData, legalName: e.target.value })}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="c-addr">Registered Address</Label>
+              <Input
+                id="c-addr"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-siren">Registration (SIREN / RCS)</Label>
+              <Input
+                id="c-siren"
+                value={formData.registrationNumber}
+                onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
+                placeholder="e.g. 912 345 678 R.C.S. Paris"
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-vat">EU VAT Number</Label>
+              <Input
+                id="c-vat"
+                value={formData.vatNumber}
+                onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
+                placeholder="e.g. FR89 912345678"
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-capital">Share Capital</Label>
+              <Input
+                id="c-capital"
+                value={formData.shareCapital}
+                onChange={(e) => setFormData({ ...formData, shareCapital: e.target.value })}
+                placeholder="e.g. 50 000 €"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-phone">Phone Number</Label>
+              <Input
+                id="c-phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="e.g. +33 1 89 71 23 45"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-admin">Platform Admin Email</Label>
+              <Input
+                id="c-admin"
+                value={formData.adminEmail}
+                onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+                placeholder="sriram.rajan@stalfe.com"
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-dpo">DPO / Privacy Email</Label>
+              <Input
+                id="c-dpo"
+                value={formData.dpoEmail}
+                onChange={(e) => setFormData({ ...formData, dpoEmail: e.target.value })}
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-legal">Legal Email</Label>
+              <Input
+                id="c-legal"
+                value={formData.legalEmail}
+                onChange={(e) => setFormData({ ...formData, legalEmail: e.target.value })}
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="c-sec">Security Email</Label>
+              <Input
+                id="c-sec"
+                value={formData.securityEmail}
+                onChange={(e) => setFormData({ ...formData, securityEmail: e.target.value })}
+                className="h-10 font-mono text-xs"
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="c-residency">Data Residency Statement</Label>
+              <Input
+                id="c-residency"
+                value={formData.dataResidency}
+                onChange={(e) => setFormData({ ...formData, dataResidency: e.target.value })}
+                placeholder="EU (Paris / Gravelines)"
+                className="h-10"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={act.isPending}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Building2, Ban, RotateCcw, ChevronRight, HardDrive, Mail, CalendarClock, Users as UsersIcon } from "lucide-react";
+import { Building2, Ban, RotateCcw, ChevronRight, HardDrive, Mail, CalendarClock, Users as UsersIcon, Plus, Pencil } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import {
   Column, ConfirmDialog, CopyableCode, DataTable, PageHeader, StatusBadge, fmtDate, fmtMb, fmtRelative,
@@ -12,7 +12,9 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
@@ -26,7 +28,7 @@ type TenantRow = {
 };
 
 type TenantDetail = {
-  tenant: TenantRow & { billingEmail: string | null };
+  tenant: TenantRow & { billingEmail: string | null; enforceTwoFactor?: boolean };
   members: { id: string; userId: string; role: string; status: string; name: string; email: string; totpEnabled: boolean; lastActiveAt: string | null; createdAt: string }[];
   subscriptions: { id: string; planCode: string; status: string; mrrEur: number; seats: number; renewalAt: string; paymentMethod: string; lastInvoiceAt: string | null; failedPayment: boolean }[];
   domains: { id: string; domain: string; method: string; status: string; verifiedAt: string | null }[];
@@ -48,6 +50,17 @@ export function AdminTenants() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [planDialogFor, setPlanDialogFor] = useState<TenantRow | null>(null);
   const [plan, setPlan] = useState("BUSINESS");
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "", slug: "", planCode: "BUSINESS", billingEmail: "", status: "ACTIVE", enforceTwoFactor: false,
+  });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "", slug: "", billingEmail: "", status: "ACTIVE", storageUsedMb: 0, enforceTwoFactor: false,
+  });
+
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -124,6 +137,17 @@ export function AdminTenants() {
       <PageHeader
         title="Tenants"
         description="Every customer workspace with plan, lifecycle state and usage. Select a tenant to manage it."
+        actions={
+          <Button
+            className="h-11 gap-1.5"
+            onClick={() => {
+              setCreateForm({ name: "", slug: "", planCode: "BUSINESS", billingEmail: "", status: "ACTIVE", enforceTwoFactor: false });
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" aria-hidden /> Create Workspace
+          </Button>
+        }
       />
 
       <DataTable<TenantRow>
@@ -194,6 +218,24 @@ export function AdminTenants() {
               </div>
 
               <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-11 gap-1.5"
+                  onClick={() => {
+                    setEditForm({
+                      name: t.name,
+                      slug: t.slug,
+                      billingEmail: t.billingEmail || "",
+                      status: t.status,
+                      storageUsedMb: t.storageUsedMb,
+                      enforceTwoFactor: Boolean(t.enforceTwoFactor),
+                    });
+                    setEditOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" aria-hidden /> Edit workspace
+                </Button>
                 <Button size="sm" className="h-11" onClick={() => { setPlan(t.planCode); setPlanDialogFor(t); }}>
                   Change plan ({t.planCode})
                 </Button>
@@ -330,6 +372,201 @@ export function AdminTenants() {
             <Button variant="outline" onClick={() => setPlanDialogFor(null)}>Cancel</Button>
             <Button onClick={() => changePlan.mutate()} disabled={changePlan.isPending || plan === planDialogFor?.planCode}>
               {changePlan.isPending ? "Applying…" : "Apply plan change"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Workspace Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Customer Workspace</DialogTitle>
+            <DialogDescription>
+              Provision a new isolated tenant workspace. A default subscription will be initialized.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="cw-name">Workspace Name</Label>
+              <Input
+                id="cw-name"
+                value={createForm.name}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setCreateForm({
+                    ...createForm,
+                    name,
+                    slug: createForm.slug || name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, ""),
+                  });
+                }}
+                placeholder="Acme Corp"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cw-slug">Subdomain / Slug</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  id="cw-slug"
+                  value={createForm.slug}
+                  onChange={(e) => setCreateForm({ ...createForm, slug: e.target.value })}
+                  placeholder="acme"
+                  className="h-10 font-mono text-sm"
+                />
+                <span className="text-xs text-muted-foreground whitespace-nowrap">.docurama.eu</span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cw-plan">Plan Tier</Label>
+              <select
+                id="cw-plan"
+                value={createForm.planCode}
+                onChange={(e) => setCreateForm({ ...createForm, planCode: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="SOLO">Solo (€12/mo · 1 seat)</option>
+                <option value="STARTER">Starter (€29/mo · 3 seats)</option>
+                <option value="BUSINESS">Business (€79/mo · 10 seats)</option>
+                <option value="ENTERPRISE">Enterprise (€349/mo · 100 seats)</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cw-email">Billing Contact Email (optional)</Label>
+              <Input
+                id="cw-email"
+                type="email"
+                value={createForm.billingEmail}
+                onChange={(e) => setCreateForm({ ...createForm, billingEmail: e.target.value })}
+                placeholder="billing@acme.com"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cw-status">Initial Status</Label>
+              <select
+                id="cw-status"
+                value={createForm.status}
+                onChange={(e) => setCreateForm({ ...createForm, status: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="TRIALING">TRIALING</option>
+                <option value="SUSPENDED">SUSPENDED</option>
+              </select>
+            </div>
+            <label className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm font-medium">Enforce Two-Factor Authentication</span>
+              <Switch
+                checked={createForm.enforceTwoFactor}
+                onCheckedChange={(v) => setCreateForm({ ...createForm, enforceTwoFactor: v })}
+              />
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "create", id: "", data: createForm });
+                setCreateOpen(false);
+              }}
+              disabled={act.isPending || !createForm.name.trim()}
+            >
+              Create Workspace
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Workspace Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Workspace Settings</DialogTitle>
+            <DialogDescription>
+              Modify workspace parameters, slug, billing contact, or storage quota.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ew-name">Workspace Name</Label>
+              <Input
+                id="ew-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ew-slug">Subdomain / Slug</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  id="ew-slug"
+                  value={editForm.slug}
+                  onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
+                  className="h-10 font-mono text-sm"
+                />
+                <span className="text-xs text-muted-foreground whitespace-nowrap">.docurama.eu</span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ew-email">Billing Email</Label>
+              <Input
+                id="ew-email"
+                type="email"
+                value={editForm.billingEmail}
+                onChange={(e) => setEditForm({ ...editForm, billingEmail: e.target.value })}
+                placeholder="billing@example.com"
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ew-status">Status</Label>
+              <select
+                id="ew-status"
+                value={editForm.status}
+                onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="TRIALING">TRIALING</option>
+                <option value="SUSPENDED">SUSPENDED</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ew-storage">Storage Used (MB)</Label>
+              <Input
+                id="ew-storage"
+                type="number"
+                value={editForm.storageUsedMb}
+                onChange={(e) => setEditForm({ ...editForm, storageUsedMb: Number(e.target.value) })}
+                className="h-10 font-mono text-sm"
+              />
+            </div>
+            <label className="flex items-center justify-between rounded-lg border p-3">
+              <span className="text-sm font-medium">Enforce Two-Factor Authentication</span>
+              <Switch
+                checked={editForm.enforceTwoFactor}
+                onCheckedChange={(v) => setEditForm({ ...editForm, enforceTwoFactor: v })}
+              />
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (t) {
+                  act.mutate({ op: "update", id: t.id, data: editForm });
+                }
+                setEditOpen(false);
+              }}
+              disabled={act.isPending || !editForm.name.trim()}
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

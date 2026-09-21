@@ -1178,6 +1178,7 @@ model PlatformSetting {
   smtpHost            String   @default("smtp.eu.mailprovider.io")
   smtpPort            Int      @default(587)
   smtpUser            String   @default("notifications@docurama.eu")
+  smtpPassword        String?  // encrypted or raw SMTP submission password
   smtpFrom            String   @default("Docurama Sign <notifications@docurama.eu>")
   smtpTls             Boolean  @default(true)
   tsaUrl              String   @default("https://timestamp.digicert.com")
@@ -1189,12 +1190,13 @@ model PlatformSetting {
   maintenanceMode     Boolean  @default(false)
   featureFlags        String   @default("{\"smsDelivery\":true,\"bulkSend\":true,\"webhooks\":true,\"passkeys\":true,\"aiFieldDetect\":false,\"euResidencyOnly\":false}")
   provisioningState   String   @default("{}") // persisted provisioning state for docurama.eu emails/subdomains/DNS
+  companyProfile      String?  // JSON string storing editable company identity
   sweeperLastRunAt    DateTime @default(now())
   queueDepth          Int      @default(3)
   apiReplicas         Int      @default(2)
   diskUsedPct         Int      @default(41)
   lastDeployAt        DateTime @default(now())
-  version             String   @default("4.2.1")
+  version             String   @default("0.3.0")
   auditChainSealedAt  DateTime @default(now())
   auditChainBlockHeight Int   @default(1842)
   updatedAt           DateTime @default(now())

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   ShieldCheck, Paperclip, Trash2, RotateCcw, Play, Pause, ShieldAlert,
   Check, X, FileCheck, UserCheck, Wrench, Server, Database, ClipboardList,
-  FileDown, Globe, Lock, BookOpen,
+  FileDown, Globe, Lock, BookOpen, Plus, Pencil, Save,
 } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
 import { ErrorState, KpiCard, PageHeader, StatusBadge, fmtDate, fmtRelative } from "@/components/portal/shared";
@@ -15,8 +15,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type ComplianceDocumentItem = {
   id: string;
@@ -53,6 +55,34 @@ type ComplianceData = {
 export function AdminCompliance() {
   const [tab, setTab] = useState("documents");
   const [selectedDoc, setSelectedDoc] = useState<ComplianceDocumentItem | null>(null);
+  const [editDocMode, setEditDocMode] = useState(false);
+  const [docForm, setDocForm] = useState({
+    title: "", version: "", category: "", owner: "", controlRefs: "", changeNote: "", bodyMarkdown: "",
+  });
+
+  const [controlDialog, setControlDialog] = useState<{
+    open: boolean; id?: string; form: { ref: string; title: string; framework: string; category: string; status: string; owner: string };
+  }>({
+    open: false, form: { ref: "", title: "", framework: "SOC 2", category: "Security", status: "IMPLEMENTED", owner: "Security" },
+  });
+
+  const [policyDialog, setPolicyDialog] = useState<{
+    open: boolean; id?: string; form: { name: string; scope: string; retentionDays: number; disposition: string; status: string };
+  }>({
+    open: false, form: { name: "", scope: "DOCUMENTS", retentionDays: 365, disposition: "PURGE", status: "ACTIVE" },
+  });
+
+  const [riskDialog, setRiskDialog] = useState<{
+    open: boolean; id?: string; form: { title: string; category: string; likelihood: string; impact: string; status: string; owner: string; mitigation: string };
+  }>({
+    open: false, form: { title: "", category: "Security", likelihood: "MEDIUM", impact: "MEDIUM", status: "OPEN", owner: "Security", mitigation: "" },
+  });
+
+  const [incidentDialog, setIncidentDialog] = useState<{
+    open: boolean; id?: string; form: { title: string; severity: string; status: string; assignee: string; description: string };
+  }>({
+    open: false, form: { title: "", severity: "MEDIUM", status: "OPEN", assignee: "Security Lead", description: "" },
+  });
   const queryClient = useQueryClient();
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -205,6 +235,24 @@ export function AdminCompliance() {
         {/* Controls */}
         <TabsContent value="controls">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div>
+                <CardTitle className="text-base">Security &amp; Privacy Controls</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Framework controls mapped across SOC 2, ISO 27001, and GDPR.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => {
+                  setControlDialog({
+                    open: true,
+                    form: { ref: "", title: "", framework: "SOC 2", category: "Security", status: "IMPLEMENTED", owner: "Security" },
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add Control
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.controls.map((c) => (
@@ -220,7 +268,28 @@ export function AdminCompliance() {
                     <div className="flex shrink-0 items-center gap-2">
                       <StatusBadge status={c.status} />
                       <Button
-                        variant="outline" size="sm" className="h-11"
+                        variant="ghost"
+                        size="sm"
+                        className="h-10 text-muted-foreground hover:text-foreground gap-1"
+                        onClick={() => {
+                          setControlDialog({
+                            open: true,
+                            id: c.id,
+                            form: {
+                              ref: c.ref,
+                              title: c.title,
+                              framework: c.framework,
+                              category: c.category,
+                              status: c.status,
+                              owner: c.owner,
+                            },
+                          });
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                      </Button>
+                      <Button
+                        variant="outline" size="sm" className="h-10"
                         onClick={() => act.mutate({ op: "control-evidence", id: c.id })}
                         aria-label={`Attach evidence to ${c.ref}`}
                       >
@@ -237,6 +306,24 @@ export function AdminCompliance() {
         {/* Retention */}
         <TabsContent value="retention">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div>
+                <CardTitle className="text-base">Data Retention &amp; Disposal Policies</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Automated document lifecycle rules and purge schedules.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => {
+                  setPolicyDialog({
+                    open: true,
+                    form: { name: "", scope: "DOCUMENTS", retentionDays: 365, disposition: "PURGE", status: "ACTIVE" },
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add Policy
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.policies.map((p) => (
@@ -249,6 +336,26 @@ export function AdminCompliance() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <StatusBadge status={p.status} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-10 text-muted-foreground hover:text-foreground gap-1"
+                        onClick={() => {
+                          setPolicyDialog({
+                            open: true,
+                            id: p.id,
+                            form: {
+                              name: p.name,
+                              scope: p.scope,
+                              retentionDays: p.retentionDays,
+                              disposition: p.disposition,
+                              status: p.status,
+                            },
+                          });
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                      </Button>
                       <span className="text-xs text-muted-foreground">last sweep {fmtRelative(p.lastSweepAt)}</span>
                     </div>
                   </li>
@@ -290,6 +397,24 @@ export function AdminCompliance() {
         {/* Incidents */}
         <TabsContent value="incidents">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div>
+                <CardTitle className="text-base">Security &amp; Operational Incidents</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Triage, severity classification, and resolution logs.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => {
+                  setIncidentDialog({
+                    open: true,
+                    form: { title: "", severity: "MEDIUM", status: "OPEN", assignee: "Security Lead", description: "" },
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Log Incident
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.incidents.map((i) => (
@@ -302,6 +427,26 @@ export function AdminCompliance() {
                       <div className="flex shrink-0 items-center gap-2">
                         <StatusBadge status={i.severity} />
                         <StatusBadge status={i.status} />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => {
+                            setIncidentDialog({
+                              open: true,
+                              id: i.id,
+                              form: {
+                                title: i.title,
+                                severity: i.severity,
+                                status: i.status,
+                                assignee: i.assignee,
+                                description: i.description,
+                              },
+                            });
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                        </Button>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">{i.description}</p>
@@ -354,6 +499,24 @@ export function AdminCompliance() {
         {/* Risk register */}
         <TabsContent value="risks">
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div>
+                <CardTitle className="text-base">Risk Register &amp; Mitigations</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Threat assessments, residual risk scoring, and treatment plans.</p>
+              </div>
+              <Button
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => {
+                  setRiskDialog({
+                    open: true,
+                    form: { title: "", category: "Security", likelihood: "MEDIUM", impact: "MEDIUM", status: "OPEN", owner: "Security", mitigation: "" },
+                  });
+                }}
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Add Risk
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <ul className="divide-y">
                 {data.risks.map((r) => (
@@ -374,6 +537,28 @@ export function AdminCompliance() {
                           <span className="text-xs font-semibold tabular-nums">{r.score}</span>
                         </span>
                         <StatusBadge status={r.status} />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => {
+                            setRiskDialog({
+                              open: true,
+                              id: r.id,
+                              form: {
+                                title: r.title,
+                                category: r.category,
+                                likelihood: r.likelihood,
+                                impact: r.impact,
+                                status: r.status,
+                                owner: r.owner,
+                                mitigation: r.mitigation || "",
+                              },
+                            });
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                        </Button>
                       </div>
                     </div>
                     {r.mitigation && <p className="text-xs text-muted-foreground">{r.mitigation}</p>}
@@ -519,15 +704,39 @@ export function AdminCompliance() {
         </TabsContent>
       </Tabs>
 
-      {/* Document Viewer Modal */}
-      <Dialog open={!!selectedDoc} onOpenChange={(v) => !v && setSelectedDoc(null)}>
+      {/* Document Viewer & Editor Modal */}
+      <Dialog open={!!selectedDoc} onOpenChange={(v) => { if (!v) { setSelectedDoc(null); setEditDocMode(false); } }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           {selectedDoc && (
             <div className="space-y-4">
               <DialogHeader>
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-mono font-semibold text-primary">v{selectedDoc.version}</span>
-                  <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{selectedDoc.category}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-mono font-semibold text-primary">v{selectedDoc.version}</span>
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">{selectedDoc.category}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 text-xs"
+                    onClick={() => {
+                      if (!editDocMode) {
+                        setDocForm({
+                          title: selectedDoc.title,
+                          version: selectedDoc.version,
+                          category: selectedDoc.category,
+                          owner: selectedDoc.owner,
+                          controlRefs: selectedDoc.controlRefs,
+                          changeNote: "",
+                          bodyMarkdown: selectedDoc.bodyMarkdown,
+                        });
+                      }
+                      setEditDocMode(!editDocMode);
+                    }}
+                  >
+                    {editDocMode ? <BookOpen className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                    {editDocMode ? "View Mode" : "Edit Document"}
+                  </Button>
                 </div>
                 <DialogTitle className="text-xl mt-1">{selectedDoc.title}</DialogTitle>
                 <DialogDescription>
@@ -536,25 +745,486 @@ export function AdminCompliance() {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="rounded-lg border bg-muted/20 p-4 prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans text-xs sm:text-sm">
-                {selectedDoc.bodyMarkdown}
-              </div>
+              {editDocMode ? (
+                <div className="space-y-3.5 py-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ed-title">Document Title</Label>
+                      <Input
+                        id="ed-title"
+                        value={docForm.title}
+                        onChange={(e) => setDocForm({ ...docForm, title: e.target.value })}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ed-ver">Version</Label>
+                      <Input
+                        id="ed-ver"
+                        value={docForm.version}
+                        onChange={(e) => setDocForm({ ...docForm, version: e.target.value })}
+                        className="h-10 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
 
-              {selectedDoc.versions && selectedDoc.versions.length > 0 && (
-                <div className="space-y-1.5 border-t pt-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</h4>
-                  <ul className="text-xs space-y-1 text-muted-foreground">
-                    {selectedDoc.versions.map((v) => (
-                      <li key={v.id} className="flex items-center justify-between">
-                        <span>v{v.version} — {v.changeNote || "Revision"}</span>
-                        <span>{v.changedBy} · {fmtDate(v.createdAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ed-owner">Owner</Label>
+                      <Input
+                        id="ed-owner"
+                        value={docForm.owner}
+                        onChange={(e) => setDocForm({ ...docForm, owner: e.target.value })}
+                        className="h-10 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ed-cat">Category</Label>
+                      <Input
+                        id="ed-cat"
+                        value={docForm.category}
+                        onChange={(e) => setDocForm({ ...docForm, category: e.target.value })}
+                        className="h-10 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ed-ctrl">Control Refs</Label>
+                      <Input
+                        id="ed-ctrl"
+                        value={docForm.controlRefs}
+                        onChange={(e) => setDocForm({ ...docForm, controlRefs: e.target.value })}
+                        className="h-10 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ed-note">Change Note / Revision Summary</Label>
+                    <Input
+                      id="ed-note"
+                      value={docForm.changeNote}
+                      onChange={(e) => setDocForm({ ...docForm, changeNote: e.target.value })}
+                      placeholder="e.g. Annual policy review and ISO 27001 control updates"
+                      className="h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ed-body">Document Markdown Content</Label>
+                    <textarea
+                      id="ed-body"
+                      value={docForm.bodyMarkdown}
+                      onChange={(e) => setDocForm({ ...docForm, bodyMarkdown: e.target.value })}
+                      rows={14}
+                      className="flex w-full rounded-md border border-input bg-background p-3 font-mono text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t">
+                    <Button variant="outline" onClick={() => setEditDocMode(false)}>Cancel</Button>
+                    <Button
+                      onClick={() => {
+                        act.mutate({ op: "doc-save", id: selectedDoc.id, data: docForm });
+                        setEditDocMode(false);
+                        setSelectedDoc(null);
+                      }}
+                      disabled={act.isPending || !docForm.title.trim() || !docForm.bodyMarkdown.trim()}
+                    >
+                      <Save className="h-4 w-4 mr-1.5" /> Save Document
+                    </Button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="rounded-lg border bg-muted/20 p-4 prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans text-xs sm:text-sm">
+                    {selectedDoc.bodyMarkdown}
+                  </div>
+
+                  {selectedDoc.versions && selectedDoc.versions.length > 0 && (
+                    <div className="space-y-1.5 border-t pt-3">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Version History</h4>
+                      <ul className="text-xs space-y-1 text-muted-foreground">
+                        {selectedDoc.versions.map((v) => (
+                          <li key={v.id} className="flex items-center justify-between">
+                            <span>v{v.version} — {v.changeNote || "Revision"}</span>
+                            <span>{v.changedBy} · {fmtDate(v.createdAt)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Control Dialog */}
+      <Dialog open={controlDialog.open} onOpenChange={(v) => !v && setControlDialog({ ...controlDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{controlDialog.id ? "Edit Control" : "Add Security Control"}</DialogTitle>
+            <DialogDescription>Configure compliance control framework reference and implementation status.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="ctl-ref">Control Reference ID</Label>
+              <Input
+                id="ctl-ref"
+                value={controlDialog.form.ref}
+                onChange={(e) => setControlDialog({ ...controlDialog, form: { ...controlDialog.form, ref: e.target.value } })}
+                placeholder="SOC2-CC6.1 or ISO27001-A.9.2"
+                className="h-10 font-mono text-xs"
+                disabled={!!controlDialog.id}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ctl-title">Title</Label>
+              <Input
+                id="ctl-title"
+                value={controlDialog.form.title}
+                onChange={(e) => setControlDialog({ ...controlDialog, form: { ...controlDialog.form, title: e.target.value } })}
+                placeholder="User Registration and Access Management"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ctl-fw">Framework</Label>
+                <select
+                  id="ctl-fw"
+                  value={controlDialog.form.framework}
+                  onChange={(e) => setControlDialog({ ...controlDialog, form: { ...controlDialog.form, framework: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="SOC 2">SOC 2</option>
+                  <option value="ISO 27001">ISO 27001</option>
+                  <option value="GDPR">GDPR</option>
+                  <option value="eIDAS">eIDAS</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ctl-cat">Category</Label>
+                <Input
+                  id="ctl-cat"
+                  value={controlDialog.form.category}
+                  onChange={(e) => setControlDialog({ ...controlDialog, form: { ...controlDialog.form, category: e.target.value } })}
+                  className="h-10"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ctl-st">Status</Label>
+                <select
+                  id="ctl-st"
+                  value={controlDialog.form.status}
+                  onChange={(e) => setControlDialog({ ...controlDialog, form: { ...controlDialog.form, status: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="IMPLEMENTED">IMPLEMENTED</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="PLANNED">PLANNED</option>
+                  <option value="EXEMPT">EXEMPT</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ctl-owner">Owner</Label>
+                <Input
+                  id="ctl-owner"
+                  value={controlDialog.form.owner}
+                  onChange={(e) => setControlDialog({ ...controlDialog, form: { ...controlDialog.form, owner: e.target.value } })}
+                  className="h-10"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setControlDialog({ ...controlDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "control-save", id: controlDialog.id, data: controlDialog.form });
+                setControlDialog({ ...controlDialog, open: false });
+              }}
+              disabled={act.isPending || !controlDialog.form.title.trim()}
+            >
+              Save Control
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Policy Dialog */}
+      <Dialog open={policyDialog.open} onOpenChange={(v) => !v && setPolicyDialog({ ...policyDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{policyDialog.id ? "Edit Retention Policy" : "Add Retention Policy"}</DialogTitle>
+            <DialogDescription>Define automated lifecycle and data destruction rules.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="pol-name">Policy Name</Label>
+              <Input
+                id="pol-name"
+                value={policyDialog.form.name}
+                onChange={(e) => setPolicyDialog({ ...policyDialog, form: { ...policyDialog.form, name: e.target.value } })}
+                placeholder="Signed Envelope Retention"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="pol-scope">Scope</Label>
+                <Input
+                  id="pol-scope"
+                  value={policyDialog.form.scope}
+                  onChange={(e) => setPolicyDialog({ ...policyDialog, form: { ...policyDialog.form, scope: e.target.value } })}
+                  placeholder="ENVELOPES"
+                  className="h-10 font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pol-days">Retention Days</Label>
+                <Input
+                  id="pol-days"
+                  type="number"
+                  value={policyDialog.form.retentionDays}
+                  onChange={(e) => setPolicyDialog({ ...policyDialog, form: { ...policyDialog.form, retentionDays: Number(e.target.value) } })}
+                  className="h-10 font-mono text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="pol-disp">Disposition</Label>
+                <select
+                  id="pol-disp"
+                  value={policyDialog.form.disposition}
+                  onChange={(e) => setPolicyDialog({ ...policyDialog, form: { ...policyDialog.form, disposition: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="PURGE">PURGE</option>
+                  <option value="ARCHIVE_COLD">ARCHIVE_COLD</option>
+                  <option value="ANONYMIZE">ANONYMIZE</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pol-st">Status</Label>
+                <select
+                  id="pol-st"
+                  value={policyDialog.form.status}
+                  onChange={(e) => setPolicyDialog({ ...policyDialog, form: { ...policyDialog.form, status: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="PAUSED">PAUSED</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPolicyDialog({ ...policyDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "policy-save", id: policyDialog.id, data: policyDialog.form });
+                setPolicyDialog({ ...policyDialog, open: false });
+              }}
+              disabled={act.isPending || !policyDialog.form.name.trim()}
+            >
+              Save Policy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Incident Dialog */}
+      <Dialog open={incidentDialog.open} onOpenChange={(v) => !v && setIncidentDialog({ ...incidentDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{incidentDialog.id ? "Edit Incident" : "Log Security Incident"}</DialogTitle>
+            <DialogDescription>Record and update incident classification and response state.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="inc-title">Title</Label>
+              <Input
+                id="inc-title"
+                value={incidentDialog.form.title}
+                onChange={(e) => setIncidentDialog({ ...incidentDialog, form: { ...incidentDialog.form, title: e.target.value } })}
+                placeholder="Failed webhook replay threshold exceeded"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="inc-sev">Severity</Label>
+                <select
+                  id="inc-sev"
+                  value={incidentDialog.form.severity}
+                  onChange={(e) => setIncidentDialog({ ...incidentDialog, form: { ...incidentDialog.form, severity: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="LOW">LOW</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="inc-st">Status</Label>
+                <select
+                  id="inc-st"
+                  value={incidentDialog.form.status}
+                  onChange={(e) => setIncidentDialog({ ...incidentDialog, form: { ...incidentDialog.form, status: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="OPEN">OPEN</option>
+                  <option value="CONTAINED">CONTAINED</option>
+                  <option value="RESOLVED">RESOLVED</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inc-assignee">Assignee</Label>
+              <Input
+                id="inc-assignee"
+                value={incidentDialog.form.assignee}
+                onChange={(e) => setIncidentDialog({ ...incidentDialog, form: { ...incidentDialog.form, assignee: e.target.value } })}
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inc-desc">Description</Label>
+              <textarea
+                id="inc-desc"
+                value={incidentDialog.form.description}
+                onChange={(e) => setIncidentDialog({ ...incidentDialog, form: { ...incidentDialog.form, description: e.target.value } })}
+                rows={3}
+                className="flex w-full rounded-md border border-input bg-background p-2.5 text-xs ring-offset-background"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIncidentDialog({ ...incidentDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "incident-save", id: incidentDialog.id, data: incidentDialog.form });
+                setIncidentDialog({ ...incidentDialog, open: false });
+              }}
+              disabled={act.isPending || !incidentDialog.form.title.trim()}
+            >
+              Save Incident
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Risk Dialog */}
+      <Dialog open={riskDialog.open} onOpenChange={(v) => !v && setRiskDialog({ ...riskDialog, open: false })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{riskDialog.id ? "Edit Risk Assessment" : "Add Risk Assessment"}</DialogTitle>
+            <DialogDescription>Track likelihood, impact, and mitigation controls in the risk register.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="rk-title">Risk Title</Label>
+              <Input
+                id="rk-title"
+                value={riskDialog.form.title}
+                onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, title: e.target.value } })}
+                placeholder="Third-party timestamp authority downtime"
+                className="h-10"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="rk-cat">Category</Label>
+                <Input
+                  id="rk-cat"
+                  value={riskDialog.form.category}
+                  onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, category: e.target.value } })}
+                  className="h-10 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rk-lh">Likelihood</Label>
+                <select
+                  id="rk-lh"
+                  value={riskDialog.form.likelihood}
+                  onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, likelihood: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-xs"
+                >
+                  <option value="LOW">LOW</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rk-imp">Impact</Label>
+                <select
+                  id="rk-imp"
+                  value={riskDialog.form.impact}
+                  onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, impact: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-xs"
+                >
+                  <option value="LOW">LOW</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rk-st">Status</Label>
+                <select
+                  id="rk-st"
+                  value={riskDialog.form.status}
+                  onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, status: e.target.value } })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="OPEN">OPEN</option>
+                  <option value="MITIGATED">MITIGATED</option>
+                  <option value="ACCEPTED">ACCEPTED</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rk-owner">Owner</Label>
+                <Input
+                  id="rk-owner"
+                  value={riskDialog.form.owner}
+                  onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, owner: e.target.value } })}
+                  className="h-10 text-xs"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rk-mit">Mitigation Plan</Label>
+              <textarea
+                id="rk-mit"
+                value={riskDialog.form.mitigation}
+                onChange={(e) => setRiskDialog({ ...riskDialog, form: { ...riskDialog.form, mitigation: e.target.value } })}
+                rows={2}
+                placeholder="Automated fallback to local timestamping and B-B signature level"
+                className="flex w-full rounded-md border border-input bg-background p-2.5 text-xs ring-offset-background"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRiskDialog({ ...riskDialog, open: false })}>Cancel</Button>
+            <Button
+              onClick={() => {
+                act.mutate({ op: "risk-save", id: riskDialog.id, data: riskDialog.form });
+                setRiskDialog({ ...riskDialog, open: false });
+              }}
+              disabled={act.isPending || !riskDialog.form.title.trim()}
+            >
+              Save Risk
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

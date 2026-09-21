@@ -54,6 +54,70 @@ export function smtpMode(): SmtpMode {
     return { configured: false };
   }
 }
+
+/** Resolves SMTP mode from process.env.SMTP_URL or falls back to database PlatformSetting. */
+export async function resolveSmtpMode(): Promise<SmtpMode> {
+  const envMode = smtpMode();
+  if (envMode.configured) return envMode;
+  try {
+    const setting = await db.platformSetting.findUnique({ where: { id: "singleton" } });
+    if (setting?.smtpHost && setting.smtpHost !== "smtp.eu.mailprovider.io" && setting.smtpPassword) {
+      const proto = setting.smtpPort === 465 ? "smtps:" : "smtp:";
+      const auth = setting.smtpUser ? `${encodeURIComponent(setting.smtpUser)}:${encodeURIComponent(setting.smtpPassword)}@` : "";
+      const url = new URL(`${proto}//${auth}${setting.smtpHost}:${setting.smtpPort}`);
+      return { configured: true, url, tls: setting.smtpTls };
+    }
+  } catch {
+    // Database query failed or table not yet migrated
+  }
+  return { configured: false };
+}
+
+/** Explicit SMTP verification and optional test email dispatch for admin UI testing. */
+export async function testSmtpConnection(opts: {
+  host: string;
+  port: number;
+  user?: string;
+  pass?: string;
+  tls?: boolean;
+  from: string;
+  to?: string;
+}): Promise<{ ok: boolean; message: string; latencyMs: number }> {
+  const t0 = Date.now();
+  const secure = opts.port === 465;
+  const transporter = createTransport({
+    host: opts.host,
+    port: opts.port,
+    secure,
+    requireTLS: opts.tls && !secure,
+    ignoreTLS: !opts.tls,
+    auth: opts.user ? { user: opts.user, pass: opts.pass ?? "" } : undefined,
+    connectionTimeout: 8_000,
+    greetingTimeout: 8_000,
+    socketTimeout: 10_000,
+    pool: false,
+  });
+
+  try {
+    await transporter.verify();
+    if (opts.to) {
+      await transporter.sendMail({
+        from: opts.from,
+        to: opts.to,
+        subject: "Docurama Sign - SMTP Test Message",
+        text: `This is an automated test message from Docurama Sign to confirm SMTP connectivity.\n\nTimestamp: ${new Date().toISOString()}\nHost: ${opts.host}:${opts.port}`,
+      });
+    }
+    const latencyMs = Date.now() - t0;
+    return { ok: true, message: `SMTP connection verified (${latencyMs}ms)${opts.to ? ` - test email sent to ${opts.to}` : ""}`, latencyMs };
+  } catch (err: any) {
+    const latencyMs = Date.now() - t0;
+    return { ok: false, message: `SMTP verification failed: ${err.message || String(err)}`, latencyMs };
+  } finally {
+    transporter.close();
+  }
+}
+
 export type OutboxMessage = { id: string; toEmail: string; fromEmail: string; subject: string; bodyText: string };
 
 /** A dedicated transport lets a deadline close only this message's connection. */
@@ -84,7 +148,7 @@ export async function sendViaSmtp(mode: Extract<SmtpMode, { configured: true }>,
 export type ProcessOutboxResult = { mode: "smtp" | "outbox-only"; processed: number; sent: number; failed: number; deferred: number };
 /** At least once. A crash after SMTP accepts but before acknowledgement may retry. */
 export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
-  const mode = smtpMode();
+  const mode = await resolveSmtpMode();
   if (!mode.configured) return { mode: "outbox-only", processed: 0, sent: 0, failed: 0, deferred: 0 };
   const now = new Date();
   const unclaimed = { OR: [{ claimUntil: null }, { claimUntil: { lte: now } }] };
