@@ -37,8 +37,13 @@ services:
       - DATABASE_URL=${DATABASE_URL:-file:/app/db/custom.db}
       - STORAGE_DIR=/app/storage
       - NEXT_PUBLIC_DEMO_MODE=false
+      # SMTP relay (unset = outbox-only mode, mail stays QUEUED + inspectable):
+      #   smtp://user:pass@relay.example.com:587 (STARTTLS) or smtps://…:465
+      #   URL-encode special characters in user/password (e.g. @ → %40).
+      - SMTP_URL=${SMTP_URL:-}
       # Base domain for the vanity sub-domain routing (status./docs./verify./…).
-      # - ROOT_DOMAIN=docurama.eu
+      # Unset falls back to the application default (docurama.eu).
+      - ROOT_DOMAIN=${ROOT_DOMAIN:-}
       # SMTP delivery (unset = outbox-only mode, mail stays QUEUED + inspectable).
       #   smtp://user:pass@relay.example.com:587 or smtps://…:465
       # With the mail profile below, the one-liner is:
