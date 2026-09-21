@@ -29,6 +29,14 @@ mkdir -p backups
 cp db/custom.db "backups/pre-deploy-$TS.db"
 cp db/custom.db /tmp/custom.db.deploy-protect
 
+# A locally-modified docker-compose.yml carries live prod config (env wiring
+# the committed file may not have yet) — preserve it across the checkout.
+COMPOSE_DIRTY=0
+if ! git diff --quiet -- docker-compose.yml; then
+  COMPOSE_DIRTY=1
+  cp docker-compose.yml /tmp/compose.deploy-protect
+fi
+
 git fetch origin
 git checkout -f -B "$BRANCH" "$REF"
 
@@ -37,6 +45,11 @@ git checkout -f -B "$BRANCH" "$REF"
 rm -f db/custom.db-wal db/custom.db-shm
 cp /tmp/custom.db.deploy-protect db/custom.db
 rm -f /tmp/custom.db.deploy-protect
+if [ "$COMPOSE_DIRTY" = 1 ]; then
+  cp /tmp/compose.deploy-protect docker-compose.yml
+  rm -f /tmp/compose.deploy-protect
+  echo "[deploy] note: locally-modified docker-compose.yml kept over the committed one"
+fi
 chown 10001:10001 db/custom.db
 
 echo "[deploy] building image..."
