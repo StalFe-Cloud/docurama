@@ -389,11 +389,18 @@ For two-factor signing verification and OTP delivery, Docurama integrates 14 car
 
 ---
 
-## 10. Platform Enhancements & Architectural Advancements (Cycles 1–10)
+## 10. Platform Enhancements & Architectural Advancements (Cycles 1–11)
 
-Docurama has undergone 10 continuous engineering cycles, graduating from early prototypes to an audited, production-grade e-signature and evidence infrastructure:
+Docurama has undergone 11 continuous engineering cycles, graduating from early prototypes to an audited, production-grade e-signature and evidence infrastructure:
 
-1. **Maestro Browser E2E Automation Suite (Cycle 1):**
+1. **Quality Hardening Release (Cycle 11, 2026-09-20/21, quality @ `34086af`):**
+   - **Versioned database migrations** replace boot-time schema pushes: the container entrypoint runs `prisma migrate deploy` against reviewed migration trees (SQLite and PostgreSQL, baselined by `release-20260920.prisma`), refuses to start when migrations fail, and only skips schema work with an explicit operator opt-in. The old silent `db push --accept-data-loss` startup is gone.
+   - **Delivery reliability:** transactional webhook outbox with fenced leases, stable delivery identities across retries, and an SSRF-pinned transport (`safe-webhook-http.ts`) that validates destinations at registration and blocks private addresses in production.
+   - **Billing correctness:** atomic quota reservation at envelope creation, independent UTC monthly periods, serialized rollover accounting, and transactional payment replay guards.
+   - **Mail hardening:** leased outbox delivery with an explicit attempt budget, fenced acknowledgements, and stable message identity across retries.
+   - **Runtime safety:** bounded database-transaction admission (`transaction-gate.ts`) without blocking the event loop, worker-loop startup/shutdown fencing, versioned salted password hashing, and stable audit identity that no longer fabricates client IPs.
+   - **Verification:** new release-verification and webhook-network CI workflows with the recorded evidence pack (`docs/QUALITY-VERIFICATION-20260920.md`); the full matrix (static gates, SQLite e2e incl. browser and SeaweedFS, PostgreSQL tier, production image build/boot/bootstrap) validated locally on Windows via Docker; GitHub Actions validation pending restoration of the account's Actions billing.
+2. **Maestro Browser E2E Automation Suite (Cycle 1):**
    - 25 end-to-end browser flows verifying the entire user journey: authentication, document drafting, template instantiation, multi-recipient handoffs, decline workflows, and administrative console operations.
    - Deterministic fixtures seeded in `e2e/seed.ts` with strict type gates (`tsc --noEmit`) and visual regression baseline comparisons.
 2. **Public Signer Portal & Core Signing Loop (Cycle 2):**
