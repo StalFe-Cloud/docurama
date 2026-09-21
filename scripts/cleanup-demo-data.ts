@@ -121,6 +121,7 @@ async function main() {
     where: {
       OR: [
         { email: { contains: ".example" } },
+        { email: { contains: "@example.com" } },
         { company: { in: ["Nordpharm Medical Devices", "Banque Helvetia Partenaires", "Voltalis Grid Services"] } },
       ],
     },
@@ -129,13 +130,23 @@ async function main() {
 
   // Delete fake DSAR requests
   const deletedDsar = await db.dsarRequest.deleteMany({
-    where: { subjectEmail: { contains: ".example" } },
+    where: {
+      OR: [
+        { subjectEmail: { contains: ".example" } },
+        { subjectEmail: { contains: "@example.com" } },
+      ],
+    },
   });
   console.log(`Deleted ${deletedDsar.count} fake DSAR requests`);
 
   // Delete fake DMCA notices
   const deletedDmca = await db.dmcaNotice.deleteMany({
-    where: { complainant: { contains: ".example" } },
+    where: {
+      OR: [
+        { complainant: { contains: ".example" } },
+        { complainant: { contains: "@example.com" } },
+      ],
+    },
   });
   console.log(`Deleted ${deletedDmca.count} fake DMCA notices`);
 
@@ -144,40 +155,79 @@ async function main() {
     where: {
       OR: [
         { toEmail: { contains: ".example" } },
+        { toEmail: { contains: "@example.com" } },
         { toEmail: { contains: "e2e-" } },
       ],
     },
   });
   console.log(`Deleted ${deletedOutbox.count} fake/test outbox emails`);
 
-  // Delete demo envelopes and recipients with fake client emails
-  const demoRecipients = await db.recipient.findMany({
-    where: { email: { contains: ".example" } },
-    select: { envelopeId: true },
-  });
-  const demoEnvelopeIds = [...new Set(demoRecipients.map((r) => r.envelopeId))];
-
-  if (demoEnvelopeIds.length > 0) {
-    await db.envelopeEvent.deleteMany({ where: { envelopeId: { in: demoEnvelopeIds } } });
-    await db.recipient.deleteMany({ where: { envelopeId: { in: demoEnvelopeIds } } });
-    const deletedEnvs = await db.envelope.deleteMany({ where: { id: { in: demoEnvelopeIds } } });
-    console.log(`Deleted ${deletedEnvs.count} demo envelopes with fake client signers`);
-  }
-
-  // Delete demo users ending with .example and test remnants
+  // Identify demo users to delete
   const demoUsers = await db.user.findMany({
     where: {
-      OR: [
-        { email: { contains: ".example" } },
-        { email: { startsWith: "e2e-solo-" } },
-        { email: { startsWith: "e2e-starter-" } },
+      AND: [
+        { email: { not: "sriram.rajan@stalfe.com" } },
+        {
+          OR: [
+            { email: { contains: ".example" } },
+            { email: { contains: "@example.com" } },
+            { email: { in: ["admin@docurama.eu", "ops@docurama.eu"] } },
+            { email: { startsWith: "e2e-solo-" } },
+            { email: { startsWith: "e2e-starter-" } },
+          ],
+        },
       ],
     },
     select: { id: true, email: true },
   });
 
   const demoUserIds = demoUsers.map((u) => u.id);
+
+  // Delete demo envelopes and recipients with fake client emails or created by demo users
+  const demoRecipients = await db.recipient.findMany({
+    where: {
+      OR: [
+        { email: { contains: ".example" } },
+        { email: { contains: "@example.com" } },
+      ],
+    },
+    select: { envelopeId: true },
+  });
+  const demoCreatedEnvelopes = await db.envelope.findMany({
+    where: { createdById: { in: demoUserIds } },
+    select: { id: true },
+  });
+  const allDemoEnvelopeIds = [
+    ...new Set([
+      ...demoRecipients.map((r) => r.envelopeId),
+      ...demoCreatedEnvelopes.map((e) => e.id),
+    ]),
+  ];
+
+  if (allDemoEnvelopeIds.length > 0) {
+    await db.envelopeEvent.deleteMany({ where: { envelopeId: { in: allDemoEnvelopeIds } } });
+    await db.recipient.deleteMany({ where: { envelopeId: { in: allDemoEnvelopeIds } } });
+    const deletedEnvs = await db.envelope.deleteMany({ where: { id: { in: allDemoEnvelopeIds } } });
+    console.log(`Deleted ${deletedEnvs.count} demo envelopes with fake client signers or created by demo users`);
+  }
+
+  // Delete documents uploaded by demo users
   if (demoUserIds.length > 0) {
+    const userDocs = await db.document.findMany({
+      where: { uploadedById: { in: demoUserIds } },
+      select: { id: true },
+    });
+    const userDocIds = userDocs.map((d) => d.id);
+    if (userDocIds.length > 0) {
+      await db.envelope.updateMany({
+        where: { documentId: { in: userDocIds } },
+        data: { documentId: null },
+      });
+      await db.documentPage.deleteMany({ where: { documentId: { in: userDocIds } } });
+      const deletedDocs = await db.document.deleteMany({ where: { id: { in: userDocIds } } });
+      console.log(`Deleted ${deletedDocs.count} documents uploaded by demo users`);
+    }
+
     await db.session.deleteMany({ where: { userId: { in: demoUserIds } } });
     await db.member.deleteMany({ where: { userId: { in: demoUserIds } } });
     await db.userSignature.deleteMany({ where: { userId: { in: demoUserIds } } });
