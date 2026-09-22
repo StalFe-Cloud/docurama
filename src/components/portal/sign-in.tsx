@@ -27,13 +27,13 @@ const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 const DEMO_ACCOUNTS = [
   {
     label: "Platform Admin - Docurama SAS",
-    email: "sriram.rajan@stalfe.com",
+    email: "admin@docurama.eu",
     password: "StalFe2026!Admin",
     desc: "Full admin control panel: tenants, compliance, billing, ops",
   },
   {
     label: "Workspace Admin - StålFe",
-    email: "sriram.rajan@stalfe.com",
+    email: "admin@docurama.eu",
     password: "StalFe2026!Admin",
     desc: "Enterprise user portal: documents, templates, settings",
   },

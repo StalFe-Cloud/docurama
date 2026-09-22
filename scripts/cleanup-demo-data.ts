@@ -34,16 +34,16 @@ async function main() {
     console.log("Updated StålFe tenant");
   }
 
-  // 2. Ensure sriram.rajan@stalfe.com exists as PLATFORM_ADMIN & OWNER of stalfe
+  // 2. Ensure admin@docurama.eu exists as PLATFORM_ADMIN & OWNER of stalfe
   const password = "StalFe2026!Admin";
   const passwordHash = hashPassword(password);
-  let sriram = await db.user.findUnique({ where: { email: "sriram.rajan@stalfe.com" } });
-  if (!sriram) {
-    sriram = await db.user.create({
+  let admin = await db.user.findUnique({ where: { email: "admin@docurama.eu" } });
+  if (!admin) {
+    admin = await db.user.create({
       data: {
-        email: "sriram.rajan@stalfe.com",
-        firstName: "Sriram",
-        lastName: "Rajan",
+        email: "admin@docurama.eu",
+        firstName: "Docurama",
+        lastName: "Admin",
         role: "PLATFORM_ADMIN",
         status: "ACTIVE",
         passwordHash,
@@ -52,13 +52,13 @@ async function main() {
         activeTenantId: stalfe.id,
       },
     });
-    console.log("Created user sriram.rajan@stalfe.com");
+    console.log("Created user admin@docurama.eu");
   } else {
-    sriram = await db.user.update({
-      where: { id: sriram.id },
+    admin = await db.user.update({
+      where: { id: admin.id },
       data: {
-        firstName: "Sriram",
-        lastName: "Rajan",
+        firstName: "Docurama",
+        lastName: "Admin",
         role: "PLATFORM_ADMIN",
         status: "ACTIVE",
         passwordHash,
@@ -67,28 +67,28 @@ async function main() {
         activeTenantId: stalfe.id,
       },
     });
-    console.log("Updated user sriram.rajan@stalfe.com");
+    console.log("Updated user admin@docurama.eu");
   }
 
   // 3. Ensure membership in StålFe
   const existingMember = await db.member.findFirst({
-    where: { userId: sriram.id, tenantId: stalfe.id },
+    where: { userId: admin.id, tenantId: stalfe.id },
   });
   if (!existingMember) {
     await db.member.create({
       data: {
-        userId: sriram.id,
+        userId: admin.id,
         tenantId: stalfe.id,
         role: "OWNER",
       },
     });
-    console.log("Added sriram.rajan@stalfe.com as OWNER of StålFe");
+    console.log("Added admin@docurama.eu as OWNER of StålFe");
   } else {
     await db.member.update({
       where: { id: existingMember.id },
       data: { role: "OWNER" },
     });
-    console.log("Updated sriram.rajan@stalfe.com to OWNER of StålFe");
+    console.log("Updated admin@docurama.eu to OWNER of StålFe");
   }
 
   // 4. Ensure verified domain stalfe.com is linked to StålFe
@@ -166,12 +166,12 @@ async function main() {
   const demoUsers = await db.user.findMany({
     where: {
       AND: [
-        { email: { not: "sriram.rajan@stalfe.com" } },
+        { email: { notIn: ["admin@docurama.eu", "sriram.rajan@stalfe.com"] } },
         {
           OR: [
             { email: { contains: ".example" } },
             { email: { contains: "@example.com" } },
-            { email: { in: ["admin@docurama.eu", "ops@docurama.eu"] } },
+            { email: { in: ["ops@docurama.eu"] } },
             { email: { startsWith: "e2e-solo-" } },
             { email: { startsWith: "e2e-starter-" } },
           ],

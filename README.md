@@ -176,7 +176,7 @@ Platform administrators have root oversight across all tenants, global audit log
 
 | Email | Role | Operator Name | Initial Password | 2FA Status | Permissions |
 |---|---|---|---|---|---|
-| **`sriram.rajan@stalfe.com`** | `PLATFORM_ADMIN` | Sriram Rajan | `StalFe2026!Admin` | Configurable | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits, billing, telemetry |
+| **`admin@docurama.eu`** | `PLATFORM_ADMIN` | Docurama Admin | `StalFe2026!Admin` | Configurable | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits, billing, telemetry |
 
 ---
 

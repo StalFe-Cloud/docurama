@@ -65,7 +65,7 @@ async function main() {
 
   // ── Users & memberships ────────────────────────────────────────────────
   const usersData = [
-    { email: "sriram.rajan@stalfe.com", first: "Sriram", last: "Rajan", role: "PLATFORM_ADMIN", pw: "StalFe2026!Admin", tenant: "stalfe", mrole: "OWNER", totp: false },
+    { email: "admin@docurama.eu", first: "Docurama", last: "Admin", role: "PLATFORM_ADMIN", pw: "StalFe2026!Admin", tenant: "stalfe", mrole: "OWNER", totp: false },
   ];
   const users: Record<string, string> = {};
   for (const u of usersData) {

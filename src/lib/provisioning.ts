@@ -38,7 +38,7 @@ export const COMPANY: CompanyProfile = {
   dpoEmail: "privacy@docurama.eu",
   legalEmail: "legal@docurama.eu",
   securityEmail: "security@docurama.eu",
-  adminEmail: "sriram.rajan@stalfe.com",
+  adminEmail: "admin@docurama.eu",
   phone: "+33 1 89 71 23 45",
   dataResidency: "EU (Paris / EU-West)",
 };

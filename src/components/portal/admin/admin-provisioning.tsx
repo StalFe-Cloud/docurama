@@ -637,7 +637,7 @@ function ZoneTab({ data, act }: { data: ProvisioningData | undefined; act: ActMu
                 id="c-admin"
                 value={formData.adminEmail}
                 onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                placeholder="sriram.rajan@stalfe.com"
+                placeholder="admin@docurama.eu"
                 className="h-10 font-mono text-xs"
               />
             </div>
