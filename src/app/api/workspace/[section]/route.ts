@@ -144,6 +144,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             attestStatus: e.attestStatus,
             verifiedSenderDomain: e.verifiedSenderDomain,
             createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
+            fields: e.fields ? JSON.parse(e.fields) : [],
           },
           tenantName: e.tenant.name,
           // Owner-only: personal signing links for pending signers. The list
@@ -313,6 +314,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const env = await db.$transaction(async (tx) => {
             const reservation = await reserveEnvelopeAllowance(tenantId!, tx);
             if (!reservation) throw new Error("ENVELOPE_QUOTA_REACHED");
+            const fieldsJson = Array.isArray(data.fields) && data.fields.length > 0 ? JSON.stringify(data.fields) : null;
             const envelope = await tx.envelope.create({
               data: {
                 publicCode: code, title, titleLower: foldForSearch(title),
@@ -320,6 +322,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 templateId, // evidence chain: which template produced this envelope
                 status: "SENT", message: String(data.message ?? ""),
                 pages: realPageCount, sha256: realSha256,
+                fields: fieldsJson,
               },
             });
             // WS9b: signing tokens are cryptographically random, not derived from

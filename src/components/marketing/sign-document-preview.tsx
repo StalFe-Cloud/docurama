@@ -25,12 +25,31 @@ import { cn } from "@/lib/utils";
 
 export type SignDocument = { filename: string; pages: number; sha256: string };
 
+export interface PreviewField {
+  id: string;
+  type: string;
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  recipientEmail: string;
+  recipientName: string;
+  label?: string;
+}
+
 export function SignDocumentPreview({
   token,
   document: doc,
+  fields,
+  currentRecipientEmail,
+  onFieldClick,
 }: {
   token: string;
   document: SignDocument;
+  fields?: PreviewField[];
+  currentRecipientEmail?: string;
+  onFieldClick?: (field: PreviewField) => void;
 }) {
   const [page, setPage] = useState(1);
   // Derived lifecycle, no effects: a page is "loading" until the <img> for
@@ -99,6 +118,38 @@ export function SignDocumentPreview({
               state === "ready" ? "opacity-100" : "opacity-0",
             )}
           />
+
+          {/* Placed signature holders for the current page */}
+          {state === "ready" && (
+            <div className="absolute inset-0 pointer-events-none">
+              {(fields || []).filter((f) => f.pageNumber === page).map((f) => {
+                const isMine = !currentRecipientEmail || f.recipientEmail.toLowerCase() === currentRecipientEmail.toLowerCase();
+                return (
+                  <div
+                    key={f.id}
+                    onClick={() => onFieldClick?.(f)}
+                    style={{
+                      left: `${f.x}%`,
+                      top: `${f.y}%`,
+                      width: `${f.width}%`,
+                      height: `${f.height}%`,
+                    }}
+                    className={cn(
+                      "absolute flex items-center justify-center rounded border-2 p-1 text-xs cursor-pointer pointer-events-auto transition-all shadow-sm select-none",
+                      isMine
+                        ? "border-blue-600 bg-blue-500/25 text-blue-700 font-semibold ring-2 ring-blue-400/50 hover:bg-blue-500/35"
+                        : "border-slate-400 bg-slate-200/40 text-slate-500 opacity-60"
+                    )}
+                    title={isMine ? "Click to sign here" : `Assigned to ${f.recipientName}`}
+                  >
+                    <span className="truncate text-[11px] font-bold uppercase tracking-tight">
+                      {isMine ? "✍️ Sign Here" : f.label || "Signature"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {state === "loading" && (
             <div className="absolute inset-0 flex min-h-64 items-center justify-center" aria-live="polite">

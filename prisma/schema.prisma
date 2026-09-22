@@ -269,6 +269,7 @@ model Envelope {
   verifiedSenderDomain String? // sender email domain was DNS-TXT-verified at seal time
   attestedAt        DateTime? // when the minimal fingerprint was pushed to the public portal
   attestStatus      String?   // PUSHED | FAILED | SKIPPED
+  fields            String?   // JSON: placed fields [{ id, type, pageNumber, x, y, width, height, recipientIndex, recipientEmail, label, required }]
 
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdBy  User      @relation("createdDocs", fields: [createdById], references: [id])

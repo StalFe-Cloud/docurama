@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       if (!recipients.some((item) => item.role === "SIGNER")) return jsonError("At least one signer is required");
       const documentId = typeof data.documentId === "string" && data.documentId ? data.documentId : undefined;
       const templateId = typeof data.templateId === "string" && data.templateId ? data.templateId : undefined;
+      const fieldsJson = Array.isArray(data.fields) && data.fields.length > 0 ? JSON.stringify(data.fields) : null;
       // Paid-term catch-up is separate; capacity is decided again in the transaction.
       await currentAllowance(me.tenantId, now);
       const envelope = await serializableTransaction(async (tx) => {
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
           publicCode: code, title, titleLower: foldForSearch(title), tenantId, createdById: me.id,
           documentId, templateId, status: "SENT", message: String(data.message ?? "").slice(0, 10_000),
           pages: document?.pageCount ?? template?.pages ?? 1, sha256: document?.sha256, createdAt: now,
+          fields: fieldsJson,
         } });
         if (template) await tx.template.update({ where: { id: template.id }, data: {
           usageCount: { increment: 1 }, lastUsedAt: now,

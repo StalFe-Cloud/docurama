@@ -51,6 +51,7 @@ export type SignPageState =
       signers: { name: string; email: string; status: string; order: number }[];
       bodyMarkdown: string | null;
       document: { filename: string; pages: number; sha256: string } | null;
+      fields?: Array<{ id: string; type: string; pageNumber: number; x: number; y: number; width: number; height: number; recipientEmail: string; recipientName: string; label?: string }>;
     };
 
 const FONTS = [
@@ -356,7 +357,17 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                 above stays as the integrity anchor; a rendering failure never
                 blocks signing (graceful degradation inside the component). */}
             {state.document && state.document.pages > 0 && (
-              <SignDocumentPreview token={token} document={state.document} />
+              <SignDocumentPreview
+                token={token}
+                document={state.document}
+                fields={state.fields}
+                currentRecipientEmail={state.recipientEmail}
+                onFieldClick={() => {
+                  const el = document.getElementById("sign-name-input");
+                  el?.focus();
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              />
             )}
 
             {/* Contract text (template-sent envelopes) */}

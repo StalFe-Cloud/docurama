@@ -4,14 +4,16 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2, Scale, Link2, QrCode, FileArchive, ServerCog } from "lucide-react";
+import { Bell, Ban, Eye, FileSignature, Send, Plus, Trash2, UploadCloud, FileText, Loader2, Scale, Link2, QrCode, FileArchive, ServerCog, Sparkles } from "lucide-react";
 import { apiGet, apiPost, apiUpload, ApiError } from "@/lib/client";
+import { DocumentBuilder, type PlacedField } from "./document-builder";
 import {
   Column, ConfirmDialog, CopyableCode, DataTable, PageHeader, StatusBadge, fmtDate, fmtRelative,
 } from "@/components/portal/shared";
 import { pushPath } from "@/components/portal/portal-root";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -32,6 +34,7 @@ type EnvelopeRow = {
   pages: number; lastRemindedAt: string | null; voidReason: string | null;
   attestedAt: string | null; attestStatus: string | null; verifiedSenderDomain: string | null;
   recipients: Recipient[];
+  fields?: PlacedField[];
 };
 type EnvelopeDetail = {
   envelope: EnvelopeRow;
@@ -84,6 +87,7 @@ export function UserDocuments() {
   const [status, setStatus] = useState("ALL");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [sendOpen, setSendOpen] = useState(false);
+  const [builderOpen, setBuilderOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<{ id: string; name: string; pages: number; category: string } | null>(null);
   const [uploadedDoc, setUploadedDoc] = useState<{ id: string; filename: string; pageCount: number; byteSize: number } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -167,8 +171,8 @@ export function UserDocuments() {
     }
   }
 
-  const send = useMutation({
-    mutationFn: () => apiPost<{ ok: boolean; message: string }>("/api/workspace/envelopes", {
+  const send = useMutation<{ ok: boolean; message: string }, ApiError, PlacedField[] | void>({
+    mutationFn: (placedFields?: PlacedField[] | void) => apiPost<{ ok: boolean; message: string }>("/api/workspace/envelopes", {
       op: "send",
       data: {
         title: form.title,
@@ -176,11 +180,13 @@ export function UserDocuments() {
         documentId: uploadedDoc?.id,
         templateId: selectedTemplate?.id,
         recipients: form.recipients.filter((r) => r.email.trim()),
+        fields: placedFields,
       },
     }),
     onSuccess: (res) => {
       toast.success(res.message);
       setSendOpen(false);
+      setBuilderOpen(false);
       setUploadedDoc(null);
       setSelectedTemplate(null);
       setForm({ title: "", message: "", recipients: [{ name: "", email: "" }, { name: "", email: "" }] });
@@ -442,6 +448,24 @@ export function UserDocuments() {
                 </p>
               </section>
 
+              {/* Placed signature holders */}
+              {env.fields && env.fields.length > 0 && (
+                <section aria-labelledby="placed-fields" className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 id="placed-fields" className="text-sm font-semibold">Signature & Form Holders</h3>
+                    <Badge variant="secondary" className="text-xs">{env.fields.length} placed</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {env.fields.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg border bg-card p-2.5">
+                        <span className="font-medium capitalize">{f.type}</span>
+                        <span className="text-muted-foreground">Page {f.pageNumber}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <Separator />
 
               {/* Audit trail */}
@@ -626,17 +650,44 @@ export function UserDocuments() {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setSendOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => send.mutate()}
-              disabled={!form.title.trim() || validRecipients.length === 0 || send.isPending || uploading}
-            >
-              {send.isPending ? "Sending…" : validRecipients.length > 0 ? `Send for signature (${validRecipients.length})` : "Send for signature"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => send.mutate()}
+                disabled={!form.title.trim() || validRecipients.length === 0 || send.isPending || uploading}
+              >
+                {send.isPending ? "Sending…" : "Quick Send"}
+              </Button>
+              {uploadedDoc && (
+                <Button
+                  onClick={() => { setSendOpen(false); setBuilderOpen(true); }}
+                  disabled={!form.title.trim() || validRecipients.length === 0 || uploading}
+                  className="gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium"
+                >
+                  <Sparkles className="h-4 w-4" /> Prepare in Builder (Fields & AI)
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Visual Document Builder Overlay */}
+      {builderOpen && uploadedDoc && (
+        <DocumentBuilder
+          documentId={uploadedDoc.id}
+          documentFilename={uploadedDoc.filename}
+          pageCount={uploadedDoc.pageCount}
+          recipients={validRecipients}
+          title={form.title}
+          message={form.message}
+          isSending={send.isPending}
+          onClose={() => { setBuilderOpen(false); setSendOpen(true); }}
+          onSend={(placedFields) => send.mutate(placedFields)}
+        />
+      )}
     </div>
   );
 }

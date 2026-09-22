@@ -105,6 +105,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         signers: signers.map((r) => ({ name: r.name, email: r.email, status: r.status, order: r.order })),
         bodyMarkdown: env.template?.bodyMarkdown || null,
         document,
+        fields: env.fields ? JSON.parse(env.fields) : [],
       };
     }
   }
