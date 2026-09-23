@@ -34,7 +34,7 @@ services:
       # SQLite file inside the persistent volume (absolute path required by
       # Prisma). With the postgres profile, override both this and DB_PROVIDER:
       #   DB_PROVIDER=postgresql       #   DATABASE_URL=postgresql://docurama:docurama@postgres:5432/docurama       #   docker compose --profile postgres up -d --build
-      - DATABASE_URL=${DATABASE_URL:-file:/app/db/custom.db}
+      - DATABASE_URL=${DOCKER_DATABASE_URL:-file:/app/db/custom.db}
       - STORAGE_DIR=/app/storage
       - NEXT_PUBLIC_DEMO_MODE=false
       # SMTP relay (unset = outbox-only mode, mail stays QUEUED + inspectable):
