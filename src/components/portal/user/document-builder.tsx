@@ -4,11 +4,16 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Sparkles, Send, Trash2, Calendar, PenLine, Type,
   CheckSquare, FileSignature, Loader2, Bot, Scale, ShieldAlert,
-  ChevronRight, ZoomIn, ZoomOut, Check, Info, FileText
+  ChevronRight, ZoomIn, ZoomOut, Check, Info, FileText, Users, Plus, Edit3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { apiGet } from "@/lib/client";
 import { cn } from "@/lib/utils";
@@ -110,10 +115,17 @@ export function DocumentBuilder({
   title: string;
   message: string;
   onClose: () => void;
-  onSend: (fields: PlacedField[]) => void;
+  onSend: (fields: PlacedField[], recipients: BuilderRecipient[], title: string) => void;
   isSending?: boolean;
 }) {
-  const signers = recipients.filter((r) => r.role !== "CC");
+  const [builderRecipients, setBuilderRecipients] = useState<BuilderRecipient[]>(
+    recipients && recipients.length > 0 ? recipients : [{ name: "Signer 1", email: "" }]
+  );
+  const [docTitle, setDocTitle] = useState(title || documentFilename.replace(/\.pdf$/i, "").replace(/[-_]+/g, " "));
+  const [recipientsModalOpen, setRecipientsModalOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+
+  const signers = builderRecipients.filter((r) => r.role !== "CC");
   const [activeSignerIdx, setActiveSignerIdx] = useState(0);
   const [activeTool, setActiveTool] = useState<FieldKind>("signature");
   const [fields, setFields] = useState<PlacedField[]>([]);
@@ -275,7 +287,15 @@ export function DocumentBuilder({
 
   // Validate and submit
   const handleSendClick = () => {
-    // Check if every signer has at least 1 signature field
+    // 1. Check all signers have valid names & emails
+    const invalidSigner = signers.find((s) => !s.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email.trim()));
+    if (invalidSigner) {
+      toast.error(`Please provide a valid email for ${invalidSigner.name || "Signer"}`);
+      setRecipientsModalOpen(true);
+      return;
+    }
+
+    // 2. Check if every signer has at least 1 signature field
     const missingSigners = signers.filter((s, idx) => {
       return !fields.some((f) => f.recipientIndex === idx && f.type === "signature");
     });
@@ -286,14 +306,14 @@ export function DocumentBuilder({
         {
           action: {
             label: "Send Anyway",
-            onClick: () => onSend(fields),
+            onClick: () => onSend(fields, builderRecipients, docTitle),
           },
         }
       );
       return;
     }
 
-    onSend(fields);
+    onSend(fields, builderRecipients, docTitle);
   };
 
   return (
@@ -311,7 +331,22 @@ export function DocumentBuilder({
           </Button>
           <div className="h-5 w-px bg-slate-800" />
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold text-white">{title || documentFilename}</h1>
+            {editingTitle ? (
+              <input
+                type="text"
+                value={docTitle}
+                onChange={(e) => setDocTitle(e.target.value)}
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={(e) => { if (e.key === "Enter") setEditingTitle(false); }}
+                autoFocus
+                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-sm font-semibold text-white focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            ) : (
+              <div className="flex items-center gap-1.5 cursor-pointer group" onClick={() => setEditingTitle(true)}>
+                <h1 className="truncate text-sm font-semibold text-white">{docTitle}</h1>
+                <Edit3 className="h-3 w-3 text-slate-500 group-hover:text-slate-300 transition-colors" />
+              </div>
+            )}
             <p className="text-xs text-slate-400">
               {pageCount} page{pageCount > 1 ? "s" : ""} · {fields.length} placed field{fields.length !== 1 ? "s" : ""}
             </p>
@@ -345,6 +380,16 @@ export function DocumentBuilder({
                 </button>
               );
             })}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRecipientsModalOpen(true)}
+              className="h-7 px-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800 gap-1 ml-1"
+              title="Manage and configure signers"
+            >
+              <Users className="h-3 w-3" />
+              <span>Signers</span>
+            </Button>
           </div>
 
           {/* Field Palette Toolbar */}
@@ -625,6 +670,101 @@ export function DocumentBuilder({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Manage Signers Modal */}
+      <Dialog open={recipientsModalOpen} onOpenChange={setRecipientsModalOpen}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> Manage Signers
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Assign documents to multiple recipients. Each signer will receive their own secure signing link.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {builderRecipients.map((r, idx) => {
+              const col = SIGNER_COLORS[idx % SIGNER_COLORS.length];
+              return (
+                <div key={idx} className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                  <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white", col.bg)}>
+                    {idx + 1}
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 flex-1">
+                    <Input
+                      value={r.name}
+                      placeholder={`Signer ${idx + 1}`}
+                      onChange={(e) => {
+                        const next = [...builderRecipients];
+                        next[idx] = { ...next[idx], name: e.target.value };
+                        setBuilderRecipients(next);
+                        // Also update placed fields label
+                        setFields((prev) =>
+                          prev.map((f) => (f.recipientIndex === idx ? { ...f, recipientName: e.target.value } : f))
+                        );
+                      }}
+                      className="h-8 bg-slate-900 border-slate-700 text-xs text-white"
+                    />
+                    <Input
+                      type="email"
+                      value={r.email}
+                      placeholder="email@example.com"
+                      onChange={(e) => {
+                        const next = [...builderRecipients];
+                        next[idx] = { ...next[idx], email: e.target.value };
+                        setBuilderRecipients(next);
+                        // Also update placed fields email
+                        setFields((prev) =>
+                          prev.map((f) => (f.recipientIndex === idx ? { ...f, recipientEmail: e.target.value } : f))
+                        );
+                      }}
+                      className="h-8 bg-slate-900 border-slate-700 text-xs text-white"
+                    />
+                  </div>
+                  {builderRecipients.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                      onClick={() => {
+                        const next = builderRecipients.filter((_, i) => i !== idx);
+                        setBuilderRecipients(next);
+                        if (activeSignerIdx >= next.length) setActiveSignerIdx(0);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+
+            {builderRecipients.length < 5 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const newIdx = builderRecipients.length;
+                  setBuilderRecipients([...builderRecipients, { name: `Signer ${newIdx + 1}`, email: "" }]);
+                }}
+                className="w-full h-8 gap-1.5 border-dashed border-slate-700 text-xs text-slate-300 hover:text-white hover:bg-slate-800"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add another signer
+              </Button>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              className="h-9 w-full bg-primary text-primary-foreground font-medium text-xs"
+              onClick={() => setRecipientsModalOpen(false)}
+            >
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

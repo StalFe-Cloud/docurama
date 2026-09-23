@@ -171,18 +171,26 @@ export function UserDocuments() {
     }
   }
 
-  const send = useMutation<{ ok: boolean; message: string }, ApiError, PlacedField[] | void>({
-    mutationFn: (placedFields?: PlacedField[] | void) => apiPost<{ ok: boolean; message: string }>("/api/workspace/envelopes", {
-      op: "send",
-      data: {
-        title: form.title,
-        message: form.message,
-        documentId: uploadedDoc?.id,
-        templateId: selectedTemplate?.id,
-        recipients: form.recipients.filter((r) => r.email.trim()),
-        fields: placedFields,
-      },
-    }),
+  const send = useMutation<
+    { ok: boolean; message: string },
+    ApiError,
+    { fields?: PlacedField[]; recipients?: { name: string; email: string }[]; title?: string } | void
+  >({
+    mutationFn: (override) =>
+      apiPost<{ ok: boolean; message: string }>("/api/workspace/envelopes", {
+        op: "send",
+        data: {
+          title: override?.title || form.title,
+          message: form.message,
+          documentId: uploadedDoc?.id,
+          templateId: selectedTemplate?.id,
+          recipients: (override?.recipients && override.recipients.length > 0
+            ? override.recipients
+            : form.recipients
+          ).filter((r) => r.email.trim()),
+          fields: override?.fields,
+        },
+      }),
     onSuccess: (res) => {
       toast.success(res.message);
       setSendOpen(false);
@@ -587,6 +595,31 @@ export function UserDocuments() {
               )}
             </div>
 
+            {/* Direct Visual Builder Launch Callout */}
+            {uploadedDoc && (
+              <div className="rounded-xl border border-purple-500/30 bg-purple-500/10 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <span className="font-semibold text-xs text-foreground">Visual Document Builder (DocuSeal Mode)</span>
+                  </div>
+                  <Badge variant="outline" className="border-purple-500/40 text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 text-[10px]">
+                    Interactive Canvas & AI
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Preview pages, place signature & date holders for each signer, and auto-detect form fields with AI before sending.
+                </p>
+                <Button
+                  type="button"
+                  onClick={() => { setSendOpen(false); setBuilderOpen(true); }}
+                  className="w-full h-9 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs shadow-sm"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Open in Document Builder (Preview & Place Fields)
+                </Button>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="doc-title">Document title</Label>
               <Input
@@ -663,7 +696,7 @@ export function UserDocuments() {
               {uploadedDoc && (
                 <Button
                   onClick={() => { setSendOpen(false); setBuilderOpen(true); }}
-                  disabled={!form.title.trim() || validRecipients.length === 0 || uploading}
+                  disabled={uploading}
                   className="gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-medium"
                 >
                   <Sparkles className="h-4 w-4" /> Prepare in Builder (Fields & AI)
@@ -680,12 +713,18 @@ export function UserDocuments() {
           documentId={uploadedDoc.id}
           documentFilename={uploadedDoc.filename}
           pageCount={uploadedDoc.pageCount}
-          recipients={validRecipients}
-          title={form.title}
+          recipients={validRecipients.length > 0 ? validRecipients : [{ name: "Signer 1", email: "" }]}
+          title={form.title || uploadedDoc.filename.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ")}
           message={form.message}
           isSending={send.isPending}
           onClose={() => { setBuilderOpen(false); setSendOpen(true); }}
-          onSend={(placedFields) => send.mutate(placedFields)}
+          onSend={(placedFields, builderRecipients, currentTitle) => {
+            send.mutate({
+              fields: placedFields,
+              recipients: builderRecipients.map((r) => ({ name: r.name, email: r.email })),
+              title: currentTitle,
+            });
+          }}
         />
       )}
     </div>

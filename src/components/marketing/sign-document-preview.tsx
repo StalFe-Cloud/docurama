@@ -98,58 +98,55 @@ export function SignDocumentPreview({
             if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
             if (e.key === "ArrowRight") { e.preventDefault(); go(1); }
           }}
-          className="relative overflow-hidden rounded-lg border bg-muted/40 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative flex justify-center overflow-hidden rounded-lg border bg-muted/40 outline-none focus-visible:ring-2 focus-visible:ring-ring p-2 sm:p-4"
         >
-          {/* The page itself. key={page} guarantees a fresh load per page so
-              onLoad/onError fire for THIS page, not a cached previous one.
-              Bounded height (DocuSign-style reader pane): a full-size A4
-              render would push the pager and the rest of the flow far below
-              the fold on every device. */}
-          <img
-            key={page}
-            ref={attachImg}
-            src={src}
-            alt={`Page ${page} of ${doc.pages} of ${doc.filename}`}
-            data-testid="doc-preview-img"
-            onLoad={() => { setLoadedPage(page); setErrorPage(null); }}
-            onError={() => { setErrorPage(page); }}
-            className={cn(
-              "mx-auto block h-auto w-full max-w-full max-h-[60vh] object-contain bg-white transition-opacity",
-              state === "ready" ? "opacity-100" : "opacity-0",
-            )}
-          />
+          <div className="relative inline-block max-w-full">
+            <img
+              key={page}
+              ref={attachImg}
+              src={src}
+              alt={`Page ${page} of ${doc.pages} of ${doc.filename}`}
+              data-testid="doc-preview-img"
+              onLoad={() => { setLoadedPage(page); setErrorPage(null); }}
+              onError={() => { setErrorPage(page); }}
+              className={cn(
+                "block h-auto w-auto max-w-full max-h-[70vh] rounded shadow-sm bg-white transition-opacity",
+                state === "ready" ? "opacity-100" : "opacity-0",
+              )}
+            />
 
-          {/* Placed signature holders for the current page */}
-          {state === "ready" && (
-            <div className="absolute inset-0 pointer-events-none">
-              {(fields || []).filter((f) => f.pageNumber === page).map((f) => {
-                const isMine = !currentRecipientEmail || f.recipientEmail.toLowerCase() === currentRecipientEmail.toLowerCase();
-                return (
-                  <div
-                    key={f.id}
-                    onClick={() => onFieldClick?.(f)}
-                    style={{
-                      left: `${f.x}%`,
-                      top: `${f.y}%`,
-                      width: `${f.width}%`,
-                      height: `${f.height}%`,
-                    }}
-                    className={cn(
-                      "absolute flex items-center justify-center rounded border-2 p-1 text-xs cursor-pointer pointer-events-auto transition-all shadow-sm select-none",
-                      isMine
-                        ? "border-blue-600 bg-blue-500/25 text-blue-700 font-semibold ring-2 ring-blue-400/50 hover:bg-blue-500/35"
-                        : "border-slate-400 bg-slate-200/40 text-slate-500 opacity-60"
-                    )}
-                    title={isMine ? "Click to sign here" : `Assigned to ${f.recipientName}`}
-                  >
-                    <span className="truncate text-[11px] font-bold uppercase tracking-tight">
-                      {isMine ? "✍️ Sign Here" : f.label || "Signature"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            {/* Placed signature holders for the current page */}
+            {state === "ready" && (
+              <div className="absolute inset-0 pointer-events-none">
+                {(fields || []).filter((f) => f.pageNumber === page).map((f) => {
+                  const isMine = !currentRecipientEmail || f.recipientEmail.toLowerCase() === currentRecipientEmail.toLowerCase();
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => onFieldClick?.(f)}
+                      style={{
+                        left: `${f.x}%`,
+                        top: `${f.y}%`,
+                        width: `${f.width}%`,
+                        height: `${f.height}%`,
+                      }}
+                      className={cn(
+                        "absolute flex items-center justify-center rounded border-2 p-1 text-xs cursor-pointer pointer-events-auto transition-all shadow-sm select-none",
+                        isMine
+                          ? "border-blue-600 bg-blue-500/25 text-blue-700 font-semibold ring-2 ring-blue-400/50 hover:bg-blue-500/35"
+                          : "border-slate-400 bg-slate-200/40 text-slate-500 opacity-60"
+                      )}
+                      title={isMine ? "Click to sign here" : `Assigned to ${f.recipientName}`}
+                    >
+                      <span className="truncate text-[11px] font-bold uppercase tracking-tight">
+                        {isMine ? "✍️ Sign Here" : f.label || "Signature"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {state === "loading" && (
             <div className="absolute inset-0 flex min-h-64 items-center justify-center" aria-live="polite">
