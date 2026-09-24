@@ -31,6 +31,7 @@ import { extendToLongTerm, maintainLongTerm } from "@/lib/ltv";
 import { pemToDer } from "@/lib/der";
 import { signedPdfRevisions } from "@/lib/seal-shared";
 import { publicVerifyUrl } from "@/lib/app-origin";
+import { fieldLabel, isEnteredField, stampText } from "@/lib/field-kinds";
 import { createHash } from "crypto";
 
 const INK = rgb(0.06, 0.16, 0.4);
@@ -139,6 +140,12 @@ function drawStamp(page: PDFPage, s: Stamp, fonts: { script: PDFFont; body: PDFF
   const size = fitSize(font, text, room.width, Math.min(11, room.height * 0.75));
   const width = font.widthOfTextAtSize(text, size);
   const baseline = box.height / 2 + size * 0.35;
+  if (s.type === "checkbox") {
+    // The tick mark, centred in its box.
+    const p = at((box.width - width) / 2, baseline);
+    page.drawText(text, { x: p.x, y: p.y, size, font, color: INK, rotate });
+    return;
+  }
   const back = at(pad - 1, baseline + size * 0.28);
   page.drawRectangle({ x: back.x, y: back.y, width: width + 2, height: size * 1.15, color: rgb(1, 1, 1), rotate });
   const p = at(pad, baseline);
@@ -296,12 +303,13 @@ export async function composeSealedPdf(input: SealedPdfInput): Promise<Uint8Arra
   const pages = pdf.getPages();
   for (const f of input.fields) {
     const page = pages[f.pageNumber - 1];
-    if (!page || !f.value) continue;
+    const text = stampText(f);
+    if (!page || !text) continue;
     const signer = f.recipientEmail ? byEmail.get(f.recipientEmail.toLowerCase()) : undefined;
     const isSignature = f.type === "signature";
     drawStamp(page, {
       ...f,
-      value: f.value,
+      value: text,
       image: isSignature ? await kit.imageFor(signer?.image ?? null) : null,
       caption: isSignature ? `Docurama ${input.code}${signer?.signedAt ? ` · ${fmtUtc(signer.signedAt)}` : ""}` : undefined,
     }, kit.fonts);
@@ -419,9 +427,9 @@ export async function composeTemplateSealedPdf(input: SealedTextInput): Promise<
   y -= 10;
   const valuesBy = new Map<string, { label: string; value: string }[]>();
   for (const f of input.fields ?? []) {
-    if (f.type !== "text" || !f.value || !f.recipientEmail) continue;
+    if (!isEnteredField(f) || !f.value || !f.recipientEmail) continue;
     const list = valuesBy.get(f.recipientEmail.toLowerCase()) ?? [];
-    list.push({ label: f.label && f.label !== "Text Field" ? f.label : "Text", value: f.value });
+    list.push({ label: fieldLabel(f), value: f.value });
     valuesBy.set(f.recipientEmail.toLowerCase(), list);
   }
   for (const s of [...input.signers].sort((a, b) => a.order - b.order)) {

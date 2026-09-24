@@ -36,6 +36,8 @@ import { PortalProviders } from "@/components/portal/providers";
 import { SignDocumentPreview, type SignDocument } from "@/components/marketing/sign-document-preview";
 import { SignatureAdopter, SIGNATURE_FONTS, type Adoption, type SavedSignature } from "@/components/marketing/signature-adopter";
 import { celebrate } from "@/components/marketing/confetti";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { checkFieldEntry, fieldLabel, fieldOptions, isEnteredField } from "@/lib/field-kinds";
 import { cn } from "@/lib/utils";
 
 export type SignPageState =
@@ -57,7 +59,11 @@ export type SignPageState =
       signers: { name: string; email: string; status: string; order: number }[];
       bodyMarkdown: string | null;
       document: { filename: string; pages: number; sha256: string } | null;
-      fields?: Array<{ id: string; type: string; pageNumber: number; x: number; y: number; width: number; height: number; recipientEmail: string; recipientName: string; label?: string; value?: string }>;
+      fields?: Array<{
+        id: string; type: string; pageNumber: number; x: number; y: number; width: number; height: number;
+        recipientEmail: string; recipientName: string; label?: string; value?: string;
+        options?: string[]; required?: boolean; mustTick?: boolean;
+      }>;
     };
 
 /** The sending workspace's Personalization (logo, after-signing message and button, confetti). */
@@ -65,11 +71,6 @@ export type SignBrand = {
   logoUrl: string | null; name: string;
   completedMessage: string | null; redirectUrl: string | null; redirectLabel: string | null; confetti: boolean;
 };
-
-/** Builder-placed text holders default to "Text Field"; show something a signer understands. */
-function fieldLabel(label?: string): string {
-  return label && label !== "Text Field" ? label : "Text";
-}
 
 export function PublicSign({ token, state, brand = null }: { token: string; state: SignPageState; brand?: SignBrand | null }) {
   return (
@@ -97,14 +98,16 @@ function SignInner({ token, state, brand }: { token: string; state: SignPageStat
   const [declineReason, setDeclineReason] = useState("");
   const viewed = useRef(false);
 
-  // Text holders the sender placed for THIS signer (Name, Title, …): filled
-  // here, validated server-side and recorded in the sealed evidence.
-  const myTextFields = state.phase === "active"
-    ? (state.fields ?? []).filter((f) => f.type === "text" && f.recipientEmail.toLowerCase() === state.recipientEmail.toLowerCase())
+  // Fields the sender placed for THIS signer (text, number, dropdown, radio,
+  // checkbox): filled here, checked with the rules the server applies again
+  // (src/lib/field-kinds.ts), and recorded in the sealed evidence.
+  const myFields = state.phase === "active"
+    ? (state.fields ?? []).filter((f) => isEnteredField(f) && f.recipientEmail.toLowerCase() === state.recipientEmail.toLowerCase())
     : [];
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => Object.fromEntries(
-    myTextFields.map((f) => [f.id, state.phase === "active" && /name|nom/i.test(f.label ?? "") ? state.recipientName : ""]),
+    myFields.map((f) => [f.id, state.phase === "active" && f.type === "text" && /name|nom/i.test(f.label ?? "") ? state.recipientName : ""]),
   ));
+  const setField = (id: string, value: string) => setFieldValues((prev) => ({ ...prev, [id]: value }));
 
   // First open of an active link records VIEWED + DELIVERED (idempotent
   // server-side: only fires for PENDING recipients).
@@ -130,8 +133,10 @@ function SignInner({ token, state, brand }: { token: string; state: SignPageStat
   const sign = async () => {
     if (!name.trim() || name.trim().length < 2) { setError("Please type your full name to sign."); return; }
     if (!consent) { setError("Please confirm you have read and agree to sign electronically."); return; }
-    const empty = myTextFields.find((f) => !(fieldValues[f.id] ?? "").trim());
-    if (empty) { setError(`Please fill in "${fieldLabel(empty.label)}" (page ${empty.pageNumber}).`); return; }
+    for (const f of myFields) {
+      const entry = checkFieldEntry(f, fieldValues[f.id]);
+      if (!entry.ok) { setError(`${entry.error} It is on page ${f.pageNumber}.`); return; }
+    }
     if ((adoption.method === "draw" || adoption.method === "upload") && !adoption.image) {
       setError(adoption.method === "draw" ? "Draw your signature, or choose Type." : "Upload an image of your signature, or choose Type.");
       return;
@@ -142,7 +147,7 @@ function SignInner({ token, state, brand }: { token: string; state: SignPageStat
         op: "sign", name: name.trim(), font,
         signature: { method: adoption.method, image: adoption.image },
         saveSignature,
-        fieldValues: Object.fromEntries(myTextFields.map((f) => [f.id, (fieldValues[f.id] ?? "").trim()])),
+        fieldValues: Object.fromEntries(myFields.map((f) => [f.id, f.type === "checkbox" ? fieldValues[f.id] === "Yes" : (fieldValues[f.id] ?? "").trim()])),
       });
       setSealed(!!r.sealed);
       setPhase("signed");
@@ -452,23 +457,57 @@ function SignInner({ token, state, brand }: { token: string; state: SignPageStat
                   />
                 </div>
 
-                {myTextFields.length > 0 && (
-                  <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                {myFields.length > 0 && (
+                  <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
                     <p className="text-sm font-medium">Complete your details</p>
                     <p className="text-xs text-muted-foreground">
                       The sender placed these fields for you. They are recorded with your signature.
                     </p>
-                    {myTextFields.map((f) => (
-                      <div key={f.id} className="space-y-1.5">
-                        <Label htmlFor={`field-${f.id}`}>
-                          {fieldLabel(f.label)} <span className="text-xs font-normal text-muted-foreground">· page {f.pageNumber}</span>
-                        </Label>
-                        <Input
-                          id={`field-${f.id}`} required maxLength={200} value={fieldValues[f.id] ?? ""}
-                          onChange={(e) => setFieldValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
-                        />
-                      </div>
-                    ))}
+                    {myFields.map((f) => {
+                      const where = <span className="text-xs font-normal text-muted-foreground">· page {f.pageNumber}{f.type !== "checkbox" && f.required === false ? " · optional" : ""}</span>;
+                      if (f.type === "checkbox") {
+                        return (
+                          <label key={f.id} htmlFor={`field-${f.id}`} className="flex cursor-pointer items-start gap-3 text-sm">
+                            <Checkbox id={`field-${f.id}`} className="mt-0.5" aria-label={fieldLabel(f)} checked={fieldValues[f.id] === "Yes"}
+                              onCheckedChange={(v) => setField(f.id, v === true ? "Yes" : "")} />
+                            <span>{fieldLabel(f)}{f.mustTick ? <span className="text-destructive"> *</span> : null} {where}</span>
+                          </label>
+                        );
+                      }
+                      if (f.type === "radio") {
+                        return (
+                          <fieldset key={f.id} className="space-y-2">
+                            <legend className="text-sm font-medium">{fieldLabel(f)} {where}</legend>
+                            <RadioGroup value={fieldValues[f.id] ?? ""} onValueChange={(v) => setField(f.id, v)} aria-label={fieldLabel(f)}>
+                              {fieldOptions(f).map((option, i) => (
+                                <label key={option} htmlFor={`field-${f.id}-${i}`} className="flex cursor-pointer items-center gap-2 text-sm">
+                                  <RadioGroupItem id={`field-${f.id}-${i}`} value={option} /> {option}
+                                </label>
+                              ))}
+                            </RadioGroup>
+                          </fieldset>
+                        );
+                      }
+                      return (
+                        <div key={f.id} className="space-y-1.5">
+                          <Label htmlFor={`field-${f.id}`}>{fieldLabel(f)} {where}</Label>
+                          {f.type === "select" ? (
+                            <select
+                              id={`field-${f.id}`} value={fieldValues[f.id] ?? ""} onChange={(e) => setField(f.id, e.target.value)}
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <option value="">Choose…</option>
+                              {fieldOptions(f).map((option) => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          ) : (
+                            <Input
+                              id={`field-${f.id}`} value={fieldValues[f.id] ?? ""} onChange={(e) => setField(f.id, e.target.value)}
+                              {...(f.type === "number" ? { inputMode: "decimal" as const, maxLength: 24, placeholder: "e.g. 1250" } : { maxLength: 200 })}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 

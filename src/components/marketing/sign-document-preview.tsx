@@ -21,6 +21,7 @@ import { useCallback, useState } from "react";
 import { ChevronLeft, ChevronRight, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { fieldLabel } from "@/lib/field-kinds";
 import { cn } from "@/lib/utils";
 
 export type SignDocument = { filename: string; pages: number; sha256: string };
@@ -42,13 +43,17 @@ export interface PreviewField {
 
 /** What a holder asks of the person looking at it. */
 function holderLabel(f: PreviewField, isMine: boolean): string {
+  if (f.type === "checkbox" && f.value) return f.value === "Yes" ? "☑" : "☐";
   if (f.value) return f.value;
   if (!isMine) return f.label || f.type;
   switch (f.type) {
     case "signature": return "✍️ Sign here";
     case "initials": return "Initial here";
     case "date": return "Date · on signing";
-    case "text": return `${f.label && f.label !== "Text Field" ? f.label : "Text"} · fill below`;
+    case "text":
+    case "number": return `${fieldLabel(f)} · fill below`;
+    case "select":
+    case "radio": return `${fieldLabel(f)} · choose below`;
     case "checkbox": return "☐";
     default: return f.label || f.type;
   }

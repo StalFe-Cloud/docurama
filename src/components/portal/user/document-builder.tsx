@@ -4,8 +4,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   ArrowLeft, Sparkles, Send, Trash2, Calendar, PenLine, Type,
   CheckSquare, FileSignature, Loader2, Bot, Scale, ShieldAlert,
-  ChevronRight, ZoomIn, ZoomOut, Check, Info, FileText, Users, Plus, Edit3
+  ChevronRight, ZoomIn, ZoomOut, Check, Info, FileText, Users, Plus, Edit3,
+  Hash, ChevronsUpDown, CircleDot, X,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { MAX_OPTIONS, MAX_OPTION_LENGTH } from "@/lib/field-kinds";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -19,7 +23,10 @@ import { apiGet } from "@/lib/client";
 import { assignFieldsToSigners } from "@/lib/docintel/assign-signers";
 import { cn } from "@/lib/utils";
 
-export type FieldKind = "signature" | "initials" | "date" | "text" | "checkbox";
+export type FieldKind = "signature" | "initials" | "date" | "text" | "number" | "select" | "radio" | "checkbox";
+
+/** Palette order. Rules for what signers enter: src/lib/field-kinds.ts. */
+export const FIELD_KINDS: FieldKind[] = ["signature", "initials", "date", "text", "number", "select", "radio", "checkbox"];
 
 export interface BuilderRecipient {
   name: string;
@@ -40,6 +47,10 @@ export interface PlacedField {
   recipientName: string;
   label?: string;
   required?: boolean;
+  /** Dropdown and radio fields: the choices offered to the signer. */
+  options?: string[];
+  /** Checkbox fields: the signer must tick it to sign. */
+  mustTick?: boolean;
 }
 
 export const SIGNER_COLORS = [
@@ -55,6 +66,9 @@ const FIELD_DEFAULTS: Record<FieldKind, { width: number; height: number; icon: R
   initials: { width: 14, height: 5.5, icon: FileSignature, label: "Initials" },
   date: { width: 18, height: 4.8, icon: Calendar, label: "Date" },
   text: { width: 22, height: 4.8, icon: Type, label: "Text Field" },
+  number: { width: 14, height: 4.8, icon: Hash, label: "Number" },
+  select: { width: 22, height: 4.8, icon: ChevronsUpDown, label: "Dropdown" },
+  radio: { width: 22, height: 4.8, icon: CircleDot, label: "Radio" },
   checkbox: { width: 4.5, height: 3.5, icon: CheckSquare, label: "Checkbox" },
 };
 
@@ -220,11 +234,17 @@ export function DocumentBuilder({
       recipientName: activeSigner.name,
       label: defaults.label,
       required: true,
+      ...(activeTool === "select" || activeTool === "radio" ? { options: ["Option 1", "Option 2"] } : {}),
+      ...(activeTool === "checkbox" ? { mustTick: false } : {}),
     };
 
     setFields((prev) => [...prev, newField]);
     setSelectedFieldId(newField.id);
   };
+
+  const updateField = (fieldId: string, patch: Partial<PlacedField>) =>
+    setFields((prev) => prev.map((f) => (f.id === fieldId ? { ...f, ...patch } : f)));
+  const selectedField = fields.find((f) => f.id === selectedFieldId) ?? null;
 
   // Remove field
   const handleDeleteField = (fieldId: string, e?: React.MouseEvent) => {
@@ -298,7 +318,15 @@ export function DocumentBuilder({
       return;
     }
 
-    // 2. Check if every signer has at least 1 signature field
+    // 2. Dropdown and radio fields need choices to offer.
+    const noChoices = fields.find((f) => (f.type === "select" || f.type === "radio") && (f.options ?? []).filter((o) => o.trim()).length < 2);
+    if (noChoices) {
+      toast.error(`"${noChoices.label || FIELD_DEFAULTS[noChoices.type].label}" on page ${noChoices.pageNumber} needs at least two options.`);
+      setSelectedFieldId(noChoices.id);
+      return;
+    }
+
+    // 3. Check if every signer has at least 1 signature field
     const missingSigners = signers.filter((s, idx) => {
       return !fields.some((f) => f.recipientIndex === idx && f.type === "signature");
     });
@@ -399,7 +427,7 @@ export function DocumentBuilder({
 
           {/* Field Palette Toolbar */}
           <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950/70 p-1">
-            {(["signature", "initials", "date", "text", "checkbox"] as FieldKind[]).map((kind) => {
+            {FIELD_KINDS.map((kind) => {
               const def = FIELD_DEFAULTS[kind];
               const Icon = def.icon;
               const isActive = activeTool === kind;
@@ -492,7 +520,7 @@ export function DocumentBuilder({
             onChange={(e) => setActiveTool(e.target.value as FieldKind)}
             className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-white"
           >
-            {(["signature", "initials", "date", "text", "checkbox"] as FieldKind[]).map((kind) => (
+            {FIELD_KINDS.map((kind) => (
               <option key={kind} value={kind}>
                 {FIELD_DEFAULTS[kind].label}
               </option>
@@ -592,6 +620,54 @@ export function DocumentBuilder({
           })}
         </div>
       </main>
+
+      {/* Settings of the selected field */}
+      {selectedField && selectedField.type !== "signature" && selectedField.type !== "initials" && selectedField.type !== "date" && (
+        <div
+          className="fixed bottom-4 right-4 z-40 w-72 select-text space-y-3 rounded-xl border border-slate-700 bg-slate-900/95 p-4 text-sm shadow-2xl backdrop-blur"
+          role="dialog" aria-label="Field settings"
+          onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <p className="font-semibold text-white">{FIELD_DEFAULTS[selectedField.type].label} settings</p>
+            <button type="button" onClick={() => setSelectedFieldId(null)} className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close field settings">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="field-label" className="text-xs text-slate-300">Label shown to the signer</Label>
+            <Input
+              id="field-label" value={selectedField.label ?? ""} maxLength={80}
+              onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+              className="h-9 border-slate-700 bg-slate-950 text-white"
+            />
+          </div>
+          {(selectedField.type === "select" || selectedField.type === "radio") && (
+            <div className="space-y-1.5">
+              <Label htmlFor="field-options" className="text-xs text-slate-300">Options, one per line</Label>
+              <Textarea
+                id="field-options" rows={4}
+                value={(selectedField.options ?? []).join("\n")}
+                onChange={(e) => updateField(selectedField.id, {
+                  options: e.target.value.split("\n").map((o) => o.slice(0, MAX_OPTION_LENGTH)).slice(0, MAX_OPTIONS),
+                })}
+                className="border-slate-700 bg-slate-950 text-white"
+              />
+            </div>
+          )}
+          {selectedField.type === "checkbox" ? (
+            <label className="flex items-center justify-between gap-3 text-xs text-slate-300">
+              The signer must tick it
+              <Switch checked={selectedField.mustTick === true} onCheckedChange={(v) => updateField(selectedField.id, { mustTick: v })} aria-label="The signer must tick it" />
+            </label>
+          ) : (
+            <label className="flex items-center justify-between gap-3 text-xs text-slate-300">
+              Required
+              <Switch checked={selectedField.required !== false} onCheckedChange={(v) => updateField(selectedField.id, { required: v })} aria-label="Required" />
+            </label>
+          )}
+        </div>
+      )}
 
       {/* Document Intelligence Insights Sheet */}
       <Sheet open={intelOpen} onOpenChange={setIntelOpen}>

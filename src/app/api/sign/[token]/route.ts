@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { queueEnvelopeEvent, retryFailedDeliveries } from "@/lib/webhooks";
 import { processOutbox } from "@/lib/mail";
 import { queueCompletion, queueSenderAlert } from "@/lib/notify";
+import { checkFieldEntry, fieldLabel, isEnteredField } from "@/lib/field-kinds";
 import { serializableTransaction } from "@/lib/transaction";
 
 /** Signing tokens authenticate recipients; every state decision is re-read in
@@ -79,7 +80,6 @@ const METHOD_TEXT: Record<Adopted["method"], string> = {
   type: "typed signature", draw: "drawn signature", upload: "uploaded signature image", saved: "saved signature",
 };
 
-const textLabel = (f: PlacedField) => (f.label && f.label !== "Text Field" ? f.label : "Text");
 const initialsOf = (name: string) => name.split(/\s+/).filter(Boolean).map((part) => part[0]!.toUpperCase()).join("").slice(0, 4);
 
 async function loadRecipient(tx: Prisma.TransactionClient, token: string) {
@@ -184,22 +184,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       if (ahead && ahead.id !== recipient.id) {
         throw jsonError(`${ahead.name} signs before you. You will be able to sign once they have completed.`, 409);
       }
-      // Holders the sender placed for this signer: text values are required and
-      // recorded in the SIGNED audit event and on the envelope's fields; date,
-      // signature and initials holders are stamped from the signing act itself.
-      // All of them are bound by the seal (src/lib/seal.ts) once the last
-      // signer completes.
+      // Holders the sender placed for this signer: what they enter (text,
+      // number, dropdown, radio, checkbox; rules in src/lib/field-kinds.ts) is
+      // checked, recorded in the SIGNED audit event and on the envelope's
+      // fields; date, signature and initials holders are stamped from the
+      // signing act itself. All of them are bound by the seal (src/lib/seal.ts)
+      // once the last signer completes.
       const placed = parseFields(envelope.fields);
       const mine = placed.filter((f) => String(f.recipientEmail ?? "").toLowerCase() === recipient.email.toLowerCase());
       const submitted = body.fieldValues && typeof body.fieldValues === "object" && !Array.isArray(body.fieldValues)
         ? body.fieldValues as Record<string, unknown> : {};
       const filled: string[] = [];
       for (const f of mine) {
-        if (f.type === "text") {
-          const value = String(submitted[f.id] ?? "").trim().slice(0, 200);
-          if (!value) throw jsonError(`Please fill in "${textLabel(f)}" before signing.`);
-          f.value = value;
-          filled.push(`${textLabel(f)}="${value.replace(/"/g, "'")}"`);
+        if (isEnteredField(f)) {
+          const entry = checkFieldEntry(f, submitted[f.id]);
+          if (!entry.ok) throw jsonError(entry.error);
+          f.value = entry.value;
+          if (entry.value) filled.push(`${fieldLabel(f)}="${entry.value.replace(/"/g, "'")}"`);
         } else if (f.type === "date") {
           f.value = actionAt.toISOString().slice(0, 10);
         } else if (f.type === "signature") {
