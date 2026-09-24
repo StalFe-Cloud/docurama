@@ -160,10 +160,13 @@ as dev-server noise — see the note on `DEV_SERVER_NOISE` in the harness.
 
 ## CI
 
-`.github/workflows/e2e.yml` runs the suite on push/PR against `quality` and
-`main`: bun install → prisma generate → seed → `bash e2e/run.sh`. The CI image needs a
-`chromium` wrapper that injects `--no-sandbox --disable-dev-shm-usage` (the
-workflow creates one), and downloads the **SeaweedFS** binary so
+CI does not use GitHub Actions. `bash scripts/ci-over-ssh.sh <ssh-host> [ref]`
+ships a commit to a Docker host over SSH and runs every check there, one job at
+a time within CPU and memory limits (`scripts/ci-ssh/`): TLS and destination
+policy, lint and startup policy, database invariants on SQLite and PostgreSQL,
+the PostgreSQL E2E suites, the production image and worker, and this whole
+battery on Linux. The runner image has Chromium (the browser harness passes
+`--no-sandbox`), and the E2E job downloads the **SeaweedFS** binary so
 `e2e/s3-seaweed.test.ts` exercises the S3 storage backend against a real
 `weed server -s3` (skipped locally when no `weed` is on PATH — set `WEED_BIN`
 to enable it, `E2E_SKIP_S3=1` to force off).

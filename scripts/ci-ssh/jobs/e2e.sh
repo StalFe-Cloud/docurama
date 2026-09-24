@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# e2e.yml › e2e: the whole battery (e2e/run.sh) on Linux, SQLite
+# e2e: the whole battery (e2e/run.sh) on Linux, SQLite, with SeaweedFS for S3
 set -euo pipefail
 cd /work
 export E2E_BASE_URL=http://127.0.0.1:3000 NEXT_PUBLIC_DEMO_MODE=true DOCURAMA_ALLOW_PRIVATE_WEBHOOKS=1

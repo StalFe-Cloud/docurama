@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release-verification.yml › database-invariants (matrix: sqlite | postgresql)
+# invariants-<provider>: migration upgrade, backup/restore, drift and transaction/mail invariants (sqlite | postgresql)
 set -euo pipefail
 provider="$1"
 cd /work

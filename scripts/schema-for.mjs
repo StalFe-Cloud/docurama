@@ -9,8 +9,8 @@
  * provider has to be fixed before `prisma generate` runs — i.e. at build time.
  * One image therefore targets one provider.
  *
- * This replaces the inline `sed` that .github/workflows/e2e.yml used for its
- * postgres-portability job, so CI and local development share one code path.
+ * This replaces the inline `sed` the old postgres-portability CI job used, so
+ * CI (scripts/ci-over-ssh.sh) and local development share one code path.
  *
  * The provider line is the ONLY edit. That is the portability contract the
  * portability job asserts: if the schema ever needs provider-specific

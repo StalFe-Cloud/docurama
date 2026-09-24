@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# e2e.yml › postgres: the HTTP, MCP and browser suites against PostgreSQL 16
+# postgres: the HTTP, MCP and browser suites against PostgreSQL 16
 set -euo pipefail
 cd /work
 export PGURL="postgresql://docurama:docurama@${PG_HOST}:5432/docurama_test" DOCURAMA_ALLOW_PRIVATE_WEBHOOKS=1

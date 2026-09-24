@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The checks of .github/workflows, run on this Docker host one job at a time.
+# The project's CI checks, run on this Docker host one job at a time.
 # scripts/ci-over-ssh.sh ships the commit here (ctx/src.tar, app/) and calls it.
 #
 # The host keeps serving its own workload: everything created here is named

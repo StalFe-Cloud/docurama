@@ -1,5 +1,5 @@
-# Images for scripts/ci-over-ssh.sh: the checks of .github/workflows on any
-# Docker host reached over SSH, instead of GitHub Actions.
+# Images for scripts/ci-over-ssh.sh, the project's CI: its checks on any
+# Docker host reached over SSH (GitHub Actions is not used).
 #
 #   runner  stands in for GitHub's ubuntu-latest: Bun (the version the app
 #           image uses), Node 22, Chromium for the browser suites, and the

@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
   // output. It is loaded lazily from src/lib/sso.ts on the SAML path only.
   serverExternalPackages: ["@napi-rs/canvas", "sharp", "tesseract.js", "pdfjs-dist", "xmllint-wasm"],
   // F3 (docs/IMPROVEMENT-PLAN.md): type errors fail the build again.
-  // Kept clean via `bunx tsc --noEmit`, enforced in CI (.github/workflows/e2e.yml).
+  // Kept clean via `bunx tsc --noEmit`, enforced in CI (scripts/ci-over-ssh.sh).
   reactStrictMode: false,
   async headers() {
     return [

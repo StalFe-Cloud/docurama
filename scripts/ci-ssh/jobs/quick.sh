@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# webhook-network.yml › tls-and-destination-policy, and the source-level steps
-# of e2e.yml › production-image (lint, startup failure policy).
+# tls-and-destination-policy (webhook and TSA/OCSP transport), and the
+# source-level production-image checks (lint, startup failure policy).
 set -euo pipefail
 cd /work
 echo "::step tls-and-destination-policy"

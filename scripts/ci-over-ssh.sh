@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Run the checks of .github/workflows on a Docker host over SSH, instead of
-# GitHub Actions: the commit is shipped with `git archive`, the jobs run there
-# one at a time within CPU and memory limits (scripts/ci-ssh/run-on-host.sh),
-# and nothing is left behind.
+# The project's CI (GitHub Actions is not used): the commit is shipped to a
+# Docker host over SSH with `git archive`, the jobs run there one at a time
+# within CPU and memory limits (scripts/ci-ssh/run-on-host.sh), and nothing is
+# left behind.
 #
 #   bash scripts/ci-over-ssh.sh <ssh-host> [git-ref]      e.g. nexa-vps HEAD
 #

@@ -13,7 +13,7 @@ Master gate. Every box ticks before launch day; sign-off per section. Companion 
 
 ## 2. Engineering gates
 
-- [x] `bunx tsc --noEmit` clean (0 errors — the build enforces types; gate also runs in CI, `.github/workflows/e2e.yml`).
+- [x] `bunx tsc --noEmit` clean (0 errors — the build enforces types; gate also runs in CI, `scripts/ci-over-ssh.sh`).
 - [x] `eslint` clean.
 - [x] Production build green — CI `production-image` builds the image and boots it against an empty scratch database, asserting `/api/health` and a rendered `/blog`. (A local `bun run build` needs network for `next/font/google`; the containerised build is the authoritative gate.)
 - [x] Full E2E battery green via `bash e2e/run.sh`: the Playwright browser suites (`e2e/browser/`, 30 tests covering the 29 journeys that were Maestro flows) + `api`, `evidence`, `transparency`, `rekor`, `mcp`, `plans`, `webhooks`, `visual`, `mail`, `billing`, `sso`, `bot-guard`, `lead-conversion` suites (S3/SeaweedFS suite runs in CI or where a `weed` binary exists).
