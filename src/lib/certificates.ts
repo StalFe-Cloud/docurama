@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { randomBytes } from "crypto";
+import { configValue, writeSubjectConfig } from "@/lib/openssl-subject";
 
 /**
  * One-click signing-certificate provisioning.
@@ -57,17 +58,19 @@ export async function issueSigningCertificate(opts: {
     const p12Path = join(dir, "cert.p12");
     const serial = `0x${randomBytes(16).toString("hex").toUpperCase()}`;
 
-    const subjParts = [`/CN=${cn}`];
-    if (opts.organization) subjParts.push(`/O=${subjSafe(opts.organization)}`);
-    subjParts.push("/C=FR");
-    if (opts.email && /.+@.+\..+/.test(opts.email)) subjParts.push(`/emailAddress=${subjSafe(opts.email, 254)}`);
+    // The subject goes in a UTF-8 config file, not -subj: see src/lib/openssl-subject.ts.
+    const config = await writeSubjectConfig(dir, [
+      ["CN", configValue(cn)],
+      ["O", opts.organization ? configValue(opts.organization) : ""],
+      ["C", "FR"],
+      ["emailAddress", opts.email && /.+@.+\..+/.test(opts.email) ? configValue(opts.email, 254) : ""],
+    ]);
 
     // 1. Key pair + self-signed X.509 certificate
     await run("openssl", [
-      "req", "-x509", "-newkey", "rsa:2048", "-sha256",
+      "req", "-x509", "-utf8", "-config", config, "-newkey", "rsa:2048", "-sha256",
       "-days", String(Math.min(1095, Math.max(30, opts.days))),
       "-nodes", "-keyout", keyPath, "-out", certPath,
-      "-subj", subjParts.join(""),
       "-set_serial", serial,
     ]);
 

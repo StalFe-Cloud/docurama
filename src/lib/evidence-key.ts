@@ -27,6 +27,7 @@ import { join } from "path";
 import { createHash, createPrivateKey, createPublicKey, randomBytes, sign as nodeSign, verify as nodeVerify } from "crypto";
 import { db } from "@/lib/db";
 import { canonicalJson } from "@/lib/canonical-json";
+import { configValue, writeSubjectConfig } from "@/lib/openssl-subject";
 
 const run = promisify(execFile);
 
@@ -66,11 +67,14 @@ async function issueKeyCertificate(opts: {
   try {
     const keyPath = join(dir, "key.pem");
     const certPath = join(dir, "cert.pem");
+    // The subject goes in a UTF-8 config file, not -subj: see src/lib/openssl-subject.ts.
+    const config = await writeSubjectConfig(dir, [
+      ["CN", configValue(`Docurama Evidence Key - ${opts.tenantName}`)], ["O", configValue(opts.tenantName)], ["C", "FR"],
+    ]);
     const args = [
-      "req", "-x509", "-newkey", "rsa:2048", "-sha256",
+      "req", "-x509", "-utf8", "-config", config, "-newkey", "rsa:2048", "-sha256",
       "-days", String(EVIDENCE_KEY_VALIDITY_DAYS),
       "-nodes", "-keyout", keyPath, "-out", certPath,
-      "-subj", `/CN=${subjSafe(`Docurama Evidence Key - ${opts.tenantName}`)}/O=${subjSafe(opts.tenantName)}/C=FR`,
     ];
     if (opts.sanDomain) {
       args.push("-addext", `subjectAltName=DNS:${subjSafe(opts.sanDomain, 253)}`);
