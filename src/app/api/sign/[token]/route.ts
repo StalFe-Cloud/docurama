@@ -10,6 +10,8 @@ import { getSessionUser } from "@/lib/auth";
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { queueEnvelopeEvent, retryFailedDeliveries } from "@/lib/webhooks";
+import { processOutbox } from "@/lib/mail";
+import { queueCompletion, queueSenderAlert } from "@/lib/notify";
 import { serializableTransaction } from "@/lib/transaction";
 
 /** Signing tokens authenticate recipients; every state decision is re-read in
@@ -86,7 +88,7 @@ async function loadRecipient(tx: Prisma.TransactionClient, token: string) {
     include: { envelope: { include: {
       recipients: true,
       document: { select: { sha256: true } },
-      createdBy: { select: { email: true } },
+      createdBy: { select: { email: true, firstName: true, lastName: true } },
       tenant: { select: { status: true } },
     } } },
   });
@@ -102,6 +104,7 @@ async function loadRecipient(tx: Prisma.TransactionClient, token: string) {
 function wakeWebhooks() {
   // The durable rows, not this best-effort wake-up, guarantee eventual work.
   void retryFailedDeliveries(20).catch((error) => console.warn("[sign] webhook wake-up failed", error));
+  void processOutbox(20).catch((error) => console.warn("[sign] mail wake-up failed", error));
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
@@ -114,6 +117,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const op = body.op;
     if (!["view", "sign", "decline"].includes(String(op))) return jsonError("Unknown operation", 400);
     const actionAt = new Date();
+    const origin = req.nextUrl.origin;
 
     if (op === "view") {
       const status = await serializableTransaction(async (tx) => {
@@ -132,6 +136,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           code: envelope.publicCode, title: envelope.title, status: envelope.status,
           recipient: { name: recipient.name, email: recipient.email },
         });
+        await queueSenderAlert(tx, envelope, "viewed", { origin, createdAt: actionAt, signerName: recipient.name });
         return "DELIVERED";
       });
       wakeWebhooks();
@@ -155,6 +160,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           code: envelope.publicCode, title: envelope.title, status: "DECLINED",
           recipient: { name: recipient.name, email: recipient.email }, reason,
         });
+        await queueSenderAlert(tx, envelope, "declined", { origin, createdAt: actionAt, signerName: recipient.name, reason });
       });
       wakeWebhooks();
       return jsonOk({ ok: true, status: "DECLINED", envelopeStatus: "DECLINED" });
@@ -263,6 +269,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         code: envelope.publicCode, title: envelope.title, status: "COMPLETED", sha256: saved.sha256,
         sealedAt: actionAt.toISOString(), conformance: saved.conformanceLevel, signerCount,
       });
+      // The sender hears about progress; at completion everyone gets their signed copy.
+      if (sealed) {
+        await queueCompletion(tx, envelope, envelope.recipients, {
+          origin, createdAt: actionAt, hasPdf: !!envelope.document || !!envelope.contractText,
+        });
+      } else {
+        await queueSenderAlert(tx, envelope, "signed", { origin, createdAt: actionAt, signerName: name });
+      }
       return { envelope: saved, sealed, signerCount };
     });
     wakeWebhooks();

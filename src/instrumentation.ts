@@ -4,8 +4,8 @@ export async function register() {
       process.env.NEXT_PHASE === "phase-production-build") return;
   const global = globalThis as unknown as { __docuramaWorker?: () => void };
   if (global.__docuramaWorker) return;
-  const [{ processOutbox }, { retryFailedDeliveries }, { renewDueSubscriptions }, { maintainSealedPdfs }, { startWorkerLoop }] = await Promise.all([
-    import("@/lib/mail"), import("@/lib/webhooks"), import("@/lib/billing"), import("@/lib/signed-pdf"), import("@/lib/worker-loop"),
+  const [{ processOutbox }, { retryFailedDeliveries }, { renewDueSubscriptions }, { maintainSealedPdfs }, { runReminderPass }, { startWorkerLoop }] = await Promise.all([
+    import("@/lib/mail"), import("@/lib/webhooks"), import("@/lib/billing"), import("@/lib/signed-pdf"), import("@/lib/reminders"), import("@/lib/worker-loop"),
   ]);
   if (global.__docuramaWorker) return;
   const tick = async () => {
@@ -22,6 +22,10 @@ export async function register() {
       if (renewals.length) console.log(`[worker] billing: ${renewals.length} term renewals`);
     } catch (error) { console.warn("[worker] billing pass failed", error); }
     try {
+      const reminders = await runReminderPass({ limit: 50 });
+      if (reminders.reminded) console.log(`[worker] reminders: ${reminders.reminded} queued`);
+    } catch (error) { console.warn("[worker] reminder pass failed", error); }
+    try {
       const pdfs = await maintainSealedPdfs({ limit: 5 });
       if (pdfs.extended || pdfs.renewed) console.log(`[worker] signed PDFs: ${pdfs.extended} raised to a long-term level, ${pdfs.renewed} archive timestamps renewed`);
     } catch (error) { console.warn("[worker] signed PDF pass failed", error); }
@@ -30,5 +34,5 @@ export async function register() {
     onError: (error) => console.warn("[worker] pass failed", error) });
   process.once("SIGTERM", global.__docuramaWorker);
   process.once("SIGINT", global.__docuramaWorker);
-  console.log("[worker] background worker started (mail + webhook retries + subscription renewals + signed PDF upkeep)");
+  console.log("[worker] background worker started (mail + webhook retries + subscription renewals + reminders + signed PDF upkeep)");
 }

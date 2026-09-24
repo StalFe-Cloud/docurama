@@ -140,6 +140,8 @@ bun test e2e/password-security.test.ts || { echo "!! password security tests fai
 bun test e2e/quota-security.test.ts || { echo "!! quota and API entitlement tests failed"; exit 1; }
 bun test e2e/lead-conversion.test.ts || { echo "!! enterprise lead conversion tests failed"; exit 1; }
 bun test e2e/blog.test.ts e2e/storage-config.test.ts e2e/docintel.test.ts e2e/seal.test.ts e2e/timestamp.test.ts e2e/pades.test.ts || { echo "!! content/storage/document-intelligence/seal/timestamp/PAdES tests failed"; exit 1; }
+# Own process: it points workspace SMTP at a loopback relay.
+bun test e2e/notifications.test.ts || { echo "!! envelope email and reminder tests failed"; exit 1; }
 if [[ "${E2E_SKIP_API:-0}" != "1" ]]; then
   echo "── e2e: API-layer + evidence-layer + transparency-layer + MCP + visual tests"
   E2E_BASE_URL="$BASE_URL" bun test e2e/api.test.ts e2e/evidence.test.ts e2e/transparency.test.ts e2e/rekor.test.ts e2e/plans.test.ts e2e/webhooks.test.ts e2e/visual.test.ts || { echo "!! API/evidence/transparency/plans/webhooks/visual tests failed"; exit 1; }

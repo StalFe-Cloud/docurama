@@ -1,6 +1,10 @@
 import { createTransport } from "nodemailer";
 import { randomUUID } from "node:crypto";
+import dns from "node:dns/promises";
+import { isIP } from "node:net";
 import { db } from "@/lib/db";
+import { openSecret } from "@/lib/key-vault";
+import { isPublicAddress } from "@/lib/safe-webhook-http";
 
 export const MAX_MAIL_ATTEMPTS = 10;
 const MAIL_LEASE_MS = 90_000;
@@ -82,11 +86,14 @@ export async function testSmtpConnection(opts: {
   tls?: boolean;
   from: string;
   to?: string;
+  /** Pinned, already-vetted address to connect to (workspace SMTP); TLS still checks `host`. */
+  address?: string;
 }): Promise<{ ok: boolean; message: string; latencyMs: number }> {
   const t0 = Date.now();
   const secure = opts.port === 465;
   const transporter = createTransport({
-    host: opts.host,
+    host: opts.address ?? opts.host,
+    ...(opts.address ? { tls: { servername: opts.host } } : {}),
     port: opts.port,
     secure,
     requireTLS: opts.tls && !secure,
@@ -118,13 +125,59 @@ export async function testSmtpConnection(opts: {
   }
 }
 
-export type OutboxMessage = { id: string; toEmail: string; fromEmail: string; subject: string; bodyText: string };
+export type OutboxMessage = {
+  id: string; toEmail: string; fromEmail: string; subject: string; bodyText: string;
+  bodyHtml?: string | null; replyTo?: string | null;
+};
+
+/* ── Workspace SMTP (Settings > Notifications) ─────────────────────────────── */
+
+const SMTP_PORTS = new Set([25, 465, 587, 2525]);
+
+/** Stored workspace SMTP passwords: encrypted (gcm1:/plain:, src/lib/key-vault.ts) or, from before, raw. */
+export function readSmtpSecret(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  return /^(gcm1|plain):/.test(stored) ? openSecret(stored) : stored;
+}
+
+/**
+ * A workspace SMTP host is chosen by a workspace admin, so the worker must not
+ * be steered into the private network: submission ports only, and a hostname
+ * that resolves exclusively to public addresses. Returns the address to pin
+ * the connection to (no second lookup to rebind).
+ */
+export async function vetSmtpHost(host: string, port: number): Promise<string> {
+  const hostname = host.toLowerCase().replace(/\.$/, "");
+  const development = process.env.NODE_ENV !== "production" && process.env.DOCURAMA_ALLOW_PRIVATE_WEBHOOKS === "1";
+  if (!SMTP_PORTS.has(port) && !development) throw new Error(`SMTP port ${port} is not allowed (use 25, 465, 587 or 2525)`);
+  if (!development && ((!hostname.includes(".") && !isIP(hostname)) || /(?:^|\.)(?:localhost|local|internal)$/.test(hostname))) {
+    throw new Error("Internal SMTP hostnames are not allowed");
+  }
+  const addresses = isIP(hostname) ? [{ address: hostname }] : await dns.lookup(hostname, { all: true, verbatim: true });
+  if (!addresses.length) throw new Error(`${hostname} does not resolve`);
+  if (!development && addresses.some((a) => !isPublicAddress(a.address))) throw new Error("The SMTP host must resolve only to public addresses");
+  return addresses[0].address;
+}
+
+export type WorkspaceSmtp = { mode: Extract<SmtpMode, { configured: true }>; from: string };
+
+/** The workspace's own relay, when it has one that passed its test. */
+export async function workspaceSmtp(tenantId: string): Promise<WorkspaceSmtp | null> {
+  const n = await db.notificationSettings.findUnique({ where: { tenantId } });
+  if (!n?.smtpHost || n.smtpLastTestStatus !== "OK") return null;
+  const secure = n.smtpPort === 465;
+  const pass = readSmtpSecret(n.smtpPassword) ?? "";
+  const auth = n.smtpUser ? `${encodeURIComponent(n.smtpUser)}:${encodeURIComponent(pass)}@` : "";
+  const url = new URL(`${secure ? "smtps:" : "smtp:"}//${auth}${n.smtpHost}:${n.smtpPort}`);
+  return { mode: { configured: true, url, tls: n.smtpSecure }, from: n.smtpFrom };
+}
 
 /** A dedicated transport lets a deadline close only this message's connection. */
-export async function sendViaSmtp(mode: Extract<SmtpMode, { configured: true }>, msg: OutboxMessage): Promise<void> {
+export async function sendViaSmtp(mode: Extract<SmtpMode, { configured: true }>, msg: OutboxMessage, opts: { address?: string } = {}): Promise<void> {
   const secure = mode.url.protocol === "smtps:";
   const transporter = createTransport({
-    host: mode.url.hostname, port: Number(mode.url.port || (secure ? 465 : 587)),
+    host: opts.address ?? mode.url.hostname, ...(opts.address ? { tls: { servername: mode.url.hostname } } : {}),
+    port: Number(mode.url.port || (secure ? 465 : 587)),
     secure, requireTLS: mode.tls && !secure, ignoreTLS: !mode.tls,
     auth: mode.url.username ? { user: decodeURIComponent(mode.url.username), pass: decodeURIComponent(mode.url.password) } : undefined,
     connectionTimeout: 8_000, greetingTimeout: 8_000, socketTimeout: 15_000,
@@ -134,6 +187,7 @@ export async function sendViaSmtp(mode: Extract<SmtpMode, { configured: true }>,
   try {
     await Promise.race([
       transporter.sendMail({ from: msg.fromEmail, to: msg.toEmail, subject: msg.subject, text: msg.bodyText,
+        ...(msg.bodyHtml ? { html: msg.bodyHtml } : {}), ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
         messageId: `<${msg.id}@outbox.docurama>` }),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => { transporter.close(); reject(new Error("SMTP delivery deadline exceeded")); }, SEND_DEADLINE_MS);
@@ -149,7 +203,10 @@ export type ProcessOutboxResult = { mode: "smtp" | "outbox-only"; processed: num
 /** At least once. A crash after SMTP accepts but before acknowledgement may retry. */
 export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
   const mode = await resolveSmtpMode();
-  if (!mode.configured) return { mode: "outbox-only", processed: 0, sent: 0, failed: 0, deferred: 0 };
+  // Workspaces with their own relay send even when the platform has none. A
+  // relay is only used once its settings passed a test (Settings > Notifications).
+  const ownRelay = (await db.notificationSettings.findMany({ where: { smtpHost: { not: null }, smtpLastTestStatus: "OK" }, select: { tenantId: true } })).map((n) => n.tenantId);
+  if (!mode.configured && !ownRelay.length) return { mode: "outbox-only", processed: 0, sent: 0, failed: 0, deferred: 0 };
   const now = new Date();
   const unclaimed = { OR: [{ claimUntil: null }, { claimUntil: { lte: now } }] };
   await db.mailOutbox.updateMany({ where: { status: "QUEUED", attempts: { gte: MAX_MAIL_ATTEMPTS }, ...unclaimed },
@@ -157,7 +214,9 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
   const due = { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] };
   const candidates = await db.mailOutbox.findMany({ where: {
     status: "QUEUED", attempts: { lt: MAX_MAIL_ATTEMPTS }, AND: [due, unclaimed],
+    ...(mode.configured ? {} : { tenantId: { in: ownRelay } }),
   }, orderBy: { createdAt: "asc" }, take: Math.max(0, Math.min(limit, 100)) });
+  const relays = new Map<string, WorkspaceSmtp | null>();
   const result: ProcessOutboxResult = { mode: "smtp", processed: 0, sent: 0, failed: 0, deferred: 0 };
   for (const row of candidates) {
     const claimToken = randomUUID();
@@ -174,7 +233,20 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
     const attempt = row.attempts + 1;
     let lastError: string | null = null;
     try {
-      await sendViaSmtp(mode, row);
+      // The workspace's relay, from its own address, when it has one; else the platform's.
+      let relay: WorkspaceSmtp | null = null;
+      if (row.tenantId && ownRelay.includes(row.tenantId)) {
+        if (!relays.has(row.tenantId)) relays.set(row.tenantId, await workspaceSmtp(row.tenantId));
+        relay = relays.get(row.tenantId) ?? null;
+      }
+      if (relay) {
+        const address = await vetSmtpHost(relay.mode.url.hostname, Number(relay.mode.url.port));
+        await sendViaSmtp(relay.mode, { ...row, fromEmail: relay.from }, { address });
+      } else if (mode.configured) {
+        await sendViaSmtp(mode, row);
+      } else {
+        throw new Error("No SMTP relay configured");
+      }
     } catch (error) {
       lastError = (error instanceof Error ? error.message : "SMTP delivery failed").slice(0, 500);
     }

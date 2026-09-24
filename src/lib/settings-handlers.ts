@@ -6,7 +6,9 @@ import type { SessionUser } from "@/lib/auth";
 import { hashPasswordAsync, verifyPasswordAsync, recordAudit } from "@/lib/auth";
 import { requestClientIp } from "@/lib/request-metadata";
 import { isWorkspaceAdmin, settingsOperationAllowed } from "@/lib/settings-policy";
-import { smtpMode } from "@/lib/mail";
+import { readSmtpSecret, testSmtpConnection, vetSmtpHost } from "@/lib/mail";
+import { reminderDecision } from "@/lib/reminders";
+import { EDITABLE_EMAILS, EMAIL_DEFAULTS, parseEmailOverrides } from "@/lib/email-templates";
 import { jsonError, jsonOk, iso, isos } from "@/lib/serializers";
 import { generateTotpSecret, verifyTotp, otpauthUri, generateRecoveryCodes } from "@/lib/totp";
 import { issueSigningCertificate, shortThumbprint } from "@/lib/certificates";
@@ -56,7 +58,8 @@ async function ensureNotificationSettings(tenantId: string) {
   return db.notificationSettings.upsert({
     where: { tenantId },
     update: {},
-    create: { tenantId },
+    // Alerts a sender wants by default: progress, completion and declines (src/lib/notify.ts).
+    create: { tenantId, alertOnSent: false, alertOnViewed: false, alertOnDeclined: true },
   });
 }
 async function ensureSmsGateway(tenantId: string) {
@@ -238,9 +241,10 @@ export async function getSettingsSection(
       const n = await ensureNotificationSettings(tenantId);
       return jsonOk({
         settings: {
-          smtpOverrideActive: false, transportSource: "SMTP_URL",
+          smtpOverrideActive: Boolean(n.smtpHost) && n.smtpLastTestStatus === "OK",
+          transportSource: n.smtpHost && n.smtpLastTestStatus === "OK" ? "WORKSPACE_SMTP" : "PLATFORM",
           smtpHost: n.smtpHost, smtpPort: n.smtpPort, smtpUser: n.smtpUser,
-          smtpPasswordMasked: mask(n.smtpPassword), smtpHasPassword: Boolean(n.smtpPassword),
+          smtpPasswordMasked: n.smtpPassword ? "••••••••" : null, smtpHasPassword: Boolean(n.smtpPassword),
           smtpFrom: n.smtpFrom, smtpSecure: n.smtpSecure,
           smtpLastTestAt: n.smtpLastTestAt?.toISOString() ?? null,
           smtpLastTestStatus: n.smtpLastTestStatus,
@@ -254,6 +258,23 @@ export async function getSettingsSection(
           escalateToSms: n.escalateToSms, escalateAfterDays: n.escalateAfterDays,
           reminderJobLastRunAt: n.reminderJobLastRunAt?.toISOString() ?? null,
         },
+      });
+    }
+
+    case "settings-personalization": {
+      const [p, tenant] = await Promise.all([
+        db.personalization.findUnique({ where: { tenantId } }),
+        db.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      ]);
+      return jsonOk({
+        workspaceName: tenant?.name ?? "",
+        logoUrl: p?.logoSha256 ? `/api/branding/logo/${p.logoSha256}` : null,
+        emailTemplates: parseEmailOverrides(p?.emailTemplates),
+        emailDefaults: Object.fromEntries(EDITABLE_EMAILS.map((k) => [k, { subject: EMAIL_DEFAULTS[k].subject, body: EMAIL_DEFAULTS[k].body }])),
+        completedMessage: p?.completedMessage ?? "",
+        redirectUrl: p?.redirectUrl ?? "",
+        redirectLabel: p?.redirectLabel ?? "",
+        confetti: p?.confetti ?? false,
       });
     }
 
@@ -1027,6 +1048,68 @@ export async function postSettingsOp(
     return jsonOk({ ok: true, message: "Digital signature preferences saved" });
   }
 
+  // ── Personalization: logo, email wording, after signing ──
+  if (op === "personalization.save") {
+    // Only what differs from the default wording is stored.
+    const submitted = parseEmailOverrides(JSON.stringify(data.emailTemplates ?? {}));
+    const templates: Record<string, { subject?: string; body?: string }> = {};
+    for (const kind of EDITABLE_EMAILS) {
+      const t = submitted[kind];
+      if (!t) continue;
+      const subject = t.subject && t.subject !== EMAIL_DEFAULTS[kind].subject ? t.subject : undefined;
+      const body = t.body && t.body !== EMAIL_DEFAULTS[kind].body ? t.body : undefined;
+      if (subject || body) templates[kind] = { ...(subject ? { subject } : {}), ...(body ? { body } : {}) };
+    }
+    const completedMessage = String(data.completedMessage ?? "").trim().slice(0, 1000) || null;
+    const redirectLabel = String(data.redirectLabel ?? "").trim().slice(0, 40) || null;
+    const rawUrl = String(data.redirectUrl ?? "").trim();
+    let redirectUrl: string | null = null;
+    if (rawUrl) {
+      let url: URL;
+      try { url = new URL(rawUrl); } catch { return jsonError("The redirect link must be a full URL, like https://yourcompany.com/thanks"); }
+      if (url.protocol !== "https:" || url.username || url.password || rawUrl.length > 500) {
+        return jsonError("The redirect link must be an https:// address (at most 500 characters)");
+      }
+      redirectUrl = url.toString();
+    }
+    const confetti = data.confetti === true;
+    const emailTemplates = Object.keys(templates).length ? JSON.stringify(templates) : null;
+    await db.personalization.upsert({
+      where: { tenantId },
+      create: { tenantId, emailTemplates, completedMessage, redirectUrl, redirectLabel, confetti },
+      update: { emailTemplates, completedMessage, redirectUrl, redirectLabel, confetti, updatedAt: new Date() },
+    });
+    await audit({
+      actor, actorRole: me.role, action: "personalization.updated", resource: `tenant:${me.tenantSlug}`, tenantName: me.tenantName,
+      detail: `${Object.keys(templates).length} custom email template(s)${redirectUrl ? `, redirect to ${new URL(redirectUrl).host}` : ""}${confetti ? ", confetti" : ""}`,
+    });
+    return jsonOk({ ok: true, message: "Personalization saved" });
+  }
+
+  if (op === "personalization.logo") {
+    if (data.image === null) {
+      await db.personalization.upsert({
+        where: { tenantId }, create: { tenantId }, update: { logo: null, logoSha256: null, updatedAt: new Date() },
+      });
+      return jsonOk({ ok: true, message: "Logo removed" });
+    }
+    const m = typeof data.image === "string" ? /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(data.image) : null;
+    const bytes = m ? Buffer.from(m[2], "base64") : Buffer.alloc(0);
+    const kind = m?.[1];
+    const magic = kind === "png" ? bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+      : kind === "jpeg" ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      : kind === "webp" ? bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WEBP" : false;
+    if (!m || !bytes.length || bytes.length > 256 * 1024 || !magic) return jsonError("Upload a PNG, JPEG or WebP logo under 256 KB");
+    const logoSha256 = createHash("sha256").update(bytes).digest("hex");
+    await db.personalization.upsert({
+      where: { tenantId },
+      create: { tenantId, logo: data.image as string, logoSha256 },
+      update: { logo: data.image as string, logoSha256, updatedAt: new Date() },
+    });
+    await audit({ actor, actorRole: me.role, action: "personalization.logo", resource: `tenant:${me.tenantSlug}`, tenantName: me.tenantName, detail: `logo ${logoSha256.slice(0, 12)}` });
+    return jsonOk({ ok: true, message: "Logo updated", logoUrl: `/api/branding/logo/${logoSha256}` });
+  }
+
   // ── Notifications: SMTP, alerts, reminder jobs ──
   if (op === "notifications.save") {
     const n = await ensureNotificationSettings(tenantId);
@@ -1048,18 +1131,25 @@ export async function postSettingsOp(
       return jsonError("Times must use the 24h HH:MM format");
     }
     if (!smtpFrom.includes("@")) return jsonError("From address must be a valid email");
+    if (smtpHost && ![25, 465, 587, 2525].includes(smtpPort)) return jsonError("SMTP port must be 25, 465, 587 or 2525");
+    const smtpUser = String(data.smtpUser ?? "").trim() || null;
+    const smtpSecure = data.smtpSecure !== false;
+    // Changed relay settings must pass a new test before mail goes through them.
+    const relayChanged = smtpHost !== n.smtpHost || smtpPort !== n.smtpPort || smtpUser !== n.smtpUser ||
+      smtpFrom !== n.smtpFrom || smtpSecure !== n.smtpSecure || Boolean(smtpPassword);
     await db.notificationSettings.update({
       where: { tenantId },
       data: {
-        smtpHost, smtpPort,
-        smtpUser: String(data.smtpUser ?? "").trim() || null,
-        smtpPassword: smtpPassword ? smtpPassword : n.smtpPassword, // empty = keep existing
-        smtpFrom, smtpSecure: data.smtpSecure !== false,
+        smtpHost, smtpPort, smtpUser,
+        ...(relayChanged ? { smtpLastTestStatus: null, smtpLastTestAt: null } : {}),
+        // Empty = keep the existing one; stored encrypted under the key vault.
+        smtpPassword: smtpPassword ? sealSecret(smtpPassword) : n.smtpPassword,
+        smtpFrom, smtpSecure,
         alertOnSent: data.alertOnSent !== false,
         alertOnViewed: data.alertOnViewed === true,
         alertOnSigned: data.alertOnSigned !== false,
         alertOnCompleted: data.alertOnCompleted !== false,
-        alertOnDeclined: data.alertOnDeclined === true,
+        alertOnDeclined: data.alertOnDeclined !== false,
         dailyDigest: data.dailyDigest === true,
         digestTime,
         reminderMode, reminderIntervalDays, reminderMaxCount,
@@ -1075,30 +1165,35 @@ export async function postSettingsOp(
       tenantName: me.tenantName,
       detail: `SMTP ${smtpHost ? `override (${smtpHost})` : "platform default"} · reminders=${reminderMode} every ${reminderIntervalDays}d (max ${reminderMaxCount})`,
     });
-    return jsonOk({ ok: true, message: "Notification settings saved. SMTP overrides are inactive; delivery uses operator SMTP_URL." });
+    return jsonOk({ ok: true, message: smtpHost && (relayChanged || n.smtpLastTestStatus !== "OK")
+      ? "Notification settings saved. Send a test email: your SMTP server is used once the test succeeds."
+      : "Notification settings saved." });
   }
 
   if (op === "smtp.test") {
-    const mode = smtpMode();
-    await ensureNotificationSettings(tenantId);
+    const n = await ensureNotificationSettings(tenantId);
+    if (!n.smtpHost) return jsonError("Enter and save your SMTP server first. Without one, email goes through the platform relay.");
+    let result: { ok: boolean; message: string };
+    try {
+      const address = await vetSmtpHost(n.smtpHost, n.smtpPort);
+      result = await testSmtpConnection({
+        host: n.smtpHost, address, port: n.smtpPort, user: n.smtpUser ?? undefined, pass: readSmtpSecret(n.smtpPassword) ?? undefined,
+        tls: n.smtpSecure, from: n.smtpFrom, to: me.email,
+      });
+    } catch (error) {
+      result = { ok: false, message: `SMTP verification failed: ${error instanceof Error ? error.message : String(error)}` };
+    }
     await db.notificationSettings.update({ where: { tenantId }, data: {
-      smtpLastTestAt: new Date(), smtpLastTestStatus: "CONFIGURATION_ONLY",
+      smtpLastTestAt: new Date(), smtpLastTestStatus: result.ok ? "OK" : "FAILED",
     } });
-    return jsonOk({ ok: true, configurationOnly: true, delivered: false,
-      transportConfigured: mode.configured,
-      message: "No test message sent. Delivery uses operator SMTP_URL; per-workspace SMTP fields are stored but inactive.",
-    });
+    if (!result.ok) return jsonError(result.message, 400);
+    return jsonOk({ ok: true, delivered: true, message: result.message });
   }
 
   if (op === "reminders.run") {
+    // A preview of the worker's next pass (src/lib/reminders.ts), with its rules.
     const n = await ensureNotificationSettings(tenantId);
     const now = new Date();
-    const hour = now.getHours();
-    const inQuietHours =
-      n.quietHoursStart > n.quietHoursEnd
-        ? hour >= Number(n.quietHoursStart.slice(0, 2)) || hour < Number(n.quietHoursEnd.slice(0, 2))
-        : hour >= Number(n.quietHoursStart.slice(0, 2)) && hour < Number(n.quietHoursEnd.slice(0, 2));
-    const weekend = now.getDay() === 0 || now.getDay() === 6;
 
     const active = await db.envelope.findMany({
       where: { tenantId, status: { in: ["SENT", "PARTIALLY_SIGNED"] } },
@@ -1110,19 +1205,20 @@ export async function postSettingsOp(
     const due: { code: string; title: string; ageDays: number; reminders: number; reason: string }[] = [];
     let skippedQuiet = 0, skippedWeekend = 0, skippedThrottle = 0, skippedMax = 0, manualOnly = 0;
     for (const e of active) {
-      const last = e.lastRemindedAt ?? e.createdAt;
       const ageDays = Math.floor((now.getTime() - e.createdAt.getTime()) / 86400_000);
-      if (n.reminderMode === "manual" && !e.autoRemind) { manualOnly++; continue; }
-      if (e.reminderCount >= n.reminderMaxCount) { skippedMax++; continue; }
-      const since = (now.getTime() - last.getTime()) / 86400_000;
-      if (since < n.reminderIntervalDays) { skippedThrottle++; continue; }
-      if (n.skipWeekends && weekend) { skippedWeekend++; continue; }
-      if (inQuietHours) { skippedQuiet++; continue; }
-      due.push({
-        code: e.publicCode, title: e.title, ageDays, reminders: e.reminderCount,
-        reason: e.autoRemind ? "per-envelope auto-remind enabled" : "platform job policy",
-      });
+      const decision = reminderDecision(n, e, now);
+      if (!decision.due) {
+        if (decision.skip === "manual") manualOnly++;
+        else if (decision.skip === "max") skippedMax++;
+        else if (decision.skip === "throttle") skippedThrottle++;
+        else if (decision.skip === "weekend") skippedWeekend++;
+        else skippedQuiet++;
+        continue;
+      }
+      due.push({ code: e.publicCode, title: e.title, ageDays, reminders: e.reminderCount, reason: decision.reason });
     }
+    const inQuietHours = skippedQuiet > 0;
+    const weekend = skippedWeekend > 0;
     await db.notificationSettings.update({
       where: { tenantId },
       data: { reminderJobLastRunAt: now },
@@ -1130,7 +1226,7 @@ export async function postSettingsOp(
     return jsonOk({
       ok: true,
       dryRun: true,
-      message: `Reminder job (dry run): ${due.length} envelope${due.length === 1 ? "" : "s"} due · ${skippedThrottle} throttled · ${skippedMax} at max reminders · ${manualOnly} manual-only`,
+      message: `Reminder preview: ${due.length} envelope${due.length === 1 ? "" : "s"} due now (the background job sends them) · ${skippedThrottle} throttled · ${skippedMax} at max reminders · ${manualOnly} manual-only`,
       due,
       stats: { active: active.length, due: due.length, skippedQuiet, skippedWeekend, skippedThrottle, skippedMax, manualOnly, inQuietHours, weekend },
     });

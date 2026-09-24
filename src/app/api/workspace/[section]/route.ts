@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser, recordAudit } from "@/lib/auth";
 import { publicRecipient, isos, iso, envelopeRow, jsonError, jsonOk } from "@/lib/serializers";
 import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
+import { queueInvitations, queueReminders } from "@/lib/notify";
 import { foldForSearch } from "@/lib/search";
 import { verifyEnvelopeCode } from "@/lib/verify";
 import { dispatchEnvelopeEvent } from "@/lib/webhooks";
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     // Workspace context requires a tenant membership.
     if (
-      ["envelopes", "templates", "settings", "overview", "settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp", "settings-webhooks"].includes(section) &&
+      ["envelopes", "templates", "settings", "overview", "settings-account", "settings-esign", "settings-notifications", "settings-personalization", "settings-sms", "settings-mcp", "settings-webhooks"].includes(section) &&
       !tenantId
     ) {
       return jsonError("No workspace membership for this account", 403);
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     // Production settings sections (account security, eSign, notifications,
     // SMS gateway, MCP, webhooks) are served by the dedicated handlers module.
-    if (["settings-account", "settings-esign", "settings-notifications", "settings-sms", "settings-mcp", "settings-webhooks"].includes(section)) {
+    if (["settings-account", "settings-esign", "settings-notifications", "settings-personalization", "settings-sms", "settings-mcp", "settings-webhooks"].includes(section)) {
       return getSettingsSection(section, me);
     }
 
@@ -292,23 +293,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 accessToken: tokens[i],
               })),
             });
-            // Signing invitations into the mail outbox, each carrying the
-            // recipient's unique signing link (/sign/{token}). While the SMTP
-            // transport is not wired the messages stay QUEUED and inspectable
-            // in the admin console - the audit trail below says exactly that.
-            await tx.mailOutbox.createMany({
-              data: valid.map((r, i) => ({
-                toEmail: String(r.email).toLowerCase(),
-                template: "SIGN_INVITE",
-                subject: `${actor} asks for your signature: ${title}`,
-                bodyText:
-                  `Hello ${String(r.name ?? r.email)},\n\n` +
-                  `${actor} sent you "${title}" for electronic signature via Docurama.\n\n` +
-                  `Open your personal signing link (unique to you, do not forward):\n${origin}/sign/${tokens[i]}\n\n` +
-                  `Verification code once completed: ${code}\n`,
-                linkUrl: `${origin}/sign/${tokens[i]}`,
-              })),
-            });
+            // Signing invitations (and copy notices) into the mail outbox, each
+            // signer's carrying their unique signing link (/sign/{token}), in the
+            // workspace's wording (src/lib/notify.ts).
+            await queueInvitations(tx, { tenantId: tenantId!, publicCode: code, title, message: envelope.message, createdBy: me },
+              valid.map((r, i) => ({
+                name: String(r.name ?? r.email), email: String(r.email).toLowerCase(),
+                role: r.role === "CC" ? "CC" : "SIGNER", accessToken: tokens[i],
+              })), { origin });
             // WS9f: record what actually happened — invitations are queued in
             // the outbox; the ledger does not claim SMTP delivery.
             await tx.envelopeEvent.createMany({
@@ -333,15 +325,18 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} - code ${code}` });
         }
         if (op === "remind") {
-          const e = await db.envelope.findFirst({ where: { id, tenantId: tenantId! } });
+          const e = await db.envelope.findFirst({ where: { id, tenantId: tenantId! }, include: { recipients: true } });
           if (!e) return jsonError("Envelope not found", 404);
           if (!["SENT", "PARTIALLY_SIGNED"].includes(e.status)) return jsonError("Reminders can only be sent for active envelopes");
           // Anti-spam throttle - the original UI allowed unlimited reminder spam.
           if (e.lastRemindedAt && Date.now() - e.lastRemindedAt.getTime() < 6 * 3600000) {
             return jsonError("A reminder was already sent recently - please wait before sending another.");
           }
-          await db.envelope.update({ where: { id }, data: { lastRemindedAt: new Date() } });
-          await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "REMINDED", detail: "Reminder email dispatched" } });
+          const pending = e.recipients.filter((r) => r.role === "SIGNER" && ["PENDING", "DELIVERED"].includes(r.status));
+          if (!pending.length) return jsonError("No pending signers remain");
+          const queued = await queueReminders(db, { tenantId: tenantId!, publicCode: e.publicCode, title: e.title, createdBy: me }, pending, { origin: req.nextUrl.origin });
+          await db.envelope.update({ where: { id }, data: { lastRemindedAt: new Date(), reminderCount: { increment: 1 } } });
+          await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "REMINDED", detail: `${queued} reminder email(s) queued` } });
           void dispatchEnvelopeEvent(tenantId!, "reminder.sent", { code: e.publicCode, title: e.title, status: e.status }).catch(() => undefined);
           void processOutbox(20).catch(() => undefined);
           return jsonOk({ ok: true, message: "Reminder sent" });

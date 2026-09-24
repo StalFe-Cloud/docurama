@@ -35,6 +35,7 @@ import { MarketingHomeLink } from "@/components/brand/home-link";
 import { PortalProviders } from "@/components/portal/providers";
 import { SignDocumentPreview, type SignDocument } from "@/components/marketing/sign-document-preview";
 import { SignatureAdopter, SIGNATURE_FONTS, type Adoption, type SavedSignature } from "@/components/marketing/signature-adopter";
+import { celebrate } from "@/components/marketing/confetti";
 import { cn } from "@/lib/utils";
 
 export type SignPageState =
@@ -59,20 +60,26 @@ export type SignPageState =
       fields?: Array<{ id: string; type: string; pageNumber: number; x: number; y: number; width: number; height: number; recipientEmail: string; recipientName: string; label?: string; value?: string }>;
     };
 
+/** The sending workspace's Personalization (logo, after-signing message and button, confetti). */
+export type SignBrand = {
+  logoUrl: string | null; name: string;
+  completedMessage: string | null; redirectUrl: string | null; redirectLabel: string | null; confetti: boolean;
+};
+
 /** Builder-placed text holders default to "Text Field"; show something a signer understands. */
 function fieldLabel(label?: string): string {
   return label && label !== "Text Field" ? label : "Text";
 }
 
-export function PublicSign({ token, state }: { token: string; state: SignPageState }) {
+export function PublicSign({ token, state, brand = null }: { token: string; state: SignPageState; brand?: SignBrand | null }) {
   return (
     <PortalProviders>
-      <SignInner token={token} state={state} />
+      <SignInner token={token} state={state} brand={brand} />
     </PortalProviders>
   );
 }
 
-function SignInner({ token, state }: { token: string; state: SignPageState }) {
+function SignInner({ token, state, brand }: { token: string; state: SignPageState; brand: SignBrand | null }) {
   const [phase, setPhase] = useState(state.phase);
   const [name, setName] = useState(state.phase === "active" ? state.recipientName : "");
   const [font, setFont] = useState<string>("caveat");
@@ -139,6 +146,7 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
       });
       setSealed(!!r.sealed);
       setPhase("signed");
+      if (brand?.confetti) celebrate();
     } catch (e) { setError(e instanceof Error ? e.message : "Signing failed"); }
     finally { setBusy(null); }
   };
@@ -169,7 +177,9 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
       {/* Header */}
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
-          <MarketingHomeLink newTab><BrandLogo /></MarketingHomeLink>
+          {brand?.logoUrl
+            ? <img src={brand.logoUrl} alt={brand.name} className="max-h-10 max-w-[180px] object-contain" />
+            : <MarketingHomeLink newTab><BrandLogo /></MarketingHomeLink>}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden sm:inline">Secure signing</span>
@@ -249,6 +259,14 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                   ? " All parties have signed — the envelope is sealed and verifiable."
                   : " Other signers are still pending; you will receive the completed document once everyone has signed."}
               </p>
+              {brand?.completedMessage && (
+                <p className="whitespace-pre-line rounded-lg bg-muted/60 p-3 text-sm" data-testid="completed-message">{brand.completedMessage}</p>
+              )}
+              {brand?.redirectUrl && (
+                <Button asChild className="h-11">
+                  <a href={brand.redirectUrl} rel="noopener noreferrer" data-testid="completed-redirect">{brand.redirectLabel || `Continue to ${brand.name}`}</a>
+                </Button>
+              )}
               {sealed && (
                 <div className="rounded-lg border bg-card p-4 text-left">
                   <p className="flex items-center gap-2 text-sm font-medium">

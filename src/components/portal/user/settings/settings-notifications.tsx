@@ -19,6 +19,7 @@ type NotifData = {
     smtpPasswordMasked: string | null; smtpHasPassword: boolean;
     smtpFrom: string; smtpSecure: boolean;
     smtpLastTestAt: string | null; smtpLastTestStatus: string | null;
+    smtpOverrideActive?: boolean;
     alertOnSent: boolean; alertOnViewed: boolean; alertOnSigned: boolean;
     alertOnCompleted: boolean; alertOnDeclined: boolean;
     dailyDigest: boolean; digestTime: string;
@@ -97,7 +98,9 @@ function SmtpCard({ s }: { s: NotifData["settings"] }) {
           <Mail className="h-4 w-4 text-muted-foreground" aria-hidden /> Email delivery (SMTP)
         </CardTitle>
         <CardDescription>
-          Per-organization relay override. Leave the host empty to send through the platform relay (Docurama Sign &lt;notifications@docurama.eu&gt;) - the verified, authenticated route.
+          Send your workspace&apos;s email from your own server and address. Leave the host empty to use the platform
+          relay (Docurama Sign &lt;notifications@docurama.eu&gt;). Your server is used once a test email succeeds; after
+          any change, test again.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -128,6 +131,8 @@ function SmtpCard({ s }: { s: NotifData["settings"] }) {
             {s.smtpLastTestAt && (
               <>Last test: <StatusBadge status={s.smtpLastTestStatus === "OK" ? "ACTIVE" : "FAILED"} /> {fmtDate(s.smtpLastTestAt)}</>
             )}
+            {s.smtpHost && !s.smtpLastTestAt && <span>Not tested yet: email still goes through the platform relay.</span>}
+            {s.smtpOverrideActive && <span className="font-medium text-foreground">In use for this workspace</span>}
           </div>
           <div className="flex gap-2">
             <Button
@@ -136,7 +141,7 @@ function SmtpCard({ s }: { s: NotifData["settings"] }) {
               onClick={async () => { setTesting(true); await act.mutateAsync({ op: "smtp.test" }).catch(() => undefined); setTesting(false); }}
             >
               <RefreshCw className={cn("h-4 w-4", testing && "animate-spin")} aria-hidden />
-              {testing ? "Testing…" : "Test connection"}
+              {testing ? "Testing…" : "Send test email"}
             </Button>
             <Button className="h-11" disabled={act.isPending} onClick={() => act.mutate({ op: "notifications.save", data: form })}>
               <Save className="h-4 w-4" aria-hidden /> Save SMTP

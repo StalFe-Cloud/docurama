@@ -44,6 +44,8 @@ services:
       # Base domain for the vanity sub-domain routing (status./docs./verify./…).
       # Unset falls back to the application default (docurama.eu).
       - ROOT_DOMAIN=${ROOT_DOMAIN:-}
+      # Public origin for links in worker-sent email (reminders); default https://APP_HOST.
+      - APP_URL=${APP_URL:-}
       # Payment rails (docs/PAYMENTS.md). Unset = manual bank-transfer mode.
       # Put the values in the .env next to this file (never commit it).
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-}

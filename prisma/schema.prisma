@@ -139,9 +139,14 @@ model MailOutbox {
   toEmail   String
   fromEmail String    @default("Docurama Sign <notifications@docurama.eu>")
   subject   String
-  template  String    // SIGNUP_VERIFICATION | TEAM_INVITE | REMINDER | TEST
+  template  String    // SIGNUP_VERIFICATION | TEAM_INVITE | SIGN_INVITE | REMINDER | COPY_NOTICE | DOCUMENT_COPY | COMPLETED_NOTICE | SIGNED_NOTICE | VIEWED_NOTICE | DECLINED_NOTICE | SENT_NOTICE | TEST
   status    String    @default("QUEUED") // QUEUED | SENT | FAILED
   bodyText  String
+  bodyHtml  String?   // branded HTML alternative (src/lib/email-templates.ts); text is always sent too
+  replyTo   String?   // envelope emails: replies go to the sender, not the relay
+  // Workspace mail goes through the workspace's own SMTP when it has one
+  // (NotificationSettings), else through the platform relay.
+  tenantId  String?
   linkUrl   String?
   createdAt DateTime  @default(now())
   sentAt    DateTime?
@@ -233,6 +238,7 @@ model Tenant {
   esignPrefs    EsignPreferences?
   notificationSettings NotificationSettings?
   smsGateway    SmsGateway?
+  personalization Personalization?
   mcpConfig     McpConfig?
   evidenceKey   EvidenceKey?
   transparencyEntries TransparencyEntry[]
@@ -683,6 +689,25 @@ model NotificationSettings {
   updatedAt         DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// Workspace look and wording (Settings > Personalization): the logo on signing
+// pages and emails, email templates, and what a signer sees after signing.
+model Personalization {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  logo             String?  // data URL (PNG, JPEG or WebP, at most 256 KB)
+  logoSha256       String?  // content address: served at /api/branding/logo/{logoSha256}
+  emailTemplates   String?  // JSON { invite|reminder|completed|copy: { subject, body } }; absent = default wording
+  completedMessage String?  // shown to a signer once they have signed
+  redirectUrl      String?  // https URL of the "continue" button after signing
+  redirectLabel    String?
+  confetti         Boolean  @default(false)
+  updatedAt        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([logoSha256])
 }
 
 model SmsGateway {

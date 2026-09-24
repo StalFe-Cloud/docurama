@@ -6,6 +6,7 @@ import { currentAllowance, envelopeDeniedMessage, reserveEnvelopeAllowance } fro
 import { serializableTransaction } from "@/lib/transaction";
 import { queueEnvelopeEvent, retryFailedDeliveries } from "@/lib/webhooks";
 import { processOutbox } from "@/lib/mail";
+import { queueInvitations, queueReminders } from "@/lib/notify";
 import { jsonError, jsonOk } from "@/lib/serializers";
 import { foldForSearch } from "@/lib/search";
 import { requestClientIp } from "@/lib/request-metadata";
@@ -93,15 +94,8 @@ export async function POST(req: NextRequest) {
         await tx.recipient.createMany({ data: recipients.map((item, index) => ({
           envelopeId: created.id, ...item, order: index + 1, status: "PENDING", accessToken: tokens[index],
         })) });
-        await tx.mailOutbox.createMany({ data: recipients.map((item, index) => ({
-          toEmail: item.email, template: item.role === "SIGNER" ? "SIGN_INVITE" : "COPY_NOTICE",
-          subject: item.role === "SIGNER" ? `${actor} asks for your signature: ${title}` : `${actor} added you as a copy recipient: ${title}`,
-          bodyText: item.role === "SIGNER"
-            ? `Hello ${item.name},\n\n${actor} sent you "${title}" for electronic signature via Docurama.\n\nOpen your personal signing link (unique to you, do not forward):\n${origin}/sign/${tokens[index]}\n\nVerification code once completed: ${code}\n`
-            : `Hello ${item.name},\n\n${actor} added you as a copy recipient for "${title}". No signature is required from you.\n\nVerification code: ${code}\n`,
-          linkUrl: item.role === "SIGNER" ? `${origin}/sign/${tokens[index]}` : null,
-          createdAt: now,
-        })) });
+        await queueInvitations(tx, { tenantId, publicCode: code, title, message: created.message, createdBy: me },
+          recipients.map((item, index) => ({ ...item, accessToken: tokens[index] })), { origin, createdAt: now });
         await tx.envelopeEvent.createMany({ data: [
           { envelopeId: created.id, actor, action: "CREATED", at: now, detail: "Document prepared in Builder" },
           { envelopeId: created.id, actor: "Docurama", action: "SENT", at: now,
@@ -127,11 +121,7 @@ export async function POST(req: NextRequest) {
         }
         const pending = envelope.recipients.filter((item) => item.role === "SIGNER" && ["PENDING", "DELIVERED"].includes(item.status));
         if (!pending.length) throw jsonError("No pending signers remain");
-        await tx.mailOutbox.createMany({ data: pending.map((item) => ({
-          toEmail: item.email, template: "REMINDER", subject: `Reminder: ${envelope.title}`,
-          bodyText: `Hello ${item.name},\n\n${actor} reminds you to sign "${envelope.title}".\n\nYour personal signing link:\n${origin}/sign/${item.accessToken}\n`,
-          linkUrl: `${origin}/sign/${item.accessToken}`, createdAt: now,
-        })) });
+        await queueReminders(tx, { tenantId, publicCode: envelope.publicCode, title: envelope.title, createdBy: me }, pending, { origin, createdAt: now });
         await tx.envelope.update({ where: { id }, data: { lastRemindedAt: now, reminderCount: { increment: 1 } } });
         await tx.envelopeEvent.create({ data: { envelopeId: id, actor, action: "REMINDED", at: now,
           detail: `${pending.length} reminder email(s) queued` } });

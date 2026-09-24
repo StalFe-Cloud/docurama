@@ -8,6 +8,7 @@ import { ProfileTab } from "@/components/portal/user/settings/settings-profile";
 import { UsersTab } from "@/components/portal/user/settings/settings-users";
 import { EsignTab } from "@/components/portal/user/settings/settings-esign";
 import { NotificationsTab } from "@/components/portal/user/settings/settings-notifications";
+import { PersonalizationTab } from "@/components/portal/user/settings/settings-personalization";
 import { SmsTab } from "@/components/portal/user/settings/settings-sms";
 import { ApiTab } from "@/components/portal/user/settings/settings-api";
 import { McpTab } from "@/components/portal/user/settings/settings-mcp";
@@ -22,6 +23,7 @@ export const SETTINGS_TABS = [
   { key: "sso", label: "SSO" },
   { key: "esign", label: "eSign" },
   { key: "notifications", label: "Notifications" },
+  { key: "personalization", label: "Personalization" },
   { key: "sms", label: "SMS" },
   { key: "api", label: "API" },
   { key: "mcp", label: "MCP" },
@@ -73,6 +75,7 @@ export function UserSettings({ tab, onTabChange }: { tab: SettingsTabKey; onTabC
       {tab === "sso" && <SsoTab />}
       {tab === "esign" && <EsignTab />}
       {tab === "notifications" && <NotificationsTab />}
+      {tab === "personalization" && <PersonalizationTab />}
       {tab === "sms" && <SmsTab />}
       {tab === "api" && <ApiTab />}
       {tab === "mcp" && <McpTab />}

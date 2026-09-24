@@ -30,6 +30,7 @@ import { assignedTsa } from "@/lib/tsa";
 import { extendToLongTerm, maintainLongTerm } from "@/lib/ltv";
 import { pemToDer } from "@/lib/der";
 import { signedPdfRevisions } from "@/lib/seal-shared";
+import { publicVerifyUrl } from "@/lib/app-origin";
 import { createHash } from "crypto";
 
 const INK = rgb(0.06, 0.16, 0.4);
@@ -38,10 +39,7 @@ const TEXT = rgb(0.07, 0.09, 0.13);
 const ACCENT = rgb(0.02, 0.47, 0.34);
 const RULE = rgb(0.85, 0.88, 0.9);
 
-export function publicVerifyUrl(code: string): string {
-  const base = (process.env.PUBLIC_VERIFY_URL || `https://verify.${(process.env.ROOT_DOMAIN || "docurama.eu").toLowerCase()}/`).replace(/\/?$/, "/");
-  return `${base}?code=${encodeURIComponent(code)}`;
-}
+export { publicVerifyUrl };
 
 const fmtUtc = (d: Date) => `${d.toISOString().slice(0, 10)} ${d.toISOString().slice(11, 19)} UTC`;
 

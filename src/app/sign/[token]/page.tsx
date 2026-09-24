@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { PublicSign, type SignPageState } from "@/components/marketing/public-sign";
+import { PublicSign, type SignBrand, type SignPageState } from "@/components/marketing/public-sign";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,16 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
       },
     },
   });
+
+  // Settings > Personalization of the sending workspace: logo, and what a signer sees after signing.
+  const look = recipient
+    ? await db.personalization.findUnique({ where: { tenantId: recipient.envelope.tenantId } })
+    : null;
+  const brand: SignBrand | null = look ? {
+    logoUrl: look.logoSha256 ? `/api/branding/logo/${look.logoSha256}` : null,
+    name: recipient!.envelope.tenant.name,
+    completedMessage: look.completedMessage, redirectUrl: look.redirectUrl, redirectLabel: look.redirectLabel, confetti: look.confetti,
+  } : null;
 
   let state: SignPageState;
   if (!recipient) {
@@ -126,5 +136,5 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
     }
   }
 
-  return <PublicSign token={token} state={state} />;
+  return <PublicSign token={token} state={state} brand={brand} />;
 }

@@ -97,6 +97,11 @@ export function UserDocuments() {
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({ title: "", message: "", recipients: [{ name: "", email: "" }, { name: "", email: "" }] });
   const queryClient = useQueryClient();
+  // Notification emails link to /documents?code=DOC-…: open on that document.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (code && /^DOC-[A-Z0-9]{4,16}$/i.test(code)) setSearch(code.toUpperCase());
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

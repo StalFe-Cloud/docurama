@@ -12,7 +12,7 @@ export const SETTINGS_POLICY: Readonly<Record<string, Policy>> = Object.freeze({
   "part11.save":"admin", "esign.save":"admin", "notifications.save":"admin", "smtp.test":"admin",
   "reminders.run":"admin", "envelope.auto-remind":"admin", "sms.save":"admin", "sms.test":"admin",
   "create-key":"admin", "revoke-key":"admin", "webhook.create":"admin", "webhook.delete":"admin",
-  "webhook.toggle":"admin", "mcp.save":"admin", "cert.create":"certificate", "cert.provision":"certificate",
+  "webhook.toggle":"admin", "mcp.save":"admin", "personalization.save":"admin", "personalization.logo":"admin", "cert.create":"certificate", "cert.provision":"certificate",
   "cert.activate":"certificate", "cert.revoke":"certificate", "cert.delete":"certificate", "cert.import":"admin",
 });
 export function isWorkspaceAdmin(me: SessionUser): boolean {
