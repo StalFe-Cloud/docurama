@@ -644,14 +644,14 @@ export function UserDocuments() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                    <span className="font-semibold text-xs text-foreground">Visual Document Builder (DocuSeal Mode)</span>
+                    <span className="font-semibold text-xs text-foreground">Visual Document Builder</span>
                   </div>
                   <Badge variant="outline" className="border-purple-500/40 text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30 text-[10px]">
                     Interactive Canvas & AI
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Preview pages, place signature & date holders for each signer, and auto-detect form fields with AI before sending.
+                  Preview pages, place signatures, dates and fields to fill in (text, number, dropdown, checkbox) for each signer, and auto-detect them with AI before sending.
                 </p>
                 <Button
                   type="button"
