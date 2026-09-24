@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import net from "node:net";
 import { createHash } from "node:crypto";
-import { S3Client, HeadBucketCommand, CreateBucketCommand } from "@aws-sdk/client-s3";
+import { S3Client, HeadBucketCommand, CreateBucketCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const RUN_S3_E2E = process.env.S3_E2E === "1";
 const WEED_BIN = process.env.WEED_BIN || "weed";
@@ -51,16 +51,23 @@ async function startWeed(): Promise<Weed> {
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {
       if (proc.exitCode !== null) throw new Error(`SeaweedFS exited early: ${proc.exitCode}`);
+      // Ready means writable: the gateway answers bucket calls before a volume
+      // server has registered, and on a busy machine the first write then
+      // fails with 500 ("failed to pick 1 from 0 node candidates").
+      const writable = async () => {
+        await probe.send(new PutObjectCommand({ Bucket: "docurama-e2e-ready", Key: "probe", Body: "ok" }), { abortSignal: AbortSignal.timeout(2000) });
+        return { s3Port, dataDir, proc };
+      };
       try {
         await probe.send(new HeadBucketCommand({ Bucket: "docurama-e2e-ready" }), { abortSignal: AbortSignal.timeout(2000) });
-        return { s3Port, dataDir, proc };
+        return await writable();
       } catch (error) {
         lastError = error;
         if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) {
           try {
             await probe.send(new CreateBucketCommand({ Bucket: "docurama-e2e-ready" }), { abortSignal: AbortSignal.timeout(2000) });
             await probe.send(new HeadBucketCommand({ Bucket: "docurama-e2e-ready" }), { abortSignal: AbortSignal.timeout(2000) });
-            return { s3Port, dataDir, proc };
+            return await writable();
           } catch (createError) { lastError = createError; }
         }
       }
