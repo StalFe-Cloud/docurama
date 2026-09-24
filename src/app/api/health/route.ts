@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { storageHealthProbe } from "@/lib/document-store";
 import { smtpMode, outboxStats } from "@/lib/mail";
 import { rekorWitnessingEnabled, getPortalKeyWitness } from "@/lib/rekor";
+import { paymentMode, stripePosture } from "@/lib/payments";
 
 /**
  * Operational health endpoint — the target the runbook monitors
@@ -73,6 +74,15 @@ export async function GET() {
     checks.webhooks = { endpoints, failing };
   } catch {
     checks.webhooks = { endpoints: null, failing: null };
+  }
+
+  // Informational: payment rails posture. Public endpoint, so only mode +
+  // readiness; stripe + ready:false means checkouts are refused until
+  // STRIPE_WEBHOOK_SECRET is set (details in the server log below).
+  const billingMode = paymentMode();
+  checks.billing = billingMode === "stripe" ? { mode: billingMode, ready: stripePosture().ready } : { mode: billingMode };
+  if (billingMode === "stripe" && !stripePosture().ready) {
+    console.warn("[health] PAYMENT_PROVIDER=stripe but STRIPE_WEBHOOK_SECRET is missing — checkouts are refused");
   }
 
   const criticalOk =

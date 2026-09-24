@@ -10,33 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { VerifyResult } from "@/lib/verify";
+import { sealLevelLabel } from "@/lib/seal-shared";
+import { FileFingerprintCheck, SealCoverage, SealIntegrityFailed } from "@/components/verify/seal-details";
 
-type VerifyResult =
-  | { result: "NOT_FOUND"; code: string }
-  | { result: "NOT_SEALED"; code: string; title: string; status: string }
-  | { result: "VOIDED"; code: string; voidedAt: string | null; voidReason: string | null }
-  | {
-      result: "VERIFIED"; code: string;
-      envelope: {
-        title: string; status: string; sealedAt: string; completedAt: string | null;
-        conformance: string | null; sha256: string; tenantName: string; pages: number;
-        verifiedSenderDomain: string | null;
-        signers: { id: string; name: string; email: string; signedAt: string | null }[];
-      };
-    }
-  | {
-      result: "VERIFIED_ATTESTED"; code: string;
-      attestation: {
-        sha256: string; sealedAt: string; completedAt: string | null; conformance: string | null;
-        pages: number; signerCount: number; verifiedDomain: string | null;
-        instance: { label: string; firstSeenAt: string; attestationCount: number };
-        transparency?: { chainSeq: number | null; chainEntryHash: string | null; proof: string; checkpoint: string } | null;
-      };
-    };
+/** ?code=DOC-XXXX (the signer's "Verify the seal" link) prefills and runs the check. */
+function codeFromUrl(): string {
+  if (typeof window === "undefined") return "";
+  return (new URLSearchParams(window.location.search).get("code") ?? "").trim().toUpperCase().slice(0, 64);
+}
 
 export function UserVerify() {
-  const [code, setCode] = useState("");
-  const [submitted, setSubmitted] = useState("");
+  const [code, setCode] = useState(codeFromUrl);
+  const [submitted, setSubmitted] = useState(codeFromUrl);
 
   const { data, isFetching, error, refetch } = useQuery({
     queryKey: ["workspace", "verify", submitted],
@@ -100,14 +86,20 @@ export function UserVerify() {
                     </span>
                     <div>
                       <p className="text-base font-semibold text-success">Signature verified</p>
-                      <p className="text-xs text-muted-foreground">Checked against the sealed file - {data.code}</p>
+                      <p className="text-xs text-muted-foreground">Seal recomputed from the evidence records - {data.code}</p>
                     </div>
                   </div>
                   <dl className="space-y-2 text-sm">
                     <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Document</dt><dd className="text-right font-medium">{data.envelope.title}</dd></div>
                     <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Workspace</dt><dd>{data.envelope.tenantName}</dd></div>
                     <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Sealed</dt><dd>{fmtDate(data.envelope.sealedAt, true)}</dd></div>
-                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Conformance</dt><dd>PAdES {data.envelope.conformance}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Seal level</dt><dd className="text-right">{sealLevelLabel(data.envelope.conformance)}</dd></div>
+                    {data.envelope.signedPdf?.level && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Signed PDF</dt>
+                        <dd className="text-right">{data.envelope.signedPdf.level.replace("-", " ")}{data.envelope.signedPdf.signer ? ` · ${data.envelope.signedPdf.signer.split(" (")[0]}` : ""}</dd>
+                      </div>
+                    )}
                     {data.envelope.verifiedSenderDomain && (
                       <div className="flex justify-between gap-4">
                         <dt className="text-muted-foreground">Sender domain</dt>
@@ -117,10 +109,18 @@ export function UserVerify() {
                       </div>
                     )}
                     <div className="flex flex-wrap justify-between gap-2">
-                      <dt className="text-muted-foreground">SHA-256 digest</dt>
+                      <dt className="text-muted-foreground">Seal digest</dt>
                       <dd><CopyableCode value={data.envelope.sha256} max={26} /></dd>
                     </div>
+                    {data.envelope.seal.documentSha256 && data.envelope.seal.documentSha256 !== data.envelope.sha256 && (
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <dt className="text-muted-foreground">Signed file SHA-256</dt>
+                        <dd><CopyableCode value={data.envelope.seal.documentSha256} max={26} /></dd>
+                      </div>
+                    )}
                   </dl>
+                  <SealCoverage seal={data.envelope.seal} />
+                  {data.envelope.seal.documentSha256 && <FileFingerprintCheck documentSha256={data.envelope.seal.documentSha256} signedPdfSha256={data.envelope.signedPdf?.sha256} earlierSignedPdfs={data.envelope.signedPdf?.earlier} />}
                   <div>
                     <p className="mb-2 text-sm font-medium">Signers</p>
                     <ul className="space-y-1.5">
@@ -134,10 +134,18 @@ export function UserVerify() {
                   </div>
                   <p className="flex items-start gap-2 rounded-lg bg-success-soft/50 p-3 text-xs text-muted-foreground">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-                    Every claim above is derived from an inspection of the sealed file and its embedded certificate - including the RFC 3161 timestamp.
+                    Every claim above comes from the envelope&apos;s sealed evidence records, checked against the seal digest when you ran this check. It does not certify the document&apos;s legal meaning.
                   </p>
                 </CardContent>
               </Card>
+            )}
+
+            {/* INTEGRITY_FAILED — sealed, but the records changed since */}
+            {data.result === "INTEGRITY_FAILED" && (
+              <SealIntegrityFailed
+                seal={data.envelope.seal} title={data.envelope.title}
+                tenantName={data.envelope.tenantName} sealedAt={data.envelope.sealedAt}
+              />
             )}
 
             {/* VERIFIED_ATTESTED — sealed on a self-hosted instance */}

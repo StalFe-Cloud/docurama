@@ -8,7 +8,7 @@ export const FILENAME_TOKENS: { token: string; description: string; example: str
   { token: "{title}", description: "Envelope title", example: "Service Agreement" },
   { token: "{document}", description: "Document file name", example: "contract-v3" },
   { token: "{signer}", description: "Signer full name", example: "Alexandra Fischer" },
-  { token: "{sender}", description: "Sender full name", example: "Priya Shah" },
+  { token: "{sender}", description: "Sender full name", example: "Camille Laurent" },
   { token: "{envelope_id}", description: "Public verification code", example: "DOC-8F3K2M9P" },
   { token: "{sequence}", description: "Recipient signing order", example: "1" },
   { token: "{date}", description: "Completion date (YYYY-MM-DD)", example: "2026-09-14" },
@@ -54,7 +54,7 @@ export function previewFilename(
     title: "Service Agreement",
     document: "contract-v3",
     signer: "Alexandra Fischer",
-    sender: "Priya Shah",
+    sender: "Camille Laurent",
     envelope_id: "DOC-8F3K2M9P",
     sequence: "1",
     date: "2026-09-14",
@@ -69,10 +69,12 @@ export function previewFilename(
 // ── RFC 3161 Timestamp Authority presets ─────────────────────────────────────
 
 export const TSA_PRESETS: { key: string; name: string; url: string; note: string }[] = [
-  { key: "digicert", name: "DigiCert", url: "https://timestamp.digicert.com", note: "Industry default, high availability" },
-  { key: "sectigo", name: "Sectigo", url: "https://timestamp.sectigo.com", note: "Generous rate limits" },
-  { key: "globalsign", name: "GlobalSign", url: "https://timestamp.globalsign.com/tsa/rsladvanced/rfc3161", note: "SHA-256 advanced" },
-  { key: "freetsa", name: "FreeTSA.org", url: "https://freetsa.org", note: "Free community TSA - fine for QA, not for qualified seals" },
+  // URLs checked against the live services (Sept 2026): DigiCert and GlobalSign
+  // answer RFC 3161 over HTTP only, which is fine: the reply is a signed token.
+  { key: "digicert", name: "DigiCert", url: "http://timestamp.digicert.com", note: "Industry default, high availability" },
+  { key: "sectigo", name: "Sectigo", url: "https://timestamp.sectigo.com", note: "Generous rate limits, HTTPS" },
+  { key: "globalsign", name: "GlobalSign", url: "http://timestamp.globalsign.com/tsa/r6advanced1", note: "SHA-256 advanced" },
+  { key: "freetsa", name: "FreeTSA.org", url: "https://freetsa.org/tsr", note: "Free community TSA - fine for QA, not for qualified seals" },
 ];
 
 // ── 21 CFR Part 11 reference copy ────────────────────────────────────────────
@@ -100,31 +102,25 @@ export const ESIGN_LEVELS: { key: string; label: string; description: string }[]
 
 /* ── Envelope sealing ──────────────────────────────────────────────────────── */
 
-export type SealInput = {
-  id: string;
+export type LegacySealInput = {
   publicCode: string;
   title: string;
   pages: number;
   createdAt: Date;
-  documentSha256?: string | null;
   recipients: { email: string; role: string; status: string; order: number; signedAt: Date | null }[];
   events: { action: string; actor: string; at: Date }[];
 };
 
 /**
- * Deterministic digest over the complete envelope record at sealing time.
+ * The v1 record digest, kept only to verify seals made before
+ * "docurama-seal/2" (src/lib/seal.ts). New seals never use it.
  *
- * When the envelope carries a real uploaded document, that file's SHA-256
- * (computed at upload, stored on Envelope.sha256) is already the integrity
- * anchor and is kept. Template-based envelopes have no file, so the seal is
- * computed over a canonical serialization of everything that matters
- * legally: the document identity, every recipient and their signing state,
- * and the full event ledger. Any later mutation of any of those fields
- * changes the digest, which is exactly the property the public verify
- * portal relies on.
+ * v1 sealed an uploaded envelope with the file hash alone and a template
+ * envelope with this serialization of the signer roster and event actions.
+ * It left out signer names, event details and field values, which is why
+ * seal v2 replaced it.
  */
-export function computeEnvelopeDigest(env: SealInput): string {
-  if (env.documentSha256) return env.documentSha256;
+export function computeLegacyEnvelopeDigest(env: LegacySealInput): string {
   const lines: string[] = [
     `doc:${env.publicCode}`,
     `title:${env.title}`,

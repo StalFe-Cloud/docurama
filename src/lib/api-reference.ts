@@ -87,7 +87,7 @@ export const API_REFERENCE: ApiGroup[] = [
         summary: "Envelope detail with recipients, full audit event timeline and seal state",
         response: `{
   "envelope": { "publicCode": "DOC-8F3K2M9P", "sha256": "3a2f…", "sealedAt": "2026-09-14T16:42:07Z" },
-  "recipients": [ { "name": "Ravi Patel", "email": "ravi@acme.example", "status": "SIGNED" } ],
+  "recipients": [ { "name": "Jonas Weber", "email": "jonas.weber@nordlicht.example", "status": "SIGNED" } ],
   "events": [ { "action": "SENT", "at": "2026-09-12T09:00:00Z" } ]
 }`,
       },
@@ -111,13 +111,21 @@ certificate/evidence-key.pem`,
     endpoints: [
       {
         method: "GET", path: "/api/v1/verify/{code}", auth: "none",
-        summary: "Verify a document by its public code (DOC-XXXXXX). Cloud envelopes return VERIFIED; codes sealed on self-hosted instances return VERIFIED_ATTESTED (the signed fingerprint the instance pushed — see docs/SELF-HOSTED-ATTESTATION.md)",
+        summary: "Verify a document by its public code (DOC-XXXXXX). The seal is recomputed from the envelope records on every call: VERIFIED when they match, INTEGRITY_FAILED (with the affected parts, and no signer roster) when a record changed after sealing. Codes sealed on self-hosted instances return VERIFIED_ATTESTED (the signed fingerprint the instance pushed, see docs/SELF-HOSTED-ATTESTATION.md). Other results: NOT_SEALED, VOIDED, NOT_FOUND",
         response: `{
   "result": "VERIFIED",
   "envelope": {
-    "title": "Service Agreement", "status": "COMPLETED",
+    "title": "Service Agreement", "status": "COMPLETED", "conformance": "B-T",
     "sealedAt": "2026-09-14T16:42:07Z", "sha256": "3a2f…",
-    "signers": [ { "name": "Ravi Patel", "signedAt": "2026-09-14T16:42:07Z" } ]
+    "seal": {
+      "format": "docurama-seal/2", "integrity": "INTACT",
+      "scope": ["document", "signers", "audit-trail", "field-values"],
+      "documentSha256": "9c41…", "bound": { "signers": 2, "events": 6, "fields": 4 },
+      "mismatches": [],
+      "timestamp": { "tsa": "timestamp.digicert.com", "at": "2026-09-14T16:42:08Z", "hash": "SHA-256" },
+      "transparency": { "status": "MATCHES", "seq": 12 }
+    },
+    "signers": [ { "name": "Alexandra Fischer", "signedAt": "2026-09-14T16:42:07Z" } ]
   }
 }`,
       },

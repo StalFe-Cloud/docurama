@@ -27,6 +27,8 @@ export interface DetectedField {
   width: number;
   height: number;
   name: string;
+  /** The printed label a text field was found with ("Name", "Title", "Nom"). */
+  label?: string;
   confidence: number;
   /**
    * How this placement was arrived at. `fallback` means the document could not

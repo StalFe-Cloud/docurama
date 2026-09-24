@@ -9,6 +9,8 @@
 
 import { db } from "@/lib/db";
 import { publicRecipient, iso } from "@/lib/serializers";
+import { SEAL_MISMATCH_LABELS } from "@/lib/seal";
+import { verifyEnvelopeCode } from "@/lib/verify";
 
 export type McpTool = {
   name: string;
@@ -139,21 +141,22 @@ export async function executeMcpTool(
     }
     case "document_verify": {
       const code = String(args.code ?? "").trim().toUpperCase();
-      const e = await db.envelope.findUnique({
-        where: { publicCode: code },
-        include: { recipients: true, tenant: { select: { name: true } } },
-      });
-      if (!e) return text(`NOT_FOUND - no sealed document with code ${code}.`);
-      if (e.status === "VOIDED") return text(`VOIDED - ${e.title} was voided on ${e.voidedAt?.toISOString() ?? "unknown date"}.`);
-      if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
-        return text(`NOT_SEALED - ${e.title} is ${e.status}; it is not sealed yet, so it cannot be verified.`);
+      const v = await verifyEnvelopeCode(code);
+      switch (v.result) {
+        case "NOT_FOUND": return text(`NOT_FOUND - no sealed document with code ${code}.`);
+        case "VOIDED": return text(`VOIDED - envelope ${code} was voided on ${v.voidedAt ?? "unknown date"}.`);
+        case "NOT_SEALED": return text(`NOT_SEALED - ${v.title} is ${v.status}; it is not sealed yet, so it cannot be verified.`);
+        case "VERIFIED_ATTESTED": return text(JSON.stringify(v, null, 2));
+        case "INTEGRITY_FAILED":
+          return text(`INTEGRITY_FAILED - ${v.envelope.title} was sealed on ${v.envelope.sealedAt}, but these records no longer match the seal: ` +
+            `${v.envelope.seal.mismatches.map((m) => SEAL_MISMATCH_LABELS[m]).join(", ")}. Do not rely on it.`);
+        case "VERIFIED": return text(JSON.stringify({
+          result: "VERIFIED", title: v.envelope.title, tenant: v.envelope.tenantName,
+          sealedAt: v.envelope.sealedAt, sha256: v.envelope.sha256, conformance: v.envelope.conformance,
+          seal: { format: v.envelope.seal.format, binds: v.envelope.seal.scope, documentSha256: v.envelope.seal.documentSha256, transparency: v.envelope.seal.transparency },
+          signers: v.envelope.signers.map((r) => ({ name: r.name, signedAt: r.signedAt })),
+        }, null, 2));
       }
-      return text(JSON.stringify({
-        result: "VERIFIED", title: e.title, tenant: e.tenant.name,
-        sealedAt: e.sealedAt.toISOString(), sha256: e.sha256,
-        conformance: e.conformanceLevel,
-        signers: e.recipients.filter((r) => r.status === "SIGNED").map((r) => ({ name: r.name, signedAt: r.signedAt?.toISOString() })),
-      }, null, 2));
     }
     case "template_list": {
       const folder = typeof args.folder === "string" ? args.folder : undefined;

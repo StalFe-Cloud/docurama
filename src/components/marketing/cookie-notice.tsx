@@ -10,13 +10,17 @@
  * links the Privacy Policy for the details. Dismissal is remembered locally.
  */
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Cookie, X } from "lucide-react";
 
 const KEY = "docurama.cookie-notice.dismissed.v1";
 
+// Also remembered in memory, for browsers where storage writes fail.
+let dismissedThisSession = false;
+
 function readDismissed(): boolean {
+  if (dismissedThisSession) return true;
   try {
     return window.localStorage.getItem(KEY) === "1";
   } catch {
@@ -25,18 +29,22 @@ function readDismissed(): boolean {
   }
 }
 
-export function CookieNotice() {
-  // Server renders nothing (no localStorage); the notice appears on hydration
-  // unless previously dismissed - no layout shift risk on public pages since
-  // it is a fixed overlay.
-  const [show, setShow] = useState(false);
-  const [checked, setChecked] = useState(false);
-  if (!checked) {
-    setChecked(true);
-    setShow(!readDismissed());
-  }
+// Dismissal changes in this tab notify here; other tabs via the storage event.
+const listeners = new Set<() => void>();
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => { listeners.delete(listener); window.removeEventListener("storage", listener); };
+}
 
-  if (!show) return null;
+export function CookieNotice() {
+  // The server (and the hydration pass) render nothing: the server snapshot
+  // says "dismissed". The notice then appears on the client unless it was
+  // dismissed before, so a returning visitor's page hydrates without a
+  // mismatch. A fixed overlay, so no layout shift either way.
+  const dismissed = useSyncExternalStore(subscribe, readDismissed, () => true);
+
+  if (dismissed) return null;
 
   return (
     <aside
@@ -58,8 +66,9 @@ export function CookieNotice() {
         <button
           type="button"
           onClick={() => {
+            dismissedThisSession = true;
             try { window.localStorage.setItem(KEY, "1"); } catch { /* ignore */ }
-            setShow(false);
+            listeners.forEach((l) => l());
           }}
           className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-muted"
         >

@@ -152,6 +152,13 @@ describe("pricing and enterprise pages (marketing surface)", () => {
     expect(html).toContain("roll over");
     // The badge is gone: value framing took its place.
     expect(html).not.toContain("Most popular");
+    // Enterprise is sales-negotiated: no published price, seats or volume.
+    expect(html).toContain("Seats, envelopes, storage and price set per contract");
+    expect(html).not.toContain("€349");
+    expect(html).not.toContain("5,000 envelopes");
+    // Only Solo advertises a free trial on its card.
+    expect(html).toContain("Get Starter");
+    expect(html).toContain("Get Business");
     // The three committed discount slabs are communicated.
     expect(html).toContain("−5%");
     expect(html).toContain("−10%");
@@ -202,17 +209,34 @@ describe("signup plan prefill and seat limits", () => {
     expect(String(invite.body.error)).toContain("All 1 seats");
   });
 
-  test("default signup (no planCode) still lands on STARTER", async () => {
+  test("default signup (no planCode) lands on the SOLO free trial", async () => {
     const signup = await post("/api/auth/signup", {
-      firstName: "Tim", lastName: "Team", email: `e2e-starter-${stamp}@docurama.eu`,
-      password: "teamPass1234", organization: "E2E Starter Workshop", consent: true,
+      firstName: "Dee", lastName: "Fault", email: `e2e-default-${stamp}@docurama.eu`,
+      password: "defaultPass1234", organization: "E2E Default Workshop", consent: true,
     });
     expect(signup.status).toBe(200);
-    const state = await get("/api/onboarding", { Authorization: `Bearer ${String(signup.body.token)}` });
+    const token = { Authorization: `Bearer ${String(signup.body.token)}` };
+    const state = await get("/api/onboarding", token);
+    expect((state.body.org as { planCode: string }).planCode).toBe("SOLO");
+    const billing = await get("/api/billing/overview", token);
+    expect(billing.status).toBe(200);
+    expect(billing.body.trial).toBeTruthy();
+  });
+
+  test("STARTER signup has no free trial: seats as Starter, no trial on the billing page", async () => {
+    const signup = await post("/api/auth/signup", {
+      firstName: "Tim", lastName: "Team", email: `e2e-starter-${stamp}@docurama.eu`,
+      password: "teamPass1234", organization: "E2E Starter Workshop", consent: true, planCode: "STARTER",
+    });
+    expect(signup.status).toBe(200);
+    const token = { Authorization: `Bearer ${String(signup.body.token)}` };
+    const state = await get("/api/onboarding", token);
     const seats = state.body.seats as { limit: number; remaining: number };
     expect((state.body.org as { planCode: string }).planCode).toBe("STARTER");
     expect(seats.limit).toBe(3);
     expect(seats.remaining).toBe(2);
+    const billing = await get("/api/billing/overview", token);
+    expect(billing.body.trial).toBeNull();
   });
 });
 
@@ -276,7 +300,7 @@ describe("enterprise lead pipeline (/api/enterprise-lead + admin triage)", () =>
     const anon = await get("/api/admin/leads");
     expect([401, 403]).toContain(anon.status);
 
-    const token = await login("sriram.rajan@stalfe.com", "StalFe2026!Admin");
+    const token = await login("e2e-admin@docurama.eu", "e2eAdmin1234!"); // seeded platform admin (e2e/seed.ts)
     const list = await get("/api/admin/leads?q=E2E Medical", { Authorization: `Bearer ${token}` });
     expect(list.status).toBe(200);
     const leads = list.body.leads as { id: string; company: string; status: string }[];

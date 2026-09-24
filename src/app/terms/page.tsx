@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 
 export const metadata: Metadata = {
   title: "Terms of Service · Docurama",
@@ -16,9 +17,9 @@ export default function TermsPage() {
     <div className="min-h-dvh bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/marketing" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-            ← Docurama
-          </Link>
+          <MarketingHomeLink>
+            <BrandLogo size="sm" />
+          </MarketingHomeLink>
           <nav className="flex items-center gap-4 text-sm">
             <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/privacy">Privacy</Link>
             <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/security">Security</Link>
@@ -44,9 +45,10 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold tracking-tight">2. Signature levels, honestly stated</h2>
             <p className="mt-3">
-              Docurama implements eIDAS-aligned electronic signature workflows. Depending on plan and
-              configuration, documents are sealed at the PAdES B-B, B-T, B-LT or B-LTA conformance
-              level, and the level actually applied is reported in each document&apos;s evidence record.
+              Docurama implements eIDAS-aligned electronic signature workflows. A completed document is
+              sealed as a PDF carrying a PAdES signature: at level B-LTA when the RFC 3161 timestamp
+              authority and the certificates&apos; revocation services answer, at B-T or B-B otherwise.
+              The level actually applied is recorded in each document&apos;s evidence record.
               Docurama is not a Qualified Trust Service Provider, does not issue qualified
               certificates, and does not provide qualified electronic signatures or seals. Whether a
               simple or advanced electronic signature is sufficient for a specific contract is a legal
@@ -81,8 +83,9 @@ export default function TermsPage() {
                 Allowances are per workspace and do not accumulate across plan changes or refunds.
               </p>
               <p>
-                Every workspace starts with a free trial of the selected plan. Trials have the same
-                functionality but expire automatically; no credit card is required to start.
+                The Solo plan starts with a free trial. Trials have the same functionality but expire
+                automatically; no credit card is required to start. Starter and Business have no free
+                trial: they are activated when the first term is paid. Enterprise is priced per contract.
               </p>
             </div>
           </section>

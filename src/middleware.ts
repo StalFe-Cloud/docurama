@@ -15,7 +15,8 @@ import { NextRequest, NextResponse } from "next/server";
  *   api.{root}       non-/api  → /api             (API index)
  *   admin.{root}     /         → /admin           (admin console, auth-gated)
  *   mail.{root}      /         → /mail            (mail service page)
- *   app. / staging. / apex / www / localhost: untouched (handled by page.tsx)
+ *   app. / staging. / apex / www / localhost: untouched (handled by page.tsx),
+ *   except apex sign-in/workspace paths → APP_HOST (see below)
  *
  * Requests to /api/*, /_next/*, static files and well-known paths always
  * pass through so health checks and API clients keep working on every host.
@@ -35,6 +36,20 @@ const ROOT_ROUTES: Record<string, string> = {
   "mail": "/mail",
   "sign": "/sign",
 };
+
+// Sign-in and the workspace live on the app host; the apex serves the
+// marketing site. The session cookie is host-only, so signing in on the apex
+// would strand the session there — apex requests for these paths are sent to
+// the app host instead (query preserved: verification and invite links keep
+// working). Default for the Docurama cloud; self-hosters opt in with
+// APP_HOST=app.example.com, and APP_HOST=off disables it.
+const APP_HOST = (process.env.APP_HOST || (ROOT_DOMAIN === "docurama.eu" ? "app.docurama.eu" : "")).trim().toLowerCase();
+const APP_ONLY_PATHS = ["/login", "/welcome", "/reset-password", "/invite", "/settings", "/admin", "/documents", "/templates"];
+
+function isApexHost(host: string): boolean {
+  const bare = host.toLowerCase().split(":")[0];
+  return bare === ROOT_DOMAIN || bare === `www.${ROOT_DOMAIN}`;
+}
 
 function subdomain(host: string): string {
   const bare = host.toLowerCase().split(":")[0];
@@ -59,7 +74,13 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 307);
   }
 
-  const label = subdomain(req.headers.get("host") ?? "");
+  const host = req.headers.get("host") ?? "";
+  if (APP_HOST && APP_HOST !== "off" && isApexHost(host) &&
+      APP_ONLY_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
+    return NextResponse.redirect(`https://${APP_HOST}${pathname}${search}`, 308);
+  }
+
+  const label = subdomain(host);
   if (!label) return NextResponse.next();
 
   // Never intercept infrastructure paths on any host.

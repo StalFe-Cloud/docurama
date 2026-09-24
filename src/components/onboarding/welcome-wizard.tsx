@@ -23,8 +23,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ApiError, apiGet, apiPost, setSessionToken } from "@/lib/client";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { PortalProviders } from "@/components/portal/providers";
-import { planDef, planGuide } from "@/lib/plans";
+import { SELF_SERVE_PLANS, planDef, planEnvelopeLabel, planGuide, planHasFreeTrial } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import { TURNSTILE_ENABLED, TurnstileField } from "@/components/ui/turnstile-field";
 
@@ -112,7 +113,7 @@ function Wizard() {
     const verify = params.get("verify");
     const invite = params.get("invite");
     const plan = params.get("plan");
-    if (plan && ["SOLO", "STARTER"].includes(plan.toUpperCase())) {
+    if (plan && SELF_SERVE_PLANS.includes(plan.toUpperCase() as never)) {
       planRef.current = plan.toUpperCase();
     }
 
@@ -189,7 +190,7 @@ function Wizard() {
       {/* Header */}
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <BrandLogo tagline size="sm" />
+          <MarketingHomeLink><BrandLogo tagline size="sm" /></MarketingHomeLink>
           <div className="flex items-center gap-3 text-sm">
             {authed && state?.user ? (
               <>
@@ -478,7 +479,7 @@ function AccountStep({ invite, inviteTokenRef, planRef, onDone }: { invite: Invi
           ? "Your teammates are already here - create your login with the invited email address."
           : corporateDomain?.autoJoin
           ? `Confirm your @${corporateDomain.domain} email address to access ${corporateDomain.tenantName}.`
-          : "You'll be the owner of a new organization on a 14-day trial of the Starter plan. No credit card required."
+          : "You'll be the owner of a new organization. Solo comes with a 14-day free trial, no credit card required; Starter and Business are activated at checkout before your first envelope."
       }
     >
       <form onSubmit={submit} className="space-y-4" noValidate>
@@ -702,7 +703,7 @@ function OrgStep({ state, onDone }: { state: OnboardingData; onDone: () => void 
         {state.org && (
           <p className="text-xs text-muted-foreground">
             Workspace slug <span className="font-mono">{state.org.slug}</span> · plan{" "}
-            {state.org.planCode === "STARTER" ? "Starter (trial)" : state.org.planCode} · {state.org.enforceTwoFactor ? "2FA required by policy" : "2FA optional"}
+            {planDef(state.org.planCode).name}{planHasFreeTrial(state.org.planCode) ? " (free trial)" : ""} · {state.org.enforceTwoFactor ? "2FA required by policy" : "2FA optional"}
           </p>
         )}
       </div>
@@ -1134,6 +1135,15 @@ function DoneStep({ state }: { state: OnboardingData }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["onboarding"] }),
     onError: (err: ApiError) => toast.error(err.message),
   });
+  // Only a workspace that actually owes its first payment gets the callout —
+  // not members invited into an already-paid Starter/Business workspace.
+  const billingQ = useQuery({
+    queryKey: ["billing", "overview"],
+    queryFn: () => apiGet<{ billingBlock: { reason: string } | null }>("/api/billing/overview"),
+    enabled: Boolean(state.org),
+    retry: false,
+  });
+  const awaitingPayment = billingQ.data?.billingBlock?.reason === "payment_required";
 
   const checklist = [
     { label: "Account created", done: true },
@@ -1174,7 +1184,7 @@ function DoneStep({ state }: { state: OnboardingData }) {
             <Sparkles className="h-4 w-4 text-primary" aria-hidden /> {guide.headline}
           </p>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            {plan.name} · {plan.seatLabel} · {plan.envelopeLimit.toLocaleString("en-GB")} envelopes/month
+            {plan.name} · {plan.seatLabel} · {planEnvelopeLabel(plan)}
             {plan.code === "SOLO" || plan.code === "STARTER" ? " · 35 sending days a month (weekends on us)" : ""}
             {" "}· unused envelopes roll over on renewal
           </p>
@@ -1212,6 +1222,19 @@ function DoneStep({ state }: { state: OnboardingData }) {
             ))}
           </ul>
         </div>
+
+        {awaitingPayment && (
+          <div className="rounded-xl border border-primary/40 bg-primary-soft/40 p-4 text-sm">
+            <p className="font-semibold">Activate your {plan.name} plan</p>
+            <p className="mt-1 text-muted-foreground">
+              {plan.name} has no free trial: choose a billing term and pay by card or SEPA to start sending envelopes.
+              Monthly billing has no engagement — cancel anytime.
+            </p>
+            <Button className="mt-3" size="sm" onClick={() => { window.location.assign("/settings/billing"); }}>
+              <ArrowRight className="h-4 w-4" aria-hidden /> Choose a term and pay
+            </Button>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3">
           {!state.completed && (

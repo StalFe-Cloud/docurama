@@ -11,6 +11,9 @@ import { jsonError, jsonOk, iso, isos } from "@/lib/serializers";
 import { generateTotpSecret, verifyTotp, otpauthUri, generateRecoveryCodes } from "@/lib/totp";
 import { issueSigningCertificate, shortThumbprint } from "@/lib/certificates";
 import { validateFilenameFormat } from "@/lib/esign";
+import { requestTimestamp, type TsaHash } from "@/lib/tsa";
+import { describeSealIdentity, openPkcs12 } from "@/lib/seal-identity";
+import { KeyVaultError, keyVaultConfigured, sealSecret } from "@/lib/key-vault";
 import { verifySendingDomain, checkEmailPosture } from "@/lib/dns-check";
 import { providerByKey } from "@/lib/sms-providers";
 import { MCP_DEFAULT_TOOLS, mcpToolsCatalogue } from "@/lib/mcp";
@@ -206,7 +209,11 @@ export async function getSettingsSection(
           createdAt: c.createdAt.toISOString(),
           createdBy: c.userId === me.id ? "you" : "workspace",
           hasBundle: Boolean(c.pkcs12Base64),
+          origin: c.origin,
+          serverKey: Boolean(c.privateKeyEnc),
         })),
+        sealIdentity: await describeSealIdentity(tenantId),
+        keyVault: keyVaultConfigured(),
         tsa: {
           url: tsa.url, hashAlgorithm: tsa.hashAlgorithm, authType: tsa.authType,
           username: tsa.username, enabled: tsa.enabled,
@@ -420,7 +427,7 @@ export async function postSettingsOp(
     const tenant = await db.$transaction(async (tx) => {
       if (!tenantCreationAllowed(me.role, await tx.tenant.count())) return null;
       const created = await tx.tenant.create({
-        data: { name, slug, planCode: "STARTER", status: "TRIAL", trialEndsAt: new Date(Date.now() + 14 * 86400_000) },
+        data: { name, slug, planCode: "SOLO", status: "TRIAL", trialEndsAt: new Date(Date.now() + 14 * 86400_000) },
       });
       await tx.member.create({ data: { userId: me.id, tenantId: created.id, role: "OWNER", status: "ACTIVE" } });
       await tx.user.update({ where: { id: me.id }, data: { activeTenantId: created.id } });
@@ -431,7 +438,7 @@ export async function postSettingsOp(
       actor, actorRole: me.role, action: "organization.created", resource: `tenant:${slug}`,
       tenantName: name, detail: "New organization created from Settings → Account",
     });
-    return jsonOk({ ok: true, message: `Organization “${name}” created - you are the owner. 14-day trial started.` });
+    return jsonOk({ ok: true, message: `Organization “${name}” created - you are the owner. 14-day Solo trial started; upgrade anytime in Settings → Billing.` });
   }
 
   // ── Access security ──
@@ -770,6 +777,7 @@ export async function postSettingsOp(
     if (cert.status !== "PENDING") return jsonError("Only pending certificates can be provisioned");
     const passphrase = String(data.passphrase ?? "");
     try {
+      const sealing = cert.purpose === "sealing";
       const issued = await issueSigningCertificate({
         commonName: cert.commonName,
         organization: cert.organization ?? undefined,
@@ -777,11 +785,16 @@ export async function postSettingsOp(
         days: cert.validityDays,
         purpose: cert.purpose,
         passphrase,
+        keepPrivateKey: sealing,
       });
+      // A sealing certificate becomes the workspace seal identity at once when
+      // none is active: seals switch to it with no further step.
+      const autoActivate = sealing && !(await db.signingCertificate.count({ where: { tenantId, purpose: "sealing", status: "ACTIVE" } }));
       await db.signingCertificate.update({
         where: { id },
         data: {
-          status: "ISSUED",
+          status: autoActivate ? "ACTIVE" : "ISSUED",
+          privateKeyEnc: sealing && issued.privateKeyPem ? sealSecret(issued.privateKeyPem) : null,
           pkcs12Base64: issued.pkcs12Base64,
           certificatePem: issued.certificatePem,
           serialNumber: issued.serialNumber,
@@ -798,7 +811,9 @@ export async function postSettingsOp(
       });
       return jsonOk({
         ok: true,
-        message: `Certificate issued - serial ${issued.serialNumber.slice(0, 16)}… Download the .p12 bundle now`,
+        message: autoActivate
+          ? `Sealing certificate issued and active: new seals are signed with “${cert.commonName}”`
+          : `Certificate issued - serial ${issued.serialNumber.slice(0, 16)}… Download the .p12 bundle now`,
       });
     } catch (err) {
       return jsonError(err instanceof Error ? err.message : "Certificate issuance failed", 500);
@@ -812,6 +827,9 @@ export async function postSettingsOp(
     if (cert.status !== "ISSUED") return jsonError("Only issued certificates can be activated");
     if (cert.notAfter.getTime() < Date.now()) return jsonError("This certificate has expired");
     if (cert.userId !== me.id && !adminRoles(me)) return jsonError("Only the certificate owner or a workspace admin can activate it", 403);
+    if (cert.purpose === "sealing" && !cert.privateKeyEnc) {
+      return jsonError("The server does not hold this certificate's key, so it cannot seal. Issue a new sealing certificate or import one with its key.");
+    }
     // One active certificate per purpose - deactivate the others.
     await db.signingCertificate.updateMany({
       where: { tenantId, purpose: cert.purpose, status: "ACTIVE" },
@@ -822,7 +840,12 @@ export async function postSettingsOp(
       actor, actorRole: me.role, action: "certificate.activated", resource: `certificate:${cert.id}`,
       severity: "WARNING", tenantName: me.tenantName, detail: `${cert.purpose} certificate is now live`,
     });
-    return jsonOk({ ok: true, message: `“${cert.commonName}” is now the active ${cert.purpose} certificate` });
+    return jsonOk({
+      ok: true,
+      message: cert.purpose === "sealing"
+        ? `“${cert.commonName}” now signs this workspace's sealed PDFs`
+        : `“${cert.commonName}” is now the active ${cert.purpose} certificate`,
+    });
   }
 
   if (op === "cert.revoke") {
@@ -831,12 +854,62 @@ export async function postSettingsOp(
     if (cert.purpose === "sealing" && !adminRoles(me)) return jsonError("Workspace administrator access required for sealing certificates", 403);
     if (cert.userId !== me.id && !adminRoles(me)) return jsonError("Only the certificate owner or a workspace admin can revoke it", 403);
     if (!["ISSUED", "ACTIVE"].includes(cert.status)) return jsonError("Only issued or active certificates can be revoked");
-    await db.signingCertificate.update({ where: { id }, data: { status: "REVOKED", revokedAt: new Date(), pkcs12Base64: null } });
+    await db.signingCertificate.update({ where: { id }, data: { status: "REVOKED", revokedAt: new Date(), pkcs12Base64: null, privateKeyEnc: null } });
     await audit({
       actor, actorRole: me.role, action: "certificate.revoked", resource: `certificate:${cert.id}`,
       severity: "CRITICAL", tenantName: me.tenantName, detail: `Serial ${cert.serialNumber.slice(0, 16)}… revoked`,
     });
-    return jsonOk({ ok: true, message: `Certificate revoked - new signatures will no longer use it` });
+    return jsonOk({
+      ok: true,
+      message: cert.purpose === "sealing" && cert.status === "ACTIVE"
+        ? "Certificate revoked and its key deleted. New seals are signed with the workspace evidence key until another sealing certificate is active."
+        : "Certificate revoked and its stored key bundle deleted. Stop using any downloaded copy of the .p12 file.",
+    });
+  }
+
+  if (op === "cert.import") {
+    // Bring your own seal certificate: a PKCS#12 from a CA (for example one on
+    // the Adobe Approved Trust List, or a QTSP seal certificate).
+    if (!adminRoles(me)) return jsonError("Workspace administrator access required", 403);
+    const b64 = String(data.pkcs12Base64 ?? "").replace(/^data:[^,]*,/, "").trim();
+    const passphrase = String(data.passphrase ?? "");
+    if (!b64) return jsonError("Choose a .p12 or .pfx file");
+    const bundle = Buffer.from(b64, "base64");
+    if (bundle.length < 100 || bundle.length > 64 * 1024) return jsonError("The file must be a PKCS#12 bundle under 64 KB");
+    try {
+      const opened = await openPkcs12(bundle, passphrase);
+      const d = opened.description;
+      const privateKeyEnc = sealSecret(opened.privateKeyPem, { requireEncryption: true });
+      const duplicate = await db.signingCertificate.findFirst({ where: { tenantId, thumbprint: d.thumbprint, status: { not: "REVOKED" } } });
+      if (duplicate) return jsonError("This certificate is already in the workspace", 409);
+      const autoActivate = !(await db.signingCertificate.count({ where: { tenantId, purpose: "sealing", status: "ACTIVE" } }));
+      const label = String(data.commonName ?? "").trim().slice(0, 120) || d.commonName;
+      const cert = await db.signingCertificate.create({
+        data: {
+          tenantId, userId: me.id, commonName: label, organization: null, email: null,
+          purpose: "sealing", origin: "imported", status: autoActivate ? "ACTIVE" : "ISSUED",
+          serialNumber: d.serialNumber, thumbprint: d.thumbprint, issuer: d.issuer,
+          keyAlgorithm: d.keyAlgorithm, signatureAlgorithm: "SHA-256",
+          notBefore: d.notBefore, notAfter: d.notAfter,
+          validityDays: Math.max(1, Math.round((d.notAfter.getTime() - d.notBefore.getTime()) / 86_400_000)),
+          certificatePem: opened.certificatePem, chainPem: opened.chainPem || null, privateKeyEnc,
+        },
+      });
+      await audit({
+        actor, actorRole: me.role, action: "certificate.imported", resource: `certificate:${cert.id}`,
+        severity: "WARNING", tenantName: me.tenantName,
+        detail: `Sealing certificate imported: ${d.subject}, issued by ${d.issuer}, expires ${d.notAfter.toISOString().slice(0, 10)}`,
+      });
+      return jsonOk({
+        ok: true, id: cert.id,
+        message: autoActivate
+          ? `“${label}” imported and active: new seals are signed with it`
+          : `“${label}” imported - activate it to sign seals with it`,
+      });
+    } catch (err) {
+      if (err instanceof KeyVaultError) return jsonError(err.message, 409);
+      return jsonError(err instanceof Error ? err.message : "The certificate could not be imported", 400);
+    }
   }
 
   if (op === "cert.delete") {
@@ -852,7 +925,9 @@ export async function postSettingsOp(
   // ── RFC 3161 Timestamp Authority ──
   if (op === "tsa.save") {
     const url = String(data.url ?? "").trim();
-    if (!/^https?:\/\//.test(url)) return jsonError("TSA URL must use https:// - timestamp responses must be integrity-protected");
+    // http:// is fine for RFC 3161: the reply is a signed token and the request
+    // carries only a hash. Destinations are checked when a timestamp is requested.
+    if (!/^https?:\/\/[^\s]+$/.test(url) || url.length > 300) return jsonError("Enter the TSA URL, starting with http:// or https://");
     const hashAlgorithm = ["SHA-256", "SHA-384", "SHA-512"].includes(String(data.hashAlgorithm)) ? String(data.hashAlgorithm) : "SHA-256";
     const authType = data.authType === "basic" ? "basic" : "none";
     const username = authType === "basic" ? String(data.username ?? "").trim() || null : null;
@@ -876,21 +951,18 @@ export async function postSettingsOp(
     const started = Date.now();
     let status: string;
     let note: string;
+    // A real RFC 3161 request for a throwaway digest: the same client, SSRF
+    // policy and checks (status, imprint, nonce) that sealing uses.
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 6000);
-      try {
-        const res = await fetch(tsa.url, { method: "GET", signal: ctrl.signal, redirect: "manual" });
-        const latency = Date.now() - started;
-        status = "OK";
-        note = `Reachable - HTTP ${res.status} in ${latency} ms over ${tsa.url.startsWith("https") ? "TLS" : "plain HTTP"}. RFC 3161 token issuance runs in the sealing pipeline.`;
-      } finally {
-        clearTimeout(timer);
-      }
+      const hash: TsaHash = tsa.hashAlgorithm === "SHA-384" || tsa.hashAlgorithm === "SHA-512" ? tsa.hashAlgorithm : "SHA-256";
+      const ts = await requestTimestamp(tsa.url, `docurama-tsa-test ${tenantId} ${new Date().toISOString()}`, hash);
+      status = "OK";
+      note = `Timestamp issued in ${Date.now() - started} ms: genTime ${ts.genTime.toISOString()}, serial ${ts.serial.slice(0, 16)}, ${hash}. ` +
+        (tsa.enabled ? "Every seal in this workspace is timestamped by this authority." : "Enable it to timestamp this workspace's seals; until then the platform authority is used.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      status = /abort/i.test(msg) ? "TIMEOUT" : /certificate|tls|ssl/i.test(msg) ? "TLS_ERROR" : "UNREACHABLE";
-      note = status === "TIMEOUT" ? "No response within 6 seconds" : `Could not reach the TSA: ${msg}`;
+      status = /abort|timeout/i.test(msg) ? "TIMEOUT" : /certificate|tls|ssl/i.test(msg) ? "TLS_ERROR" : "UNREACHABLE";
+      note = status === "TIMEOUT" ? "No timestamp within 10 seconds" : `No valid timestamp: ${msg}`;
     }
     await db.tsaConfig.update({
       where: { tenantId },

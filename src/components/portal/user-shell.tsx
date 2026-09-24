@@ -112,7 +112,7 @@ export function UserShell({
                 <SheetTitle className="sr-only">Workspace navigation</SheetTitle>
                 <div className="space-y-6 pt-2">
                   <div className="flex items-center gap-2.5">
-                    <BrandMark className="h-9 w-9" />
+                    <a href="/" aria-label="Docurama workspace home" className="shrink-0"><BrandMark className="h-9 w-9" /></a>
                     <div className="leading-tight">
                       <p className="text-sm font-semibold tracking-tight">{user.tenantName ?? "Docurama"}</p>
                       <p className="text-[11px] text-muted-foreground">{user.tenantPlan} plan</p>

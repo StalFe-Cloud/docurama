@@ -49,7 +49,12 @@ async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T
   });
 }
 
-export async function resolveWebhookTarget(raw: string, signal = AbortSignal.timeout(WEBHOOK_TIMEOUT_MS)) {
+/**
+ * `plainHttp` admits http:// on port 80 for protocols whose payload is signed
+ * end to end (RFC 3161 timestamp replies); the public-address policy is the
+ * same either way.
+ */
+export async function resolveWebhookTarget(raw: string, signal = AbortSignal.timeout(WEBHOOK_TIMEOUT_MS), opts: { plainHttp?: boolean } = {}) {
   signal.throwIfAborted();
   const url = new URL(raw);
   if (url.username || url.password || url.hash) throw new Error("Webhook URLs must not contain credentials or fragments");
@@ -57,9 +62,9 @@ export async function resolveWebhookTarget(raw: string, signal = AbortSignal.tim
   const loopback = ["localhost", "127.0.0.1", "::1"].includes(hostname);
   const development = process.env.NODE_ENV !== "production" && process.env.DOCURAMA_ALLOW_PRIVATE_WEBHOOKS === "1" && loopback;
   const internal = internalOriginAllowed(url) || development;
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && internal)) throw new Error("Webhook endpoints must use HTTPS");
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && (internal || opts.plainHttp))) throw new Error("Webhook endpoints must use HTTPS");
   const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
-  const ports = [443, ...(process.env.DOCURAMA_WEBHOOK_ALLOWED_PORTS ?? "").split(",").filter(Boolean).map(Number)];
+  const ports = [443, ...(opts.plainHttp ? [80] : []), ...(process.env.DOCURAMA_WEBHOOK_ALLOWED_PORTS ?? "").split(",").filter(Boolean).map(Number)];
   if (!internal && !ports.includes(port)) throw new Error("Webhook destination port is not allowed");
   if (!internal && (!hostname.includes(".") && !isIP(hostname) || /(?:^|\.)(?:localhost|local|internal)$/.test(hostname))) {
     throw new Error("Internal webhook hostname is not allowed");

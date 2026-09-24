@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { setSessionToken } from "@/lib/client";
 
 function ResetPasswordForm() {
@@ -79,7 +80,7 @@ function ResetPasswordForm() {
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-primary/30 blur-3xl" aria-hidden />
         <div className="absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-[#4fd1a1]/15 blur-3xl" aria-hidden />
         <div className="relative">
-          <BrandLogo invert tagline size="md" />
+          <MarketingHomeLink><BrandLogo invert tagline size="md" /></MarketingHomeLink>
         </div>
         <div className="relative max-w-md space-y-5">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight">
@@ -109,7 +110,7 @@ function ResetPasswordForm() {
         <main className="w-full max-w-md space-y-6">
           <div className="space-y-2 text-center lg:text-left">
             <div className="mb-6 flex justify-center lg:justify-start">
-              <BrandLogo tagline size="md" className="lg:hidden" />
+              <MarketingHomeLink><BrandLogo tagline size="md" className="lg:hidden" /></MarketingHomeLink>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">Set a new password</h2>
             <p className="text-sm text-muted-foreground">

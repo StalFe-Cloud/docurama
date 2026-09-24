@@ -4,6 +4,7 @@ import { Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 
 export const metadata: Metadata = {
   title: "Sign a document · Docurama",
@@ -21,7 +22,7 @@ export default function SignLandingPage() {
     <div className="flex min-h-screen flex-col bg-muted">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-3xl items-center px-4 sm:px-6">
-          <BrandLogo />
+          <MarketingHomeLink><BrandLogo /></MarketingHomeLink>
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-3xl flex-1 items-center justify-center px-4 py-12 sm:px-6">

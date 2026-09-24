@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /// <reference types="bun-types" />
 
+import { randomBytes } from "crypto";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth";
 
@@ -35,7 +36,10 @@ async function main() {
   }
 
   // 2. Ensure admin@docurama.eu exists as PLATFORM_ADMIN & OWNER of stalfe
-  const password = "StalFe2026!Admin";
+  // Never a fixed, documented password: ADMIN_INITIAL_PASSWORD, or a random
+  // one printed once. Only used when the account is created — re-runs never
+  // reset an existing administrator's password or second factor.
+  const password = process.env.ADMIN_INITIAL_PASSWORD || randomBytes(18).toString("base64url");
   const passwordHash = hashPassword(password);
   let admin = await db.user.findUnique({ where: { email: "admin@docurama.eu" } });
   if (!admin) {
@@ -53,6 +57,7 @@ async function main() {
       },
     });
     console.log("Created user admin@docurama.eu");
+    if (!process.env.ADMIN_INITIAL_PASSWORD) console.log(`  initial password (shown once, change it at first sign-in): ${password}`);
   } else {
     admin = await db.user.update({
       where: { id: admin.id },
@@ -61,13 +66,11 @@ async function main() {
         lastName: "Admin",
         role: "PLATFORM_ADMIN",
         status: "ACTIVE",
-        passwordHash,
-        totpEnabled: false,
         emailVerifiedAt: new Date(),
         activeTenantId: stalfe.id,
       },
     });
-    console.log("Updated user admin@docurama.eu");
+    console.log("Updated user admin@docurama.eu (password and 2FA unchanged)");
   }
 
   // 3. Ensure membership in StålFe

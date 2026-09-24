@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { apiGet } from "@/lib/client";
+import { assignFieldsToSigners } from "@/lib/docintel/assign-signers";
 import { cn } from "@/lib/utils";
 
 export type FieldKind = "signature" | "initials" | "date" | "text" | "checkbox";
@@ -92,6 +93,7 @@ interface AnalysisApiResponse {
     width: number;
     height: number;
     name: string;
+    label?: string;
     confidence: number;
     source: string;
   }[];
@@ -150,9 +152,10 @@ export function DocumentBuilder({
       }
 
       if (res.detectedFields && res.detectedFields.length > 0) {
+        // One signature block per party, in reading order (see assign-signers).
+        const owners = assignFieldsToSigners(res.detectedFields, Math.max(1, signers.length));
         const newFields: PlacedField[] = res.detectedFields.map((df, i) => {
-          // Distribute across signers if multiple exist
-          const sIdx = df.fieldType === "signature" ? (i % signers.length) : activeSignerIdx;
+          const sIdx = owners[i];
           const assignedSigner = signers[sIdx] || activeSigner;
           const defaults = FIELD_DEFAULTS[df.fieldType] || FIELD_DEFAULTS.signature;
 
@@ -171,7 +174,7 @@ export function DocumentBuilder({
             recipientIndex: sIdx,
             recipientEmail: assignedSigner.email,
             recipientName: assignedSigner.name,
-            label: defaults.label,
+            label: df.label || defaults.label,
             required: true,
           };
         });
@@ -319,8 +322,8 @@ export function DocumentBuilder({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 select-none">
       {/* Top Header Bar */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/90 px-4 backdrop-blur">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/90 px-4 backdrop-blur">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
@@ -353,8 +356,10 @@ export function DocumentBuilder({
           </div>
         </div>
 
-        {/* Center: Recipient Selector & Field Tools */}
-        <div className="hidden lg:flex items-center gap-4">
+        {/* Center: Recipient Selector & Field Tools. Needs ~1400px with the
+            actions beside it — narrower screens get the secondary bar, so
+            Send is never pushed off-screen. */}
+        <div className="hidden 2xl:flex items-center gap-4">
           {/* Signer Switcher */}
           <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950/70 p-1">
             <span className="px-2 text-xs font-medium text-slate-400">Signer:</span>
@@ -420,7 +425,7 @@ export function DocumentBuilder({
         </div>
 
         {/* Right Actions: AI Auto-Detect, Document Intel, Send */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -465,7 +470,7 @@ export function DocumentBuilder({
       </header>
 
       {/* Secondary Bar for Mobile/Tablet */}
-      <div className="flex lg:hidden items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
+      <div className="flex 2xl:hidden items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-slate-400">Signer:</span>
           <select

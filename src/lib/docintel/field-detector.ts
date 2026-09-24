@@ -14,78 +14,79 @@ async function pdfjs() {
 
 interface KeywordRule {
   type: FieldType;
-  regex: RegExp;
+  /** Label vocabulary (French + English). Matched with the `giu` flags. */
+  label: string;
   confidence: number;
+  /** Size of a field placed BELOW a standalone label, in points. */
   width: number;
   height: number;
-  offsetY: number; // in pt below the keyword
+  /** Height of a field drawn ON a fill-in blank next to its label. */
+  lineHeight: number;
 }
 
+// Labels, not keywords: a rule only fires where the text is shaped like a form
+// label (see isFormLabel) — "Date: ____", "Signature", "Nom :" — never on the
+// same words inside a sentence ("…from the Effective Date.", "the signature of
+// this agreement"). Word boundaries are explicit lookarounds because \b after a
+// colon only matches when a letter follows, which silently disabled "Title:".
 const RULES: KeywordRule[] = [
-  // French signature blocks
   {
     type: "signature",
-    regex: /\b(bon\s+pour\s+accord|lu\s+et\s+approuv[eé]|sign[eé]\s+par|cachet\s+et\s+signature|le\s+soussign[eé]|pour\s+la\s+soci[eé]t[eé]|le\s+salari[eé]|le\s+prestataire|signature\s*:?)\b/i,
-    confidence: 0.88,
-    width: 160,
-    height: 50,
-    offsetY: 8,
+    label: "bon\\s+pour\\s+accord|lu\\s+et\\s+approuv[ée]e?|cachet\\s+et\\s+signature|sign[ée]e?\\s+par|authori[sz]ed\\s+signature|signed\\s+by|signature",
+    confidence: 0.88, width: 160, height: 50, lineHeight: 34,
   },
-  // English signature blocks
-  {
-    type: "signature",
-    regex: /\b(authorized\s+signature|agreed\s+and\s+accepted|signed\s+by|signature\s+of|by\s*:\s*$|signature\s*:?)\b/i,
-    confidence: 0.85,
-    width: 160,
-    height: 50,
-    offsetY: 8,
-  },
-  // French dates
   {
     type: "date",
-    regex: /\b(fait\s+[aà].*le|date\s+de\s+signature|le\s*:\s*|date\s*:?)\b/i,
-    confidence: 0.82,
-    width: 110,
-    height: 28,
-    offsetY: 4,
+    label: "date\\s+de\\s+signature|fait\\s+[àa]\\s+[^,:_]{0,40},?\\s*le|dated|date",
+    confidence: 0.84, width: 110, height: 28, lineHeight: 22,
   },
-  // English dates
-  {
-    type: "date",
-    regex: /\b(dated\s*:?|as\s+of\s+date|date\s*:)\b/i,
-    confidence: 0.80,
-    width: 110,
-    height: 28,
-    offsetY: 4,
-  },
-  // Initials / Paraphes
   {
     type: "initials",
-    regex: /\b(paraphes?|initiales?|initial\s+here|initials)\b/i,
-    confidence: 0.85,
-    width: 70,
-    height: 35,
-    offsetY: 4,
+    label: "paraphes?|initiales?|initial\\s+here|initials?",
+    confidence: 0.85, width: 70, height: 35, lineHeight: 26,
   },
-  // Text inputs
   {
     type: "text",
-    regex: /\b(nom\s*:|pr[eé]nom\s*:|soci[eé]t[eé]\s*:|fonction\s*:|title\s*:|full\s+name\s*:)\b/i,
-    confidence: 0.75,
-    width: 140,
-    height: 26,
-    offsetY: 4,
+    label: "full\\s+name|printed\\s+name|name|pr[ée]nom|nom|title|position|company|soci[ée]t[ée]|fonction|qualit[ée]",
+    confidence: 0.76, width: 140, height: 26, lineHeight: 22,
   },
 ];
 
+const BLANK = /^\s*[:：]?\s*(?:_{3,}|\.{4,}|…{2,})/;
+const TRAILING_COLON = /^\s*[:：]\s*$/;
+
 /**
- * Check if two detected fields overlap closely on the same page.
+ * Is the match at `index` a form label rather than a word in running text?
+ * It must start a label (item start, or after whitespace/a blank run) and be
+ * followed by a fill-in blank, a lone colon, or nothing (a standalone label).
+ */
+function isFormLabel(text: string, index: number, length: number): { onBlank: boolean } | null {
+  // Mid-sentence words ("…from the Effective Date.") are not labels: only the
+  // line start or a previous label's blank may precede a label.
+  const before = text.slice(0, index);
+  if (before.trim() && !/(?:_{3,}|\.{4,}|…{2,}|[:：])\s*$/.test(before)) return null;
+  const after = text.slice(index + length);
+  if (BLANK.test(after)) return { onBlank: true };
+  if (TRAILING_COLON.test(after) || !after.trim()) return { onBlank: false };
+  return null;
+}
+
+/** x position (pt) of a character index, assuming evenly spaced glyphs. */
+function xAt(item: TextItemBox, index: number): number {
+  const len = Math.max(1, item.text.length);
+  return item.x0 + ((item.x1 - item.x0) * index) / len;
+}
+
+/**
+ * Is `b` the same field as `a` found twice (an AcroForm widget and its printed
+ * label, say)? Only near-identical positions count: form lines sit ~3% apart
+ * (25pt), and a 5%-tall window used to swallow "Title:" and "Date:" under "Name:".
  */
 function isOverlapping(a: DetectedField, b: DetectedField): boolean {
   if (a.pageNumber !== b.pageNumber) return false;
   const dx = Math.abs(a.x - b.x);
   const dy = Math.abs(a.y - b.y);
-  return dx < 6 && dy < 5;
+  return dx < 3 && dy < 1.5;
 }
 
 /**
@@ -164,31 +165,64 @@ function scanPageKeywords(page: PageGeometry): DetectedField[] {
   if (!page.items || page.items.length === 0) return fields;
 
   for (const item of page.items) {
+    // Every label on the line ("Initials: ____   Initials: ____" is two
+    // fields), earliest rule wins where two rules claim the same characters.
+    const claimed: { start: number; end: number }[] = [];
+    const matches: { rule: KeywordRule; index: number; length: number }[] = [];
     for (const rule of RULES) {
-      if (rule.regex.test(item.text)) {
-        // Compute position in percentages from top-left
-        const xPt = Math.max(0, item.x0);
-        const yPt = Math.min(page.height - rule.height, item.y1 + rule.offsetY);
+      const re = new RegExp(`(?<![\\p{L}\\p{N}])(?:${rule.label})(?![\\p{L}\\p{N}])`, "giu");
+      for (const m of item.text.matchAll(re)) {
+        const index = m.index ?? 0;
+        if (claimed.some((c) => index < c.end && index + m[0].length > c.start)) continue;
+        claimed.push({ start: index, end: index + m[0].length });
+        matches.push({ rule, index, length: m[0].length });
+      }
+    }
+    matches.sort((a, b) => a.index - b.index);
 
-        const xPercent = Math.max(2, Math.min(85, (xPt / page.width) * 100));
-        const yPercent = Math.max(2, Math.min(90, (yPt / page.height) * 100));
+    for (const { rule, index, length } of matches) {
+      const printed = item.text.slice(index, index + length).replace(/\s+/g, " ").trim();
+      const shape = isFormLabel(item.text, index, length);
+      if (!shape) continue;
 
-        const field: DetectedField = {
-          fieldType: rule.type,
-          pageNumber: page.pageNumber,
-          x: Math.round(xPercent * 10) / 10,
-          y: Math.round(yPercent * 10) / 10,
-          width: rule.width,
-          height: rule.height,
-          name: `${rule.type}_p${page.pageNumber}_${fields.length + 1}`,
-          confidence: rule.confidence,
-          source: "keyword",
-        };
+      let xPt: number;
+      let yPt: number;
+      let width = rule.width;
+      let height = rule.height;
+      if (shape.onBlank) {
+        // Sit ON the fill-in blank to the right of the label, resting on the baseline.
+        const blankStart = index + length + (item.text.slice(index + length).search(/[_.…]/) || 0);
+        xPt = xAt(item, blankStart);
+        const nextLabel = matches.find((m) => m.index > index);
+        const blankEnd = nextLabel ? xAt(item, nextLabel.index) : item.x1;
+        width = Math.max(rule.type === "initials" ? 50 : 90, Math.min(rule.width, blankEnd - xPt));
+        height = rule.lineHeight;
+        yPt = item.y1 + 3 - height;
+      } else {
+        // Standalone label: the field goes on the line below it.
+        xPt = item.x0;
+        yPt = item.y1 + 6;
+      }
+      yPt = Math.max(0, Math.min(page.height - height, yPt));
 
-        if (!fields.some((existing) => isOverlapping(existing, field))) {
-          fields.push(field);
-        }
-        break; // Match one rule per text item
+      const xPercent = Math.max(2, Math.min(85, (xPt / page.width) * 100));
+      const yPercent = Math.max(2, Math.min(90, (yPt / page.height) * 100));
+
+      const field: DetectedField = {
+        fieldType: rule.type,
+        pageNumber: page.pageNumber,
+        x: Math.round(xPercent * 10) / 10,
+        y: Math.round(yPercent * 10) / 10,
+        width: Math.round(width),
+        height: Math.round(height),
+        name: `${rule.type}_p${page.pageNumber}_${fields.length + 1}`,
+        ...(rule.type === "text" ? { label: printed.charAt(0).toUpperCase() + printed.slice(1) } : {}),
+        confidence: rule.confidence,
+        source: "keyword",
+      };
+
+      if (!fields.some((existing) => isOverlapping(existing, field))) {
+        fields.push(field);
       }
     }
   }

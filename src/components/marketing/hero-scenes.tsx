@@ -427,7 +427,7 @@ export function EvidenceDrawer({ open, hash, audit }: { open: boolean; hash: str
           {v ? (
             <span style={{ fontSize: 10.5, color: INK }}>{v}</span>
           ) : k === "Conformance" ? (
-            <span style={{ background: EMERALD_SOFT, color: EMERALD, fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: "2px 7px" }}>PAdES B-LT</span>
+            <span style={{ background: EMERALD_SOFT, color: EMERALD, fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: "2px 7px" }}>PAdES B-LTA</span>
           ) : (
             <span style={{ fontSize: 10, color: INK, fontFamily: "var(--font-geist-mono), monospace", maxWidth: 190, overflow: "hidden", whiteSpace: "nowrap" }}>
               {hash || "…"}

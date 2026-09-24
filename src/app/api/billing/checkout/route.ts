@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { requestOrigin } from "@/lib/onboarding";
 import { PLAN_ORDER, SELF_SERVE_PLANS } from "@/lib/plans";
-import { createCheckout, termCents, paymentMode } from "@/lib/payments";
+import { BillingUnavailableError, createCheckout, termCents, paymentMode } from "@/lib/payments";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +35,20 @@ export async function POST(req: NextRequest) {
     if (planCode === "ENTERPRISE") {
       return NextResponse.json({ error: "Enterprise plans are provisioned by sales — talk to us at sales@docurama.eu" }, { status: 400 });
     }
-    if (!SELF_SERVE_PLANS.includes(planCode as never) && planCode !== "SMART" && planCode !== "BUSINESS") {
+    if (!SELF_SERVE_PLANS.includes(planCode as never)) {
       return NextResponse.json({ error: "This plan is not self-serve" }, { status: 400 });
     }
 
-    const origin = new URL(req.url).origin;
+    // Buying the plan and term already being paid for would only double-charge.
+    const current = await db.subscription.findFirst({ where: { tenantId: me.tenantId }, orderBy: { renewalAt: "desc" } });
+    if (current && ["ACTIVE", "PAST_DUE"].includes(current.status) && current.planCode === planCode && current.termMonths === termMonths) {
+      return NextResponse.json({
+        error: current.status === "PAST_DUE"
+          ? "This plan is already active — update your payment method instead of buying it again."
+          : "This workspace is already on this plan and term.",
+      }, { status: 409 });
+    }
+
     const result = await createCheckout({
       tenantId: me.tenantId,
       tenantName: me.tenantName ?? me.email,
@@ -45,7 +56,7 @@ export async function POST(req: NextRequest) {
       userName: `${me.firstName} ${me.lastName}`.trim(),
       planCode,
       termMonths,
-      origin,
+      origin: requestOrigin(req),
     });
 
     return NextResponse.json({
@@ -60,6 +71,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof Response) return err;
+    if (err instanceof BillingUnavailableError) {
+      console.error("billing/checkout misconfigured:", err.message);
+      return NextResponse.json({ error: "Online payment is temporarily unavailable. Please try again later or contact billing@docurama.eu." }, { status: 503 });
+    }
     console.error("billing/checkout", err);
     return NextResponse.json({ error: "Checkout could not be started" }, { status: 500 });
   }
@@ -67,7 +82,7 @@ export async function POST(req: NextRequest) {
 
 /** GET /api/billing/checkout — price preview without starting anything. */
 export async function GET() {
-  const preview = PLAN_ORDER.filter((c) => c !== "ENTERPRISE").map((code) => ({
+  const preview = SELF_SERVE_PLANS.map((code) => ({
     planCode: code,
     terms: [1, 3, 6, 12].map((m) => ({ termMonths: m, amountCents: termCents(code, m) })),
   }));

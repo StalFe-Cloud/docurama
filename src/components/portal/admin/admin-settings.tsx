@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Mail, Timer, Flag, Send, Save, Lock, Eye, EyeOff, KeyRound } from "lucide-react";
+import { Mail, Timer, Flag, Send, Save, Lock, Eye, EyeOff } from "lucide-react";
 import { apiGet, apiPost, ApiError } from "@/lib/client";
-import { ConfirmDialog, CopyableCode, ErrorState, PageHeader, daysUntil } from "@/components/portal/shared";
+import { ConfirmDialog, CopyableCode, ErrorState, PageHeader } from "@/components/portal/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 type PlatformSettings = {
   smtpHost: string; smtpPort: number; smtpUser: string; smtpPassword?: string; smtpFrom: string; smtpTls: boolean;
@@ -19,6 +20,12 @@ type PlatformSettings = {
   signingConformance: string; trialLengthDays: number; maintenanceMode: boolean;
   featureFlags: string; sweeperLastRunAt: string; version: string;
   auditChainBlockHeight: number; auditChainSealedAt: string;
+};
+
+type SealingOverview = {
+  keyVault: boolean; workspaces: number; withCertificate: number; imported: number;
+  expiringSoon: { tenant: string; commonName: string; notAfter: string }[];
+  signedPdfs30d: number; padesBT30d: number;
 };
 
 type FeatureFlags = { smsDelivery: boolean; bulkSend: boolean; webhooks: boolean; passkeys: boolean; aiFieldDetect: boolean; euResidencyOnly: boolean };
@@ -47,7 +54,7 @@ function useAct() {
 }
 
 /** Form body - mounted once data is available so every field starts from saved server state. */
-function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act }) {
+function SettingsBody({ settings, sealing, act }: { settings: PlatformSettings; sealing: SealingOverview; act: Act }) {
   const [smtp, setSmtp] = useState({
     smtpHost: settings.smtpHost, smtpPort: settings.smtpPort,
     smtpUser: settings.smtpUser, smtpPassword: settings.smtpPassword ?? "", smtpFrom: settings.smtpFrom, smtpTls: settings.smtpTls,
@@ -55,11 +62,6 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
 
   const [tsaUrl, setTsaUrl] = useState(settings.tsaUrl);
-  const [certSettings, setCertSettings] = useState({
-    certFingerprint: settings.certFingerprint,
-    certExpiryAt: settings.certExpiryAt ? new Date(settings.certExpiryAt).toISOString().split("T")[0] : "",
-    signingConformance: settings.signingConformance || "B-LT",
-  });
 
   const [trialDays, setTrialDays] = useState(settings.trialLengthDays);
   const [maintenance, setMaintenance] = useState(settings.maintenanceMode);
@@ -67,7 +69,6 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
     try { return JSON.parse(settings.featureFlags); } catch { return {} as FeatureFlags; }
   });
 
-  const certDays = daysUntil(settings.certExpiryAt);
 
   return (
     <>
@@ -149,7 +150,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
           <CardTitle className="flex items-center gap-2 text-base">
             <Timer className="h-4 w-4 text-muted-foreground" aria-hidden /> Signing infrastructure
           </CardTitle>
-          <CardDescription>Timestamp authority and platform sealing certificate.</CardDescription>
+          <CardDescription>Timestamp authority for every seal, and how workspaces sign their sealed PDFs.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-1.5">
@@ -161,67 +162,47 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Current status: {settings.tsaReachable ? "reachable - timestamps applied to every seal" : "unreachable - seals fall back to B-B conformance"}
+              {settings.tsaReachable
+                ? "Last request succeeded. Seals in workspaces without their own TSA are timestamped here (level B-T)."
+                : "Last request failed. Seals are made without a timestamp (level B-B) until it recovers; the timestamp is retried when the evidence pack is exported."}
             </p>
           </div>
 
           <Separator />
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Sealing certificate</p>
-              <span className={certDays > 30 ? "text-xs text-muted-foreground" : "text-xs font-medium text-warning"}>
-                Expires in {certDays} days ({new Date(settings.certExpiryAt).toLocaleDateString("en-GB")})
-              </span>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="cert-fingerprint">SHA-256 Fingerprint</Label>
-                <Input
-                  id="cert-fingerprint"
-                  value={certSettings.certFingerprint}
-                  onChange={(e) => setCertSettings({ ...certSettings, certFingerprint: e.target.value })}
-                  className="font-mono text-xs h-11"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cert-expiry">Expiry Date</Label>
-                <Input
-                  id="cert-expiry"
-                  type="date"
-                  value={certSettings.certExpiryAt}
-                  onChange={(e) => setCertSettings({ ...certSettings, certExpiryAt: e.target.value })}
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cert-conformance">Target Conformance Level</Label>
-                <select
-                  id="cert-conformance"
-                  value={certSettings.signingConformance}
-                  onChange={(e) => setCertSettings({ ...certSettings, signingConformance: e.target.value })}
-                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="B-LT">PAdES B-LT (Long-Term Validation)</option>
-                  <option value="B-LTA">PAdES B-LTA (Long-Term Archival with TSA)</option>
-                  <option value="B-T">PAdES B-T (Electronic Timestamp)</option>
-                  <option value="B-B">PAdES B-B (Basic Signature)</option>
-                </select>
-              </div>
-            </div>
-
-            <Button
-              className="h-11"
-              onClick={() => act.mutate({ op: "save-signing", data: certSettings })}
-              disabled={act.isPending}
-            >
-              <KeyRound className="h-4 w-4" aria-hidden /> Save Certificate Settings
-            </Button>
-
+          <div className="space-y-3" data-testid="admin-sealing">
+            <p className="text-sm font-medium">Sealed PDFs (PAdES)</p>
             <p className="text-xs text-muted-foreground">
-              The achieved level is always re-read from the sealed file and recorded per envelope - never claimed from configuration alone.
+              Each workspace signs its sealed PDFs with its own seal identity, assigned automatically: its active sealing
+              certificate (issued in Settings, or a CA-issued .p12 it imported), otherwise its evidence key. There is no
+              shared platform key to rotate here.
             </p>
+            <dl className="grid gap-3 text-sm sm:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <dt className="text-xs text-muted-foreground">Workspaces with their own seal certificate</dt>
+                <dd className="mt-1 font-medium">{sealing.withCertificate} of {sealing.workspaces}{sealing.imported ? ` (${sealing.imported} imported)` : ""}</dd>
+              </div>
+              <div className="rounded-lg border p-3">
+                <dt className="text-xs text-muted-foreground">Sealed PDFs, last 30 days</dt>
+                <dd className="mt-1 font-medium">{sealing.signedPdfs30d} · {sealing.padesBT30d} at PAdES B-LTA</dd>
+              </div>
+              <div className="rounded-lg border p-3">
+                <dt className="text-xs text-muted-foreground">Seal keys at rest</dt>
+                <dd className={cn("mt-1 font-medium", !sealing.keyVault && "text-warning")}>
+                  {sealing.keyVault ? "Encrypted (AES-256-GCM)" : "Not encrypted: set DOCURAMA_KEY_ENCRYPTION_KEY"}
+                </dd>
+              </div>
+            </dl>
+            {sealing.expiringSoon.length > 0 && (
+              <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-xs">
+                <p className="font-medium">Seal certificates expiring within 30 days</p>
+                <ul className="mt-1 space-y-0.5">
+                  {sealing.expiringSoon.map((c) => (
+                    <li key={`${c.tenant}-${c.commonName}`}>{c.tenant}: {c.commonName}, {new Date(c.notAfter).toLocaleDateString("en-GB")}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -306,7 +287,7 @@ function SettingsBody({ settings, act }: { settings: PlatformSettings; act: Act 
 export function AdminSettings() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin", "settings"],
-    queryFn: () => apiGet<{ settings: PlatformSettings }>("/api/admin/settings"),
+    queryFn: () => apiGet<{ settings: PlatformSettings; sealing: SealingOverview }>("/api/admin/settings"),
   });
   const act = useAct();
 
@@ -321,7 +302,7 @@ export function AdminSettings() {
         title="Platform settings"
         description="Global configuration for delivery, timestamping, sealing and feature availability."
       />
-      <SettingsBody settings={data.settings} act={act} />
+      <SettingsBody settings={data.settings} sealing={data.sealing} act={act} />
     </div>
   );
 }

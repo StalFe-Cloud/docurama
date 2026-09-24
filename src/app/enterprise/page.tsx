@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { EnterpriseLeadForm } from "@/components/marketing/enterprise-lead-form";
 import { PortalProviders } from "@/components/portal/providers";
 
@@ -51,7 +52,7 @@ const STEPS = [
 ];
 
 const INCLUDED = [
-  { icon: Users, title: "100 seats, structured your way", body: "Organize members into small team groups inside the company workspace — Sales, HR, Legal — with per-team visibility of activity, without fragmenting billing or audit." },
+  { icon: Users, title: "Custom seat count, structured your way", body: "Organize members into small team groups inside the company workspace — Sales, HR, Legal — with per-team visibility of activity, without fragmenting billing or audit." },
   { icon: KeyRound, title: "SSO/SAML and BYO certificates", body: "Enroll your identity provider and import your own signing and sealing certificates, including qualified certificates from your QTSP." },
   { icon: Lock, title: "21 CFR Part 11 mode", body: "Signature manifestation (§11.50), signer-consent records (§11.100), optional re-authentication before signing, and audit events on every mutation." },
   { icon: FileSearch, title: "Audit chain exports and evidence packs", body: "Every envelope carries a court-ready evidence pack; export the full audit chain for any period your auditors ask about." },
@@ -64,15 +65,15 @@ export default function EnterprisePage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6" aria-label="Main">
-          <Link href="/" className="flex items-center gap-2" aria-label="Docurama home">
+          <MarketingHomeLink className="gap-2">
             <BrandLogo tagline size="sm" />
-          </Link>
+          </MarketingHomeLink>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/">Back to docurama.eu</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/welcome">Start free trial</Link>
+              <Link href="/welcome?plan=SOLO">Start free trial</Link>
             </Button>
           </div>
         </nav>
@@ -143,10 +144,10 @@ export default function EnterprisePage() {
               ))}
             </div>
             <p className="mt-6 text-xs text-muted-foreground">
-              List price is €349/month for 100 seats and 5,000 envelopes;
-              committed 3/6/12-month terms take −5/−10/−20%. Higher volumes,
-              self-hosting and on-premises deployments are quoted per rollout —
-              the form below captures what we need to price it.
+              Enterprise pricing is custom: seats, envelope volume, storage and
+              price are sized to your organization and set in your contract, as
+              are self-hosting and on-premises deployments. The form below
+              captures what we need to quote your rollout.
             </p>
           </div>
         </section>

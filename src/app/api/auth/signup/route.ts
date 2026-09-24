@@ -7,6 +7,7 @@ import { issueEmailVerification, requestOrigin } from "@/lib/onboarding";
 import { checkBotGuard } from "@/lib/bot-guard";
 import { publicRegistrationAllowed } from "@/lib/deployment-policy";
 import { seatCapacity } from "@/lib/billing";
+import { SELF_SERVE_PLANS, planHasFreeTrial } from "@/lib/plans";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -129,18 +130,21 @@ async function handlePost(req: NextRequest) {
         if (organization.length > 80) return jsonError("Organization name must be 80 characters or fewer");
         const slug = `${organization.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "org"}-${Math.random().toString(36).slice(2, 8)}`;
         const trialDays = (await tx.platformSetting.findUnique({ where: { id: "singleton" } }))?.trialLengthDays ?? 14;
-        // ?plan= prefill (pricing page CTA): SOLO is the Starter feature set
-        // capped at one seat. Only self-serve plans are accepted here —
-        // ENTERPRISE goes through /enterprise (sales-assisted onboarding).
+        // ?plan= prefill (pricing page CTA). Only self-serve plans are accepted
+        // here — ENTERPRISE goes through /enterprise (sales-assisted onboarding).
+        // Solo is the free-trial plan and the default; Starter and Business
+        // start with a zero-length trial, i.e. they pay before the first envelope.
         const requestedPlan = String(body.planCode ?? "").trim().toUpperCase();
-        const planCode = requestedPlan === "SOLO" ? "SOLO" : "STARTER";
+        const planCode = SELF_SERVE_PLANS.includes(requestedPlan as never) ? requestedPlan : "SOLO";
+        const createdAt = new Date();
         const tenant = await tx.tenant.create({
           data: {
             name: organization,
             slug,
             planCode,
             status: "TRIAL",
-            trialEndsAt: new Date(Date.now() + trialDays * 24 * 3600_000),
+            createdAt,
+            trialEndsAt: new Date(createdAt.getTime() + (planHasFreeTrial(planCode) ? trialDays * 24 * 3600_000 : 0)),
           },
         });
         tenantId = tenant.id;

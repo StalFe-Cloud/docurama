@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { getBlogPost, listBlogPosts, formatDate } from "@/lib/blog";
 import { MarkdownBody } from "@/components/docs/markdown-body";
 import { ScrollTop } from "@/components/marketing/scroll-top";
@@ -58,10 +59,10 @@ export default async function BlogPostPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <Link href="/blog" aria-label="Docurama blog" className="flex items-center gap-2.5">
-            <BrandLogo size="sm" />
-            <span className="text-xs font-medium text-muted-foreground">Blog</span>
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
+            <Link href="/blog" className="text-xs font-medium text-muted-foreground hover:text-foreground">Blog</Link>
+          </div>
           <Link href="/docs" className="text-xs font-medium text-muted-foreground hover:text-foreground">
             Documentation
           </Link>

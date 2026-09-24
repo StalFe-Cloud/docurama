@@ -34,6 +34,16 @@ export function isos<T extends Record<string, unknown>>(rows: T[]): T[] {
   return rows.map(iso);
 }
 
+/** An envelope row for JSON responses: dates as ISO strings, without the
+ * seal manifest and timestamp token (kilobytes each; the evidence pack and
+ * the verify endpoints are where those are served and checked) and without
+ * the sealed PDF's internal storage key. */
+export function envelopeRow<T extends { sealManifest?: string | null; sealTimestamp?: string | null; signedPdfKey?: string | null; contractText?: string | null; signedPdfRevisions?: string | null; signedPdfCheckAt?: Date | null } & Record<string, unknown>>(e: T) {
+  const { sealManifest: _manifest, sealTimestamp: _token, signedPdfKey: _key, signedPdfRevisions: _revisions, signedPdfCheckAt: _check, contractText, ...rest } = e;
+  void _manifest; void _token; void _key;
+  return { ...iso(rest), hasContractText: Boolean(contractText) };
+}
+
 export const jsonError = (message: string, status = 400) =>
   new Response(JSON.stringify({ error: message }), {
     status, headers: { "content-type": "application/json" },

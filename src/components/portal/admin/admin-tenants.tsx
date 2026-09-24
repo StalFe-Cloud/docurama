@@ -41,7 +41,7 @@ const PLANS = [
   { code: "SOLO", label: "Solo - €12/mo · 30 envelopes · 1 seat" },
   { code: "STARTER", label: "Starter - €29/mo · 100 envelopes · 3 seats" },
   { code: "BUSINESS", label: "Business - €79/mo · 250 envelopes · 10 seats" },
-  { code: "ENTERPRISE", label: "Enterprise - €349/mo · 5,000 envelopes · 100 seats" },
+  { code: "ENTERPRISE", label: "Enterprise - custom (set negotiated limits and price on the subscription)" },
 ];
 
 export function AdminTenants() {
@@ -429,7 +429,7 @@ export function AdminTenants() {
                 <option value="SOLO">Solo (€12/mo · 1 seat)</option>
                 <option value="STARTER">Starter (€29/mo · 3 seats)</option>
                 <option value="BUSINESS">Business (€79/mo · 10 seats)</option>
-                <option value="ENTERPRISE">Enterprise (€349/mo · 100 seats)</option>
+                <option value="ENTERPRISE">Enterprise (custom — negotiated)</option>
               </select>
             </div>
             <div className="space-y-1.5">

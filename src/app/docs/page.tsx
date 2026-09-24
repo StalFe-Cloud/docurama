@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo, BRAND_LEGAL_NAME } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { API_REFERENCE } from "@/lib/api-reference";
 import { ScrollTop } from "@/components/marketing/scroll-top";
 import { DocsSearch } from "@/components/docs/docs-search";
@@ -60,7 +61,7 @@ export default function DocsPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <BrandLogo size="sm" />
+          <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
             <DocsSearch items={searchItems} />
             <LanguageSwitcher />
@@ -111,7 +112,7 @@ export default function DocsPage() {
           <section>
             <H2 id="getting-started">Getting started</H2>
             <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground marker:font-semibold marker:text-foreground">
-              <li><span className="font-medium text-foreground">Create your account</span> at app.docurama.eu/welcome. Signup opens a 14-day Starter trial and creates your organization workspace.</li>
+              <li><span className="font-medium text-foreground">Create your account</span> at app.docurama.eu/welcome. Signup creates your organization workspace: Solo opens a 14-day free trial; Starter and Business are activated at checkout (Settings → Billing).</li>
               <li><span className="font-medium text-foreground">Verify your email.</span> A verification link is sent from notifications@docurama.eu. Until an SMTP transport is wired for your deployment, workspace admins can verify from the onboarding wizard with an audited action.</li>
               <li><span className="font-medium text-foreground">Name your organization</span> and pick an industry and size. This tunes your workspace defaults.</li>
               <li><span className="font-medium text-foreground">Add your signature</span> by drawing, typing or uploading. Signatures are stored per user and reused on every envelope.</li>

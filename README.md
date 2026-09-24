@@ -161,7 +161,7 @@ The dedicated enterprise deployment at **`https://docurama.stalfe.com`** provide
 
 | Login Email | Organization | Role | Plan Tier | Initial Password | Capabilities |
 |---|---|---|---|---|---|
-| **`sriram.rajan@stalfe.com`** | StålFe | `WORKSPACE_ADMIN` / `PLATFORM_ADMIN` (Owner) | **ENTERPRISE** | `StalFe2026!Admin` | Full workspace governance, BYO certificate upload, team management, billing, signing |
+| **`sriram.rajan@stalfe.com`** | StålFe | `WORKSPACE_ADMIN` / `PLATFORM_ADMIN` (Owner) | **ENTERPRISE** | _set at provisioning — never documented_ | Full workspace governance, BYO certificate upload, team management, billing, signing |
 
 #### Direct Access Links:
 - **Sign In:** [`https://docurama.stalfe.com/login`](https://docurama.stalfe.com/login)
@@ -176,7 +176,7 @@ Platform administrators have root oversight across all tenants, global audit log
 
 | Email | Role | Operator Name | Initial Password | 2FA Status | Permissions |
 |---|---|---|---|---|---|
-| **`admin@docurama.eu`** | `PLATFORM_ADMIN` | Docurama Admin | `StalFe2026!Admin` | Configurable | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits, billing, telemetry |
+| **`admin@docurama.eu`** | `PLATFORM_ADMIN` | Docurama Admin | _set at provisioning — never documented_ | Configurable | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits, billing, telemetry |
 
 ---
 
@@ -520,7 +520,7 @@ Rotate initial demonstration credentials for production deployment:
   - Change default password for `admin@docurama.eu` and `ops@docurama.eu` (default was `admin1234`) via [https://admin.docurama.eu](https://admin.docurama.eu) or direct `/reset-password`.
   - Configure TOTP Two-Factor Authentication (Google Authenticator / 1Password) on the platform operator account.
 - [ ] **Rotate StålFe Dedicated Enterprise Passwords:**
-  - Change initial password for `sriram.rajan@stalfe.com` (initial: `StalFe2026!Admin`) via [https://docurama.stalfe.com/login](https://docurama.stalfe.com/login).
+  - Change initial password for `sriram.rajan@stalfe.com` via [https://docurama.stalfe.com/login](https://docurama.stalfe.com/login).
 - [ ] **Rotate Production Environment Encryption Salts:**
   - Verify `/opt/docurama-cloud/.env` and `/opt/docurama-enterprise/.env` on `nexa-vps` have unique, random 64-character hex values for `SESSION_SECRET`, `ENCRYPTION_KEY`, and `NEXTAUTH_SECRET`.
 

@@ -1,9 +1,13 @@
+import { createHash } from "crypto";
 import Stripe from "stripe";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { planDef, termFor } from "@/lib/plans";
+import { planDef, termCents, termFor } from "@/lib/plans";
 import { monthlyWindow, shiftUtcMonth, usageAnchor } from "@/lib/monthly-period";
 import { serializableTransaction } from "@/lib/transaction";
+import { STRIPE_API_VERSION, STRIPE_APP, ensurePlanPrice, ensurePortalConfiguration, resetStripeCatalogCache, stripeAutomaticTax } from "@/lib/stripe-catalog";
+
+export { termCents };
 
 /**
  * Payment provider rails (go-live cycle).
@@ -58,7 +62,7 @@ export function stripeClient(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY ?? "sk_test_disabled";
   if (!stripeSingleton) {
     stripeSingleton = new Stripe(key, {
-      apiVersion: "2026-08-26.dahlia" as Stripe.LatestApiVersion,
+      apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion,
       maxNetworkRetries: 2,
       ...stripeHostConfig(),
     });
@@ -69,18 +73,29 @@ export function stripeClient(): Stripe {
 /** Test seam: reset the singleton when the api base changes. */
 export function resetStripeClient(): void {
   stripeSingleton = null;
+  resetStripeCatalogCache();
+}
+
+/** Stripe is selected but cannot take money safely (e.g. no webhook secret). */
+export class BillingUnavailableError extends Error {}
+
+/**
+ * Operator-facing Stripe posture for /api/health — booleans only, never key
+ * material. `ready` is false when checkouts would take money that could never
+ * activate a plan (no webhook secret).
+ */
+export function stripePosture() {
+  const key = process.env.STRIPE_SECRET_KEY ?? "";
+  const webhookConfigured = Boolean(process.env.STRIPE_WEBHOOK_SECRET);
+  return {
+    livemode: /^(sk|rk)_live_/.test(key),
+    webhookConfigured,
+    automaticTax: stripeAutomaticTax(),
+    ready: paymentMode() === "stripe" && webhookConfigured,
+  };
 }
 
 // ─── Money math ───────────────────────────────────────────────────────────────
-
-/** Total cents charged for a plan under a committed term (discount applied). */
-export function termCents(planCode: string, termMonths: number): number {
-  const plan = planDef(planCode);
-  const term = termFor(termMonths);
-  // monthlyEur × (100 − discountPct) × months is already euro-cents:
-  // Starter 12mo → 29 × 80 × 12 = 27840 cents = €278.40.
-  return Math.round(plan.monthlyEur * (100 - term.discountPct) * term.months);
-}
 
 export function centsToEur(cents: number): string {
   return `€${(cents / 100).toFixed(2)}`;
@@ -115,43 +130,60 @@ export async function createCheckout(input: {
   const description = `${plan.name} plan — ${term.months}-month term${term.discountPct ? ` (−${term.discountPct}%)` : ""}`;
 
   if (paymentMode() === "stripe") {
+    // Without the signing secret no paid checkout could ever activate a plan:
+    // refuse to take money rather than charge customers into a void.
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new BillingUnavailableError("STRIPE_WEBHOOK_SECRET is not set; paid checkouts cannot activate plans");
+    }
     const stripe = stripeClient();
     const customer = await getOrCreateStripeCustomer(input.tenantId, input.userEmail, `${input.userName} · ${input.tenantName}`);
+    const price = await ensurePlanPrice(stripe, input.planCode, term.months);
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: customer.externalId,
-      client_reference_id: input.tenantId,
-      metadata: { tenantId: input.tenantId, planCode: input.planCode, termMonths: String(input.termMonths) },
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "eur",
-            unit_amount: amountCents,
-            recurring: { interval: "month", interval_count: term.months },
-            product_data: { name: `Docurama ${plan.name}`, description },
-          },
-        },
-      ],
-      success_url: `${input.origin}/settings/billing?checkout=success`,
-      cancel_url: `${input.origin}/settings/billing?checkout=canceled`,
-    });
-
-    await db.payment.create({
+    // Record the ledger row first so a paid session can always be matched,
+    // even if this process dies between Stripe answering and the DB write.
+    const payment = await db.payment.create({
       data: {
         tenantId: input.tenantId,
         provider: "stripe",
         kind: "checkout",
         planCode: input.planCode,
-        termMonths: input.termMonths,
+        termMonths: term.months,
         amountCents,
         status: "PENDING",
-        reference: session.id,
-        checkoutUrl: session.url ?? undefined,
         description,
       },
     });
+    const identity = { app: STRIPE_APP, tenantId: input.tenantId, planCode: input.planCode, termMonths: String(term.months) };
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        customer: customer.externalId,
+        client_reference_id: input.tenantId,
+        metadata: { ...identity, paymentId: payment.id },
+        // Copied onto the subscription and every invoice it generates, so
+        // renewals are attributable on an account shared with other products.
+        subscription_data: { metadata: identity, description },
+        line_items: [{ price, quantity: 1 }],
+        billing_address_collection: "required",
+        customer_update: { address: "auto", name: "auto" },
+        tax_id_collection: { enabled: true },
+        automatic_tax: { enabled: stripeAutomaticTax() },
+        // Charge exactly the published EUR catalogue price — no local-currency
+        // conversion, so receipts, ledger and renewals all stay in euros.
+        adaptive_pricing: { enabled: false },
+        branding_settings: { display_name: "Docurama" },
+        locale: "auto",
+        success_url: `${input.origin}/settings/billing?checkout=success`,
+        cancel_url: `${input.origin}/settings/billing?checkout=canceled`,
+      }, { idempotencyKey: `docurama-checkout-${payment.id}` });
+    } catch (err) {
+      await db.payment.update({ where: { id: payment.id }, data: { status: "CANCELED", approverNote: "Stripe Checkout session could not be created" } });
+      throw err;
+    }
+
+    await db.payment.update({ where: { id: payment.id }, data: { reference: session.id, checkoutUrl: session.url ?? undefined } });
     return { mode: "stripe", url: session.url ?? undefined, reference: session.id, amountCents };
   }
 
@@ -173,14 +205,44 @@ export async function createCheckout(input: {
   return { mode: "manual", reference, amountCents, instructions: MANUAL_INSTRUCTIONS };
 }
 
+/**
+ * The tenant's live Stripe customer. A mapping to a customer that no longer
+ * exists on this key (deleted in the dashboard, or minted with test keys
+ * before the switch to live) is replaced instead of failing every checkout.
+ */
 async function getOrCreateStripeCustomer(tenantId: string, email: string, name: string) {
-  const existing = await db.paymentCustomer.findUnique({ where: { tenantId_provider: { tenantId, provider: "stripe" } } });
-  if (existing) return existing;
+  const where = { tenantId_provider: { tenantId, provider: "stripe" } };
   const stripe = stripeClient();
-  const customer = await stripe.customers.create({ email, name, metadata: { tenantId } });
-  return db.paymentCustomer.create({
-    data: { tenantId, provider: "stripe", externalId: customer.id },
-  });
+  const existing = await db.paymentCustomer.findUnique({ where });
+  if (existing) {
+    const found = await retrieveCustomer(stripe, existing.externalId);
+    if (found) return existing;
+    await db.paymentCustomer.deleteMany({ where: { id: existing.id } });
+  }
+  // Same tenant + details within 24h → same customer (double-clicked checkout).
+  const fingerprint = createHash("sha256").update(`${email}\n${name}`).digest("hex").slice(0, 16);
+  const customer = await stripe.customers.create(
+    { email, name, metadata: { app: STRIPE_APP, tenantId } },
+    { idempotencyKey: `docurama-customer-${tenantId}-${fingerprint}` },
+  );
+  try {
+    return await db.paymentCustomer.create({ data: { tenantId, provider: "stripe", externalId: customer.id } });
+  } catch (err) {
+    // A concurrent checkout mapped the tenant first; keep its customer.
+    const winner = await db.paymentCustomer.findUnique({ where });
+    if (winner) return winner;
+    throw err;
+  }
+}
+
+async function retrieveCustomer(stripe: Stripe, customerId: string): Promise<Stripe.Customer | null> {
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    return customer.deleted ? null : customer;
+  } catch (err) {
+    if ((err as { code?: string }).code === "resource_missing") return null;
+    throw err;
+  }
 }
 
 // ─── Activation (shared by Stripe webhook and manual admin approval) ─────────
@@ -206,6 +268,8 @@ export async function activateSubscription(input: {
   paymentReference?: string | null;
   /** Authoritative paid service-period end from Stripe; manual terms use now. */
   providerPeriodEnd?: Date;
+  /** What the customer was actually charged (Stripe amount_total, tax included). */
+  amountPaidCents?: number | null;
   actor: string;
   actorRole: string;
   note?: string;
@@ -214,7 +278,9 @@ export async function activateSubscription(input: {
   const term = termFor(input.termMonths);
   const now = new Date();
   const renewalAt = shiftUtcMonth(now, term.months);
-  const amountCents = termCents(input.planCode, input.termMonths);
+  const amountCents = Number.isSafeInteger(input.amountPaidCents) && input.amountPaidCents! >= 0
+    ? input.amountPaidCents!
+    : termCents(input.planCode, input.termMonths);
   const paidUntil = input.provider === "stripe" ? input.providerPeriodEnd : renewalAt;
   if (!paidUntil || !Number.isFinite(paidUntil.getTime())) throw new Error("A valid provider service-period end is required");
 
@@ -237,7 +303,12 @@ export async function activateSubscription(input: {
       data: { status: "PAID", paidAt: new Date(), approverNote: input.note },
     });
     if (claimed.count !== 1) throw new Error("Checkout payment changed during activation");
-    const tenant = await tx.tenant.update({ where: { id: input.tenantId }, data: { planCode: input.planCode } });
+    const before = await tx.tenant.findUniqueOrThrow({ where: { id: input.tenantId }, select: { status: true } });
+    // A paid plan ends the trial. SUSPENDED is an admin decision and stays.
+    const tenant = await tx.tenant.update({
+      where: { id: input.tenantId },
+      data: { planCode: input.planCode, ...(before.status === "TRIAL" ? { status: "ACTIVE" } : {}) },
+    });
 
     const usage = monthlyWindow(existing ? { ...existing, usageAnchorAt: usageAnchor(existing, now) } : { renewalAt: paidUntil, termMonths: term.months, usageAnchorAt: now }, now);
     const metering = existing
@@ -388,10 +459,11 @@ export async function markPastDue(providerSubscriptionRef: string, invoiceRef: s
   });
 }
 
-/** The customer canceled in the Stripe portal: mark CANCELED, keep the data. */
-export async function markCanceled(providerSubscriptionRef: string): Promise<void> {
-  const sub = await db.subscription.findFirst({ where: { providerRef: providerSubscriptionRef }, include: { tenant: true } });
-  if (!sub || sub.status === "CANCELED") return;
+/** The Stripe subscription ended (portal cancellation, dunning exhausted): mark CANCELED, keep the data. */
+export async function markCanceled(providerSubscriptionRef: string): Promise<boolean> {
+  const sub = await db.subscription.findFirst({ where: { provider: "stripe", providerRef: providerSubscriptionRef }, include: { tenant: true } });
+  if (!sub) return false;
+  if (sub.status === "CANCELED") return true;
   await db.subscription.update({ where: { id: sub.id }, data: { status: "CANCELED" } });
   await db.auditEvent.create({
     data: {
@@ -402,9 +474,157 @@ export async function markCanceled(providerSubscriptionRef: string): Promise<voi
       tenantId: sub.tenantId, tenantName: sub.tenant.name,
       ip: "system",
       severity: "WARNING",
-      detail: "Subscription canceled from the Stripe customer portal. The workspace keeps its data; the plan stays active until the paid term ends.",
+      detail: "Stripe subscription ended (portal cancellation or exhausted payment retries). The workspace keeps its data; sending stops once the paid term has ended.",
     },
   });
+  return true;
+}
+
+const RETIRABLE_STATUSES = new Set<string>(["active", "trialing", "past_due", "unpaid", "incomplete", "paused"]);
+
+/**
+ * A plan or term change is a fresh Checkout subscription. Once it is active,
+ * every other live subscription on the tenant's customer is canceled with a
+ * prorated credit (applied by Stripe to the next invoice) — otherwise the old
+ * plan would keep charging alongside the new one. Idempotent.
+ */
+export async function retireSupersededStripeSubscriptions(tenantId: string, keepSubscriptionRef: string): Promise<string[]> {
+  const customer = await db.paymentCustomer.findUnique({ where: { tenantId_provider: { tenantId, provider: "stripe" } } });
+  if (!customer) return [];
+  const stripe = stripeClient();
+  const subscriptions = await stripe.subscriptions.list({ customer: customer.externalId, status: "all", limit: 100 });
+  const retired: string[] = [];
+  for (const subscription of subscriptions.data) {
+    if (subscription.id === keepSubscriptionRef || !RETIRABLE_STATUSES.has(subscription.status)) continue;
+    // Never-paid subscriptions have nothing to credit back.
+    const settled = subscription.status !== "incomplete";
+    await stripe.subscriptions.cancel(subscription.id, {
+      prorate: settled,
+      invoice_now: settled,
+      cancellation_details: { comment: `Superseded by ${keepSubscriptionRef} (Docurama plan change)` },
+    }, { idempotencyKey: `docurama-retire-${subscription.id}` });
+    retired.push(subscription.id);
+  }
+  if (retired.length) {
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { name: true, slug: true } });
+    await db.auditEvent.create({
+      data: {
+        actor: "Docurama Billing", actorRole: "SYSTEM", action: "subscription.superseded",
+        resource: `tenant:${tenant?.slug ?? tenantId}`, tenantId, tenantName: tenant?.name, ip: "system",
+        detail: `Plan change: canceled ${retired.join(", ")} in favour of ${keepSubscriptionRef}; unused time credited to the customer balance.`,
+      },
+    });
+  }
+  return retired;
+}
+
+/** A checkout that will never be paid: async payment failed, or the session expired. */
+export async function closeCheckout(paymentId: string, outcome: "FAILED" | "CANCELED", note: string): Promise<void> {
+  const closed = await db.payment.updateMany({ where: { id: paymentId, status: "PENDING" }, data: { status: outcome, approverNote: note } });
+  if (closed.count !== 1 || outcome !== "FAILED") return;
+  const payment = await db.payment.findUniqueOrThrow({ where: { id: paymentId }, include: { tenant: true } });
+  await db.auditEvent.create({
+    data: {
+      actor: "Stripe", actorRole: "SYSTEM", action: "billing.checkout_failed", resource: `tenant:${payment.tenant.slug}`,
+      tenantId: payment.tenantId, tenantName: payment.tenant.name, ip: "system", severity: "WARNING",
+      detail: `${payment.description}: ${note}`,
+    },
+  });
+  const owner = await db.member.findFirst({ where: { tenantId: payment.tenantId, status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } }, include: { user: true } });
+  if (owner) {
+    await db.mailOutbox.create({
+      data: {
+        toEmail: owner.user.email,
+        subject: `Payment not completed for ${payment.tenant.name}`,
+        template: "BILLING",
+        bodyText:
+          `The payment for "${payment.description}" could not be completed (${note}).\n\n` +
+          `Your plan has not changed. You can try again with another payment method from Settings → Billing.`,
+      },
+    });
+  }
+}
+
+/** Portal cancellation scheduled or reverted: audit the churn signal for admins. */
+export async function recordSubscriptionUpdate(subscription: Stripe.Subscription, previous: Record<string, unknown> | undefined): Promise<boolean> {
+  const sub = await db.subscription.findFirst({ where: { provider: "stripe", providerRef: subscription.id }, include: { tenant: true } });
+  if (!sub) return false;
+  if (!previous || !("cancel_at_period_end" in previous || "cancel_at" in previous)) return true;
+  const scheduled = subscription.cancel_at_period_end || Boolean(subscription.cancel_at);
+  await db.auditEvent.create({
+    data: {
+      actor: "Stripe", actorRole: "SYSTEM",
+      action: scheduled ? "subscription.cancel_scheduled" : "subscription.cancel_reverted",
+      resource: `subscription:${sub.id}`, tenantId: sub.tenantId, tenantName: sub.tenant.name, ip: "system",
+      severity: scheduled ? "WARNING" : "INFO",
+      detail: scheduled
+        ? `Cancellation scheduled from the customer portal; service continues until ${sub.renewalAt.toISOString().slice(0, 10)}.`
+        : "Scheduled cancellation reverted from the customer portal.",
+    },
+  });
+  return true;
+}
+
+async function tenantForStripeCustomer(customer: string | { id: string } | null | undefined) {
+  const externalId = typeof customer === "string" ? customer : customer?.id;
+  if (!externalId) return null;
+  const mapping = await db.paymentCustomer.findFirst({ where: { provider: "stripe", externalId }, include: { tenant: true } });
+  return mapping?.tenant ?? null;
+}
+
+/** True when a Stripe customer id belongs to a Docurama workspace. */
+export async function isDocuramaCustomer(customer: string | { id: string } | null | undefined): Promise<boolean> {
+  return (await tenantForStripeCustomer(customer)) !== null;
+}
+
+/**
+ * Refunds issued from the Stripe dashboard land in the ledger (one REFUNDED
+ * row per refunded increment). A refund never changes the plan by itself —
+ * cancel the subscription in Stripe as well when service should stop.
+ */
+export async function recordRefund(charge: Stripe.Charge): Promise<boolean> {
+  const tenant = await tenantForStripeCustomer(charge.customer);
+  if (!tenant) return false;
+  const reference = `refund:${charge.id}:${charge.amount_refunded}`;
+  await serializableTransaction(async (tx) => {
+    if (await tx.payment.findFirst({ where: { provider: "stripe", reference } })) return;
+    const earlier = await tx.payment.findMany({ where: { provider: "stripe", kind: "refund", reference: { startsWith: `refund:${charge.id}:` } } });
+    const delta = charge.amount_refunded - earlier.reduce((sum, row) => sum + row.amountCents, 0);
+    if (delta <= 0) return;
+    const sub = await tx.subscription.findFirst({ where: { tenantId: tenant.id }, orderBy: { renewalAt: "desc" } });
+    await tx.payment.create({
+      data: {
+        tenantId: tenant.id, provider: "stripe", kind: "refund", planCode: sub?.planCode ?? tenant.planCode,
+        termMonths: sub?.termMonths ?? 1, amountCents: delta, currency: charge.currency.toUpperCase(), status: "REFUNDED",
+        reference, description: `Refund of ${centsToEur(delta)} on charge ${charge.id}`, paidAt: new Date(),
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actor: "Stripe", actorRole: "SYSTEM", action: "billing.refunded", resource: `tenant:${tenant.slug}`,
+        tenantId: tenant.id, tenantName: tenant.name, ip: "system", severity: "WARNING",
+        detail: `${centsToEur(delta)} refunded on ${charge.id} (total refunded ${centsToEur(charge.amount_refunded)}). The plan is unchanged unless the subscription is canceled.`,
+      },
+    });
+  });
+  return true;
+}
+
+/** A chargeback: CRITICAL audit so the billing team responds before the evidence deadline. */
+export async function recordDispute(dispute: Stripe.Dispute, charge: Stripe.Charge): Promise<boolean> {
+  const tenant = await tenantForStripeCustomer(charge.customer);
+  if (!tenant) return false;
+  const already = await db.auditEvent.findFirst({ where: { action: "billing.dispute_opened", resource: `dispute:${dispute.id}` } });
+  if (already) return true;
+  const due = dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000).toISOString().slice(0, 10) : "see Stripe";
+  await db.auditEvent.create({
+    data: {
+      actor: "Stripe", actorRole: "SYSTEM", action: "billing.dispute_opened", resource: `dispute:${dispute.id}`,
+      tenantId: tenant.id, tenantName: tenant.name, ip: "system", severity: "CRITICAL",
+      detail: `Chargeback of ${centsToEur(dispute.amount)} (${dispute.reason}) on ${charge.id}. Submit evidence in the Stripe dashboard by ${due}.`,
+    },
+  });
+  return true;
 }
 
 // ─── Receipts ────────────────────────────────────────────────────────────────
@@ -431,8 +651,10 @@ export async function createPortalSession(tenantId: string, origin: string): Pro
   const customer = await db.paymentCustomer.findUnique({ where: { tenantId_provider: { tenantId, provider: "stripe" } } });
   if (!customer) return { error: "No Stripe customer on file yet — start a checkout first." };
   const stripe = stripeClient();
+  if (!(await retrieveCustomer(stripe, customer.externalId))) return { error: "No Stripe customer on file yet — start a checkout first." };
   const session = await stripe.billingPortal.sessions.create({
     customer: customer.externalId,
+    configuration: await ensurePortalConfiguration(stripe, origin),
     return_url: `${origin}/settings/billing`,
   });
   return { url: session.url };

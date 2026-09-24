@@ -44,6 +44,22 @@ services:
       # Base domain for the vanity sub-domain routing (status./docs./verify./…).
       # Unset falls back to the application default (docurama.eu).
       - ROOT_DOMAIN=${ROOT_DOMAIN:-}
+      # Payment rails (docs/PAYMENTS.md). Unset = manual bank-transfer mode.
+      # Put the values in the .env next to this file (never commit it).
+      - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_AUTOMATIC_TAX=${STRIPE_AUTOMATIC_TAX:-}
+      - STRIPE_TAX_BEHAVIOR=${STRIPE_TAX_BEHAVIOR:-}
+      - BILLING_GRACE_DAYS=${BILLING_GRACE_DAYS:-}
+      - BILLING_ENFORCEMENT=${BILLING_ENFORCEMENT:-}
+      # RFC 3161 seal timestamps (docs/EVIDENCE-PACK.md). Unset = the platform
+      # TSA from Admin > Settings; "off" disables them (air-gapped installs).
+      - SEAL_TSA_URL=${SEAL_TSA_URL:-}
+      - SEAL_TIMESTAMPS=${SEAL_TIMESTAMPS:-}
+      # Seal certificate keys at rest (openssl rand -hex 32); required to import .p12 seals.
+      - DOCURAMA_KEY_ENCRYPTION_KEY=${DOCURAMA_KEY_ENCRYPTION_KEY:-}
+      - PUBLIC_VERIFY_URL=${PUBLIC_VERIFY_URL:-}
       # SMTP delivery (unset = outbox-only mode, mail stays QUEUED + inspectable).
       #   smtp://user:pass@relay.example.com:587 or smtps://…:465
       # With the mail profile below, the one-liner is:

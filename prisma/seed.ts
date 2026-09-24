@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import { PLAN_CATALOG, PLAN_ORDER } from "../src/lib/plans";
 import { foldForSearch } from "../src/lib/search";
+import { SEAL_FORMAT, buildSealManifest, sealDigest, sealManifestJson } from "../src/lib/seal";
 
 const db = new PrismaClient();
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -65,7 +66,7 @@ async function main() {
 
   // ── Users & memberships ────────────────────────────────────────────────
   const usersData = [
-    { email: "admin@docurama.eu", first: "Docurama", last: "Admin", role: "PLATFORM_ADMIN", pw: "StalFe2026!Admin", tenant: "stalfe", mrole: "OWNER", totp: false },
+    { email: "admin@docurama.eu", first: "Docurama", last: "Admin", role: "PLATFORM_ADMIN", pw: process.env.SEED_ADMIN_PASSWORD || "demo-admin-change-me", tenant: "stalfe", mrole: "OWNER", totp: false },
   ];
   const users: Record<string, string> = {};
   for (const u of usersData) {
@@ -181,8 +182,8 @@ async function main() {
         message: "Please review and sign at your earliest convenience.",
         pages: 2 + (i % 12), createdAt: created,
         sealedAt, completedAt: sealedAt,
-        conformanceLevel: done ? pick(["B-LT", "B-LTA", "B-T"], i) : null,
-        sha256: done ? sha(`docurama-seal-${code}`).slice(0, 64) : null,
+        // Seeded seals carry no RFC 3161 token, so they are B-B (src/lib/tsa.ts).
+        conformanceLevel: done ? "B-B" : null,
         voidedAt: status === "VOIDED" ? d(i % 20) : null,
         voidReason: status === "VOIDED" ? "Withdrawn by sender · terms renegotiated" : null,
         lastRemindedAt: status === "SENT" && i % 3 === 0 ? d(0.5) : null,
@@ -217,19 +218,28 @@ async function main() {
         await db.envelopeEvent.create({
           data: {
             envelopeId: env.id, actor, action, at: d((i % 30), -off * 24),
-            detail: action === "SENT" ? "Signing invitations delivered via SMTP" : action === "SIGNED" ? "Signature applied · PAdES compliant" : null,
+            detail: action === "SENT" ? "Signing invitations delivered via SMTP" : action === "SIGNED" ? "Signed via signing link" : null,
             ipHash: sha(`ip-${env.id}-${action}`).slice(0, 12),
           },
         });
       }
       if (status === "COMPLETED") {
         await db.envelopeEvent.create({
-          data: { envelopeId: env.id, actor: "Docurama", action: "SEALED", at: sealedAt!, detail: `Sealed with conformance ${pick(["B-LT", "B-LTA", "B-T"], i)} · RFC 3161 timestamp applied`, ipHash: sha(`ip-${env.id}-seal`).slice(0, 12) },
+          data: { envelopeId: env.id, actor: "Docurama", action: "SEALED", at: sealedAt!, detail: "All signers completed. Envelope sealed (docurama-seal/2, demo data: no RFC 3161 timestamp)", ipHash: sha(`ip-${env.id}-seal`).slice(0, 12) },
         });
       }
       if (status === "VOIDED") {
         await db.envelopeEvent.create({ data: { envelopeId: env.id, actor: "Sender", action: "VOIDED", at: env.voidedAt!, detail: env.voidReason } });
       }
+    }
+    if (done) {
+      // Seal v2, exactly as the sign route seals, so verify recomputes it.
+      const full = await db.envelope.findUniqueOrThrow({ where: { id: env.id }, include: { recipients: true, events: true } });
+      const manifest = buildSealManifest({
+        publicCode: code, title: envTitle, pages: full.pages, createdAt: full.createdAt, sealedAt: sealedAt!,
+        documentSha256: null, verifiedSenderDomain: null, recipients: full.recipients, events: full.events, fields: null,
+      });
+      await db.envelope.update({ where: { id: env.id }, data: { sha256: sealDigest(manifest), sealFormat: SEAL_FORMAT, sealManifest: sealManifestJson(manifest) } });
     }
   }
 

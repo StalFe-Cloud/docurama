@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { requestOrigin } from "@/lib/onboarding";
 import { createPortalSession, paymentMode } from "@/lib/payments";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +25,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const origin = new URL(req.url).origin;
-    const result = await createPortalSession(me.tenantId, origin);
+    const result = await createPortalSession(me.tenantId, requestOrigin(req));
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ url: result.url });
   } catch (err) {

@@ -256,8 +256,22 @@ model Envelope {
   message           String?
   pages             Int       @default(1)
   conformanceLevel  String?   // B-B | B-T | B-LT | B-LTA
-  sha256            String?
+  sha256            String?   // sealed: seal digest (see sealFormat); before sealing: the document's SHA-256
   sealedAt          DateTime?
+  sealFormat        String?   // "docurama-seal/2" = manifest digest binding signers, events and field values; null = legacy seal
+  sealManifest      String?   // canonical JSON whose SHA-256 is `sha256` (src/lib/seal.ts)
+  sealTimestamp     String?   // RFC 3161 TimeStampToken over sealManifest, base64 DER (src/lib/tsa.ts)
+  sealTimestampAt   DateTime? // the token's genTime
+  sealTimestampTsa  String?   // URL of the TSA that issued it
+  // PAdES-signed PDF of the envelope (src/lib/signed-pdf.ts): signatures and
+  // values stamped, a signature certificate page appended, signed by the seal identity.
+  signedPdfKey      String?   // storage key (documents/<tenant>/sealed_<hex>.pdf), outside the upload purge
+  signedPdfSha256   String?
+  signedPdfLevel    String?   // PAdES-B-LTA | PAdES-B-LT | PAdES-B-T | PAdES-B-B
+  signedPdfSigner   String?   // seal identity that signed it: label and certificate thumbprint
+  signedPdfAt       DateTime?
+  signedPdfCheckAt  DateTime? // next long-term pass: retry B-T/B-LT, or renew the archive timestamp before its TSA certificate expires
+  signedPdfRevisions String?  // JSON: earlier copies superseded by long-term updates [{ sha256, bytes, level, supersededAt }]
   completedAt       DateTime?
   voidedAt          DateTime?
   voidReason        String?
@@ -269,6 +283,9 @@ model Envelope {
   verifiedSenderDomain String? // sender email domain was DNS-TXT-verified at seal time
   attestedAt        DateTime? // when the minimal fingerprint was pushed to the public portal
   attestStatus      String?   // PUSHED | FAILED | SKIPPED
+  // Template envelopes: the contract text exactly as sent (a template can be
+  // edited later; what the signers saw cannot). Bound into the seal by hash.
+  contractText      String?
   fields            String?   // JSON: placed fields [{ id, type, pageNumber, x, y, width, height, recipientIndex, recipientEmail, label, required }]
 
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -280,6 +297,7 @@ model Envelope {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, titleLower])
+  @@index([signedPdfCheckAt])
 }
 
 model Recipient {
@@ -293,6 +311,11 @@ model Recipient {
   authMethod  String    @default("EMAIL") // EMAIL | SMS | PASSKEY
   signedAt    DateTime?
   accessToken String    @unique // signing access token (never exposed to other recipients in UI)
+  // Adopted signature (bound into the seal by its hash): type | draw | upload | saved
+  signatureMethod String?
+  signatureFont   String?
+  signatureImage  String?   // data URL (PNG or JPEG) for drawn, uploaded and saved image signatures
+  signatureSha256 String?   // SHA-256 of the image bytes, or of the typed name and font
 
   envelope Envelope @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
 
@@ -581,6 +604,11 @@ model SigningCertificate {
   validityDays     Int      @default(365)
   pkcs12Base64     String?  // encrypted PKCS#12 blob (passphrase never stored)
   certificatePem   String?
+  chainPem         String?  // issuing CA chain (imported certificates)
+  origin           String   @default("issued") // issued | imported
+  // Sealing certificates only: the key the server signs seals with, encrypted
+  // at rest (src/lib/key-vault.ts). Personal signing certificates never keep it.
+  privateKeyEnc    String?
   revokedAt        DateTime?
   createdAt        DateTime @default(now())
 
@@ -592,7 +620,7 @@ model SigningCertificate {
 model TsaConfig {
   id              String    @id @default(cuid())
   tenantId        String    @unique
-  url             String    @default("https://timestamp.digicert.com")
+  url             String    @default("http://timestamp.digicert.com") // DigiCert answers RFC 3161 over HTTP only
   hashAlgorithm   String    @default("SHA-256")
   authType        String    @default("none") // none | basic
   username        String?
@@ -1182,7 +1210,7 @@ model PlatformSetting {
   smtpPassword        String?  // encrypted or raw SMTP submission password
   smtpFrom            String   @default("Docurama Sign <notifications@docurama.eu>")
   smtpTls             Boolean  @default(true)
-  tsaUrl              String   @default("https://timestamp.digicert.com")
+  tsaUrl              String   @default("http://timestamp.digicert.com") // DigiCert answers RFC 3161 over HTTP only
   tsaReachable        Boolean  @default(true)
   certFingerprint     String   @default("3A:F2:88:1B:6C:9E:44:D0:A7:2E:5F:B1:C3:98:0D:64:71:AA:29:5C")
   certExpiryAt        DateTime

@@ -157,6 +157,46 @@ export async function readStoredBytes(storageKey: string): Promise<Buffer> {
   return readFile(resolveStorageKey(storageKey));
 }
 
+/* ── Sealed (PAdES-signed) PDFs ────────────────────────────────────────────── */
+
+// documents/<tenant>/sealed_<hex>.pdf: next to the uploads, but never matched
+// by the upload purge (it only considers doc_<hex>.pdf), because a sealed PDF
+// is evidence from the moment it exists.
+const SEALED_KEY_RE = /^documents\/([A-Za-z0-9_-]{1,64})\/(sealed_[0-9a-f]{32})\.pdf$/;
+
+/** Write a sealed PDF through the active backend; returns its key and SHA-256. */
+export async function storeSealedPdf(tenantId: string, bytes: Buffer): Promise<{ storageKey: string; sha256: string }> {
+  if (!isValidTenantId(tenantId)) throw new Error("Invalid tenant id");
+  if (!looksLikePdf(bytes)) throw new Error("Not a PDF");
+  const storageKey = `${DOCUMENT_DIR_NAME}/${tenantId}/sealed_${randomBytes(16).toString("hex")}.pdf`;
+  const mode = activeS3();
+  if (mode) {
+    await ensureBucket(mode);
+    await s3PutBytes(mode, storageKey, bytes, "application/pdf");
+  } else {
+    const file = sealedPdfPath(storageKey);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, bytes, { flag: "wx" });
+  }
+  return { storageKey, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+function sealedPdfPath(storageKey: string): string {
+  const m = SEALED_KEY_RE.exec(storageKey);
+  if (!m) throw new Error("Invalid sealed PDF key");
+  const root = documentRoot(m[1]);
+  const resolved = path.join(root, `${m[2]}.pdf`);
+  if (!resolved.startsWith(root + path.sep)) throw new Error("Resolved path escaped the storage root");
+  return resolved;
+}
+
+export async function readSealedPdf(storageKey: string): Promise<Buffer> {
+  if (!SEALED_KEY_RE.test(storageKey)) throw new Error("Invalid sealed PDF key");
+  const mode = activeS3();
+  if (mode) return s3GetBytes(mode, storageKey);
+  return readFile(sealedPdfPath(storageKey));
+}
+
 /** Why an upload was refused. The route maps these onto status codes. */
 export type UploadRejection = "EMPTY" | "TOO_LARGE" | "NOT_A_PDF" | "WRITE_FAILED";
 

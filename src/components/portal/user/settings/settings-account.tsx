@@ -148,7 +148,7 @@ function OrganizationsCard({ base }: { base: BaseData }) {
           })}
         </ul>
         <p className="mt-3 text-xs text-muted-foreground">
-          Creating an organization starts a 14-day trial on the Starter plan. Invite your team from Settings → Users after switching.
+          Creating an organization starts a 14-day free trial on the Solo plan; upgrade anytime in Settings → Billing. Invite your team from Settings → Users after switching.
         </p>
       </CardContent>
 

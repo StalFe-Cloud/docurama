@@ -3,6 +3,7 @@ import type { Prisma, Subscription } from "@prisma/client";
 import { ENVELOPE_LIMITS, planDef, termFor } from "@/lib/plans";
 import { monthlyWindow, shiftUtcMonth, usageAnchor } from "@/lib/monthly-period";
 import { serializableTransaction } from "@/lib/transaction";
+import { paymentMode } from "@/lib/payments";
 export { periodStart, periodKey } from "@/lib/monthly-period";
 
 export interface Allowance {
@@ -11,7 +12,75 @@ export interface Allowance {
   total: number;
   used: number;
   remaining: number;
+  /** Why sending is paused for billing reasons, if it is. */
+  blocked?: BillingBlock;
 }
+
+// ─── Paid-plan enforcement ───────────────────────────────────────────────────
+
+/**
+ * Why a workspace may not send new envelopes for billing reasons:
+ *   payment_required — Starter/Business signup (no free trial) not paid yet
+ *   trial_expired    — the Solo free trial (or a grandfathered trial) ended unpaid
+ *   past_due         — renewal charge failed and the grace period elapsed
+ *   canceled         — the subscription ended and its paid term is over
+ * Signing, verification and downloads of existing envelopes are never blocked.
+ */
+export type BillingBlock = "payment_required" | "trial_expired" | "past_due" | "canceled";
+
+export const BILLING_BLOCK_MESSAGES: Record<BillingBlock, string> = {
+  payment_required: "Choose a billing term and complete checkout in Settings → Billing to start sending envelopes.",
+  trial_expired: "Your free trial has ended. Choose a plan in Settings → Billing to keep sending envelopes.",
+  past_due: "Sending is paused because the last payment for this workspace failed. Update your payment method in Settings → Billing.",
+  canceled: "This workspace's subscription has ended. Choose a plan in Settings → Billing to resume sending.",
+};
+
+/**
+ * Enforcement applies only where customers can pay online (Stripe mode).
+ * Manual/self-hosted installs keep admin-managed billing; BILLING_ENFORCEMENT=off
+ * is the operator escape hatch.
+ */
+export function billingEnforced(): boolean {
+  return process.env.BILLING_ENFORCEMENT !== "off" && paymentMode() === "stripe";
+}
+
+/** Days a PAST_DUE workspace keeps sending while Stripe retries the charge. */
+export function billingGraceDays(): number {
+  // Compose passes unset variables through as "" — that must mean the default, not 0.
+  const raw = process.env.BILLING_GRACE_DAYS?.trim();
+  const days = raw ? Number(raw) : 14;
+  return Number.isFinite(days) && days >= 0 ? days : 14;
+}
+
+export function billingBlock(
+  tenant: { status: string; createdAt: Date; trialEndsAt: Date | null },
+  sub: Pick<Subscription, "status" | "renewalAt"> | null,
+  now = new Date(),
+): BillingBlock | null {
+  if (!billingEnforced()) return null;
+  if (sub) {
+    if (sub.status === "CANCELED" && sub.renewalAt <= now) return "canceled";
+    if (sub.status === "PAST_DUE" && sub.renewalAt.getTime() + billingGraceDays() * 86_400_000 <= now.getTime()) return "past_due";
+    return null;
+  }
+  // Workspaces without a trial end date (admin-provisioned, sales-led) are never blocked here.
+  if (tenant.status !== "TRIAL" || !tenant.trialEndsAt || tenant.trialEndsAt > now) return null;
+  // Paid-plan signups get a zero-length trial: they owe a first payment rather than a renewal.
+  return tenant.trialEndsAt.getTime() - tenant.createdAt.getTime() < 60_000 ? "payment_required" : "trial_expired";
+}
+
+/** The 402 message for a denied envelope: the billing reason, or the plain quota. */
+export async function envelopeDeniedMessage(client: Prisma.TransactionClient, tenantId: string, now = new Date()): Promise<string> {
+  const tenant = await client.tenant.findUnique({
+    where: { id: tenantId },
+    include: { subscriptions: { orderBy: { renewalAt: "desc" }, take: 1 } },
+  });
+  const block = tenant ? billingBlock(tenant, tenant.subscriptions[0] ?? null, now) : null;
+  return block ? BILLING_BLOCK_MESSAGES[block] : "Monthly envelope quota reached";
+}
+
+/** Thrown inside envelope transactions when no allowance could be reserved. */
+export class EnvelopeQuotaError extends Error {}
 
 /** Advance monthly usage independently of the provider's paid-through date. */
 async function advanceUsage(tx: Prisma.TransactionClient, sub: Subscription, limit: number, now: Date) {
@@ -62,7 +131,12 @@ async function usageContext(tx: Prisma.TransactionClient, tenantId: string, now:
   ]);
   const used = Math.max(actual, row?.used ?? 0);
   const total = limit + state.carried;
-  return { key, actual, allowance: { limit, carriedForward: state.carried, total, used, remaining: Math.max(0, total - used) } };
+  const blocked = billingBlock(tenant, sub, now);
+  return { key, actual, allowance: {
+    limit, carriedForward: state.carried, total, used,
+    remaining: blocked ? 0 : Math.max(0, total - used),
+    ...(blocked ? { blocked } : {}),
+  } };
 }
 
 export async function currentAllowance(tenantId: string, now = new Date()): Promise<Allowance> {

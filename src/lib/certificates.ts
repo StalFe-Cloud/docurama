@@ -10,10 +10,13 @@ import { randomBytes } from "crypto";
  *
  * Issues a real X.509 certificate (RSA-2048, SHA-256, self-signed for
  * workspace signing) via the system OpenSSL, packages it as an encrypted
- * PKCS#12 (.p12) file, and returns everything the caller needs. The private
- * key and the passphrase are NEVER persisted - only the passphrase-encrypted
- * PKCS#12 blob is stored, so downloading it later is safe and the user always
- * needs their own passphrase to use the certificate.
+ * PKCS#12 (.p12) file, and returns everything the caller needs. The
+ * passphrase is never persisted and only the passphrase-encrypted PKCS#12
+ * blob is stored, so downloading it later is safe.
+ *
+ * A personal signing certificate's private key is never kept. A sealing
+ * certificate's key is returned (`keepPrivateKey`) so the server can seal
+ * with it; the caller stores it encrypted (src/lib/key-vault.ts).
  */
 
 const run = promisify(execFile);
@@ -26,6 +29,8 @@ export type IssuedCertificate = {
   issuer: string;
   notBefore: Date;
   notAfter: Date;
+  /** Only with `keepPrivateKey`: PKCS#8 PEM, for server-side sealing. */
+  privateKeyPem?: string;
 };
 
 /** Strip characters that would break an OpenSSL -subj string. */
@@ -39,6 +44,7 @@ export async function issueSigningCertificate(opts: {
   days: number;
   purpose: string; // "signing" | "sealing"
   passphrase: string;
+  keepPrivateKey?: boolean;
 }): Promise<IssuedCertificate> {
   const cn = subjSafe(opts.commonName);
   if (!cn) throw new Error("Common name is required");
@@ -86,16 +92,19 @@ export async function issueSigningCertificate(opts: {
       "-out", p12Path,
     ]);
 
-    const [p12, pem] = await Promise.all([readFile(p12Path), readFile(certPath, "utf8")]);
+    const [p12, pem, key] = await Promise.all([
+      readFile(p12Path), readFile(certPath, "utf8"), opts.keepPrivateKey ? readFile(keyPath, "utf8") : Promise.resolve(undefined),
+    ]);
     if (!thumbprint) throw new Error("Failed to read certificate fingerprint");
 
     return {
       pkcs12Base64: p12.toString("base64"),
       certificatePem: pem,
       serialNumber, thumbprint, issuer, notBefore, notAfter,
+      ...(key ? { privateKeyPem: key } : {}),
     };
   } finally {
-    // Private key material lives only in the temp dir - destroy it.
+    // The key file lives only in the temp dir - destroy it.
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

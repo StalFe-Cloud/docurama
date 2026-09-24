@@ -4,6 +4,7 @@ import {
   ArrowRight, Braces, KeyRound, ShieldCheck, Terminal, Webhook, Boxes,
 } from "lucide-react";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { CodeTabs } from "@/components/marketing/code-tabs";
 import { API_REFERENCE } from "@/lib/api-reference";
 import { ScrollTop } from "@/components/marketing/scroll-top";
@@ -63,7 +64,7 @@ export default function DevelopersPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <BrandLogo size="sm" />
+          <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
             <Link className="hover:text-foreground" href="/docs">Docs</Link>
             <Link className="hover:text-foreground" href="/status">Status</Link>

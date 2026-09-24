@@ -2,12 +2,13 @@ import { NextRequest } from "next/server";
 import { createHash, randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { requireUser, recordAudit } from "@/lib/auth";
-import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
+import { publicRecipient, isos, iso, envelopeRow, jsonError, jsonOk } from "@/lib/serializers";
 import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
 import { foldForSearch } from "@/lib/search";
+import { verifyEnvelopeCode } from "@/lib/verify";
 import { dispatchEnvelopeEvent } from "@/lib/webhooks";
 import { processOutbox } from "@/lib/mail";
-import { currentAllowance, reserveEnvelopeAllowance } from "@/lib/billing";
+import { EnvelopeQuotaError, currentAllowance, envelopeDeniedMessage, reserveEnvelopeAllowance } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -74,11 +75,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           quota: await currentAllowance(tenantId!),
           kpis: { sentThisMonth, completed, pending, awaitingMe },
           recent: recent.map((e) => ({
-            ...iso(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
+            ...envelopeRow(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
             recipients: e.recipients.map(publicRecipient),
           })),
           mySignQueue: mySignQueue.map((e) => ({
-            ...iso(e), tenantName: e.tenant.name, recipients: e.recipients.map(publicRecipient),
+            ...envelopeRow(e), tenantName: e.tenant.name, recipients: e.recipients.map(publicRecipient),
           })),
           team: team.map((m) => ({
             id: m.id, role: m.role, name: `${m.user.firstName} ${m.user.lastName}`,
@@ -107,10 +108,10 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         return jsonOk({
           total, page, perPage,
           rows: rows.map((e) => ({
-            ...iso(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
+            ...envelopeRow(e), createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
             recipients: e.recipients.map(publicRecipient),
           })),
-          myQueue: myQueue.map((e) => ({ ...iso(e), tenantName: e.tenant.name, recipients: e.recipients.map(publicRecipient) })),
+          myQueue: myQueue.map((e) => ({ ...envelopeRow(e), tenantName: e.tenant.name, recipients: e.recipients.map(publicRecipient) })),
         });
       }
 
@@ -184,59 +185,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       case "verify": {
         const code = (q.get("code") ?? "").trim().toUpperCase();
         if (!code) return jsonError("A verification code is required");
-        const e = await db.envelope.findUnique({
-          where: { publicCode: code },
-          include: { recipients: true, tenant: { select: { name: true } } },
-        });
-        // Honest verification states - never present an unsigned document as verified.
-        if (!e) {
-          // Self-hosted attestation fallback — same engine as the public portal.
-          const att = await db.portalAttestation.findUnique({
-            where: { code },
-            include: { instance: true },
-          });
-          if (att) {
-            return jsonOk({
-              result: "VERIFIED_ATTESTED", code,
-              attestation: {
-                sha256: att.sha256,
-                sealedAt: att.sealedAt.toISOString(),
-                completedAt: att.completedAt?.toISOString() ?? null,
-                conformance: att.conformance,
-                pages: att.pages,
-                signerCount: att.signerCount,
-                verifiedDomain: att.verifiedDomain,
-                instance: {
-                  label: att.instance.label,
-                  firstSeenAt: att.instance.firstSeenAt.toISOString(),
-                  attestationCount: att.instance.attestationCount,
-                },
-                transparency: {
-                  chainSeq: att.tSeq,
-                  chainEntryHash: att.tEntryHash,
-                  proof: `/api/transparency/proof/${att.code}`,
-                  checkpoint: "/api/transparency/checkpoint",
-                },
-              },
-            });
-          }
-          return jsonOk({ result: "NOT_FOUND", code });
-        }
-        if (e.status === "VOIDED") return jsonOk({ result: "VOIDED", code, voidedAt: e.voidedAt?.toISOString() ?? null, voidReason: e.voidReason });
-        if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
-          return jsonOk({ result: "NOT_SEALED", code, title: e.title, status: e.status });
-        }
-        return jsonOk({
-          result: "VERIFIED", code,
-          envelope: {
-            title: e.title, status: e.status, sealedAt: e.sealedAt.toISOString(),
-            completedAt: e.completedAt?.toISOString() ?? null,
-            conformance: e.conformanceLevel, sha256: e.sha256,
-            tenantName: e.tenant.name, pages: e.pages,
-            verifiedSenderDomain: e.verifiedSenderDomain,
-            signers: e.recipients.filter((r) => r.status === "SIGNED").map(publicRecipient),
-          },
-        });
+        // Honest verification states - never present an unsigned or modified
+        // document as verified (src/lib/verify.ts).
+        return jsonOk(await verifyEnvelopeCode(code));
       }
 
       case "settings": {
@@ -285,6 +236,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const templateId = typeof data.templateId === "string" ? data.templateId : undefined;
           let realPageCount = 1;
           let realSha256: string | undefined;
+          let contractText: string | null = null;
           if (documentId) {
             const doc = await db.document.findFirst({ where: { id: documentId, tenantId: tenantId! } });
             if (!doc) return jsonError("Document not found in this workspace", 404);
@@ -296,6 +248,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             });
             if (tpl) {
               realPageCount = tpl.pages;
+              contractText = tpl.bodyMarkdown || null;
               await db.template.update({
                 where: { id: tpl.id },
                 data: { usageCount: { increment: 1 }, lastUsedAt: new Date() },
@@ -313,7 +266,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           // in SENT with partial recipients.
           const env = await db.$transaction(async (tx) => {
             const reservation = await reserveEnvelopeAllowance(tenantId!, tx);
-            if (!reservation) throw new Error("ENVELOPE_QUOTA_REACHED");
+            if (!reservation) throw new EnvelopeQuotaError(await envelopeDeniedMessage(tx, tenantId!));
             const fieldsJson = Array.isArray(data.fields) && data.fields.length > 0 ? JSON.stringify(data.fields) : null;
             const envelope = await tx.envelope.create({
               data: {
@@ -322,7 +275,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 templateId, // evidence chain: which template produced this envelope
                 status: "SENT", message: String(data.message ?? ""),
                 pages: realPageCount, sha256: realSha256,
-                fields: fieldsJson,
+                fields: fieldsJson, contractText,
               },
             });
             // WS9b: signing tokens are cryptographically random, not derived from
@@ -463,7 +416,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   } catch (err) {
     if (err instanceof Response) return err;
-    if (err instanceof Error && err.message === "ENVELOPE_QUOTA_REACHED") return jsonError("Monthly envelope quota reached", 402);
+    if (err instanceof EnvelopeQuotaError) return jsonError(err.message, 402);
     console.error("[workspace POST]", err);
     return jsonError("Operation failed", 500);
   }

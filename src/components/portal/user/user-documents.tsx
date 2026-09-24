@@ -23,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { SEAL_FORMAT, sealLevelLabel } from "@/lib/seal-shared";
+import { cn } from "@/lib/utils";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
@@ -33,6 +35,8 @@ type EnvelopeRow = {
   createdBy: string; sealedAt: string | null; conformanceLevel: string | null; sha256: string | null;
   pages: number; lastRemindedAt: string | null; voidReason: string | null;
   attestedAt: string | null; attestStatus: string | null; verifiedSenderDomain: string | null;
+  sealFormat?: string | null; sealTimestampAt?: string | null; sealTimestampTsa?: string | null;
+  documentId?: string | null; hasContractText?: boolean; signedPdfLevel?: string | null; signedPdfSigner?: string | null; signedPdfSha256?: string | null;
   recipients: Recipient[];
   fields?: PlacedField[];
 };
@@ -371,8 +375,20 @@ export function UserDocuments() {
                     </p>
                     <p className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground">Conformance</span>
-                      <span>PAdES {env.conformanceLevel}</span>
+                      <span>{sealLevelLabel(env.conformanceLevel)}</span>
                     </p>
+                    <p className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Seal covers</span>
+                      <span className="text-right">{env.sealFormat === SEAL_FORMAT ? "Document, signers, audit trail, field values" : "Legacy seal, before signer binding"}</span>
+                    </p>
+                    {env.sealTimestampAt && (
+                      <p className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Timestamp</span>
+                        <span className="text-right">
+                          RFC 3161, {fmtDate(env.sealTimestampAt, true)}{env.sealTimestampTsa ? ` · ${(() => { try { return new URL(env.sealTimestampTsa).host; } catch { return env.sealTimestampTsa; } })()}` : ""}
+                        </span>
+                      </p>
+                    )}
                     {env.verifiedSenderDomain && (
                       <p className="flex items-center justify-between gap-2">
                         <span className="text-muted-foreground">Sender domain</span>
@@ -392,16 +408,38 @@ export function UserDocuments() {
                       </p>
                     )}
                   </div>
-                  <a
-                    href={`/api/evidence-pack/${env.id}`}
-                    data-testid="evidence-pack-download"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <FileArchive className="h-4 w-4" aria-hidden /> Evidence pack (.zip)
-                  </a>
+                  {env.signedPdfLevel && (
+                    <p className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-muted-foreground">Signed PDF</span>
+                      <span className="text-right">{env.signedPdfLevel.replace("-", " ")}{env.signedPdfSigner ? ` · ${env.signedPdfSigner.split(" (")[0]}` : ""}</span>
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {(env.documentId || env.hasContractText) && (
+                      <a
+                        href={`/api/workspace/envelopes/${env.id}/signed-pdf`}
+                        data-testid="signed-pdf-download"
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <FileText className="h-4 w-4" aria-hidden /> Signed PDF
+                      </a>
+                    )}
+                    <a
+                      href={`/api/evidence-pack/${env.id}`}
+                      data-testid="evidence-pack-download"
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        env.documentId || env.hasContractText ? "border bg-background hover:bg-muted" : "bg-primary text-primary-foreground hover:bg-primary/90",
+                      )}
+                    >
+                      <FileArchive className="h-4 w-4" aria-hidden /> Evidence pack (.zip)
+                    </a>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    The digest is derived from the sealed file itself and can be re-verified at any time on the public portal.
-                    The pack adds a signed manifest, the full ledger, the bilingual certificate and an offline verifier.
+                    {env.documentId || env.hasContractText
+                      ? "The signed PDF carries a PAdES digital signature any PDF reader can check, with every signature and value stamped in place and a certificate page. "
+                      : ""}
+                    The evidence pack adds the seal manifest, the full ledger, the bilingual certificate and an offline verifier.
                   </p>
                 </section>
               )}
@@ -509,7 +547,7 @@ export function UserDocuments() {
 
       {/* Send dialog */}
       <Dialog open={sendOpen} onOpenChange={setSendOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Send a document for signature</DialogTitle>
             <DialogDescription>
@@ -686,12 +724,13 @@ export function UserDocuments() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setSendOpen(false)}>Cancel</Button>
             <div className="flex items-center gap-2">
+              {/* The primary action unless an uploaded PDF can go through the builder. */}
               <Button
-                variant="outline"
+                variant={uploadedDoc ? "outline" : "default"}
                 onClick={() => send.mutate()}
                 disabled={!form.title.trim() || validRecipients.length === 0 || send.isPending || uploading}
               >
-                {send.isPending ? "Sending…" : "Quick Send"}
+                {send.isPending ? "Sending…" : validRecipients.length > 0 ? `Send for signature (${validRecipients.length})` : "Send for signature"}
               </Button>
               {uploadedDoc && (
                 <Button

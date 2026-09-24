@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 
 export const metadata: Metadata = {
   title: "Privacy Policy · Docurama",
@@ -16,9 +17,9 @@ export default function PrivacyPage() {
     <div className="min-h-dvh bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/marketing" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-            ← Docurama
-          </Link>
+          <MarketingHomeLink>
+            <BrandLogo size="sm" />
+          </MarketingHomeLink>
           <nav className="flex items-center gap-4 text-sm">
             <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/terms">Terms</Link>
             <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/security">Security</Link>

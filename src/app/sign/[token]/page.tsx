@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
+import { getSessionUser } from "@/lib/auth";
 import { PublicSign, type SignPageState } from "@/components/marketing/public-sign";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         phase: "signed", title: env.title, code: env.publicCode,
         tenantName: env.tenant.name, recipientName: recipient.name,
         sealed: env.status === "COMPLETED",
+        hasDocument: !!env.document || !!env.contractText,
         document: env.status === "COMPLETED" ? null : document,
       };
     } else if (env.status === "COMPLETED") {
@@ -93,8 +95,18 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
             select: { domain: true },
           })
         : null;
+      // Adopt once, reuse everywhere: a signer signed in with the address this
+      // document was sent to gets their saved signature offered (resolved again
+      // server-side when they sign; the client never supplies it).
+      const me = await getSessionUser().catch(() => null);
+      const own = me && me.email.toLowerCase() === recipient.email.toLowerCase();
+      const saved = own
+        ? await db.userSignature.findFirst({ where: { userId: me.id, kind: "signature" }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] })
+        : null;
       state = {
         phase: "active",
+        signedIn: !!own,
+        savedSignature: saved ? { method: saved.method === "type" ? "type" : "image", value: saved.value, font: saved.font } : null,
         title: env.title, code: env.publicCode,
         tenantName: env.tenant.name,
         message: env.message || null,
@@ -103,7 +115,8 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         senderDomainVerified: verifiedDomain?.domain ?? null,
         recipientName: recipient.name, recipientEmail: recipient.email,
         signers: signers.map((r) => ({ name: r.name, email: r.email, status: r.status, order: r.order })),
-        bodyMarkdown: env.template?.bodyMarkdown || null,
+        // The text as sent; the template itself may have been edited since.
+        bodyMarkdown: env.contractText || env.template?.bodyMarkdown || null,
         document,
         fields: (() => {
           if (!env.fields) return [];

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo, BRAND_LEGAL_NAME } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { Mail, Server, ShieldCheck } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function MailPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-3xl items-center px-4 sm:px-6">
-          <BrandLogo size="sm" />
+          <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
         </div>
       </header>
 

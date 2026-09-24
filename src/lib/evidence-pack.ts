@@ -8,8 +8,12 @@
  *   verify.html                       offline verifier — browser, no server
  *   CERTIFICATE-OF-COMPLETION.html    human proof, print-to-PDF ready (FR/EN)
  *   document/<file>                   the sealed artefact, byte-exact
+ *   document/<code>-signed.pdf        the PAdES-signed PDF (uploads): stamped
+ *                                     signatures and values, certificate page
  *   evidence/event-ledger.csv         the complete event ledger
  *   evidence/envelope.json            machine-readable envelope record
+ *   evidence/seal-manifest.json       seal v2 manifest; its SHA-256 is the
+ *                                     sealed digest (src/lib/seal.ts)
  *   certificate/evidence-key.pem      the signing certificate (DNS-SAN when the
  *                                     tenant verified its sending domain)
  *   certificate/evidence-key.pub.pem  SPKI public key used to verify
@@ -27,6 +31,10 @@ import { zipStore, type ZipEntry } from "@/lib/zip";
 import { canonicalJson } from "@/lib/canonical-json";
 import { getOrCreateEvidenceKey, signPayload, EVIDENCE_SIGNATURE_ALGORITHM } from "@/lib/evidence-key";
 import { readStoredBytes } from "@/lib/document-store";
+import { SEAL_FORMAT, SEAL_MISMATCH_LABELS, checkEnvelopeSeal } from "@/lib/seal";
+import { sealLevelLabel, signedPdfRevisions, type SignedPdfRevision } from "@/lib/seal-shared";
+import { timestampEnvelopeSeal } from "@/lib/tsa";
+import { sealedPdfBytes } from "@/lib/signed-pdf";
 import {
   appendSealCommitment, getChainSegment, signCheckpoint,
   TRANSPARENCY_FORMAT, type PackTransparencyBlock,
@@ -145,7 +153,7 @@ function renderCertificateHtml(e: FullEnvelope): string {
     <div><b>Document</b>${escapeHtml(e.title)}</div>
     <div><b>Organisation / Organization</b>${escapeHtml(e.tenant.name)}</div>
     <div><b>Expéditeur / Sender</b>${escapeHtml(`${e.createdBy.firstName} ${e.createdBy.lastName}`)} &lt;${escapeHtml(e.createdBy.email)}&gt;</div>
-    <div><b>Statut / Status</b>${escapeHtml(e.status)}${e.conformanceLevel ? ` · PAdES ${escapeHtml(e.conformanceLevel)}` : ""}</div>
+    <div><b>Statut / Status</b>${escapeHtml(e.status)} · ${escapeHtml(sealLevelLabel(e.conformanceLevel))}</div>
     <div><b>Scellé le / Sealed on</b>${escapeHtml(fmtFr(e.sealedAt))}<span class="en"> (${escapeHtml(fmtEn(e.sealedAt))})</span></div>
     <div><b>Pages</b>${escapeHtml(String(e.pages))}</div>
   </div>
@@ -160,9 +168,16 @@ function renderCertificateHtml(e: FullEnvelope): string {
   <p class="sub">${signed.length}/${signers.length} signataire(s) ont signé · ${signed.length}/${signers.length} signer(s) completed</p>
 
   <h2>Preuve cryptographique · Cryptographic evidence</h2>
-  <p class="sub">Empreinte SHA-256 du document scellé (calculée à la signature et vérifiable sur le portail public verify.docurama.eu) ·
-  SHA-256 digest of the sealed document (computed at sealing time, verifiable on the public portal):</p>
+  ${e.sealFormat === SEAL_FORMAT ? `<p class="sub">Empreinte scellée (${escapeHtml(SEAL_FORMAT)}) : elle lie le document, chaque signataire, la piste d'audit
+  et les valeurs saisies ; vérifiable sur le portail public verify.docurama.eu ·
+  Seal digest (${escapeHtml(SEAL_FORMAT)}): it binds the document, every signer, the audit trail and the entered values; verifiable on the public portal:</p>`
+  : `<p class="sub">Empreinte SHA-256 scellée (ancien format : document seul) · Sealed SHA-256 digest (legacy format: document only):</p>`}
   <div class="digest">${escapeHtml(e.sha256 ?? "")}</div>
+  ${e.document ? `<p class="sub">Empreinte SHA-256 du fichier signé · SHA-256 of the signed file:</p>
+  <div class="digest">${escapeHtml(e.document.sha256)}</div>` : ""}
+  ${e.sealTimestamp && e.sealTimestampAt ? `<p class="sub">Horodatage RFC 3161 de l'empreinte scellée · RFC 3161 timestamp of the seal:
+  ${escapeHtml(e.sealTimestampTsa ? new URL(e.sealTimestampTsa).host : "TSA")} — ${escapeHtml(fmtFr(e.sealTimestampAt))}
+  <span class="en">(${escapeHtml(fmtEn(e.sealTimestampAt))}, <code>evidence/seal-timestamp.tsr</code>)</span></p>` : ""}
 
   <h2>Piste d'audit · Audit trail</h2>
   <p class="sub">${e.events.length} événement(s) horodatés enregistré(s) — détail complet dans <code>evidence/event-ledger.csv</code> ·
@@ -171,9 +186,9 @@ function renderCertificateHtml(e: FullEnvelope): string {
   <footer>
     <p><b>Honnêteté de conformance · Compliance honesty.</b>
     Docurama n'est pas un prestataire qualifié (QTSP) au sens du règlement eIDAS. Le niveau de conformance indiqué
-    reflète exactement les mécanismes appliqués (SES / AdES / alignement QES, PAdES ${escapeHtml(e.conformanceLevel ?? "B-T")}).
+    reflète exactement les mécanismes appliqués (scellement du dossier de preuve${e.sealTimestamp ? ", horodatage RFC 3161" : ""} ; pas de signature PAdES intégrée au PDF).
     &nbsp;<span class="en">Docurama is not a qualified trust service provider under eIDAS. The stated conformance level reflects
-    exactly the mechanisms applied; it is a conformance claim, not a qualified-seal claim.</span></p>
+    exactly the mechanisms applied (evidence-record seal${e.sealTimestamp ? ", RFC 3161 timestamp" : ""}; no PAdES signature embedded in the PDF). It is not a qualified-seal claim.</span></p>
     <p>Docurama SAS · 1 Rue Marguerin, 75014 Paris, France · docurama.eu — Généré le / Generated on ${escapeHtml(fmtFr(new Date()))}</p>
   </footer>
 </div>
@@ -235,9 +250,11 @@ function renderVerifyHtml(): string {
     Cette page vérifie (1) la signature RSA-SHA-256 du manifeste avec la clé publique incluse, (2) que chaque fichier
     correspond exactement à l'empreinte SHA-256 signée, et (3) le registre de transparence : l'entrée de cette enveloppe
     s'enchaîne par hachages successifs jusqu'à un point de contrôle signé — toute réécriture de l'historique casserait la chaîne.
+    Pour un sceau v2, elle vérifie aussi que le manifeste de scellement correspond à l'empreinte scellée.
     <span class="sub">This page checks (1) the RSA-SHA-256 manifest signature against the embedded public key, (2) that every
     file matches its signed SHA-256, and (3) the transparency registry: this envelope's entry hash-chains all the way to a
-    signed checkpoint — any rewrite of history breaks the chain.</span>
+    signed checkpoint — any rewrite of history breaks the chain. For a v2 seal it also checks that the seal manifest
+    hashes to the sealed digest.</span>
   </p>
 </div>
 
@@ -354,6 +371,32 @@ async function verify(fileList){
     "<br>Scellé le / sealed: "+esc(p.envelope.sealedAt)+(p.envelope.verifiedSenderDomain?"<br>Domaine expéditeur vérifié / sender domain verified: "+esc(p.envelope.verifiedSenderDomain):"");
   out.appendChild(m);
 
+  // 3b — seal coverage. A v2 seal ships its canonical manifest: the file's
+  //      signed SHA-256 must equal the sealed digest, and the document it
+  //      names must be the document in this pack.
+  var s=p.seal;
+  if(s&&s.manifestPath){
+    var sa=p.artifacts.filter(function(x){return x.path===s.manifestPath;})[0];
+    var sf=byName[s.manifestPath.split("/").pop()];
+    var sealOk=!!sa&&!!sf&&sa.sha256===p.envelope.sha256&&(await sha256Hex(await sf.arrayBuffer()))===p.envelope.sha256;
+    var docOk=true;
+    if(sealOk&&s.documentSha256){
+      var sm=JSON.parse(await sf.text());
+      // FILE-MISSING.txt stands in when storage could not be read at export.
+      var docArt=p.artifacts.filter(function(x){return x.path.indexOf("document/")===0&&x.path!=="document/FILE-MISSING.txt";})[0];
+      docOk=!!sm.document&&sm.document.sha256===s.documentSha256&&(!docArt||docArt.sha256===s.documentSha256);
+    }
+    out.appendChild(el("div","banner "+(sealOk&&docOk?"ok":"bad"),
+      sealOk&&docOk
+        ?"Sceau "+s.format+" VALIDE — le document, les signataires, la piste d'audit et les valeurs des champs sont liés à l'empreinte scellée · Seal VALID — document, signers, audit trail and field values are bound to the sealed digest"
+        :"Sceau INVALIDE — "+(sealOk?"le document ne correspond pas / document mismatch":"le manifeste de scellement ne correspond pas à l'empreinte / seal manifest does not match the digest")+" · Seal INVALID"));
+    if(s.timestamp){
+      out.appendChild(el("div","meta","Horodatage RFC 3161 / RFC 3161 timestamp : "+s.timestamp.genTime+" — "+(s.timestamp.tsa||"TSA")+" ("+s.timestamp.path+"). Vérifiable avec / verify with: openssl ts -verify -data evidence/seal-manifest.json -in evidence/seal-timestamp.tsr -token_in -CAfile <racine TSA / TSA root>"));
+    }
+  }else if(s){
+    out.appendChild(el("div","meta","Sceau d'ancien format : seule l'empreinte "+(s.documentSha256?"du document":"de l'enregistrement")+" est scellée ; les noms des signataires et les valeurs des champs ne le sont pas. · Legacy seal: only the "+(s.documentSha256?"document":"record")+" fingerprint is sealed, not signer names or field values."));
+  }
+
   // 4 — transparency registry: the entry must commit to this envelope's
   //     fingerprint, chain link-by-link to the head, and the checkpoint must
   //     cover exactly that head under the pack key. All re-hashed locally.
@@ -434,6 +477,14 @@ CONTENU / CONTENTS
   document/                        Le document scellé, octet pour octet / the sealed artefact, byte-exact
   evidence/event-ledger.csv        Piste d'audit horodatée complète / full timestamped audit ledger
   evidence/envelope.json           Enregistrement d'enveloppe lisible par machine / machine-readable record
+  evidence/seal-manifest.json      Manifeste de scellement : son SHA-256 est l'empreinte scellée (document,
+                                   signataires, piste d'audit, valeurs des champs)
+                                   Seal manifest: its SHA-256 is the sealed digest (document, signers,
+                                   audit trail, field values)
+  evidence/seal-timestamp.tsr      Jeton d'horodatage RFC 3161 du manifeste de scellement (si émis)
+                                   RFC 3161 timestamp token over the seal manifest (when issued)
+  document/<code>-signed.pdf       PDF signé (PAdES) : signatures et valeurs apposées, page de certificat
+                                   PAdES-signed PDF: stamped signatures and values, certificate page
   certificate/evidence-key.pem     Certificat X.509 de la clé de signature (SAN DNS si domaine vérifié)
                                    X.509 certificate of the signing key (DNS SAN when domain-verified)
   certificate/evidence-key.pub.pem Clé publique SPKI / SPKI public key
@@ -446,6 +497,9 @@ VÉRIFIER / VERIFY
   1. Open verify.html in a modern browser (local file, no connection required).
   2. Select EVERY file of this pack, including manifest.json.
   3. The page checks the manifest signature, then every file's SHA-256 digest.
+
+  Horodatage / timestamp (OpenSSL, avec le certificat racine de l'autorité / with the TSA root):
+    openssl ts -verify -data evidence/seal-manifest.json -in evidence/seal-timestamp.tsr -token_in -CAfile tsa-root.pem
 
   En ligne / online : le code ${code} peut aussi être vérifié sur le portail public
   verify.docurama.eu (ou l'attestation publiée par l'instance émettrice).
@@ -482,10 +536,26 @@ export type BuiltEvidencePack = {
 };
 
 export async function buildEvidencePack(envelopeKey: string, tenantId: string): Promise<BuiltEvidencePack> {
-  const e = await loadEnvelope(envelopeKey, tenantId);
+  let e = await loadEnvelope(envelopeKey, tenantId);
   if (!e) throw new EvidencePackError("Envelope not found in this workspace", 404);
   if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
     throw new EvidencePackError("An evidence pack can only be exported for a completed, sealed envelope", 400);
+  }
+  // A seal whose TSA was unreachable at signing gets its timestamp now.
+  if (e.sealFormat === SEAL_FORMAT && !e.sealTimestamp) {
+    if ((await timestampEnvelopeSeal(e.id)).status === "TIMESTAMPED") e = (await loadEnvelope(envelopeKey, tenantId)) ?? e;
+  }
+  if (!e.sealedAt || !e.sha256) throw new EvidencePackError("An evidence pack can only be exported for a completed, sealed envelope", 400);
+
+  // A pack is signed by the workspace's evidence key, so it must never vouch
+  // for records that no longer match their seal.
+  const seal = await checkEnvelopeSeal(e);
+  if (seal.integrity === "MODIFIED") {
+    throw new EvidencePackError(
+      `The envelope's records no longer match its seal (${seal.mismatches.map((m) => SEAL_MISMATCH_LABELS[m].toLowerCase()).join(", ")}). ` +
+        "An evidence pack cannot be issued over modified records.",
+      409,
+    );
   }
 
   const key = await getOrCreateEvidenceKey(e.tenantId);
@@ -529,22 +599,31 @@ export async function buildEvidencePack(envelopeKey: string, tenantId: string): 
   if (e.documentId && e.document) {
     try {
       const data = await readStoredBytes(e.document.storageKey);
+      if (createHash("sha256").update(data).digest("hex") !== e.document.sha256) {
+        throw new EvidencePackError(
+          "The stored file no longer matches the fingerprint recorded when it was uploaded. An evidence pack cannot be issued for it.",
+          409,
+        );
+      }
       const safeName = (e.document.filename || "document.pdf").replace(/[\\/:*?"<>|]/g, "_").slice(0, 120);
       artifacts.push({ path: `document/${safeName}`, data });
-    } catch {
+    } catch (error) {
+      if (error instanceof EvidencePackError) throw error;
       artifacts.push({
         path: "document/FILE-MISSING.txt",
         data: Buffer.from(
           `The stored file for this envelope could not be read from storage at export time.\n` +
-            `The SHA-256 below remains the digest recorded at sealing.\n`,
+            `Its SHA-256, recorded at upload, is seal.documentSha256 in manifest.json.\n`,
           "utf8",
         ),
       });
     }
-  } else if (e.template?.bodyMarkdown) {
+  } else if (e.contractText || e.template?.bodyMarkdown) {
+    // The text as sent (snapshot); envelopes sent before snapshots existed
+    // fall back to the template's current text.
     artifacts.push({
       path: "document/contract-text.md",
-      data: Buffer.from(e.template.bodyMarkdown, "utf8"),
+      data: Buffer.from(e.contractText || e.template?.bodyMarkdown || "", "utf8"),
     });
   }
 
@@ -555,6 +634,26 @@ export async function buildEvidencePack(envelopeKey: string, tenantId: string): 
       [ev.at.toISOString(), ev.actor, ev.action, ev.detail ?? "", ev.ipHash ?? ""].map(csvCell).join(","),
     );
   }
+  // Seal v2: the exact canonical bytes whose SHA-256 is the sealed digest, so
+  // the artifact hash below equals envelope.sha256 and verify.html can show it.
+  const manifestPath = seal.format === SEAL_FORMAT && e.sealManifest ? "evidence/seal-manifest.json" : null;
+  if (manifestPath) artifacts.push({ path: manifestPath, data: Buffer.from(e.sealManifest!, "utf8") });
+  // The PAdES-signed PDF: produced at sealing, or now. Earlier copies (before a
+  // long-term update) are prefixes of it; their fingerprints are listed.
+  let signedPdf: { path: string; sha256: string; level: string | null; earlierCopies: SignedPdfRevision[] } | null = null;
+  if (e.documentId || e.contractText) {
+    const pdf = await sealedPdfBytes(e.id).catch(() => null);
+    if (pdf) {
+      signedPdf = {
+        path: `document/${e.publicCode}-signed.pdf`, sha256: createHash("sha256").update(pdf.bytes).digest("hex"), level: pdf.level,
+        earlierCopies: signedPdfRevisions(e.signedPdfRevisions),
+      };
+      artifacts.push({ path: signedPdf.path, data: pdf.bytes });
+    }
+  }
+  // RFC 3161 token over that manifest, as issued (DER).
+  const timestampPath = manifestPath && e.sealTimestamp && seal.timestamp ? "evidence/seal-timestamp.tsr" : null;
+  if (timestampPath) artifacts.push({ path: timestampPath, data: Buffer.from(e.sealTimestamp!, "base64") });
   artifacts.push({ path: "evidence/event-ledger.csv", data: Buffer.from(csvLines.join("\r\n") + "\r\n", "utf8") });
 
   const envelopeRecord = {
@@ -608,6 +707,16 @@ export async function buildEvidencePack(envelopeKey: string, tenantId: string): 
     signers: e.recipients
       .filter((r) => r.role === "SIGNER")
       .map((r) => ({ name: r.name, email: r.email, order: r.order, status: r.status, signedAt: iso(r.signedAt) })),
+    seal: {
+      format: seal.format,
+      binds: seal.scope,
+      documentSha256: seal.documentSha256,
+      manifestPath,
+      timestamp: seal.timestamp && timestampPath
+        ? { path: timestampPath, tsa: e.sealTimestampTsa, genTime: seal.timestamp.at, hashAlgorithm: seal.timestamp.hash }
+        : null,
+      signedPdf,
+    },
     artifacts: artifacts.map((a) => ({
       path: a.path,
       sha256: createHash("sha256").update(a.data).digest("hex"),

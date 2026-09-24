@@ -341,7 +341,7 @@ export function ExampleSupplyAgreement() {
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <p style={{ fontSize: 11.5, fontWeight: 600, color: INK }}>Sealed and archived</p>
-                <span style={{ fontSize: 8.5, fontWeight: 700, borderRadius: 5, padding: "2px 7px", background: "#dff3eb", color: EMERALD }}>PAdES B-LT</span>
+                <span style={{ fontSize: 8.5, fontWeight: 700, borderRadius: 5, padding: "2px 7px", background: "#dff3eb", color: EMERALD }}>PAdES B-LTA</span>
               </div>
               <p style={{ fontSize: 9.5, color: MUTED, lineHeight: 1.7, marginTop: 6 }}>
                 Both signatures captured · RFC 3161 timestamp applied · public

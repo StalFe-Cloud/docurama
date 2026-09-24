@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  FileSignature, Plus, ShieldCheck, Clock, Download, Ban, Trash2, Save, RefreshCw, Award, Zap,
+  FileSignature, Plus, ShieldCheck, Clock, Download, Ban, Trash2, Save, RefreshCw, Award, Zap, Upload, BadgeCheck,
 } from "lucide-react";
 import { apiGet } from "@/lib/client";
 import { ConfirmDialog, CopyableCode, ErrorState, StatusBadge, fmtDate, cn } from "@/components/portal/shared";
@@ -26,7 +26,13 @@ type EsignData = {
     keyAlgorithm: string; signatureAlgorithm: string;
     notBefore: string; notAfter: string; status: string; purpose: string; validityDays: number;
     revokedAt: string | null; createdAt: string; createdBy: string; hasBundle: boolean;
+    origin: string; serverKey: boolean;
   }[];
+  sealIdentity: {
+    source: "certificate" | "evidence-key"; certificateId: string | null; label: string; issuer: string;
+    origin: string; notAfter: string | null; thumbprint: string | null; sanDomain?: string | null;
+  };
+  keyVault: boolean;
   tsa: {
     url: string; hashAlgorithm: string; authType: string; username: string | null; enabled: boolean;
     lastTestAt: string | null; lastTestStatus: string | null; lastTestLatencyMs: number | null;
@@ -57,7 +63,7 @@ export function EsignTab() {
 
   return (
     <div className="space-y-6">
-      <CertificatesCard certs={data.certificates} />
+      <CertificatesCard certs={data.certificates} identity={data.sealIdentity} keyVault={data.keyVault} />
       <TsaCard tsa={data.tsa} />
       <PreferencesCard prefs={data.prefs} />
     </div>
@@ -66,9 +72,12 @@ export function EsignTab() {
 
 // ── Signing certificates (X.509 / PKCS#12) - one-click provisioning ──────────
 
-function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
+function CertificatesCard({ certs, identity, keyVault }: {
+  certs: EsignData["certificates"]; identity: EsignData["sealIdentity"]; keyVault: boolean;
+}) {
   const act = useSettingsAct(["settings-esign"]);
   const [create, setCreate] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [provision, setProvision] = useState<{ id: string; name: string } | null>(null);
 
   return (
@@ -76,22 +85,45 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
       <CardHeader className="flex-row items-center justify-between">
         <div>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Award className="h-4 w-4 text-muted-foreground" aria-hidden /> Signing certificates - X.509 / PKCS#12
+            <Award className="h-4 w-4 text-muted-foreground" aria-hidden /> Seal and signing certificates
           </CardTitle>
           <CardDescription>
-            Real RSA-2048 certificates issued by OpenSSL in one click, exactly like the DNS flow: request → provision → activate → download the encrypted .p12.
+            Every completed PDF is digitally signed (PAdES) by the workspace seal identity, assigned automatically.
+            Import a CA-issued seal certificate so PDF readers show your organisation as a trusted signer, or issue one here.
           </CardDescription>
         </div>
-        <Button size="sm" className="h-10" onClick={() => setCreate(true)}>
-          <Plus className="h-4 w-4" aria-hidden /> New certificate
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="h-10" onClick={() => setImporting(true)}>
+            <Upload className="h-4 w-4" aria-hidden /> Import .p12
+          </Button>
+          <Button size="sm" className="h-10" onClick={() => setCreate(true)}>
+            <Plus className="h-4 w-4" aria-hidden /> New certificate
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Who signs this workspace's sealed PDFs right now */}
+        <div className="rounded-xl border bg-muted/30 p-4" data-testid="seal-identity">
+          <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <BadgeCheck className="h-3.5 w-3.5 text-primary" aria-hidden /> Seal identity (automatic)
+          </p>
+          <p className="mt-1.5 text-sm font-medium">{identity.label}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {identity.source === "certificate"
+              ? `${identity.origin === "imported" ? "Imported" : "Issued here"} · issued by ${identity.issuer}${identity.notAfter ? ` · valid until ${fmtDate(identity.notAfter)}` : ""}`
+              : `Self-signed, created for this workspace${identity.sanDomain ? ` · carries your verified domain ${identity.sanDomain}` : ""}. PDF readers confirm the document is intact and timestamped, and show the signer as not yet trusted until you import a CA-issued seal certificate.`}
+          </p>
+          {!keyVault && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Importing a CA-issued certificate needs server-side key encryption (DOCURAMA_KEY_ENCRYPTION_KEY) to be configured by your administrator.
+            </p>
+          )}
+        </div>
         {certs.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center">
             <FileSignature className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden />
             <p className="text-sm text-muted-foreground">
-              No signing certificates yet - create one and provision it in a single click. Signatures sealed without a workspace certificate use the platform certificate.
+              No certificates yet. Sealed PDFs are signed with the workspace evidence key above; import a CA-issued seal certificate or issue a sealing certificate to replace it.
             </p>
           </div>
         ) : (
@@ -103,6 +135,10 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
                     <p className="text-sm font-medium">{c.commonName}</p>
                     <StatusBadge status={c.status} />
                     <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{c.purpose}</span>
+                    {c.origin === "imported" && <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">imported</span>}
+                    {c.status === "ACTIVE" && c.purpose === "sealing" && c.serverKey && (
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">Signs sealed PDFs</span>
+                    )}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {c.keyAlgorithm} · {c.signatureAlgorithm} · valid {fmtDate(c.notBefore)} → {fmtDate(c.notAfter)}
@@ -123,15 +159,17 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
                   )}
                   {c.status === "ISSUED" && (
                     <>
-                      <a href={`/api/workspace/certificate/${c.id}/download`}>
-                        <Button size="sm" variant="outline" className="h-10"><Download className="h-4 w-4" aria-hidden /> .p12</Button>
-                      </a>
+                      {c.hasBundle && (
+                        <a href={`/api/workspace/certificate/${c.id}/download`}>
+                          <Button size="sm" variant="outline" className="h-10"><Download className="h-4 w-4" aria-hidden /> .p12</Button>
+                        </a>
+                      )}
                       <Button size="sm" className="h-10" onClick={() => act.mutate({ op: "cert.activate", id: c.id })}>
                         <ShieldCheck className="h-4 w-4" aria-hidden /> Activate
                       </Button>
                     </>
                   )}
-                  {c.status === "ACTIVE" && (
+                  {c.status === "ACTIVE" && c.hasBundle && (
                     <a href={`/api/workspace/certificate/${c.id}/download`}>
                       <Button size="sm" variant="outline" className="h-10"><Download className="h-4 w-4" aria-hidden /> .p12</Button>
                     </a>
@@ -140,7 +178,9 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
                     <ConfirmDialog
                       trigger={<Button size="sm" variant="outline" className="h-10 text-destructive hover:text-destructive"><Ban className="h-4 w-4" aria-hidden /> Revoke</Button>}
                       title={`Revoke “${c.commonName}”?`}
-                      description="New signatures stop using this certificate immediately. Completed documents and their evidence stay valid."
+                      description={c.purpose === "sealing"
+                        ? "It stops signing sealed PDFs immediately and its key is deleted; the workspace evidence key takes over until another sealing certificate is active. Documents already sealed stay valid."
+                        : "The stored .p12 bundle is deleted. Documents already signed stay valid."}
                       confirmLabel="Revoke certificate"
                       onConfirm={() => act.mutateAsync({ op: "cert.revoke", id: c.id })}
                     />
@@ -165,6 +205,7 @@ function CertificatesCard({ certs }: { certs: EsignData["certificates"] }) {
       </CardContent>
 
       <CreateCertDialog open={create} onOpenChange={setCreate} act={act} />
+      <ImportCertDialog open={importing} onOpenChange={setImporting} act={act} keyVault={keyVault} />
       <ProvisionDialog target={provision} onClose={() => setProvision(null)} act={act} />
     </Card>
   );
@@ -208,8 +249,8 @@ function CreateCertDialog({
               <Select value={form.purpose} onValueChange={(v) => setForm({ ...form, purpose: v })}>
                 <SelectTrigger id="purpose" className="h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="signing">Signing (signers)</SelectItem>
-                  <SelectItem value="sealing">Sealing (document seals)</SelectItem>
+                  <SelectItem value="signing">Personal signing (download for your own tools)</SelectItem>
+                  <SelectItem value="sealing">Workspace seal (signs sealed PDFs)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -237,6 +278,77 @@ function CreateCertDialog({
   );
 }
 
+function ImportCertDialog({
+  open, onOpenChange, act, keyVault,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  act: ReturnType<typeof useSettingsAct>;
+  keyVault: boolean;
+}) {
+  const [file, setFile] = useState<{ name: string; base64: string } | null>(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [label, setLabel] = useState("");
+  const reset = () => { setFile(null); setPassphrase(""); setLabel(""); };
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Import a seal certificate</DialogTitle>
+          <DialogDescription>
+            A PKCS#12 file (.p12 or .pfx) with the certificate and its private key, for example an organisation seal
+            certificate from a CA on the Adobe Approved Trust List or a QTSP. The key is stored encrypted and signs every
+            sealed PDF from now on.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="p12-file">Certificate file <span className="text-destructive" aria-hidden>*</span></Label>
+            <Input
+              id="p12-file" type="file" accept=".p12,.pfx,application/x-pkcs12" className="h-11"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) { setFile(null); return; }
+                const reader = new FileReader();
+                reader.onload = () => setFile({ name: f.name, base64: String(reader.result).replace(/^data:[^,]*,/, "") });
+                reader.readAsDataURL(f);
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="p12-pass">File passphrase</Label>
+            <Input id="p12-pass" type="password" autoComplete="off" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} className="h-11" />
+            <p className="text-xs text-muted-foreground">Used once to open the file; it is not stored.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="p12-label">Display name (optional)</Label>
+            <Input id="p12-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="StålFe AB seal 2026" className="h-11" />
+          </div>
+          {!keyVault && (
+            <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+              Server-side key encryption is not configured, so an imported key cannot be stored. Ask your administrator to set DOCURAMA_KEY_ENCRYPTION_KEY.
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            disabled={!file || !keyVault || act.isPending}
+            onClick={async () => {
+              if (!file) return;
+              await act.mutateAsync({ op: "cert.import", data: { pkcs12Base64: file.base64, passphrase, commonName: label } }).catch(() => undefined);
+              onOpenChange(false);
+              reset();
+            }}
+          >
+            <Upload className="h-4 w-4" aria-hidden /> {act.isPending ? "Importing…" : "Import and use for sealing"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProvisionDialog({
   target, onClose, act,
 }: {
@@ -252,7 +364,8 @@ function ProvisionDialog({
         <DialogHeader>
           <DialogTitle>Provision “{target?.name}”</DialogTitle>
           <DialogDescription>
-            OpenSSL generates a real RSA-2048 key pair and issues the certificate. Choose an encryption passphrase for the .p12 - it is never stored, so keep it safe.
+            OpenSSL generates a real RSA-2048 key pair and issues the certificate. Choose an encryption passphrase for the downloadable .p12 - it is never stored, so keep it safe.
+            A workspace seal certificate also keeps its key on the server, encrypted, to sign sealed PDFs.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -304,7 +417,7 @@ function TsaCard({ tsa }: { tsa: EsignData["tsa"] }) {
           <Clock className="h-4 w-4 text-muted-foreground" aria-hidden /> RFC 3161 Timestamp Authority (TSA)
         </CardTitle>
         <CardDescription>
-          Trusted timestamps bound into every sealed document for long-term validation (PAdES B-LT / B-LTA). Presets point at public authorities.
+          Every seal gets an RFC 3161 timestamp over its seal manifest. When enabled, this authority issues them for your workspace; otherwise the platform authority does. Test requests a real timestamp.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -330,7 +443,7 @@ function TsaCard({ tsa }: { tsa: EsignData["tsa"] }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="tsa-url">TSA URL</Label>
-              <Input id="tsa-url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className="h-11 font-mono text-sm" placeholder="https://timestamp.digicert.com" />
+              <Input id="tsa-url" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className="h-11 font-mono text-sm" placeholder="http://timestamp.digicert.com" />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -367,8 +480,8 @@ function TsaCard({ tsa }: { tsa: EsignData["tsa"] }) {
             <ToggleRow
               checked={form.enabled}
               onCheckedChange={(v) => setForm({ ...form, enabled: v })}
-              label="Timestamp every sealed document"
-              desc="Required for PAdES B-LTA conformance and eIDAS qualified workflows"
+              label="Use this authority for this workspace"
+              desc="Off: the platform authority timestamps your seals. Timestamps make sealed PDFs PAdES B-T, and B-LTA once revocation data is embedded"
             />
             <div className="rounded-lg border p-3 text-xs text-muted-foreground">
               <p className="font-medium text-foreground">Last test</p>

@@ -1,9 +1,11 @@
 import { NextRequest } from "next/server";
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
-import { publicRecipient, iso, isos, jsonError, jsonOk } from "@/lib/serializers";
+import { publicRecipient, iso, isos, envelopeRow, jsonError, jsonOk } from "@/lib/serializers";
 import { buildEvidencePack, recordEvidencePackExport, EvidencePackError } from "@/lib/evidence-pack";
 import { apiAccessAllowed } from "@/lib/billing";
+import { verifyEnvelopeCode } from "@/lib/verify";
+import { sealedPdfBytes } from "@/lib/signed-pdf";
 
 /**
  * Public integration API (v1) - the surface documented in Settings → API.
@@ -15,6 +17,7 @@ import { apiAccessAllowed } from "@/lib/billing";
  *   GET /api/v1/envelopes?status=&page=&perPage=
  *   GET /api/v1/envelopes/{idOrCode}
  *   GET /api/v1/envelopes/{idOrCode}/evidence-pack   (ZIP, sealed envelopes)
+ *   GET /api/v1/envelopes/{idOrCode}/signed-pdf      (PAdES-signed PDF, sealed uploads)
  *   GET /api/v1/templates
  *   GET /api/v1/verify/{code}          (public - no key required; falls back
  *                                       to pushed attestations for codes that
@@ -47,63 +50,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     // Public verification - same engine as verify.docurama.eu.
     if (resource === "verify" && rest.length === 1) {
-      const code = rest[0].trim().toUpperCase();
-      const e = await db.envelope.findUnique({
-        where: { publicCode: code },
-        include: { recipients: true, tenant: { select: { name: true } } },
-      });
-      if (!e) {
-        // Not a local envelope — maybe a self-hosted instance attested this
-        // code to the portal. Honest, clearly-labeled fallback: the portal
-        // vouches for the pushed fingerprint, not for a local document.
-        const att = await db.portalAttestation.findUnique({
-          where: { code },
-          include: { instance: true },
-        });
-        if (att) {
-          return jsonOk({
-            result: "VERIFIED_ATTESTED", code,
-            attestation: {
-              sha256: att.sha256,
-              sealedAt: att.sealedAt.toISOString(),
-              completedAt: att.completedAt?.toISOString() ?? null,
-              conformance: att.conformance,
-              pages: att.pages,
-              signerCount: att.signerCount,
-              verifiedDomain: att.verifiedDomain,
-              instance: {
-                label: att.instance.label,
-                firstSeenAt: att.instance.firstSeenAt.toISOString(),
-                attestationCount: att.instance.attestationCount,
-              },
-              transparency: {
-                chainSeq: att.tSeq,
-                chainEntryHash: att.tEntryHash,
-                proof: `/api/transparency/proof/${att.code}`,
-                checkpoint: "/api/transparency/checkpoint",
-              },
-            },
-          });
-        }
-        return jsonOk({ result: "NOT_FOUND", code });
-      }
-      if (e.status === "VOIDED") {
-        return jsonOk({ result: "VOIDED", code, voidedAt: e.voidedAt?.toISOString() ?? null, voidReason: e.voidReason });
-      }
-      if (e.status !== "COMPLETED" || !e.sealedAt || !e.sha256) {
-        return jsonOk({ result: "NOT_SEALED", code, title: e.title, status: e.status });
-      }
-      return jsonOk({
-        result: "VERIFIED", code,
-        envelope: {
-          title: e.title, status: e.status, sealedAt: e.sealedAt.toISOString(),
-          completedAt: e.completedAt?.toISOString() ?? null,
-          conformance: e.conformanceLevel, sha256: e.sha256,
-          tenantName: e.tenant.name, pages: e.pages,
-          verifiedSenderDomain: e.verifiedSenderDomain,
-          signers: e.recipients.filter((r) => r.status === "SIGNED").map(publicRecipient),
-        },
-      });
+      return jsonOk(await verifyEnvelopeCode(rest[0]));
     }
 
     const auth = await resolveApiKey(req);
@@ -129,7 +76,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       return jsonOk({
         total, page, perPage,
         rows: rows.map((e) => ({
-          ...iso(e),
+          ...envelopeRow(e),
           createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
           recipients: e.recipients.map(publicRecipient),
         })),
@@ -174,6 +121,27 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           "content-type": "application/zip",
           "content-disposition": `attachment; filename="${pack.filename}"`,
           "cache-control": "no-store",
+        },
+      });
+    }
+
+    // The sealed, PAdES-signed PDF — sealed envelopes of this tenant with an uploaded document.
+    if (resource === "envelopes" && rest.length === 2 && rest[1] === "signed-pdf") {
+      const e = await db.envelope.findFirst({
+        where: { tenantId, OR: [{ id: rest[0] }, { publicCode: rest[0].toUpperCase() }] },
+        select: { id: true, status: true, documentId: true, contractText: true },
+      });
+      if (!e) return jsonError("Envelope not found", 404);
+      if (e.status !== "COMPLETED") return jsonError("The signed PDF exists once every signer has signed", 409);
+      if (!e.documentId && !e.contractText) return jsonError("This envelope has no document to seal as a PDF (sent before contract text was kept): export its evidence pack instead", 404);
+      const pdf = await sealedPdfBytes(e.id);
+      if (!pdf) return jsonError("The signed PDF could not be produced; see the envelope's audit trail", 503);
+      return new Response(new Uint8Array(pdf.bytes), {
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(pdf.filename)}`,
+          "cache-control": "no-store",
+          ...(pdf.level ? { "x-docurama-pades-level": pdf.level } : {}),
         },
       });
     }

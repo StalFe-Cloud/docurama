@@ -17,7 +17,11 @@
  *  4. the signed webhook route: not-configured 400, bad signature 400,
  *     checkout.session.completed activation, invoice.paid renewal with
  *     rollover, invoice.payment_failed → PAST_DUE + dunning mail,
- *     customer.subscription.deleted → CANCELED.
+ *     customer.subscription.deleted → CANCELED;
+ *  5. go-live hardening: catalog prices by lookup key, events from other
+ *     products on a shared account, plan-change retirement, expired/failed
+ *     checkouts, refunds/disputes, the webhook-secret guard, customer
+ *     re-mapping, and paid-plan enforcement (Solo-only free trial).
  */
 
 import { describe, expect, test, afterAll } from "bun:test";
@@ -47,6 +51,9 @@ const db = new PrismaClient();
 
 const lib = await import("../src/lib/payments");
 const plans = await import("../src/lib/plans");
+const billingLib = await import("../src/lib/billing");
+const catalog = await import("../src/lib/stripe-catalog");
+const { serializableTransaction } = await import("../src/lib/transaction");
 const webhookRoute = await import("../src/app/api/billing/webhook/route");
 const Stripe = (await import("stripe")).default;
 const periodEnd = new Date();
@@ -63,28 +70,110 @@ const invoice = (id: string, end: number, billingReason = "subscription_cycle") 
 
 /* ── A local stub Stripe API ───────────────────────────────────────────────── */
 
+type StubObject = Record<string, unknown>;
+const stripeState = {
+  customers: new Set<string>(),
+  products: new Map<string, StubObject>(),
+  prices: new Map<string, StubObject>(),
+  portalConfigurations: [] as StubObject[],
+  subscriptions: new Map<string, StubObject>([
+    ["sub_test_9", { id: "sub_test_9", object: "subscription", status: "active", customer: "cus_test_1", items: { data: [{ current_period_end: firstPeriodEnd }] } }],
+    ["sub_legacy", { id: "sub_legacy", object: "subscription", status: "active", current_period_end: firstPeriodEnd, items: { data: [{ id: "si_legacy" }] } }],
+  ]),
+  charges: new Map<string, StubObject>([["ch_1", { id: "ch_1", object: "charge", customer: "cus_test_1" }]]),
+  sessions: [] as URLSearchParams[],
+  portalSessions: [] as URLSearchParams[],
+  canceled: [] as { id: string; params: URLSearchParams }[],
+  counter: 0,
+};
+const missing = (what: string) =>
+  Response.json({ error: { type: "invalid_request_error", code: "resource_missing", message: `No such ${what}` } }, { status: 404 });
+const list = (data: unknown[]) => Response.json({ object: "list", data, has_more: false, url: "/v1/stub" });
+
 const stub = Bun.serve({
   port: 0,
   async fetch(req) {
     const url = new URL(req.url);
-    if (req.method === "GET" && url.pathname === "/v1/subscriptions/sub_test_9") {
-      return Response.json({ id: "sub_test_9", object: "subscription", status: "active", items: { data: [{ current_period_end: firstPeriodEnd }] } });
+    const path = url.pathname;
+    const form = new URLSearchParams(req.method === "GET" ? "" : await req.text());
+    const params = new URLSearchParams([...url.searchParams, ...form]);
+    const id = path.split("/").pop()!;
+
+    if (req.method === "DELETE" && path.startsWith("/v1/subscriptions/")) {
+      const sub = stripeState.subscriptions.get(id);
+      if (!sub) return missing("subscription");
+      sub.status = "canceled";
+      stripeState.canceled.push({ id, params });
+      return Response.json(sub);
     }
-    if (req.method === "GET" && url.pathname === "/v1/subscriptions/sub_legacy") {
-      return Response.json({ id: "sub_legacy", object: "subscription", status: "active", current_period_end: firstPeriodEnd, items: { data: [{ id: "si_legacy" }] } });
+    if (req.method === "GET") {
+      if (path.startsWith("/v1/subscriptions/")) {
+        return Response.json(stripeState.subscriptions.get(id) ??
+          { id, object: "subscription", status: "active", items: { data: [{ current_period_end: firstPeriodEnd }] } });
+      }
+      if (path === "/v1/subscriptions") {
+        return list([...stripeState.subscriptions.values()].filter((sub) => sub.customer === params.get("customer")));
+      }
+      if (path.startsWith("/v1/customers/")) {
+        return stripeState.customers.has(id) ? Response.json({ id, object: "customer" }) : missing("customer");
+      }
+      if (path.startsWith("/v1/products/")) return stripeState.products.has(id) ? Response.json(stripeState.products.get(id)) : missing("product");
+      if (path === "/v1/prices") {
+        const keys = [...params.entries()].filter(([key]) => key.startsWith("lookup_keys")).map(([, value]) => value);
+        return list([...stripeState.prices.values()].filter((price) => keys.includes(String(price.lookup_key)) && price.active));
+      }
+      if (path === "/v1/billing_portal/configurations") return list(stripeState.portalConfigurations);
+      if (path.startsWith("/v1/charges/")) return stripeState.charges.has(id) ? Response.json(stripeState.charges.get(id)) : missing("charge");
+      return new Response("not found", { status: 404 });
     }
-    if (req.method !== "POST") return new Response("not found", { status: 404 });
-    if (url.pathname === "/v1/customers") {
-      return Response.json({ id: "cus_test_1", object: "customer" });
+
+    if (path === "/v1/customers") {
+      const customerId = stripeState.customers.size === 0 ? "cus_test_1" : `cus_new_${++stripeState.counter}`;
+      stripeState.customers.add(customerId);
+      return Response.json({ id: customerId, object: "customer" });
     }
-    if (url.pathname === "/v1/checkout/sessions") {
+    if (path === "/v1/products") {
+      const product = { id: params.get("id"), object: "product", active: true, name: params.get("name"), tax_code: params.get("tax_code"), metadata: { app: params.get("metadata[app]") } };
+      stripeState.products.set(String(product.id), product);
+      return Response.json(product);
+    }
+    if (path.startsWith("/v1/products/")) return Response.json(stripeState.products.get(id));
+    if (path === "/v1/prices") {
+      const lookupKey = params.get("lookup_key");
+      if (params.get("transfer_lookup_key") === "true") {
+        for (const price of stripeState.prices.values()) if (price.lookup_key === lookupKey) price.lookup_key = null;
+      }
+      const price = {
+        id: `price_${++stripeState.counter}`, object: "price", active: true, product: params.get("product"),
+        currency: params.get("currency"), unit_amount: Number(params.get("unit_amount")), tax_behavior: params.get("tax_behavior"),
+        recurring: { interval: params.get("recurring[interval]"), interval_count: Number(params.get("recurring[interval_count]")) },
+        lookup_key: lookupKey,
+      };
+      stripeState.prices.set(price.id, price);
+      return Response.json(price);
+    }
+    if (path.startsWith("/v1/prices/")) {
+      const price = stripeState.prices.get(id)!;
+      if (params.has("active")) price.active = params.get("active") === "true";
+      return Response.json(price);
+    }
+    if (path === "/v1/billing_portal/configurations") {
+      const configuration = { id: `bpc_${++stripeState.counter}`, object: "billing_portal.configuration", active: true, metadata: { app: params.get("metadata[app]") } };
+      stripeState.portalConfigurations.push(configuration);
+      return Response.json(configuration);
+    }
+    if (path === "/v1/checkout/sessions") {
+      stripeState.sessions.push(params);
+      const n = stripeState.sessions.length;
+      const sessionId = n === 1 ? "cs_test_9" : `cs_test_${n + 9}`;
       return Response.json({
-        id: "cs_test_9", object: "checkout.session", mode: "subscription",
-        url: "https://checkout.stripe.test/pay/cs_test_9",
-        subscription: "sub_test_9", customer: "cus_test_1",
+        id: sessionId, object: "checkout.session", mode: "subscription",
+        url: `https://checkout.stripe.test/pay/${sessionId}`,
+        customer: params.get("customer"),
       });
     }
-    if (url.pathname === "/v1/billing_portal/sessions") {
+    if (path === "/v1/billing_portal/sessions") {
+      stripeState.portalSessions.push(params);
       return Response.json({ id: "bps_test_1", object: "billing_portal.session", url: "https://billing.stripe.test/session/bps_test_1" });
     }
     return new Response("not found", { status: 404 });
@@ -462,5 +551,234 @@ describe("stripe mode against a stub API + webhook route", () => {
     expect((await postWebhook(renewal.payload, renewal.header)).status).toBe(200);
     expect((await db.subscription.findFirstOrThrow({ where: { tenantId: t.id } })).renewalAt.getTime()).toBe(secondPeriodEnd * 1000);
     expect((await db.payment.findFirstOrThrow({ where: { reference: "in_legacy" } })).amountCents).toBe(11520);
+  });
+});
+
+/* ── 5. Go-live hardening ──────────────────────────────────────────────────── */
+
+describe("go-live hardening: catalog, shared account, plan changes", () => {
+  test("checkout references the catalog price and tags every object as Docurama's", async () => {
+    const session = stripeState.sessions[0];
+    const price = stripeState.prices.get(String(session.get("line_items[0][price]")));
+    expect(price).toMatchObject({ lookup_key: "docurama_solo_12m", unit_amount: 11520, currency: "eur", tax_behavior: "exclusive", product: "docurama_solo" });
+    expect(price?.recurring).toEqual({ interval: "month", interval_count: 12 });
+    expect(stripeState.products.get("docurama_solo")).toMatchObject({ tax_code: catalog.STRIPE_SAAS_TAX_CODE, metadata: { app: "docurama" } });
+    const payment = await db.payment.findFirstOrThrow({ where: { reference: "cs_test_9" } });
+    expect(session.get("metadata[app]")).toBe("docurama");
+    expect(session.get("metadata[paymentId]")).toBe(payment.id);
+    expect(session.get("subscription_data[metadata][app]")).toBe("docurama");
+    expect(session.get("subscription_data[metadata][tenantId]")).toBe(tenant.id);
+    expect(session.get("tax_id_collection[enabled]")).toBe("true");
+    expect(session.get("billing_address_collection")).toBe("required");
+    expect(session.get("customer_update[address]")).toBe("auto");
+    expect(session.has("line_items[0][price_data][currency]")).toBe(false);
+    // The portal session runs on the Docurama configuration, not the account default.
+    const configuration = stripeState.portalConfigurations.find((c) => (c.metadata as { app?: string }).app === "docurama");
+    expect(stripeState.portalSessions[0].get("configuration")).toBe(String(configuration?.id));
+  });
+
+  test("prices resolve by lookup key; a price change mints a new price and archives the old one", async () => {
+    const stripe = lib.stripeClient();
+    catalog.resetStripeCatalogCache();
+    const count = stripeState.prices.size;
+    const current = await catalog.ensurePlanPrice(stripe, "SOLO", 12);
+    expect(stripeState.prices.size).toBe(count);
+    stripeState.prices.get(current)!.unit_amount = 9999; // catalogue price before a change in plans.ts
+    catalog.resetStripeCatalogCache();
+    const next = await catalog.ensurePlanPrice(stripe, "SOLO", 12);
+    expect(next).not.toBe(current);
+    expect(stripeState.prices.get(next)).toMatchObject({ lookup_key: "docurama_solo_12m", unit_amount: 11520, active: true });
+    expect(stripeState.prices.get(current)).toMatchObject({ lookup_key: null, active: false });
+  });
+
+  test("events from another product on the same Stripe account are acknowledged without side effects", async () => {
+    const counts = async () => [await db.payment.count(), await db.subscription.count(), await db.auditEvent.count(), await db.mailOutbox.count()];
+    const before = await counts();
+    const foreignInvoice = (id: string) => ({
+      id, customer: "cus_nexa", billing_reason: "subscription_cycle", amount_paid: 5000,
+      parent: { type: "subscription_details", subscription_details: { subscription: "sub_nexa_1", metadata: { product: "nexa" } } },
+      // Two recurring lines: a shape Docurama never creates, must not 500.
+      lines: { data: [invoiceLine(firstPeriodEnd), invoiceLine(secondPeriodEnd)] },
+    });
+    const events = await Promise.all([
+      signedEvent("checkout.session.completed", { id: "cs_nexa_1", payment_status: "paid", client_reference_id: "nexa-user-7", customer: "cus_nexa", metadata: { orderId: "N-7" }, subscription: "sub_nexa_1" }),
+      signedEvent("checkout.session.expired", { id: "cs_nexa_2", metadata: {} }),
+      signedEvent("invoice.paid", foreignInvoice("in_nexa_1")),
+      signedEvent("invoice.payment_failed", foreignInvoice("in_nexa_2")),
+      signedEvent("customer.subscription.updated", { id: "sub_nexa_1", customer: "cus_nexa", cancel_at_period_end: true }),
+      signedEvent("customer.subscription.deleted", { id: "sub_nexa_1", customer: "cus_nexa" }),
+      signedEvent("charge.refunded", { id: "ch_nexa", object: "charge", customer: "cus_nexa", amount_refunded: 5000, currency: "eur" }),
+    ]);
+    for (const event of events) {
+      const res = await postWebhook(event.payload, event.header);
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { handled: boolean }).handled).toBe(false);
+    }
+    expect(await counts()).toEqual(before);
+  });
+
+  test("a plan change retires the superseded subscription with a prorated credit, exactly once", async () => {
+    const t = await db.tenant.create({ data: {
+      name: "Plan change", slug: "billing-plan-change", planCode: "SOLO", status: "TRIAL", trialEndsAt: new Date(Date.now() + 5 * 86_400_000),
+    } });
+    await db.paymentCustomer.create({ data: { tenantId: t.id, provider: "stripe", externalId: "cus_change" } });
+    stripeState.customers.add("cus_change");
+    const subscription = (id: string) => ({ id, object: "subscription", status: "active", customer: "cus_change", metadata: { app: "docurama" }, items: { data: [{ current_period_end: firstPeriodEnd }] } });
+    stripeState.subscriptions.set("sub_old", subscription("sub_old"));
+    await db.payment.create({ data: { tenantId: t.id, provider: "stripe", kind: "checkout", planCode: "SOLO", termMonths: 1, amountCents: 1200, reference: "cs_old", description: "Solo monthly" } });
+    await db.payment.create({ data: { tenantId: t.id, provider: "stripe", kind: "checkout", planCode: "STARTER", termMonths: 12, amountCents: 27840, reference: "cs_new", description: "Starter 12 months" } });
+    const completed = (id: string, planCode: string, termMonths: number, sub: string) => signedEvent("checkout.session.completed", {
+      id, payment_status: "paid", client_reference_id: t.id, customer: "cus_change", currency: "eur", amount_total: termMonths === 1 ? 1440 : 33408,
+      metadata: { app: "docurama", tenantId: t.id, planCode, termMonths: String(termMonths) }, subscription: sub,
+    });
+
+    const first = await completed("cs_old", "SOLO", 1, "sub_old");
+    expect((await postWebhook(first.payload, first.header)).status).toBe(200);
+    // A paid plan ends the trial; the receipt quotes what was charged (tax included).
+    expect((await db.tenant.findUniqueOrThrow({ where: { id: t.id } })).status).toBe("ACTIVE");
+    expect((await db.auditEvent.findFirstOrThrow({ where: { action: "subscription.activated", tenantId: t.id } })).detail).toContain("€14.40");
+    expect(stripeState.canceled.filter((c) => c.id === "sub_old")).toHaveLength(0);
+
+    stripeState.subscriptions.set("sub_new", subscription("sub_new"));
+    const second = await completed("cs_new", "STARTER", 12, "sub_new");
+    expect((await postWebhook(second.payload, second.header)).status).toBe(200);
+    const retired = stripeState.canceled.filter((c) => c.id === "sub_old");
+    expect(retired).toHaveLength(1);
+    expect(retired[0].params.get("prorate")).toBe("true");
+    expect(retired[0].params.get("invoice_now")).toBe("true");
+    const local = await db.subscription.findFirstOrThrow({ where: { tenantId: t.id } });
+    expect(local).toMatchObject({ providerRef: "sub_new", planCode: "STARTER", termMonths: 12, status: "ACTIVE" });
+    expect(await db.auditEvent.count({ where: { action: "subscription.superseded", tenantId: t.id } })).toBe(1);
+
+    // Replays: the superseded checkout never cancels the current subscription,
+    // the current one never cancels twice.
+    expect((await postWebhook(first.payload, first.header)).status).toBe(200);
+    expect((await postWebhook(second.payload, second.header)).status).toBe(200);
+    expect(stripeState.canceled.some((c) => c.id === "sub_new")).toBe(false);
+    expect(stripeState.canceled.filter((c) => c.id === "sub_old")).toHaveLength(1);
+
+    // A renewal invoice for the superseded subscription is acknowledged, not retried forever.
+    const oldCycle = invoice("in_old_cycle", secondPeriodEnd);
+    oldCycle.parent.subscription_details.subscription = "sub_old";
+    const late = await signedEvent("invoice.paid", { ...oldCycle, customer: "cus_change" });
+    expect((await postWebhook(late.payload, late.header)).status).toBe(200);
+    expect(await db.payment.count({ where: { reference: "in_old_cycle" } })).toBe(0);
+  });
+
+  test("expired and failed asynchronous checkouts close the pending payment", async () => {
+    const pending = (reference: string) => db.payment.create({ data: {
+      tenantId: tenant.id, provider: "stripe", kind: "checkout", planCode: "STARTER", termMonths: 1, amountCents: 2900, reference, description: "Starter monthly",
+    } });
+    const expired = await pending("cs_expired");
+    const failed = await pending("cs_sepa_failed");
+    const expiredEvent = await signedEvent("checkout.session.expired", { id: "cs_expired", metadata: {} });
+    expect((await postWebhook(expiredEvent.payload, expiredEvent.header)).status).toBe(200);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: expired.id } })).status).toBe("CANCELED");
+    const failedEvent = await signedEvent("checkout.session.async_payment_failed", { id: "cs_sepa_failed", metadata: { app: "docurama", paymentId: failed.id } });
+    expect((await postWebhook(failedEvent.payload, failedEvent.header)).status).toBe(200);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: failed.id } })).status).toBe("FAILED");
+    expect(await db.auditEvent.count({ where: { action: "billing.checkout_failed" } })).toBe(1);
+    expect(await db.mailOutbox.count({ where: { subject: { contains: "Payment not completed" } } })).toBe(1);
+    // Replays change nothing.
+    expect((await postWebhook(failedEvent.payload, failedEvent.header)).status).toBe(200);
+    expect(await db.mailOutbox.count({ where: { subject: { contains: "Payment not completed" } } })).toBe(1);
+  });
+
+  test("refunds land in the ledger once per refunded increment; disputes raise one CRITICAL audit", async () => {
+    const refund = (amount: number) => signedEvent("charge.refunded", { id: "ch_1", object: "charge", customer: "cus_test_1", amount_refunded: amount, currency: "eur" });
+    const partial = await refund(500);
+    expect((await postWebhook(partial.payload, partial.header)).status).toBe(200);
+    expect((await postWebhook(partial.payload, partial.header)).status).toBe(200);
+    const more = await refund(800);
+    expect((await postWebhook(more.payload, more.header)).status).toBe(200);
+    const rows = await db.payment.findMany({ where: { kind: "refund" }, orderBy: { amountCents: "desc" } });
+    expect(rows.map((row) => [row.amountCents, row.status])).toEqual([[500, "REFUNDED"], [300, "REFUNDED"]]);
+
+    const dispute = await signedEvent("charge.dispute.created", {
+      id: "dp_1", object: "dispute", charge: "ch_1", amount: 1200, reason: "fraudulent", evidence_details: { due_by: firstPeriodEnd },
+    });
+    expect((await postWebhook(dispute.payload, dispute.header)).status).toBe(200);
+    expect((await postWebhook(dispute.payload, dispute.header)).status).toBe(200);
+    const audits = await db.auditEvent.findMany({ where: { action: "billing.dispute_opened" } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0].severity).toBe("CRITICAL");
+  });
+
+  test("stripe mode refuses to take money while the webhook secret is missing", async () => {
+    const payments = await db.payment.count();
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    expect(lib.stripePosture()).toMatchObject({ webhookConfigured: false, ready: false });
+    await expect(lib.createCheckout({
+      tenantId: tenant.id, tenantName: tenant.name, userEmail: "billing-e2e@docurama.eu", userName: "Billing E2E",
+      planCode: "STARTER", termMonths: 1, origin: "http://127.0.0.1:3000",
+    })).rejects.toBeInstanceOf(lib.BillingUnavailableError);
+    expect(await db.payment.count()).toBe(payments);
+    process.env.STRIPE_WEBHOOK_SECRET = WEBHOOK_SECRET;
+    expect(lib.stripePosture()).toMatchObject({ webhookConfigured: true, ready: true, livemode: false });
+  });
+
+  test("a customer mapping that no longer exists on this key (test → live switch) is replaced", async () => {
+    const t = await db.tenant.create({ data: { name: "Remapped", slug: "billing-remap", planCode: "STARTER", status: "ACTIVE" } });
+    await db.paymentCustomer.create({ data: { tenantId: t.id, provider: "stripe", externalId: "cus_from_test_mode" } });
+    await lib.createCheckout({
+      tenantId: t.id, tenantName: t.name, userEmail: "remap@example.test", userName: "Re Map",
+      planCode: "STARTER", termMonths: 1, origin: "http://127.0.0.1:3000",
+    });
+    const mapping = await db.paymentCustomer.findUniqueOrThrow({ where: { tenantId_provider: { tenantId: t.id, provider: "stripe" } } });
+    expect(mapping.externalId).not.toBe("cus_from_test_mode");
+    expect(stripeState.customers.has(mapping.externalId)).toBe(true);
+  });
+});
+
+/* ── 6. Paid-plan enforcement (Stripe mode) ───────────────────────────────── */
+
+describe("paid-plan enforcement: Solo-only free trial, grace, cancellations", () => {
+  const day = 86_400_000;
+
+  test("only a real trial is free; a zero-length (paid-plan) trial owes the first payment", () => {
+    const now = new Date();
+    const createdAt = new Date(now.getTime() - 20 * day);
+    const block = (trialEndsAt: Date | null, status = "TRIAL") => billingLib.billingBlock({ status, createdAt, trialEndsAt }, null, now);
+    expect(block(new Date(now.getTime() + day))).toBeNull();
+    expect(block(new Date(now.getTime() - day))).toBe("trial_expired");
+    expect(block(createdAt)).toBe("payment_required");
+    // Admin-provisioned / sales-led workspaces carry no trial end and are never blocked.
+    expect(block(null)).toBeNull();
+    expect(block(createdAt, "ACTIVE")).toBeNull();
+  });
+
+  test("past-due keeps sending through the grace period; ended cancellations stop", () => {
+    const now = new Date();
+    const t = { status: "ACTIVE", createdAt: now, trialEndsAt: null };
+    const at = (offsetDays: number) => new Date(now.getTime() + offsetDays * day);
+    expect(billingLib.billingBlock(t, { status: "PAST_DUE", renewalAt: at(-3) }, now)).toBeNull();
+    expect(billingLib.billingBlock(t, { status: "PAST_DUE", renewalAt: at(-15) }, now)).toBe("past_due");
+    expect(billingLib.billingBlock(t, { status: "CANCELED", renewalAt: at(1) }, now)).toBeNull();
+    expect(billingLib.billingBlock(t, { status: "CANCELED", renewalAt: at(-1) }, now)).toBe("canceled");
+    expect(billingLib.billingBlock(t, { status: "ACTIVE", renewalAt: at(-90) }, now)).toBeNull();
+    // Compose passes unset variables through as "": that means the default, not zero days.
+    process.env.BILLING_GRACE_DAYS = "";
+    expect(billingLib.billingGraceDays()).toBe(14);
+    delete process.env.BILLING_GRACE_DAYS;
+  });
+
+  test("manual mode and the operator escape hatch never block", () => {
+    const expired = { status: "TRIAL", createdAt: new Date(Date.now() - 30 * day), trialEndsAt: new Date(Date.now() - day) };
+    process.env.BILLING_ENFORCEMENT = "off";
+    expect(billingLib.billingBlock(expired, null)).toBeNull();
+    delete process.env.BILLING_ENFORCEMENT;
+    delete process.env.PAYMENT_PROVIDER;
+    expect(billingLib.billingBlock(expired, null)).toBeNull();
+    process.env.PAYMENT_PROVIDER = "stripe";
+    expect(billingLib.billingBlock(expired, null)).toBe("trial_expired");
+  });
+
+  test("an unpaid Starter signup cannot reserve an envelope and is told to check out", async () => {
+    const createdAt = new Date();
+    const t = await db.tenant.create({ data: { name: "Unpaid starter", slug: "billing-unpaid-starter", planCode: "STARTER", status: "TRIAL", createdAt, trialEndsAt: createdAt } });
+    expect(await serializableTransaction((tx) => billingLib.reserveEnvelopeAllowance(t.id, tx))).toBeNull();
+    expect(await serializableTransaction((tx) => billingLib.envelopeDeniedMessage(tx, t.id))).toContain("complete checkout");
+    const allowance = await billingLib.currentAllowance(t.id);
+    expect(allowance).toMatchObject({ blocked: "payment_required", remaining: 0 });
   });
 });

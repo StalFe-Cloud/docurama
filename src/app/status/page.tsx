@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { BrandLogo, BRAND_LEGAL_NAME } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { CheckCircle2, AlertTriangle, CircleDashed } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -135,7 +136,7 @@ export default async function StatusPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <BrandLogo size="sm" />
+          <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
             <Link className="hover:text-foreground" href="/docs">Documentation</Link>
             <Link className="hover:text-foreground" href="/security">Security</Link>

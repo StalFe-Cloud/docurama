@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { currentAllowance, seatCapacity } from "@/lib/billing";
+import { BILLING_BLOCK_MESSAGES, billingBlock, currentAllowance, seatCapacity } from "@/lib/billing";
 import { planDef } from "@/lib/plans";
 import { paymentMode } from "@/lib/payments";
 
@@ -41,20 +41,26 @@ export async function GET() {
       orderBy: { renewalAt: "desc" },
     });
     const plan = planDef(tenant.planCode);
+    const block = billingBlock(tenant, subscription);
+    // Paid-plan signups carry a zero-length trial: that is "awaiting payment", not a trial.
+    const realTrial = tenant.status === "TRIAL" && !subscription && tenant.trialEndsAt &&
+      tenant.trialEndsAt.getTime() - tenant.createdAt.getTime() >= 60_000;
 
     return NextResponse.json({
       mode: paymentMode(),
       plan: {
         code: plan.code,
         name: plan.name,
-        monthlyEur: plan.monthlyEur,
+        custom: Boolean(plan.custom),
+        monthlyEur: subscription?.monthlyEurOverride ?? plan.monthlyEur,
         seatLimit: plan.seatLimit,
         envelopeLimit: plan.envelopeLimit,
         bestFor: plan.bestFor,
         features: plan.features,
         outcomes: plan.outcomes,
       },
-      trial: tenant.status === "TRIAL" ? { endsAt: tenant.trialEndsAt } : null,
+      trial: realTrial ? { endsAt: tenant.trialEndsAt } : null,
+      billingBlock: block ? { reason: block, message: BILLING_BLOCK_MESSAGES[block] } : null,
       subscription: subscription
         ? {
             status: subscription.status,

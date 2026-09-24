@@ -7,7 +7,7 @@
  * and the customer-portal entry point.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -20,16 +20,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ApiError, apiGet, apiJsonPost } from "@/lib/client";
 import { ErrorState } from "@/components/portal/shared";
-import { PLAN_ORDER } from "@/lib/plans";
+import { BILLING_TERMS, PLAN_CATALOG, PLAN_ORDER, planDef, planPriceLabel } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 type Overview = {
   mode: "stripe" | "manual";
   plan: {
-    code: string; name: string; monthlyEur: number; seatLimit: number;
+    code: string; name: string; custom: boolean; monthlyEur: number; seatLimit: number;
     envelopeLimit: number; bestFor: string; features: string[]; outcomes: string[];
   };
   trial: { endsAt: string } | null;
+  billingBlock: { reason: string; message: string } | null;
   subscription: {
     status: string; termMonths: number; discountPct: number; renewalAt: string;
     paymentMethod: string; provider: string; failedPayment: boolean; carriedForwardEnvelopes: number;
@@ -43,12 +44,11 @@ type Overview = {
   }[];
 };
 
-const TERMS = [
-  { months: 1, label: "Monthly — no engagement" },
-  { months: 3, label: "3 months (−5%)" },
-  { months: 6, label: "6 months (−10%)" },
-  { months: 12, label: "12 months (−15%)" },
-];
+// Derived from the catalog so the labels can never drift from what is charged.
+const TERMS = BILLING_TERMS.map((t) => ({
+  months: t.months,
+  label: t.months === 1 ? "Monthly — no engagement" : `${t.label} (−${t.discountPct}%)`,
+}));
 
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`;
 
@@ -57,11 +57,29 @@ export function BillingTab() {
   const [planChoice, setPlanChoice] = useState("");
   const [termChoice, setTermChoice] = useState("1");
   const [manualResult, setManualResult] = useState<{ reference: string; amountEur: string; instructions?: string } | null>(null);
+  // Back from Stripe Checkout: the webhook activates the plan within seconds,
+  // so poll the overview briefly instead of showing the old plan as if nothing happened.
+  // Read once on mount; the tab only renders its content client-side after data loads.
+  const [returnedFromCheckout] = useState<"success" | "canceled" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const outcome = new URLSearchParams(window.location.search).get("checkout");
+    return outcome === "success" || outcome === "canceled" ? outcome : null;
+  });
+  useEffect(() => {
+    if (!returnedFromCheckout) return;
+    if (returnedFromCheckout === "canceled") toast.info("Checkout canceled — nothing was charged.");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [returnedFromCheckout]);
 
   const { data, isError, error, isLoading, refetch } = useQuery({
     queryKey: ["billing", "overview"],
     queryFn: () => apiGet<Overview>("/api/billing/overview"),
     staleTime: 10_000,
+    refetchInterval: (query) => {
+      if (returnedFromCheckout !== "success") return false;
+      const pending = query.state.data?.payments.some((p) => p.provider === "stripe" && p.status === "PENDING");
+      return pending && query.state.dataUpdateCount < 20 ? 3_000 : false;
+    },
   });
 
   // Derived default: the current plan until the user picks another.
@@ -101,12 +119,40 @@ export function BillingTab() {
   }
 
   const pendingManual = data.payments.find((p) => p.status === "PENDING" && p.provider === "manual");
+  const activatingStripe = returnedFromCheckout === "success" && data.payments.some((p) => p.provider === "stripe" && p.status === "PENDING");
+  // Re-buying the exact plan and term already paid for is the only no-op choice.
+  const alreadyPaidChoice = Boolean(data.subscription && ["ACTIVE", "PAST_DUE"].includes(data.subscription.status) &&
+    planSelection === data.plan.code && Number(termChoice) === data.subscription.termMonths);
   const allowancePct = data.allowance.total > 0 ? Math.min(100, Math.round((data.allowance.used / data.allowance.total) * 100)) : 0;
   const seatsPct = data.seats.seatLimit > 0 ? Math.min(100, Math.round((data.seats.used / data.seats.seatLimit) * 100)) : 0;
 
   return (
     <div className="space-y-6">
       {/* Status banners */}
+      {returnedFromCheckout === "success" && (
+        <div className="flex items-start gap-3 rounded-xl border border-success/40 bg-success-soft/40 p-4" role="status">
+          {activatingStripe
+            ? <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-success" aria-hidden />
+            : <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden />}
+          <div className="text-sm">
+            <p className="font-semibold">{activatingStripe ? "Payment received — activating your plan…" : "Your plan is active"}</p>
+            <p className="mt-1 text-muted-foreground">
+              {activatingStripe
+                ? "This usually takes a few seconds. Bank debits (SEPA) can take a few days to confirm; we email you when the plan is active."
+                : "Thank you! Your receipt is on its way by email, and invoices are available under Manage payment method & invoices."}
+            </p>
+          </div>
+        </div>
+      )}
+      {data.billingBlock && data.subscription?.status !== "PAST_DUE" && (
+        <div className="flex items-start gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4" role="alert">
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
+          <div className="text-sm">
+            <p className="font-semibold">{data.billingBlock.reason === "payment_required" ? `Activate your ${data.plan.name} plan` : "Sending is paused"}</p>
+            <p className="mt-1 text-muted-foreground">{data.billingBlock.message} Existing envelopes can still be signed and verified.</p>
+          </div>
+        </div>
+      )}
       {data.subscription?.status === "PAST_DUE" && (
         <div className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4" role="alert">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
@@ -114,6 +160,7 @@ export function BillingTab() {
             <p className="font-semibold text-destructive">Payment failed — action needed</p>
             <p className="mt-1 text-muted-foreground">
               The last charge for this workspace failed. {data.mode === "stripe" ? "Update your payment method below, then we retry automatically." : "Contact billing@docurama.eu to settle the open invoice."}
+              {data.billingBlock?.reason === "past_due" && " Sending new envelopes is paused until the payment succeeds."}
             </p>
           </div>
         </div>
@@ -153,7 +200,9 @@ export function BillingTab() {
                 <p className="mt-1 text-sm text-muted-foreground">{data.plan.bestFor}</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold">€{data.plan.monthlyEur}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+                {data.plan.custom && !data.plan.monthlyEur
+                  ? <p className="text-2xl font-semibold">Custom</p>
+                  : <p className="text-2xl font-semibold">€{data.plan.monthlyEur}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>}
                 {data.subscription && data.subscription.discountPct > 0 && (
                   <p className="text-xs text-muted-foreground">−{data.subscription.discountPct}% term discount</p>
                 )}
@@ -256,7 +305,7 @@ export function BillingTab() {
                 <SelectContent>
                   {PLAN_ORDER.map((code) => (
                     <SelectItem key={code} value={code} disabled={code === "ENTERPRISE"}>
-                      {code === "ENTERPRISE" ? "Enterprise (via sales)" : data.plan.code === code ? `${labelFor(code)} — current` : labelFor(code)}
+                      {code === "ENTERPRISE" ? "Enterprise — custom (via sales)" : data.plan.code === code ? `${labelFor(code)} — current` : labelFor(code)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -279,7 +328,7 @@ export function BillingTab() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button
               onClick={() => checkout.mutate({ planCode: planSelection, termMonths: Number(termChoice) })}
-              disabled={checkout.isPending || !planSelection || planSelection === "ENTERPRISE" || planSelection === data.plan.code}
+              disabled={checkout.isPending || !planSelection || planSelection === "ENTERPRISE" || alreadyPaidChoice}
             >
               {checkout.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ArrowUpRight className="h-4 w-4" aria-hidden />}
               {data.mode === "stripe" ? "Continue to checkout" : "Request activation"}
@@ -362,8 +411,9 @@ export function BillingTab() {
 }
 
 function labelFor(code: string): string {
-  const names: Record<string, string> = { SOLO: "Solo — €12/mo", STARTER: "Starter — €19/mo", SMART: "Smart Team — €79/mo", BUSINESS: "Business — €199/mo" };
-  return names[code] ?? code;
+  if (!(code in PLAN_CATALOG)) return code;
+  const plan = planDef(code);
+  return `${plan.name} — ${planPriceLabel(plan)}`;
 }
 
 // Re-exported for the tab registry's icon.

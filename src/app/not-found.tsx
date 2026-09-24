@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { Button } from "@/components/ui/button";
 import { FileQuestion, Home, Search, ShieldCheck } from "lucide-react";
 
@@ -14,9 +15,9 @@ export default function NotFound() {
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/marketing" aria-label="Docurama home">
+          <MarketingHomeLink>
             <BrandLogo size="sm" />
-          </Link>
+          </MarketingHomeLink>
           <Link
             href="/verify"
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"

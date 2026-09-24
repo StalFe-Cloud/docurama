@@ -19,31 +19,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { PortalProviders } from "@/components/portal/providers";
 import { cn } from "@/lib/utils";
-
-type VerifyResult =
-  | { result: "NOT_FOUND"; code: string }
-  | { result: "NOT_SEALED"; code: string; title: string; status: string }
-  | { result: "VOIDED"; code: string; voidedAt: string | null; voidReason: string | null }
-  | {
-      result: "VERIFIED"; code: string;
-      envelope: {
-        title: string; status: string; sealedAt: string; completedAt: string | null;
-        conformance: string | null; sha256: string; tenantName: string; pages: number;
-        verifiedSenderDomain: string | null;
-        signers: { id: string; name: string; email: string; signedAt: string | null }[];
-      };
-    }
-  | {
-      result: "VERIFIED_ATTESTED"; code: string;
-      attestation: {
-        sha256: string; sealedAt: string; completedAt: string | null; conformance: string | null;
-        pages: number; signerCount: number; verifiedDomain: string | null;
-        instance: { label: string; firstSeenAt: string; attestationCount: number };
-        transparency?: { chainSeq: number | null; chainEntryHash: string | null; proof: string; checkpoint: string } | null;
-      };
-    };
+import type { VerifyResult } from "@/lib/verify";
+import { sealLevelLabel } from "@/lib/seal-shared";
+import { FileFingerprintCheck, SealCoverage, SealIntegrityFailed } from "@/components/verify/seal-details";
 
 export function PublicVerify() {
   return (
@@ -87,7 +68,7 @@ function VerifyInner() {
     <div className="flex min-h-screen flex-col bg-muted">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <a href="/" aria-label="Docurama home"><BrandLogo tagline size="sm" /></a>
+          <MarketingHomeLink><BrandLogo tagline size="sm" /></MarketingHomeLink>
           <div className="flex items-center gap-2 text-sm">
             <a href="/welcome" className="font-medium text-primary underline-offset-4 hover:underline">Create a free account</a>
             <span className="text-muted-foreground/40" aria-hidden>·</span>
@@ -130,9 +111,9 @@ function VerifyInner() {
         </Card>
 
         <p className="mt-6 text-xs leading-relaxed text-muted-foreground">
-          Verification checks the cryptographic evidence recorded when the document was sealed:
-          the SHA-256 digest, seal timestamp and signer roster. The document file itself is never
-          exposed. Docurama SAS - 1 Rue Marguerin, 75014 Paris, France.
+          Verification recomputes the seal from the recorded evidence: the signed file&apos;s
+          fingerprint, the signer roster, the audit trail and the entered field values. The document
+          file itself is never exposed. Docurama SAS - 1 Rue Marguerin, 75014 Paris, France.
         </p>
       </main>
     </div>
@@ -216,6 +197,15 @@ function ResultPanel({ result }: { result: VerifyResult }) {
     );
   }
 
+  if (result.result === "INTEGRITY_FAILED") {
+    const failed = result.envelope;
+    return (
+      <div className="mt-5">
+        <SealIntegrityFailed seal={failed.seal} title={failed.title} tenantName={failed.tenantName} sealedAt={failed.sealedAt} />
+      </div>
+    );
+  }
+
   const env = result.envelope;
   return (
     <div className="mt-5 space-y-4 rounded-lg border border-primary/40 bg-primary-soft/40 p-4">
@@ -231,12 +221,26 @@ function ResultPanel({ result }: { result: VerifyResult }) {
         <div><dt className="text-xs text-muted-foreground">Document</dt><dd className="font-medium">{env.title}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Organization</dt><dd className="font-medium">{env.tenantName}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Sealed at</dt><dd className="font-medium">{new Date(env.sealedAt).toLocaleString("en-GB")}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">Conformance</dt><dd className="font-medium">{env.conformance ?? "-"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">Seal level</dt><dd className="font-medium">{sealLevelLabel(env.conformance)}</dd></div>
+        {env.signedPdf?.level && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">Signed PDF</dt>
+            <dd className="font-medium">{env.signedPdf.level.replace("-", " ")}, digitally signed{env.signedPdf.signer ? ` by ${env.signedPdf.signer.split(" (")[0]}` : ""}</dd>
+          </div>
+        )}
         <div className="sm:col-span-2">
-          <dt className="text-xs text-muted-foreground">SHA-256 digest</dt>
+          <dt className="text-xs text-muted-foreground">Seal digest (SHA-256)</dt>
           <dd className="break-all font-mono text-xs">{env.sha256}</dd>
         </div>
+        {env.seal.documentSha256 && env.seal.documentSha256 !== env.sha256 && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">Signed file fingerprint (SHA-256)</dt>
+            <dd className="break-all font-mono text-xs">{env.seal.documentSha256}</dd>
+          </div>
+        )}
       </dl>
+      <SealCoverage seal={env.seal} />
+      {env.seal.documentSha256 && <FileFingerprintCheck documentSha256={env.seal.documentSha256} signedPdfSha256={env.signedPdf?.sha256} earlierSignedPdfs={env.signedPdf?.earlier} />}
       <div>
         <p className="mb-1.5 text-xs font-medium text-muted-foreground">Signers on record</p>
         <ul className="space-y-1 text-sm">

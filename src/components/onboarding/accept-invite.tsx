@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ApiError, apiGet, apiPost } from "@/lib/client";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { PortalProviders } from "@/components/portal/providers";
 
 type InviteData = {
@@ -76,7 +77,7 @@ function InvitePageInner() {
     <div className="flex min-h-screen flex-col bg-muted">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-5xl items-center px-4 sm:px-6">
-          <BrandLogo tagline size="sm" />
+          <MarketingHomeLink><BrandLogo tagline size="sm" /></MarketingHomeLink>
         </div>
       </header>
 

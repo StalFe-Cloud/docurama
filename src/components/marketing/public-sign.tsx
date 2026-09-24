@@ -31,19 +31,24 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { PortalProviders } from "@/components/portal/providers";
 import { SignDocumentPreview, type SignDocument } from "@/components/marketing/sign-document-preview";
+import { SignatureAdopter, SIGNATURE_FONTS, type Adoption, type SavedSignature } from "@/components/marketing/signature-adopter";
 import { cn } from "@/lib/utils";
 
 export type SignPageState =
   | { phase: "invalid" }
   | { phase: "terminal"; status: string; title: string; code: string; voidReason: string | null }
   | { phase: "cc"; title: string; code: string; tenantName: string; recipientName: string }
-  | { phase: "signed"; title: string; code: string; tenantName: string; recipientName: string; sealed: boolean; document: SignDocument | null }
+  | { phase: "signed"; title: string; code: string; tenantName: string; recipientName: string; sealed: boolean; hasDocument?: boolean; document: SignDocument | null }
   | { phase: "completed"; title: string; code: string; tenantName: string }
   | { phase: "wait"; title: string; code: string; tenantName: string; aheadName: string; document: SignDocument | null }
   | {
       phase: "active";
+      /** Signed in with the address this document was sent to. */
+      signedIn?: boolean;
+      savedSignature?: SavedSignature | null;
       title: string; code: string; tenantName: string;
       message: string | null; pages: number; senderName: string;
       senderDomainVerified: string | null;
@@ -51,14 +56,13 @@ export type SignPageState =
       signers: { name: string; email: string; status: string; order: number }[];
       bodyMarkdown: string | null;
       document: { filename: string; pages: number; sha256: string } | null;
-      fields?: Array<{ id: string; type: string; pageNumber: number; x: number; y: number; width: number; height: number; recipientEmail: string; recipientName: string; label?: string }>;
+      fields?: Array<{ id: string; type: string; pageNumber: number; x: number; y: number; width: number; height: number; recipientEmail: string; recipientName: string; label?: string; value?: string }>;
     };
 
-const FONTS = [
-  { key: "caveat", label: "Caveat", cls: "signature-font-caveat" },
-  { key: "dancing-script", label: "Dancing Script", cls: "signature-font-dancing" },
-  { key: "great-vibes", label: "Great Vibes", cls: "signature-font-greatvibes" },
-] as const;
+/** Builder-placed text holders default to "Text Field"; show something a signer understands. */
+function fieldLabel(label?: string): string {
+  return label && label !== "Text Field" ? label : "Text";
+}
 
 export function PublicSign({ token, state }: { token: string; state: SignPageState }) {
   return (
@@ -72,6 +76,9 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
   const [phase, setPhase] = useState(state.phase);
   const [name, setName] = useState(state.phase === "active" ? state.recipientName : "");
   const [font, setFont] = useState<string>("caveat");
+  const saved = state.phase === "active" ? state.savedSignature ?? null : null;
+  const [adoption, setAdoption] = useState<Adoption>({ method: saved ? "saved" : "type", image: null });
+  const [saveSignature, setSaveSignature] = useState(false);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState<"sign" | "decline" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +89,15 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
   const [declineOpen, setDeclineOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const viewed = useRef(false);
+
+  // Text holders the sender placed for THIS signer (Name, Title, …): filled
+  // here, validated server-side and recorded in the sealed evidence.
+  const myTextFields = state.phase === "active"
+    ? (state.fields ?? []).filter((f) => f.type === "text" && f.recipientEmail.toLowerCase() === state.recipientEmail.toLowerCase())
+    : [];
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => Object.fromEntries(
+    myTextFields.map((f) => [f.id, state.phase === "active" && /name|nom/i.test(f.label ?? "") ? state.recipientName : ""]),
+  ));
 
   // First open of an active link records VIEWED + DELIVERED (idempotent
   // server-side: only fires for PENDING recipients).
@@ -107,9 +123,20 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
   const sign = async () => {
     if (!name.trim() || name.trim().length < 2) { setError("Please type your full name to sign."); return; }
     if (!consent) { setError("Please confirm you have read and agree to sign electronically."); return; }
+    const empty = myTextFields.find((f) => !(fieldValues[f.id] ?? "").trim());
+    if (empty) { setError(`Please fill in "${fieldLabel(empty.label)}" (page ${empty.pageNumber}).`); return; }
+    if ((adoption.method === "draw" || adoption.method === "upload") && !adoption.image) {
+      setError(adoption.method === "draw" ? "Draw your signature, or choose Type." : "Upload an image of your signature, or choose Type.");
+      return;
+    }
     setBusy("sign"); setError(null);
     try {
-      const r = await post({ op: "sign", name: name.trim(), font });
+      const r = await post({
+        op: "sign", name: name.trim(), font,
+        signature: { method: adoption.method, image: adoption.image },
+        saveSignature,
+        fieldValues: Object.fromEntries(myTextFields.map((f) => [f.id, (fieldValues[f.id] ?? "").trim()])),
+      });
       setSealed(!!r.sealed);
       setPhase("signed");
     } catch (e) { setError(e instanceof Error ? e.message : "Signing failed"); }
@@ -126,7 +153,8 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
     finally { setBusy(null); }
   };
 
-  const activeFont = FONTS.find((f) => f.key === font) ?? FONTS[0];
+  const activeFont = SIGNATURE_FONTS.find((f) => f.key === (adoption.method === "saved" && saved?.font ? saved.font : font)) ?? SIGNATURE_FONTS[0];
+  const previewImage = adoption.method === "saved" ? (saved?.method === "image" ? saved.value : null) : adoption.image;
 
   // Narrowed views for the JSX below: `phase` (local, changes after actions)
   // and `state.phase` (server snapshot) are separate — TS needs the latter
@@ -141,7 +169,7 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
       {/* Header */}
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
-          <BrandLogo />
+          <MarketingHomeLink newTab><BrandLogo /></MarketingHomeLink>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden sm:inline">Secure signing</span>
@@ -230,13 +258,22 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                     Verification code <span className="font-mono text-foreground">{signedState.code}</span> — anyone
                     can confirm the seal on the public portal, no account needed.
                   </p>
-                  <Button size="sm" className="mt-3" asChild>
-                    {/* Link, not a plain anchor: client-side navigation keeps the
-                        transition instant (no full reload) on the success screen. */}
-                    <Link href={`/verify?code=${encodeURIComponent(signedState.code)}`}>
-                      <BadgeCheck className="h-4 w-4" aria-hidden /> Verify the seal
-                    </Link>
-                  </Button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" asChild>
+                      {/* Link, not a plain anchor: client-side navigation keeps the
+                          transition instant (no full reload) on the success screen. */}
+                      <Link href={`/verify?code=${encodeURIComponent(signedState.code)}`}>
+                        <BadgeCheck className="h-4 w-4" aria-hidden /> Verify the seal
+                      </Link>
+                    </Button>
+                    {(state.phase === "active" ? !!state.document || !!state.bodyMarkdown : state.phase === "signed" && state.hasDocument === true) && (
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={`/api/sign/${encodeURIComponent(token)}/signed-pdf`} data-testid="download-signed-pdf">
+                        <FileText className="h-4 w-4" aria-hidden /> Download the signed PDF
+                      </a>
+                    </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -397,40 +434,47 @@ function SignInner({ token, state }: { token: string; state: SignPageState }) {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Signature style</p>
-                  <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label="Signature style">
-                    {FONTS.map((f) => (
-                      <button
-                        key={f.key} type="button" role="radio" aria-checked={font === f.key}
-                        data-testid={`font-${f.key}`}
-                        onClick={() => setFont(f.key)}
-                        className={cn(
-                          "flex h-24 flex-col items-center justify-center gap-1 rounded-xl border-2 bg-card p-2 transition-colors",
-                          font === f.key ? "border-primary" : "border-transparent hover:border-muted",
-                        )}
-                      >
-                        <span className={cn("truncate text-2xl leading-none", f.cls)}>
-                          {name.trim() || "Your name"}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">{f.label}</span>
-                      </button>
+                {myTextFields.length > 0 && (
+                  <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+                    <p className="text-sm font-medium">Complete your details</p>
+                    <p className="text-xs text-muted-foreground">
+                      The sender placed these fields for you. They are recorded with your signature.
+                    </p>
+                    {myTextFields.map((f) => (
+                      <div key={f.id} className="space-y-1.5">
+                        <Label htmlFor={`field-${f.id}`}>
+                          {fieldLabel(f.label)} <span className="text-xs font-normal text-muted-foreground">· page {f.pageNumber}</span>
+                        </Label>
+                        <Input
+                          id={`field-${f.id}`} required maxLength={200} value={fieldValues[f.id] ?? ""}
+                          onChange={(e) => setFieldValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                        />
+                      </div>
                     ))}
                   </div>
-                </div>
+                )}
+
+                <SignatureAdopter
+                  name={name} font={font} onFont={setFont}
+                  adoption={adoption} onAdoption={setAdoption}
+                  saved={saved} signedIn={state.signedIn === true}
+                  save={saveSignature} onSave={setSaveSignature}
+                />
 
                 {/* Live preview on the signature line */}
                 <div className="rounded-xl border-2 border-dashed bg-card p-5">
                   <div className="flex items-end justify-between gap-3">
-                    <span className={cn("min-w-0 break-all text-4xl leading-tight", activeFont.cls)}>
-                      {name.trim() || "Your signature"}
-                    </span>
+                    {previewImage
+                      ? <img src={previewImage} alt="Your signature" className="h-14 max-w-[70%] object-contain object-left" />
+                      : (adoption.method === "draw" || adoption.method === "upload")
+                        ? <span className="text-sm text-muted-foreground">{adoption.method === "draw" ? "Draw above to preview" : "Upload above to preview"}</span>
+                        : <span className={cn("min-w-0 break-all text-4xl leading-tight", activeFont.cls)}>{name.trim() || "Your signature"}</span>}
                     <span className="shrink-0 pb-1 text-xs text-muted-foreground">
                       Signed on the date shown in the audit record
                     </span>
                   </div>
                   <div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
-                    {state.recipientEmail} · eIDAS simple electronic signature · audit-trailed
+                    {state.recipientEmail} · eIDAS simple electronic signature · sealed in a PAdES-signed PDF
                   </div>
                 </div>
 

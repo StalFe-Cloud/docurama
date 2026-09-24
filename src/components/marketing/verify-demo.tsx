@@ -153,7 +153,7 @@ export function VerifyDemo() {
                     Foundry Partner Qualification · Nordjärm Gjuteri AB
                   </span>
                 </span>
-                <span style={{ marginLeft: "auto", fontSize: 8.5, fontWeight: 700, borderRadius: 5, padding: "2px 7px", background: EMERALD_SOFT, color: EMERALD, flexShrink: 0 }}>PAdES B-LT</span>
+                <span style={{ marginLeft: "auto", fontSize: 8.5, fontWeight: 700, borderRadius: 5, padding: "2px 7px", background: EMERALD_SOFT, color: EMERALD, flexShrink: 0 }}>PAdES B-LTA</span>
               </div>
 
               <div style={{ height: 1, background: HAIR, margin: "11px 0" }} />

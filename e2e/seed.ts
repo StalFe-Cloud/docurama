@@ -31,6 +31,7 @@ import {
   GENESIS_HEAD, TRANSPARENCY_FORMAT,
 } from "../src/lib/transparency";
 import { storeUpload } from "../src/lib/document-store";
+import { SEAL_FORMAT, buildSealManifest, sealDigest, sealManifestJson } from "../src/lib/seal";
 import { PLAN_CATALOG, PLAN_ORDER } from "../src/lib/plans";
 import { syncTemplateLibrary } from "../scripts/sync-template-library";
 import { backfillLeadSearch } from "../scripts/backfill-lead-search";
@@ -132,6 +133,26 @@ const db = new PrismaClient();
 
 const hashPassword = (pw: string) => createHash("sha256").update(pw).digest("hex");
 
+type SealSourceInput = Parameters<typeof buildSealManifest>[0];
+
+/** Seal a seeded COMPLETED envelope exactly as the sign route does (seal v2),
+ * so verification recomputes the same digest. sealedAt is "now": after every
+ * seeded event, which is what the seal covers. */
+async function sealFixture(env: {
+  id: string; publicCode: string; title: string; pages: number; createdAt: Date; fields: string | null;
+  recipients: SealSourceInput["recipients"]; events: SealSourceInput["events"];
+}, documentSha256: string | null = null) {
+  const sealedAt = new Date();
+  const manifest = buildSealManifest({
+    publicCode: env.publicCode, title: env.title, pages: env.pages, createdAt: env.createdAt, sealedAt,
+    documentSha256, verifiedSenderDomain: null, recipients: env.recipients, events: env.events, fields: env.fields,
+  });
+  await db.envelope.update({
+    where: { id: env.id },
+    data: { sealedAt, sha256: sealDigest(manifest), sealFormat: SEAL_FORMAT, sealManifest: sealManifestJson(manifest) },
+  });
+}
+
 const E2E_TENANT_SLUG = "e2e-testing";
 const E2E_USER_EMAIL = "e2e@docurama.eu";
 const E2E_USER_PASSWORD = "e2ePass1234!";
@@ -221,6 +242,12 @@ async function main() {
   });
   console.log(`users: ${E2E_USER_EMAIL} (tenant scoped), ${E2E_ADMIN_EMAIL} (platform admin)`);
 
+  // One-click demo buttons on /login (NEXT_PUBLIC_DEMO_MODE=true). Fixture-only
+  // accounts on the reserved .test domain — the button credentials ship in the
+  // client bundle, so they must never be real accounts (src/components/portal/sign-in.tsx).
+  // The workspace button joins the StålFe demo workspace further down.
+  await upsertUser("demo-admin@docurama.test", "DemoAdmin2026!", "PLATFORM_ADMIN", { firstName: "Demo", lastName: "Admin" });
+
   /* ── Accounts e2e/plans.test.ts signs in as ──────────────────────── */
   // These are demo-shaped accounts that live in the committed demo database
   // (db/custom.db). The SQLite runner copies that file, so the tests found
@@ -289,6 +316,25 @@ async function main() {
     console.log(`demo accounts: provisioned into ${demoTenant.slug} (alex/marco/sofia)`);
   }
   if (demoAdmin.created) console.log("demo accounts: provisioned admin@docurama.eu");
+
+  // "Workspace Admin - StålFe" demo button: an owner seat in the same StålFe
+  // workspace as alex/marco/sofia. Fixture-only, so its password is reset on
+  // every seed to match the button.
+  const stalfeSeat = await db.member.findFirst({ where: { userId: alex.user.id }, orderBy: { createdAt: "asc" } });
+  if (stalfeSeat) {
+    const email = "camille.laurent@stalfe.test";
+    const data = {
+      email, passwordHash: hashPassword("DemoStalfe2026!"), firstName: "Camille", lastName: "Laurent",
+      role: "WORKSPACE_ADMIN", status: "ACTIVE", activeTenantId: stalfeSeat.tenantId,
+    };
+    const existing = await db.user.findUnique({ where: { email } });
+    const camille = existing
+      ? await db.user.update({ where: { id: existing.id }, data })
+      : await db.user.create({ data });
+    const seat = await db.member.findFirst({ where: { userId: camille.id, tenantId: stalfeSeat.tenantId } });
+    if (!seat) await db.member.create({ data: { userId: camille.id, tenantId: stalfeSeat.tenantId, role: "OWNER", status: "ACTIVE" } });
+    console.log(`demo accounts: ${email} (StålFe workspace owner)`);
+  }
 
   /* ── Built-in template library ───────────────────────────────────── */
   // The 8 statutory French templates are defined in src/lib/templates/fr and
@@ -407,11 +453,9 @@ async function main() {
     },
   });
 
-  // COMPLETED + sealed — verify portal must report VERIFIED with digest.
-  const sealedDigest = createHash("sha256")
-    .update("docurama-e2e-sealed-fixture")
-    .digest("hex");
-  await db.envelope.create({
+  // COMPLETED + sealed — verify portal must report VERIFIED with digest. Sealed
+  // exactly as the sign route seals (seal v2), so verification recomputes it.
+  const sealedFixture = await db.envelope.create({
     data: {
       publicCode: "DOC-E2E0002",
       title: "E2E Fixture — Supply Agreement (sealed)",
@@ -421,8 +465,6 @@ async function main() {
       status: "COMPLETED",
       message: "Seeded sealed fixture.",
       pages: 5,
-      sha256: sealedDigest,
-      sealedAt: new Date(),
       completedAt: new Date(),
       conformanceLevel: "B-LT",
       recipients: {
@@ -446,7 +488,9 @@ async function main() {
         ],
       },
     },
+    include: { recipients: true, events: true },
   });
+  await sealFixture(sealedFixture);
 
   // SENT, one pending recipient — the signer-portal happy path: the flow opens
   // the link, reviews the embedded document preview, adopts a signature, signs,

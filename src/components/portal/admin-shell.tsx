@@ -124,7 +124,7 @@ export function AdminShell({
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-sidebar lg:flex">
         <div className="docurama-scroll min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
           <div className="flex items-center gap-2.5 px-1 pt-1">
-            <BrandMark className="h-9 w-9" />
+            <a href="/" aria-label="Docurama workspace home" className="shrink-0"><BrandMark className="h-9 w-9" /></a>
             <div className="leading-tight">
               <p className="text-sm font-semibold tracking-tight">Docu<span className="text-primary">rama</span></p>
               <p className="text-[11px] text-muted-foreground">Platform Console</p>
@@ -151,7 +151,7 @@ export function AdminShell({
                 <div className="flex h-full flex-col justify-between">
                   <div className="space-y-6 p-4">
                     <div className="flex items-center gap-2.5">
-                      <BrandMark className="h-9 w-9" />
+                      <a href="/" aria-label="Docurama workspace home" className="shrink-0"><BrandMark className="h-9 w-9" /></a>
                       <div className="leading-tight">
                         <p className="text-sm font-semibold tracking-tight">Docu<span className="text-primary">rama</span></p>
                         <p className="text-[11px] text-muted-foreground">Platform Console</p>

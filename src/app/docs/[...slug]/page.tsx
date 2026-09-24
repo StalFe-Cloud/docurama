@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { BrandLogo, BRAND_LEGAL_NAME } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { getDocArticle, getDocsNav } from "@/lib/docs";
 import { MarkdownBody } from "@/components/docs/markdown-body";
 import { ScrollTop } from "@/components/marketing/scroll-top";
@@ -44,7 +45,7 @@ export default async function DocArticlePage({ params }: Props) {
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-6">
-            <BrandLogo size="sm" />
+            <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
             <span className="hidden sm:inline-block text-xs font-medium text-muted-foreground border-l pl-4">
               Documentation
             </span>

@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
 import { promises as dns } from "dns";
+import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin, recordAudit, hashPasswordAsync } from "@/lib/auth";
-import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
+import { publicRecipient, isos, iso, envelopeRow, jsonError, jsonOk } from "@/lib/serializers";
+import { requestTimestamp } from "@/lib/tsa";
+import { keyVaultConfigured } from "@/lib/key-vault";
 import { purgeExpired, storageHealthProbe } from "@/lib/document-store";
 import {
   COMPANY, EMAIL_ACCOUNTS, SUBDOMAINS, DNS_RECORDS,
@@ -11,13 +14,17 @@ import {
 } from "@/lib/provisioning";
 import { createInvitation, requestOrigin, slugifyOrg } from "@/lib/onboarding";
 import { foldForSearch } from "@/lib/search";
+import { PLAN_CATALOG, PLAN_ORDER } from "@/lib/plans";
 import { testSmtpConnection, outboxStats, smtpMode } from "@/lib/mail";
 
 export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ section: string }> };
 
-const PLAN_MRR: Record<string, number> = { SOLO: 12, STARTER: 19, SMART: 79, BUSINESS: 199, ENTERPRISE: 349 };
+// Catalogue list price per plan (0 for custom Enterprise: its MRR is the
+// negotiated monthlyEurOverride). Derived, so admin figures match checkout.
+const PLAN_MRR: Record<string, number> = Object.fromEntries(PLAN_ORDER.map((code) => [code, PLAN_CATALOG[code].monthlyEur]));
+const isPlanCode = (code: string) => PLAN_ORDER.includes(code as never);
 
 // ─────────────────────────────────────────────────────────── GET (read) ──
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -109,7 +116,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           domains: isos(t.domains),
           counts: t._count,
           recentEnvelopes: envelopes.map((e) => ({
-            ...iso(e), recipients: e.recipients.map(publicRecipient),
+            ...envelopeRow(e), recipients: e.recipients.map(publicRecipient),
           })),
           statusCounts,
         });
@@ -156,7 +163,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         return jsonOk({
           total: filtered.length, page, perPage,
           rows: rows.map((e) => ({
-            ...iso(e), tenantName: e.tenant.name,
+            ...envelopeRow(e), tenantName: e.tenant.name,
             createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
             recipients: e.recipients.map(publicRecipient),
           })),
@@ -296,7 +303,34 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
       case "settings": {
         const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
-        return jsonOk({ settings: iso(settings!) });
+        // Sealing is per workspace (src/lib/seal-identity.ts): report what is real.
+        const now = Date.now();
+        const since = new Date(now - 30 * 86_400_000);
+        const [workspaces, sealingCerts, expiringSoon, signedPdfs30d, padesBT30d] = await Promise.all([
+          db.tenant.count(),
+          db.signingCertificate.findMany({
+            where: { purpose: "sealing", status: "ACTIVE", privateKeyEnc: { not: null }, notAfter: { gt: new Date(now) } },
+            select: { tenantId: true, origin: true },
+          }),
+          db.signingCertificate.findMany({
+            where: { purpose: "sealing", status: "ACTIVE", notAfter: { lt: new Date(now + 30 * 86_400_000) } },
+            select: { commonName: true, notAfter: true, tenant: { select: { name: true } } },
+            orderBy: { notAfter: "asc" }, take: 10,
+          }),
+          db.envelope.count({ where: { signedPdfAt: { gte: since } } }),
+          db.envelope.count({ where: { signedPdfAt: { gte: since }, signedPdfLevel: "PAdES-B-LTA" } }),
+        ]);
+        return jsonOk({
+          settings: iso(settings!),
+          sealing: {
+            keyVault: keyVaultConfigured(),
+            workspaces,
+            withCertificate: new Set(sealingCerts.map((c) => c.tenantId)).size,
+            imported: sealingCerts.filter((c) => c.origin === "imported").length,
+            expiringSoon: expiringSoon.map((c) => ({ tenant: c.tenant.name, commonName: c.commonName, notAfter: c.notAfter.toISOString() })),
+            signedPdfs30d, padesBT30d,
+          },
+        });
       }
 
       // ── Email & DNS provisioning for docurama.eu (brand, mailboxes, zone) ──
@@ -348,6 +382,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         ]);
 
         const mailConfigured = smtpMode().configured || Boolean(settings?.smtpPassword && settings.smtpHost !== "smtp.eu.mailprovider.io");
+        // Signed PDF upkeep more than an hour overdue means the worker is not running.
+        const [upkeepOverdue, ltvRetrying] = await Promise.all([
+          db.envelope.count({ where: { signedPdfCheckAt: { lte: new Date(Date.now() - 60 * 60_000) } } }),
+          db.envelope.count({ where: { signedPdfLevel: { in: ["PAdES-B-T", "PAdES-B-LT"] }, signedPdfCheckAt: { not: null } } }),
+        ]);
+        const signingIssues = [
+          ...(keyVaultConfigured() ? [] : ["seal-certificate keys stored unencrypted (DOCURAMA_KEY_ENCRYPTION_KEY unset)"]),
+          ...(upkeepOverdue ? [`${upkeepOverdue} signed PDF(s) overdue for long-term upkeep: is the worker running?`] : []),
+        ];
 
         return jsonOk({
           settings: {
@@ -359,7 +402,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           secLast24h, failingHooks,
           services: [
             { name: "API gateway", status: settings!.maintenanceMode ? "DEGRADED" : "HEALTHY", detail: settings!.maintenanceMode ? "Maintenance mode active" : `2 replicas · DB latency ${t0Db}ms` },
-            { name: "Signing pipeline", status: "HEALTHY", detail: `PAdES ${settings!.signingConformance} · queue depth ${settings!.queueDepth}` },
+            {
+              name: "Signing pipeline", status: signingIssues.length ? "DEGRADED" : "HEALTHY",
+              detail: signingIssues.length ? signingIssues.join(" · ")
+                : `PAdES B-LTA when the TSA and revocation services answer · ${ltvRetrying} awaiting a long-term retry · queue depth ${settings!.queueDepth}`,
+            },
             { name: "Timestamp authority", status: settings!.tsaReachable ? "HEALTHY" : "OUTAGE", detail: settings!.tsaUrl },
             { name: "Document storage", status: storageProbe.ok ? "HEALTHY" : "DEGRADED", detail: `Backend: ${storageProbe.backend}` },
             { name: "SMTP delivery", status: mailConfigured ? "HEALTHY" : "DEGRADED", detail: `${settings!.smtpHost}:${settings!.smtpPort} (${mailStats.queued} queued)` },
@@ -596,7 +643,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
         if (op === "change-plan") {
           const plan = String(data.plan);
-          if (!PLAN_MRR[plan]) return jsonError("Invalid plan");
+          if (!isPlanCode(plan)) return jsonError("Invalid plan");
           const t = await db.tenant.update({ where: { id }, data: { planCode: plan } });
           const sub = await db.subscription.findFirst({ where: { tenantId: id } });
           if (sub) {
@@ -627,7 +674,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const firstName = String(data.firstName ?? "").trim();
           const lastName = String(data.lastName ?? "").trim();
           const role = String(data.role ?? "MEMBER").toUpperCase();
-          const password = String(data.password ?? "StalFe2026!User").trim();
+          // No shared default password: a missing one is generated and shown once.
+          const generatedPassword = data.password ? null : randomBytes(12).toString("base64url");
+          const password = String(data.password ?? generatedPassword).trim();
           const tenantId = data.tenantId ? String(data.tenantId).trim() : null;
 
           if (!email || !email.includes("@")) return jsonError("Valid email is required");
@@ -667,7 +716,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             detail: `Created ${role} user ${user.firstName} ${user.lastName}`,
           });
 
-          return jsonOk({ ok: true, message: `User ${user.email} created successfully`, user: iso(user) });
+          const { passwordHash: _hash, ...safeUser } = user;
+          void _hash;
+          return jsonOk({
+            ok: true,
+            message: generatedPassword
+              ? `User ${user.email} created. Temporary password (shown once — share it securely): ${generatedPassword}`
+              : `User ${user.email} created successfully`,
+            user: iso(safeUser),
+          });
         }
 
         if (op === "update") {
@@ -1544,7 +1601,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           }
 
           const planCode = String(data.planCode ?? "ENTERPRISE").trim().toUpperCase();
-          if (!PLAN_MRR[planCode]) return jsonError("Invalid plan");
+          if (!isPlanCode(planCode)) return jsonError("Invalid plan");
 
           // Negotiated entitlements. An explicit value wins; otherwise fall back
           // to what the lead asked for. null means "use the plan catalogue",
@@ -1856,9 +1913,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
         if (op === "save-tsa") {
           const url = String(data.tsaUrl ?? "").trim();
-          if (!/^https?:\/\//.test(url)) return jsonError("A valid HTTPS TSA URL is required");
-          await db.platformSetting.update({ where: { id: "singleton" }, data: { tsaUrl: url, updatedAt: new Date() } });
-          return jsonOk({ ok: true, message: "TSA configuration saved" });
+          if (!/^https?:\/\/[^\s]+$/.test(url) || url.length > 300) return jsonError("Enter the TSA URL, starting with http:// or https://");
+          // Every workspace without its own TSA timestamps its seals here, so
+          // only an authority that actually issues a valid token is saved.
+          let issued: Date;
+          try {
+            issued = (await requestTimestamp(url, `docurama-platform-tsa-test ${new Date().toISOString()}`)).genTime;
+          } catch (err) {
+            return jsonError(`Not saved: ${url} did not issue a valid RFC 3161 timestamp (${err instanceof Error ? err.message : String(err)})`, 422);
+          }
+          await db.platformSetting.update({ where: { id: "singleton" }, data: { tsaUrl: url, tsaReachable: true, updatedAt: new Date() } });
+          return jsonOk({ ok: true, message: `TSA saved - test timestamp issued at ${issued.toISOString()}` });
         }
         if (op === "save-flags") {
           const trialDays = Number(data.trialLengthDays ?? 14);

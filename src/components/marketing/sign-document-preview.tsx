@@ -36,6 +36,22 @@ export interface PreviewField {
   recipientEmail: string;
   recipientName: string;
   label?: string;
+  /** Filled value once its signer has signed (text fields, dates). */
+  value?: string;
+}
+
+/** What a holder asks of the person looking at it. */
+function holderLabel(f: PreviewField, isMine: boolean): string {
+  if (f.value) return f.value;
+  if (!isMine) return f.label || f.type;
+  switch (f.type) {
+    case "signature": return "✍️ Sign here";
+    case "initials": return "Initial here";
+    case "date": return "Date · on signing";
+    case "text": return `${f.label && f.label !== "Text Field" ? f.label : "Text"} · fill below`;
+    case "checkbox": return "☐";
+    default: return f.label || f.type;
+  }
 }
 
 export function SignDocumentPreview({
@@ -136,10 +152,10 @@ export function SignDocumentPreview({
                           ? "border-blue-600 bg-blue-500/25 text-blue-700 font-semibold ring-2 ring-blue-400/50 hover:bg-blue-500/35"
                           : "border-slate-400 bg-slate-200/40 text-slate-500 opacity-60"
                       )}
-                      title={isMine ? "Click to sign here" : `Assigned to ${f.recipientName}`}
+                      title={isMine ? `Yours to complete: ${holderLabel(f, true)}` : `Assigned to ${f.recipientName}`}
                     >
                       <span className="truncate text-[11px] font-bold uppercase tracking-tight">
-                        {isMine ? "✍️ Sign Here" : f.label || "Signature"}
+                        {holderLabel(f, isMine)}
                       </span>
                     </div>
                   );

@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
 import { HeroDemo } from "@/components/marketing/hero-demo";
+import { Playground } from "@/components/marketing/playground/playground";
 import { TableDemo } from "@/components/marketing/table-demo";
 import { VerifyDemo } from "@/components/marketing/verify-demo";
 import { LiveExamples } from "@/components/marketing/live-examples";
@@ -35,7 +36,7 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
   PLAN_CATALOG, PLAN_ORDER, BILLING_TERMS, type BillingTerm,
-  effectiveMonthlyEur, termTotalEur, termSavingsEur,
+  effectiveMonthlyEur, termTotalEur, termSavingsEur, planHasFreeTrial,
 } from "@/lib/plans";
 
 const NAV = [
@@ -57,13 +58,13 @@ const BENTO_FEATURES = [
   },
   {
     icon: Fingerprint,
-    title: "Certificates and sealing",
-    body: "One-click RSA-2048 signing certificates per workspace. Seal with PAdES conformance from B-B to B-LTA.",
+    title: "Signed PDFs any reader can check",
+    body: "Every completed PDF is signed at PAdES B-LTA: certificates, revocation proofs and an archive timestamp are embedded, so it stays verifiable for decades. Bring your CA or QTSP seal certificate to show as trusted in Acrobat.",
   },
   {
     icon: Timer,
     title: "RFC 3161 timestamps",
-    body: "Every signature anchored to an independent Timestamp Authority. Presets for DigiCert, Sectigo, GlobalSign, or your own TSA.",
+    body: "Every seal and every signed PDF is timestamped by an independent authority: DigiCert by default, or your own TSA.",
   },
 ];
 
@@ -99,7 +100,7 @@ const COMPLIANCE = [
     title: "Signature levels that mean something",
     points: [
       "Simple, Advanced and Qualified-aligned signing workflows.",
-      "Cryptographic sealing with PAdES conformance levels (B-B to B-LTA).",
+      "Long-term PAdES B-LTA signed PDFs, verifiable in any PDF reader for decades.",
       "Per-tenant signing certificates with revocation and thumbprints.",
       "Honest conformance reporting. The level shown is the level applied.",
     ],
@@ -153,6 +154,8 @@ export function MarketingPage() {
   // Promotional billing-term switch: monthly (no engagement) or a committed
   // 3/6/12-month term with an incremental discount. Drives every card price.
   const [termChoice, setTermChoice] = useState<BillingTerm>(BILLING_TERMS[0]);
+  // The hero is a clickable product; the replay movie stays one click away.
+  const [heroMode, setHeroMode] = useState<"try" | "watch">("try");
   const { t, locale } = useI18n();
 
   return (
@@ -213,7 +216,8 @@ export function MarketingPage() {
       </header>
 
       {/* Hero: centered statement over the live product movie */}
-      <section id="top" className="border-b">
+      {/* overflow-x-clip: the decorative glow behind the demo is wider than the viewport on small screens */}
+      <section id="top" className="overflow-x-clip border-b">
         <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
           <div className="text-center">
             <h1 className="hero-in mx-auto max-w-3xl text-4xl font-semibold leading-[1.06] tracking-tighter sm:text-5xl lg:text-6xl">
@@ -246,10 +250,21 @@ export function MarketingPage() {
           <figure className="relative mt-8 sm:mt-10 w-full">
             <div aria-hidden className="pointer-events-none absolute -inset-x-8 -top-8 bottom-0 rounded-[32px]" style={{ background: "radial-gradient(60% 55% at 50% 30%, rgba(15,122,90,.06), transparent 70%)" }} />
             <div className="relative w-full">
-              <HeroDemo />
+              {heroMode === "try" ? <Playground /> : <HeroDemo />}
             </div>
-            <figcaption className="mx-auto mt-4 max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
-              {t("hero.caption", "The StålFe demo workspace replayed end to end: a mill certificate goes to the foundry, is signed, sealed and proven with cryptographic evidence.")}
+            <figcaption className="mx-auto mt-2 max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
+              {heroMode === "try" ? (
+                <button type="button" onClick={() => setHeroMode("watch")} className="underline-offset-4 hover:text-foreground hover:underline">
+                  {t("hero.watchReplay", "Prefer to watch? Play the 40-second replay")}
+                </button>
+              ) : (
+                <>
+                  {t("hero.caption", "The StålFe demo workspace replayed end to end: a mill certificate goes to the foundry, is signed, sealed and proven with cryptographic evidence.")}{" "}
+                  <button type="button" onClick={() => setHeroMode("try")} className="font-medium text-foreground underline-offset-4 hover:underline">
+                    {t("hero.tryIt", "Try it yourself")}
+                  </button>
+                </>
+              )}
             </figcaption>
           </figure>
         </div>
@@ -273,7 +288,7 @@ export function MarketingPage() {
             recorded, hashed and reportable.
           </p>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+          <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-6">
             {/* Documents table: live demo, large cell, spans two rows */}
             <figure className="md:col-span-2 lg:col-span-4 lg:row-span-2">
               <div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
@@ -434,10 +449,11 @@ export function MarketingPage() {
             Simple, EU-priced plans
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Every plan starts with a 14-day trial, no credit card required.
-            Monthly billing has no engagement — cancel anytime. Commit to a
-            term and the discount grows: 3 months −5%, 6 months −10%, 12
-            months −20%. Prices exclude VAT.
+            Solo starts with a 14-day free trial, no credit card required.
+            Starter and Business start the moment you check out. Monthly
+            billing has no engagement, cancel anytime. Commit to a term and
+            the discount grows: 3 months −5%, 6 months −10%, 12 months −20%.
+            Enterprise is priced to your contract. Prices exclude VAT.
           </p>
 
           {/* Promotional billing-term switch */}
@@ -469,23 +485,23 @@ export function MarketingPage() {
             </div>
             <p className="mt-2.5 text-xs text-muted-foreground">
               {termChoice.months === 1
-                ? "No engagement — pay monthly and cancel anytime."
+                ? "No engagement. Pay monthly and cancel anytime."
                 : `Committed ${termChoice.months}-month term: −${termChoice.discountPct}% off list price, billed once for the term.`}
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             {PLAN_ORDER.map((code) => (
               <PricingCard key={code} code={code} term={termChoice} />
             ))}
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
-            <strong className="font-semibold text-foreground">Choose the allowance your team needs</strong> —
+            <strong className="font-semibold text-foreground">Choose the allowance your team needs.</strong>{" "}
             Solo includes 30 envelopes and one seat; Starter includes 100 envelopes and three seats.
           </p>
           <p className="mt-3 text-xs text-muted-foreground">
             Unused envelopes roll over to the next period on renewal (up to one
-            monthly allowance) — a quiet month is never a lost month. Need more
+            monthly allowance), so a quiet month is never a lost month. Need more
             envelopes, self-hosting or on-premises deployment?{" "}
             <Link className="font-medium underline underline-offset-2" href="/enterprise">Talk to sales about Enterprise</Link>.
           </p>
@@ -536,7 +552,7 @@ export function MarketingPage() {
       <footer className="bg-muted/40">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-4">
-            <BrandLogo tagline size="sm" />
+            <a href="#top" aria-label="Docurama home" className="inline-flex"><BrandLogo tagline size="sm" /></a>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {BRAND_LEGAL_NAME}<br />{BRAND_ADDRESS}<br />EU data residency. Paris, France.
             </p>
@@ -597,6 +613,7 @@ export function MarketingPage() {
 function PricingCard({ code, term }: { code: string; term: BillingTerm }) {
   const p = PLAN_CATALOG[code as keyof typeof PLAN_CATALOG];
   if (!p) return null;
+  if (p.custom) return <CustomPricingCard code={code} />;
   const monthly = effectiveMonthlyEur(p, term);
   const total = termTotalEur(p, term);
   const savings = termSavingsEur(p, term);
@@ -649,9 +666,50 @@ function PricingCard({ code, term }: { code: string; term: BillingTerm }) {
       </div>
 
       <Button className="mt-5 w-full" variant="outline" asChild>
-        {p.code === "ENTERPRISE"
-          ? <Link href="/enterprise">Talk to sales</Link>
-          : <Link href={p.code === "SOLO" ? "/welcome?plan=SOLO" : "/welcome"}>Start free trial</Link>}
+        <Link href={`/welcome?plan=${p.code}`}>{planHasFreeTrial(p.code) ? "Start free trial" : `Get ${p.name}`}</Link>
+      </Button>
+    </div>
+  );
+}
+
+// Sales-negotiated plan: no list price, seat count or envelope number is
+// published — everything is sized per contract.
+function CustomPricingCard({ code }: { code: string }) {
+  const p = PLAN_CATALOG[code as keyof typeof PLAN_CATALOG];
+  return (
+    <div className="flex flex-col rounded-xl border bg-card p-6">
+      <div className="min-h-[128px]">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{p.name}</h3>
+        <p className="mt-2 text-3xl font-semibold tracking-tight">Custom</p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">Seats, envelopes, storage and price set per contract</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{p.bestFor}</p>
+      </div>
+
+      <ul className="mt-5 flex-1 space-y-2.5">
+        {p.features.map((f) => (
+          <li key={f} className="flex items-start gap-2 text-xs leading-relaxed">
+            <span className="mt-[5px] h-1 w-1 shrink-0 rounded-full bg-primary" aria-hidden />
+            {f}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-5 rounded-lg bg-muted/60 p-3.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          With {p.name} you&apos;ll
+        </p>
+        <ul className="mt-2 space-y-1.5">
+          {p.outcomes.map((o) => (
+            <li key={o} className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              <BadgeCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+              {o}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <Button className="mt-5 w-full" variant="outline" asChild>
+        <Link href="/enterprise">Talk to sales</Link>
       </Button>
     </div>
   );

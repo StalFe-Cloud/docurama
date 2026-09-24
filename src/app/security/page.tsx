@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { ShieldCheck, Lock, FileCheck2, Timer, KeyRound, ScrollText, Mail } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -48,7 +49,7 @@ export default function SecurityPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <BrandLogo size="sm" />
+          <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
           <nav className="flex items-center gap-4 text-sm text-muted-foreground">
             <Link className="hover:text-foreground" href="/status">Status</Link>
             <Link className="hover:text-foreground" href="/docs">Documentation</Link>

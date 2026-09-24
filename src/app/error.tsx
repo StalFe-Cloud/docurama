@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { Button } from "@/components/ui/button";
 
 /** Recover a failed route without exposing server exception details. */
@@ -10,7 +11,7 @@ export default function RouteError({ error, reset }: { error: Error & { digest?:
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 max-w-4xl items-center px-4 sm:px-6">
-          <Link href="/" aria-label="Docurama home"><BrandLogo tagline size="sm" /></Link>
+          <MarketingHomeLink><BrandLogo tagline size="sm" /></MarketingHomeLink>
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6" role="alert">

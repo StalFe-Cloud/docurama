@@ -12,8 +12,11 @@
  *  - STARTER: €29/mo for collaborative teams (3 seats, 100 envelopes/mo, €9.67/seat).
  *    Strategic client friction: Solo is low-friction to start, but hard-caps at 1 seat
  *    and 30 envelopes, making the upgrade to Starter natural and compelling as business grows.
- *  - STARTER envelope allowance is 100, branded "35 sending days a month — weekends are on us".
+ *  - STARTER envelope allowance is 100, branded "35 sending days a month, weekends are on us".
  *  - Unused envelopes roll over to the next period on renewal, capped at one monthly allowance.
+ *  - Free trial on SOLO only. STARTER and BUSINESS are activated by the first
+ *    paid term; ENTERPRISE is custom (price, seats, envelopes, storage per
+ *    contract — shown as "Custom" everywhere, delivered as overrides).
  *  - Billing terms: monthly (no engagement, cancel anytime) or a committed
  *    term with an incremental discount: 3 months −5%, 6 months −10%,
  *    12 months −20%. Discounts apply to the whole term, shown per month.
@@ -27,7 +30,16 @@ export type PlanCode = "SOLO" | "STARTER" | "BUSINESS" | "ENTERPRISE";
 export interface PlanDef {
   code: PlanCode;
   name: string;
+  /** List price. 0 for custom (sales-negotiated) plans — see `custom`. */
   monthlyEur: number;
+  /**
+   * Sales-negotiated plan: price, seats, envelopes and storage are agreed per
+   * contract and delivered as subscription overrides (monthlyEurOverride,
+   * seatLimitOverride, envelopeLimitOverride). Every surface shows "Custom";
+   * the numeric limits below are only the provisioning default until the
+   * contract's overrides are set.
+   */
+  custom?: boolean;
   seatLimit: number;
   envelopeLimit: number; // per month/period
   storageGb: number;
@@ -58,18 +70,18 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
     bestFor: "Solo founders and freelancers who sign for themselves.",
     seatLabel: "1 seat",
     features: [
-      "1 seat (just you — teammates can still sign as recipients)",
+      "1 seat (just you; teammates can still sign as recipients)",
       "30 envelopes / month",
-      "35 sending days a month — weekends are on us",
+      "35 sending days a month, weekends are on us",
       "Unused envelopes roll over on renewal (up to 30)",
-      "PAdES B-B sealing",
+      "Long-term signed PDFs (PAdES B-LTA)",
       "Email signing and public verify portal",
       "2 templates",
       "99.5% uptime SLA",
     ],
     outcomes: [
       "Sign client contracts yourself without paying for team seats you don't need",
-      "Keep every unused envelope — a quiet month is never a lost month",
+      "Keep every unused envelope. A quiet month is never a lost month",
       "Look professional from day one: branded signing pages and a public verification code on every document",
     ],
   },
@@ -88,9 +100,9 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
     features: [
       "3 seats",
       "100 envelopes / month",
-      "35 sending days a month — weekends are on us",
+      "35 sending days a month, weekends are on us",
       "Unused envelopes roll over on renewal (up to 100)",
-      "PAdES B-B sealing",
+      "Long-term signed PDFs (PAdES B-LTA)",
       "Email signing and public verify portal",
       "5 templates",
       "99.5% uptime SLA",
@@ -116,7 +128,7 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
     features: [
       "10 seats",
       "250 envelopes / month (rollover on renewal, up to 250)",
-      "PAdES B-LT sealing",
+      "Long-term signed PDFs (PAdES B-LTA)",
       "SMS + WhatsApp delivery",
       "API access and webhooks",
       "DNS domain attestation",
@@ -124,7 +136,7 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
       "99.9% uptime SLA",
     ],
     outcomes: [
-      "Run your whole contract operation — sales, HR, procurement — in one place",
+      "Run your whole contract operation (sales, HR, procurement) in one place",
       "Automate signing into your own tools with the REST API and webhooks",
       "Send from your own verified domain so every invitation carries your brand",
     ],
@@ -132,7 +144,8 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
   ENTERPRISE: {
     code: "ENTERPRISE",
     name: "Enterprise",
-    monthlyEur: 349,
+    monthlyEur: 0,
+    custom: true,
     seatLimit: 100,
     envelopeLimit: 5000,
     storageGb: 500,
@@ -140,11 +153,12 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
     slaUptime: "99.99%",
     support: "24/7 support + TAM",
     bestFor: "Regulated teams with audit obligations.",
-    seatLabel: "100 seats",
+    seatLabel: "Custom seats",
     features: [
-      "100 seats",
-      "5,000 envelopes / month (rollover on renewal, up to 5,000)",
-      "PAdES B-LTA sealing",
+      "Custom seats, sized to your organization",
+      "Custom envelope volume (rollover on renewal)",
+      "Custom storage and retention",
+      "PAdES seals with your own CA or QTSP certificate",
       "BYO certificates and SSO/SAML",
       "21 CFR Part 11 mode",
       "Audit chain exports",
@@ -152,7 +166,7 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
       "99.99% uptime SLA",
     ],
     outcomes: [
-      "Pass audits — every signature manifests who signed, when, and what it means",
+      "Pass audits: every signature manifests who signed, when, and what it means",
       "Keep counsel happy with legal holds, retention policies and evidence packs",
       "Bring your own certificates and SSO, on EU infrastructure you can point a regulator at",
     ],
@@ -162,7 +176,28 @@ export const PLAN_CATALOG: Record<PlanCode, PlanDef> = {
 export const PLAN_ORDER: PlanCode[] = ["SOLO", "STARTER", "BUSINESS", "ENTERPRISE"];
 
 /** Plan codes a new signup can self-select on /welcome (ENTERPRISE goes through sales). */
-export const SELF_SERVE_PLANS: PlanCode[] = ["SOLO", "STARTER"];
+export const SELF_SERVE_PLANS: PlanCode[] = ["SOLO", "STARTER", "BUSINESS"];
+
+/**
+ * Only Solo comes with a free trial. Starter and Business workspaces are
+ * created ready to pay: they choose a term and check out before their first
+ * envelope (enforced where online payment is available — see billingBlock()).
+ */
+export const FREE_TRIAL_PLANS: PlanCode[] = ["SOLO"];
+
+export function planHasFreeTrial(code: string): boolean {
+  return FREE_TRIAL_PLANS.includes(code as PlanCode);
+}
+
+/** "€29/mo", or "Custom" for sales-negotiated plans. */
+export function planPriceLabel(plan: PlanDef): string {
+  return plan.custom ? "Custom" : `€${plan.monthlyEur}/mo`;
+}
+
+/** "100 envelopes/month", or "Custom envelope volume". */
+export function planEnvelopeLabel(plan: PlanDef): string {
+  return plan.custom ? "Custom envelope volume" : `${plan.envelopeLimit.toLocaleString("en-GB")} envelopes/month`;
+}
 
 // ─── Billing terms (the promotional switch) ──────────────────────────────────
 
@@ -177,7 +212,7 @@ export interface BillingTerm {
 }
 
 export const BILLING_TERMS: BillingTerm[] = [
-  { months: 1, label: "Monthly", discountPct: 0, note: "No engagement — cancel anytime" },
+  { months: 1, label: "Monthly", discountPct: 0, note: "No engagement, cancel anytime" },
   { months: 3, label: "3 months", discountPct: 5, note: "−5% for the term" },
   { months: 6, label: "6 months", discountPct: 10, note: "−10% for the term" },
   { months: 12, label: "12 months", discountPct: 20, note: "−20% for the term" },
@@ -200,6 +235,15 @@ export function termTotalEur(plan: PlanDef, term: BillingTerm): number {
 /** Absolute saving vs. list price over the same duration, in EUR. */
 export function termSavingsEur(plan: PlanDef, term: BillingTerm): number {
   return Math.round((plan.monthlyEur * term.months - termTotalEur(plan, term)) * 100) / 100;
+}
+
+/** Total cents charged for a plan under a committed term (discount applied). */
+export function termCents(planCode: string, termMonths: number): number {
+  const plan = planDef(planCode);
+  const term = termFor(termMonths);
+  // monthlyEur × (100 − discountPct) × months is already euro-cents:
+  // Starter 12mo → 29 × 80 × 12 = 27840 cents = €278.40.
+  return Math.round(plan.monthlyEur * (100 - term.discountPct) * term.months);
 }
 
 /** Rollover cap: unused envelopes carry forward on renewal, capped at one monthly allowance. */
@@ -230,31 +274,31 @@ export interface PlanGuide {
 
 export const PLAN_GUIDES: Record<PlanCode, PlanGuide> = {
   SOLO: {
-    headline: "You're on Solo — 1 seat, 30 envelopes, sized for one",
+    headline: "You're on Solo: 1 seat, 30 envelopes, sized for one",
     steps: [
       { label: "Send your first envelope (Builder → upload a PDF or pick a template)", href: "/" },
       { label: "Watch a recipient sign: open the signing link and see the guided signer flow", href: "/#examples" },
       { label: "Verify a completed document on the public portal", href: "/verify" },
     ],
     demos: [
-      { label: "Live example: signing an NDA", href: "/#examples", desc: "See the whole journey — open, sign, seal, verify — with sample data." },
+      { label: "Live example: signing an NDA", href: "/#examples", desc: "See the whole journey (open, sign, seal, verify) with sample data." },
       { label: "Contract template library", href: "/modeles-de-contrats", desc: "Start from a French-law template instead of a blank page." },
     ],
   },
   STARTER: {
-    headline: "You're on Starter — 3 seats, 100 envelopes, weekends on us",
+    headline: "You're on Starter: 3 seats, 100 envelopes, weekends on us",
     steps: [
       { label: "Invite your teammates to the remaining seats (Settings → Users)", href: "/settings/users" },
       { label: "Send your first envelope together (Builder → upload a PDF or pick a template)", href: "/" },
       { label: "Verify a completed document on the public portal", href: "/verify" },
     ],
     demos: [
-      { label: "Live example: signing an NDA", href: "/#examples", desc: "See the whole journey — open, sign, seal, verify — with sample data." },
+      { label: "Live example: signing an NDA", href: "/#examples", desc: "See the whole journey (open, sign, seal, verify) with sample data." },
       { label: "Contract template library", href: "/modeles-de-contrats", desc: "Start from a French-law template instead of a blank page." },
     ],
   },
   BUSINESS: {
-    headline: "You're on Business — automation, your domain, SMS delivery",
+    headline: "You're on Business: automation, your domain, SMS delivery",
     steps: [
       { label: "Connect your sending domain so invitations come from you (Settings → Account)", href: "/settings/account" },
       { label: "Create an API key and wire the envelope API into your stack (Settings → API)", href: "/settings/api" },
@@ -267,7 +311,7 @@ export const PLAN_GUIDES: Record<PlanCode, PlanGuide> = {
     ],
   },
   ENTERPRISE: {
-    headline: "You're on Enterprise — audit-grade signing for regulated teams",
+    headline: "You're on Enterprise: audit-grade signing, sized to your contract",
     steps: [
       { label: "Review the compliance hub: controls, retention, legal holds", href: "/settings" },
       { label: "Provision your signing certificate (Settings → eSign) or bring your own", href: "/settings/esign" },

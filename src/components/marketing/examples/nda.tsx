@@ -242,7 +242,7 @@ export function ExampleNda() {
               {/* Completion stamp in the gutter between blocks */}
               {st.completed && (
                 <div style={{ position: "absolute", left: 300, top: 268 }}>
-                  <RoundStamp show text="COMPLETED" sub="PAdES B-LT" size={82} />
+                  <RoundStamp show text="COMPLETED" sub="PAdES B-LTA" size={82} />
                 </div>
               )}
             </div>

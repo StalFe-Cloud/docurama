@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { requireUser, type SessionUser } from "@/lib/auth";
-import { currentAllowance, reserveEnvelopeAllowance } from "@/lib/billing";
+import { currentAllowance, envelopeDeniedMessage, reserveEnvelopeAllowance } from "@/lib/billing";
 import { serializableTransaction } from "@/lib/transaction";
 import { queueEnvelopeEvent, retryFailedDeliveries } from "@/lib/webhooks";
 import { processOutbox } from "@/lib/mail";
@@ -78,13 +78,13 @@ export async function POST(req: NextRequest) {
         }) : null;
         if (templateId && !template) throw jsonError("Template not found in this workspace", 404);
         const reservation = await reserveEnvelopeAllowance(tenantId, tx, now);
-        if (!reservation) throw jsonError("Monthly envelope quota reached", 402);
+        if (!reservation) throw jsonError(await envelopeDeniedMessage(tx, tenantId, now), 402);
         const code = `DOC-${randomBytes(4).toString("hex").toUpperCase()}`;
         const created = await tx.envelope.create({ data: {
           publicCode: code, title, titleLower: foldForSearch(title), tenantId, createdById: me.id,
           documentId, templateId, status: "SENT", message: String(data.message ?? "").slice(0, 10_000),
           pages: document?.pageCount ?? template?.pages ?? 1, sha256: document?.sha256, createdAt: now,
-          fields: fieldsJson,
+          fields: fieldsJson, contractText: document ? null : template?.bodyMarkdown || null,
         } });
         if (template) await tx.template.update({ where: { id: template.id }, data: {
           usageCount: { increment: 1 }, lastUsedAt: now,

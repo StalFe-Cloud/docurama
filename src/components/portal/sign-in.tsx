@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, setSessionToken } from "@/lib/client";
 import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 
 /**
  * One-click sign-in for the QA dataset. These are working credentials printed
@@ -19,25 +20,27 @@ import { BrandLogo, BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/l
  * administrator password is the sort of thing that survives to production by
  * accident. Unset or "false" in any real deployment.
  *
- * NEXT_PUBLIC_* is inlined at build time, so a production build with the flag
- * unset drops this code path entirely rather than merely hiding it.
+ * These strings ship in the client bundle whenever the flag is not inlined at
+ * build time (the Docker image sets it at runtime), so they must NEVER be real
+ * accounts: they are fixture-only users on reserved .test domains, created
+ * by e2e/seed.ts and impossible to register or exist in production.
  */
 const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
-const DEMO_ACCOUNTS = [
+const DEMO_ACCOUNTS = DEMO_MODE ? [
   {
-    label: "Platform Admin - Docurama SAS",
-    email: "admin@docurama.eu",
-    password: "StalFe2026!Admin",
+    label: "Platform Admin - demo",
+    email: "demo-admin@docurama.test",
+    password: "DemoAdmin2026!",
     desc: "Full admin control panel: tenants, compliance, billing, ops",
   },
   {
     label: "Workspace Admin - StålFe",
-    email: "admin@docurama.eu",
-    password: "StalFe2026!Admin",
+    email: "camille.laurent@stalfe.test",
+    password: "DemoStalfe2026!",
     desc: "Enterprise user portal: documents, templates, settings",
   },
-];
+] : [];
 
 type LoginBody = {
   ok?: boolean;
@@ -157,7 +160,7 @@ export function SignIn() {
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-primary/30 blur-3xl" aria-hidden />
         <div className="absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-[#4fd1a1]/15 blur-3xl" aria-hidden />
         <div className="relative">
-          <BrandLogo invert tagline size="md" />
+          <MarketingHomeLink><BrandLogo invert tagline size="md" /></MarketingHomeLink>
         </div>
         <div className="relative max-w-md space-y-5">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight">
@@ -190,7 +193,7 @@ export function SignIn() {
         <main className="w-full max-w-md space-y-8">
           <div className="space-y-2 text-center lg:text-left">
             <div className="mb-6 flex justify-center lg:justify-start">
-              <BrandLogo tagline size="md" className="lg:hidden" />
+              <MarketingHomeLink><BrandLogo tagline size="md" className="lg:hidden" /></MarketingHomeLink>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight">
               {view === "forgot"

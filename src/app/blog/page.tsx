@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
+import { MarketingHomeLink } from "@/components/brand/home-link";
 import { listBlogPosts, blogTagCloud, formatDate } from "@/lib/blog";
 import { ScrollTop } from "@/components/marketing/scroll-top";
 import { ArrowRight, CalendarDays, Clock } from "lucide-react";
@@ -45,7 +46,7 @@ export default function BlogIndexPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" aria-label="Docurama home"><BrandLogo size="sm" /></Link>
+          <MarketingHomeLink><BrandLogo size="sm" /></MarketingHomeLink>
           <nav className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
             <Link href="/docs" className="hover:text-foreground">Documentation</Link>
             <Link href="/verify" className="hover:text-foreground">Verify</Link>
