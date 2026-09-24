@@ -153,7 +153,7 @@ model MailOutbox {
 
   // Delivery engine (SMTP transport). Attempts and backoff survive restarts:
   // the worker (or an inline pass after send) re-reads QUEUED rows whose
-  // nextAttemptAt has come due. FAILED is terminal after 5 attempts.
+  // nextAttemptAt has come due. FAILED is terminal after MAX_MAIL_ATTEMPTS (src/lib/mail.ts).
   attempts      Int       @default(0)
   lastError     String?
   nextAttemptAt DateTime? // null = due immediately

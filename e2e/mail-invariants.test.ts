@@ -3,7 +3,7 @@ import { beforeAll, afterAll, expect, test } from "bun:test";
 import { createServer, type Server, type Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { processOutbox } from "../src/lib/mail";
+import { MAX_MAIL_ATTEMPTS, processOutbox } from "../src/lib/mail";
 import { db } from "../src/lib/db";
 
 const database = process.env.DATABASE_URL ?? "";
@@ -122,7 +122,7 @@ test("active claims are respected; expired claims are recovered", async () => {
 
 test("an exhausted abandoned job is terminal, never sent again", async () => {
   const row = await queued();
-  await direct.mailOutbox.update({ where: { id: row.id }, data: { attempts: 5, claimToken: "abandoned", claimUntil: new Date(0) } });
+  await direct.mailOutbox.update({ where: { id: row.id }, data: { attempts: MAX_MAIL_ATTEMPTS, claimToken: "abandoned", claimUntil: new Date(0) } });
   await processOutbox(100);
   expect(received(row.id)).toHaveLength(0);
   const saved = await direct.mailOutbox.findUniqueOrThrow({ where: { id: row.id } });

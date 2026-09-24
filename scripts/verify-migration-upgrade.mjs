@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, join, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -60,6 +60,8 @@ await legacy.$executeRaw`INSERT INTO "AuditEvent" ("id", "actor", "actorRole", "
 await legacy.$executeRaw`INSERT INTO "WebhookEndpoint" ("id", "tenantId", "url", "events", "secretMasked", "status") VALUES ('migrationendpoint', 'migrationtenant', 'https://example.test/hook', '*', 'fixture', 'PAUSED')`;
 await legacy.$executeRaw`INSERT INTO "WebhookDelivery" ("id", "endpointId", "event", "statusCode", "durationMs", "success", "payload", "attempts") VALUES ('migrationdelivery', 'migrationendpoint', 'envelope.sent', 503, 1, ${false}, ${payload}, 2)`;
 
+const committedMigrations = readdirSync(resolve('prisma', provider, 'migrations'), { withFileTypes: true }).filter((entry) => entry.isDirectory());
+
 async function snapshot(client) {
   const parts = await Promise.all([
     client.$queryRaw`SELECT "id", "name", "slug", "status" FROM "Tenant" ORDER BY "id"`,
@@ -113,7 +115,8 @@ for (const url of [sourceUrl, restoreUrl]) {
   assert.equal((await upgraded.mailOutbox.findUniqueOrThrow({ where: { id: 'migrationmail' } })).claimToken, null);
   assert.equal((await upgraded.webhookDelivery.findUniqueOrThrow({ where: { id: 'migrationdelivery' } })).claimUntil, null);
   const migrations = await upgraded.$queryRaw`SELECT migration_name, checksum FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name`;
-  assert.equal(migrations.length, 2);
+  // Every committed migration is applied, whatever their number.
+  assert.equal(migrations.length, committedMigrations.length, 'Every committed migration must be applied');
   const expected = createHash('sha256').update(readFileSync(resolve('prisma', provider, 'migrations', baselineName, 'migration.sql'))).digest('hex');
   assert.equal(migrations.find((entry) => entry.migration_name === baselineName)?.checksum, expected);
   await upgraded.$disconnect();

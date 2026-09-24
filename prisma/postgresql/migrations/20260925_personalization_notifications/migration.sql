@@ -26,3 +26,8 @@ CREATE UNIQUE INDEX "Personalization_tenantId_key" ON "Personalization"("tenantI
 CREATE INDEX "Personalization_logoSha256_idx" ON "Personalization"("logoSha256");
 -- AddForeignKey
 ALTER TABLE "Personalization" ADD CONSTRAINT "Personalization_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Schema drift carried since 6d6c72c (PlatformSetting.version default changed
+-- in the schema without a migration). The SQLite side was corrected when
+-- 20260923_sealed_evidence rebuilt that table.
+ALTER TABLE "PlatformSetting" ALTER COLUMN "version" SET DEFAULT '0.3.0';
