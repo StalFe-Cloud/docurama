@@ -11,7 +11,7 @@
  */
 import http from "node:http";
 import https from "node:https";
-import { resolveWebhookTarget } from "@/lib/safe-webhook-http";
+import { pinnedLookup, resolveWebhookTarget } from "@/lib/safe-webhook-http";
 
 export class SafeFetchError extends Error {}
 
@@ -38,7 +38,7 @@ export async function safeFetchBytes(rawUrl: string, opts: {
   return new Promise((resolve, reject) => {
     const request = (target.url.protocol === "https:" ? https : http).request(target.url, {
       method: opts.method ?? (opts.body ? "POST" : "GET"), agent: false, family: target.family, signal,
-      lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
+      lookup: pinnedLookup(target),
       headers: {
         Host: target.url.host,
         ...(opts.accept ? { Accept: opts.accept } : {}),

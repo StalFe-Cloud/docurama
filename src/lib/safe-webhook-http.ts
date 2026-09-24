@@ -83,6 +83,21 @@ export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
   return (await resolveWebhookTarget(raw)).url;
 }
 
+/**
+ * A `lookup` for http(s).request that always answers with the address already
+ * vetted, in the form the caller asks for: a list when `all` is set (Bun, and
+ * Node's address-family autoselection), otherwise one address. A single
+ * address given to a caller that asked for a list broke every request under
+ * Bun ("results.sort is not a function").
+ */
+export function pinnedLookup(target: { address: string; family: number }): http.RequestOptions["lookup"] {
+  const lookup = (_hostname: string, options: { all?: boolean } | number | undefined, callback: (...args: unknown[]) => void) => {
+    if (typeof options === "object" && options?.all) callback(null, [{ address: target.address, family: target.family }]);
+    else callback(null, target.address, target.family);
+  };
+  return lookup as unknown as http.RequestOptions["lookup"];
+}
+
 /** No redirects; DNS, connect, and body read share one total deadline. */
 export async function postWebhook(raw: string, body: string, headers: Record<string, string>): Promise<{ statusCode: number }> {
   const signal = AbortSignal.timeout(WEBHOOK_TIMEOUT_MS);
@@ -92,7 +107,7 @@ export async function postWebhook(raw: string, body: string, headers: Record<str
       method: "POST", agent: false, family: target.family,
       // The original hostname remains the TLS/Host identity; the socket uses
       // exactly the address checked above, never a second DNS resolution.
-      lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
+      lookup: pinnedLookup(target),
       signal,
       headers: { ...headers, "Content-Type": "application/json", Host: target.url.host,
         "Content-Length": Buffer.byteLength(body) },
