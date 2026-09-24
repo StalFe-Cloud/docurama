@@ -3,3 +3,11 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 Dockerfile text eol=lf
+
+# Binary: never line-ending converted (a PDF's xref offsets and signatures are byte-exact).
+*.pdf binary
+*.db binary
+*.png binary
+*.jpg binary
+*.p12 binary
+*.der binary
