@@ -403,6 +403,8 @@ export function DocumentBuilder({
                   key={kind}
                   variant="ghost"
                   size="sm"
+
+                  title={`Add ${kind} field`}
                   onClick={() => setActiveTool(kind)}
                   className={cn(
                     "h-8 gap-1.5 px-2.5 text-xs font-medium transition-all",
@@ -488,13 +490,18 @@ export function DocumentBuilder({
             className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-white"
           >
             {(["signature", "initials", "date", "text", "checkbox"] as FieldKind[]).map((kind) => (
-              <option key={kind} value={kind}>
+              <option key={kind} value={kind} >
                 {FIELD_DEFAULTS[kind].label}
               </option>
             ))}
           </select>
         </div>
       </div>
+
+      <p className="border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-300">
+        Signature locations guide document review. The signer adopts one typed signature for the document;
+        values are recorded per signer and rendered into a separate completed PDF. Original uploaded bytes remain unchanged.
+      </p>
 
       {/* Main Canvas Scroll Area */}
       <main className="flex-1 overflow-y-auto bg-slate-950 p-4 sm:p-8 docurama-scroll">
@@ -701,7 +708,7 @@ export function DocumentBuilder({
                         setBuilderRecipients(next);
                         // Also update placed fields label
                         setFields((prev) =>
-                          prev.map((f) => (f.recipientIndex === idx ? { ...f, recipientName: e.target.value } : f))
+                          prev.map((f) => (f.recipientEmail.toLowerCase() === r.email.toLowerCase() ? { ...f, recipientName: e.target.value } : f))
                         );
                       }}
                       className="h-8 bg-slate-900 border-slate-700 text-xs text-white"
@@ -716,7 +723,7 @@ export function DocumentBuilder({
                         setBuilderRecipients(next);
                         // Also update placed fields email
                         setFields((prev) =>
-                          prev.map((f) => (f.recipientIndex === idx ? { ...f, recipientEmail: e.target.value } : f))
+                          prev.map((f) => (f.recipientEmail.toLowerCase() === r.email.toLowerCase() ? { ...f, recipientEmail: e.target.value } : f))
                         );
                       }}
                       className="h-8 bg-slate-900 border-slate-700 text-xs text-white"
@@ -729,8 +736,14 @@ export function DocumentBuilder({
                       className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-500/10"
                       onClick={() => {
                         const next = builderRecipients.filter((_, i) => i !== idx);
+                        const removedSignerIndex = signers.indexOf(r);
                         setBuilderRecipients(next);
-                        if (activeSignerIdx >= next.length) setActiveSignerIdx(0);
+                        if (removedSignerIndex >= 0) {
+                          setFields((previous) => previous.filter((f) => f.recipientIndex !== removedSignerIndex).map((f) => ({
+                            ...f, recipientIndex: f.recipientIndex > removedSignerIndex ? f.recipientIndex - 1 : f.recipientIndex,
+                          })));
+                        }
+                        setActiveSignerIdx(0);
                       }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

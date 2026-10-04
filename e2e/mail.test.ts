@@ -20,7 +20,9 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import net from "node:net";
 import { PrismaClient } from "@prisma/client";
-import { cpSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /* ── A miniature SMTP relay ───────────────────────────────────────────────── */
 
@@ -125,8 +127,11 @@ function startFakeSmtp() {
 
 /* ── Scratch database + lib under test ─────────────────────────────────────── */
 
-const SCRATCH = "/tmp/docurama-mail-test.db";
-cpSync("db/custom.db", SCRATCH, { force: true });
+const FIXTURE = process.env.E2E_FIXTURE_DB;
+if (!FIXTURE) throw new Error("Mail E2E requires the migrated scratch fixture from e2e/run.sh");
+const SCRATCH_DIR = mkdtempSync(join(tmpdir(), "docurama-mail-test-"));
+const SCRATCH = join(SCRATCH_DIR, "scratch.db").replaceAll("\\", "/");
+cpSync(FIXTURE, SCRATCH);
 
 // Both clients must agree on the file: the lib's shared @/lib/db reads
 // process.env at import time, so pin it BEFORE the dynamic import. This is
@@ -138,6 +143,7 @@ const db = new PrismaClient({ datasources: { db: { url: `file:${SCRATCH}` } } })
 await db.mailOutbox.deleteMany({});
 
 const { processOutbox, smtpMode, mailBackoffMs, isRateLimitError, MAX_MAIL_ATTEMPTS } = await import("../src/lib/mail");
+const { db: sharedDb } = await import("../src/lib/db");
 
 let relay: Awaited<ReturnType<typeof startFakeSmtp>>;
 
@@ -148,6 +154,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await relay.close();
   await db.$disconnect();
+  await sharedDb.$disconnect();
+  rmSync(SCRATCH_DIR, { recursive: true, force: true });
 });
 
 const queueMail = (subject: string) =>

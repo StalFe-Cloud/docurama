@@ -174,7 +174,7 @@ export function UserDocuments() {
   const send = useMutation<
     { ok: boolean; message: string },
     ApiError,
-    { fields?: PlacedField[]; recipients?: { name: string; email: string }[]; title?: string } | void
+    { fields?: PlacedField[]; recipients?: { name: string; email: string; role?: string }[]; title?: string } | void
   >({
     mutationFn: (override) =>
       apiPost<{ ok: boolean; message: string }>("/api/workspace/envelopes", {
@@ -721,7 +721,7 @@ export function UserDocuments() {
           onSend={(placedFields, builderRecipients, currentTitle) => {
             send.mutate({
               fields: placedFields,
-              recipients: builderRecipients.map((r) => ({ name: r.name, email: r.email })),
+              recipients: builderRecipients.map((r) => ({ name: r.name, email: r.email, role: r.role })),
               title: currentTitle,
             });
           }}

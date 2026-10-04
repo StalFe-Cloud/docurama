@@ -1,13 +1,12 @@
 import { NextRequest } from "next/server";
-import { createHash, randomBytes } from "crypto";
+import { createHash } from "crypto";
 import { db } from "@/lib/db";
-import { requireUser, recordAudit } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
 import { getSettingsSection, postSettingsOp } from "@/lib/settings-handlers";
 import { foldForSearch } from "@/lib/search";
-import { dispatchEnvelopeEvent } from "@/lib/webhooks";
-import { processOutbox } from "@/lib/mail";
-import { currentAllowance, reserveEnvelopeAllowance } from "@/lib/billing";
+import { currentAllowance } from "@/lib/billing";
+import { parseEnvelopeFields, EnvelopeFieldsError } from "@/lib/envelope-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -119,7 +118,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const e = await db.envelope.findFirst({
           where: { id, tenantId: tenantId! },
           include: {
-            recipients: true,
+            recipients: { orderBy: { order: "asc" } },
             events: { orderBy: { at: "asc" } },
             tenant: { select: { name: true } },
             createdBy: { select: { firstName: true, lastName: true } },
@@ -144,7 +143,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
             attestStatus: e.attestStatus,
             verifiedSenderDomain: e.verifiedSenderDomain,
             createdBy: `${e.createdBy.firstName} ${e.createdBy.lastName}`,
-            fields: e.fields ? JSON.parse(e.fields) : [],
+            fields: parseEnvelopeFields(e.fields, { pageCount: e.pages, recipients: e.recipients }),
           },
           tenantName: e.tenant.name,
           // Owner-only: personal signing links for pending signers. The list
@@ -250,6 +249,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     }
   } catch (err) {
     if (err instanceof Response) return err;
+    if (err instanceof EnvelopeFieldsError) return jsonError(err.message, 409);
     console.error("[workspace GET]", err);
     return jsonError("Failed to load data", 500);
   }
@@ -259,155 +259,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   try {
     const me = await requireUser();
     const { section } = await ctx.params;
+    if (section === "envelopes") {
+      const { POST: postEnvelope } = await import("../envelopes/route");
+      return postEnvelope(req);
+    }
     const body = (await req.json().catch(() => ({}))) as { op?: string; id?: string; data?: Record<string, unknown> };
     const op = body.op ?? "";
     const id = body.id ?? "";
     const data = body.data ?? {};
-    const actor = `${me.firstName} ${me.lastName}`;
     const tenantId = me.tenantId;
 
     switch (section) {
-      case "envelopes": {
-        if (op === "send") {
-          const title = String(data.title ?? "").trim();
-          const recipients = Array.isArray(data.recipients) ? (data.recipients as { name?: string; email?: string; role?: string }[]) : [];
-          if (!title) return jsonError("Document title is required");
-          const valid = recipients.filter((r) => r.email && String(r.email).includes("@"));
-          if (valid.length === 0) return jsonError("At least one valid recipient email is required");
-          const allowance = await currentAllowance(tenantId!);
-          const tenant = await db.tenant.findUnique({ where: { id: tenantId! } });
-          if (allowance.used >= allowance.total) {
-            return jsonError(`Monthly envelope quota reached (${allowance.used}/${allowance.total}). Unused envelopes roll over on renewal, or upgrade your plan to send more.`, 402);
-          }
-
-          // WS3: accept documentId or templateId for real page count and SHA-256
-          const documentId = typeof data.documentId === "string" ? data.documentId : undefined;
-          const templateId = typeof data.templateId === "string" ? data.templateId : undefined;
-          let realPageCount = 1;
-          let realSha256: string | undefined;
-          if (documentId) {
-            const doc = await db.document.findFirst({ where: { id: documentId, tenantId: tenantId! } });
-            if (!doc) return jsonError("Document not found in this workspace", 404);
-            realPageCount = doc.pageCount;
-            realSha256 = doc.sha256;
-          } else if (templateId) {
-            const tpl = await db.template.findFirst({
-              where: { id: templateId, OR: [{ tenantId: tenantId! }, { isBuiltIn: true }] },
-            });
-            if (tpl) {
-              realPageCount = tpl.pages;
-              await db.template.update({
-                where: { id: tpl.id },
-                data: { usageCount: { increment: 1 }, lastUsedAt: new Date() },
-              });
-            }
-          }
-
-          const code = `DOC-${randomBytes(4).toString("hex").toUpperCase()}`;
-
-          // Signing links are absolute; derive the public origin from the
-          // request so invitations carry the right host in any deployment.
-          const origin = req.nextUrl.origin;
-
-          // WS9e: atomic transaction - a mid-loop failure cannot leave an envelope
-          // in SENT with partial recipients.
-          const env = await db.$transaction(async (tx) => {
-            const reservation = await reserveEnvelopeAllowance(tenantId!, tx);
-            if (!reservation) throw new Error("ENVELOPE_QUOTA_REACHED");
-            const fieldsJson = Array.isArray(data.fields) && data.fields.length > 0 ? JSON.stringify(data.fields) : null;
-            const envelope = await tx.envelope.create({
-              data: {
-                publicCode: code, title, titleLower: foldForSearch(title),
-                tenantId: tenantId!, createdById: me.id, documentId,
-                templateId, // evidence chain: which template produced this envelope
-                status: "SENT", message: String(data.message ?? ""),
-                pages: realPageCount, sha256: realSha256,
-                fields: fieldsJson,
-              },
-            });
-            // WS9b: signing tokens are cryptographically random, not derived from
-            // the envelope id. Each token is 32 bytes of entropy encoded as base64url.
-            const tokens = valid.map(() => randomBytes(32).toString("base64url"));
-            await tx.recipient.createMany({
-              data: valid.map((r, i) => ({
-                envelopeId: envelope.id,
-                name: String(r.name ?? r.email),
-                email: String(r.email).toLowerCase(),
-                role: r.role === "CC" ? "CC" : "SIGNER",
-                order: i + 1,
-                status: "PENDING",
-                accessToken: tokens[i],
-              })),
-            });
-            // Signing invitations into the mail outbox, each carrying the
-            // recipient's unique signing link (/sign/{token}). While the SMTP
-            // transport is not wired the messages stay QUEUED and inspectable
-            // in the admin console - the audit trail below says exactly that.
-            await tx.mailOutbox.createMany({
-              data: valid.map((r, i) => ({
-                toEmail: String(r.email).toLowerCase(),
-                template: "SIGN_INVITE",
-                subject: `${actor} asks for your signature: ${title}`,
-                bodyText:
-                  `Hello ${String(r.name ?? r.email)},\n\n` +
-                  `${actor} sent you "${title}" for electronic signature via Docurama.\n\n` +
-                  `Open your personal signing link (unique to you, do not forward):\n${origin}/sign/${tokens[i]}\n\n` +
-                  `Verification code once completed: ${code}\n`,
-                linkUrl: `${origin}/sign/${tokens[i]}`,
-              })),
-            });
-            // WS9f: record what actually happened — invitations are queued in
-            // the outbox; the ledger does not claim SMTP delivery.
-            await tx.envelopeEvent.createMany({
-              data: [
-                { envelopeId: envelope.id, actor, action: "CREATED", detail: "Document prepared in Builder" },
-                { envelopeId: envelope.id, actor: "Docurama", action: "SENT", detail: `Signing invitations queued for ${valid.length} recipient${valid.length > 1 ? "s" : ""}` },
-              ],
-            });
-            return envelope;
-          });
-
-          // Webhooks + mail are post-commit side effects: the envelope send
-          // itself never depends on an SMTP relay or a customer endpoint
-          // being up (same policy as the transparency append).
-          void dispatchEnvelopeEvent(tenantId!, "envelope.sent", {
-            code, title, status: "SENT",
-            recipientCount: valid.length,
-            recipients: valid.map((r) => ({ name: String(r.name ?? r.email), email: String(r.email).toLowerCase(), role: r.role === "CC" ? "CC" : "SIGNER" })),
-          }).catch(() => undefined);
-          void processOutbox(20).catch(() => undefined);
-
-          return jsonOk({ ok: true, message: `Sent to ${valid.length} recipient${valid.length > 1 ? "s" : ""} - code ${code}` });
-        }
-        if (op === "remind") {
-          const e = await db.envelope.findFirst({ where: { id, tenantId: tenantId! } });
-          if (!e) return jsonError("Envelope not found", 404);
-          if (!["SENT", "PARTIALLY_SIGNED"].includes(e.status)) return jsonError("Reminders can only be sent for active envelopes");
-          // Anti-spam throttle - the original UI allowed unlimited reminder spam.
-          if (e.lastRemindedAt && Date.now() - e.lastRemindedAt.getTime() < 6 * 3600000) {
-            return jsonError("A reminder was already sent recently - please wait before sending another.");
-          }
-          await db.envelope.update({ where: { id }, data: { lastRemindedAt: new Date() } });
-          await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "REMINDED", detail: "Reminder email dispatched" } });
-          void dispatchEnvelopeEvent(tenantId!, "reminder.sent", { code: e.publicCode, title: e.title, status: e.status }).catch(() => undefined);
-          void processOutbox(20).catch(() => undefined);
-          return jsonOk({ ok: true, message: "Reminder sent" });
-        }
-        if (op === "void") {
-          const reason = String(data.reason ?? "").trim();
-          if (!reason) return jsonError("A void reason is required");
-          const e = await db.envelope.findFirst({ where: { id, tenantId: tenantId! } });
-          if (!e) return jsonError("Envelope not found", 404);
-          if (["COMPLETED", "VOIDED", "DECLINED"].includes(e.status)) return jsonError("This envelope can no longer be voided");
-          await db.envelope.update({ where: { id }, data: { status: "VOIDED", voidedAt: new Date(), voidReason: reason } });
-          await db.envelopeEvent.create({ data: { envelopeId: id, actor, action: "VOIDED", detail: reason } });
-          await recordAudit({ actor, actorRole: me.role, action: "envelope.voided", resource: `envelope:${e.publicCode}`, severity: "WARNING", tenantName: me.tenantName, detail: reason });
-          void dispatchEnvelopeEvent(tenantId!, "envelope.voided", { code: e.publicCode, title: e.title, status: "VOIDED", reason }).catch(() => undefined);
-          return jsonOk({ ok: true, message: "Envelope voided" });
-        }
-        return jsonError("Unsupported operation");
-      }
-
       case "templates": {
         if (op === "create") {
           const name = String(data.name ?? "").trim();
@@ -463,6 +325,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   } catch (err) {
     if (err instanceof Response) return err;
+    if (err instanceof EnvelopeFieldsError) return jsonError(err.message, 409);
     if (err instanceof Error && err.message === "ENVELOPE_QUOTA_REACHED") return jsonError("Monthly envelope quota reached", 402);
     console.error("[workspace POST]", err);
     return jsonError("Operation failed", 500);

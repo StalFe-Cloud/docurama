@@ -3,6 +3,7 @@ import { promises as dns } from "dns";
 import { db } from "@/lib/db";
 import { requirePlatformAdmin, recordAudit, hashPasswordAsync } from "@/lib/auth";
 import { publicRecipient, isos, iso, jsonError, jsonOk } from "@/lib/serializers";
+import { publicAdminUserSelect, publicAdminTenant, publicAdminSettings, publicAdminApiKey, publicAdminWebhook, publicAdminUser } from "@/lib/admin-serializers";
 import { purgeExpired, storageHealthProbe } from "@/lib/document-store";
 import {
   COMPANY, EMAIL_ACCOUNTS, SUBDOMAINS, DNS_RECORDS,
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           },
           stats: isos(stats), planDist,
           securityEvents: isos(securityEvents), auditEvents: isos(auditEvents),
-          health: iso(settings!),
+          health: publicAdminSettings(settings),
         });
       }
 
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const t = await db.tenant.findUnique({
           where: { id },
           include: {
-            members: { include: { user: true }, orderBy: { createdAt: "asc" } },
+            members: { include: { user: { select: publicAdminUserSelect } }, orderBy: { createdAt: "asc" } },
             subscriptions: { orderBy: { renewalAt: "asc" } },
             domains: true,
             _count: { select: { envelopes: true, templates: true, apiKeys: true, webhookEndpoints: true } },
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         });
         const statusCounts = await db.envelope.groupBy({ by: ["status"], where: { tenantId: id }, _count: true });
         return jsonOk({
-          tenant: iso(t),
+          tenant: publicAdminTenant(t),
           members: t.members.map((m) => ({
             id: m.id, role: m.role, status: m.status, createdAt: m.createdAt.toISOString(),
             userId: m.user.id, name: `${m.user.firstName} ${m.user.lastName}`,
@@ -287,8 +288,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           include: { endpoint: { select: { url: true } } }, orderBy: { at: "desc" }, take: 40,
         });
         return jsonOk({
-          apiKeys: keys.map((k) => ({ ...iso(k), tenantName: k.tenant?.name ?? "Docurama Platform" })),
-          webhooks: hooks.map((h) => ({ ...iso(h), tenantName: h.tenant.name })),
+          apiKeys: keys.map((k) => ({ ...publicAdminApiKey(k), tenantName: k.tenant?.name ?? "Docurama Platform" })),
+          webhooks: hooks.map((h) => ({ ...publicAdminWebhook(h), tenantName: h.tenant.name })),
           deliveries: deliveries.map((dl) => ({ ...iso(dl), url: dl.endpoint.url })),
           allTenants: isos(allTenants),
         });
@@ -296,7 +297,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
       case "settings": {
         const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
-        return jsonOk({ settings: iso(settings!) });
+        return jsonOk({ settings: publicAdminSettings(settings) });
       }
 
       // ── Email & DNS provisioning for docurama.eu (brand, mailboxes, zone) ──
@@ -351,7 +352,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
         return jsonOk({
           settings: {
-            ...iso(settings!),
+            ...publicAdminSettings(settings),
             version: "0.3.0",
           },
           weekStats: isos(stats.reverse()),
@@ -408,7 +409,6 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           db.consent.findMany({ where: { subjectEmail: email } }),
         ]);
 
-        await db.dsarRequest.update({ where: { id }, data: { status: "COMPLETED", completedAt: new Date() } });
         await recordAudit({ actor: `${admin.firstName} ${admin.lastName}`, actorRole: "PLATFORM_ADMIN", action: "dsar.exported", resource: `dsar:${email}`, severity: "INFO" });
 
         const exportData = {
@@ -627,12 +627,16 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const firstName = String(data.firstName ?? "").trim();
           const lastName = String(data.lastName ?? "").trim();
           const role = String(data.role ?? "MEMBER").toUpperCase();
-          const password = String(data.password ?? "StalFe2026!User").trim();
+          const password = typeof data.password === "string" ? data.password : "";
           const tenantId = data.tenantId ? String(data.tenantId).trim() : null;
 
           if (!email || !email.includes("@")) return jsonError("Valid email is required");
           if (!firstName || !lastName) return jsonError("First and last name are required");
-          if (password.length < 8) return jsonError("Password must be at least 8 characters");
+          if (password.length < 10 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+            return jsonError("Supply a password of at least 10 characters containing a letter and a number");
+          }
+          if (!["PLATFORM_ADMIN", "WORKSPACE_ADMIN", "MEMBER"].includes(role)) return jsonError("Unsupported user role");
+          if (tenantId && !await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })) return jsonError("Workspace not found", 404);
 
           const existing = await db.user.findUnique({ where: { email } });
           if (existing) return jsonError(`User with email "${email}" already exists`);
@@ -667,7 +671,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             detail: `Created ${role} user ${user.firstName} ${user.lastName}`,
           });
 
-          return jsonOk({ ok: true, message: `User ${user.email} created successfully`, user: iso(user) });
+          return jsonOk({ ok: true, message: `User ${user.email} created successfully`, user: publicAdminUser(user) });
         }
 
         if (op === "update") {
@@ -683,9 +687,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             if (clash && clash.id !== id) return jsonError(`Email "${nextEmail}" is already registered`);
             updateData.email = nextEmail;
           }
-          if (data.role) updateData.role = String(data.role);
-          if (data.status) updateData.status = String(data.status);
-          if (data.totpEnabled !== undefined) updateData.totpEnabled = Boolean(data.totpEnabled);
+          if (data.role) {
+            if (!["PLATFORM_ADMIN", "WORKSPACE_ADMIN", "MEMBER"].includes(String(data.role))) return jsonError("Unsupported user role");
+            updateData.role = String(data.role);
+          }
+          if (data.status) {
+            if (!["ACTIVE", "SUSPENDED", "INVITED"].includes(String(data.status))) return jsonError("Unsupported user status");
+            updateData.status = String(data.status);
+          }
+          if (data.totpEnabled !== undefined && data.totpEnabled !== u.totpEnabled) {
+            return jsonError("Two-factor enrollment changes require the user's verified security flow", 409);
+          }
 
           const updated = await db.user.update({ where: { id }, data: updateData });
 
@@ -695,7 +707,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             detail: `Updated user profile for ${updated.email}`,
           });
 
-          return jsonOk({ ok: true, message: `User ${updated.email} updated`, user: iso(updated) });
+          return jsonOk({ ok: true, message: `User ${updated.email} updated`, user: publicAdminUser(updated) });
         }
 
         if (op === "reset-password") {
@@ -703,7 +715,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           if (!u) return jsonError("User not found", 404);
 
           const newPass = String(data.password ?? "").trim();
-          if (newPass.length < 8) return jsonError("Password must be at least 8 characters");
+          if (newPass.length < 10 || !/[a-zA-Z]/.test(newPass) || !/[0-9]/.test(newPass)) return jsonError("Supply a password of at least 10 characters containing a letter and a number");
 
           const passwordHash = await hashPasswordAsync(newPass);
           await db.user.update({
@@ -732,10 +744,20 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return jsonOk({ ok: true, message: next === "ACTIVE" ? "User reactivated" : "User deactivated" });
         }
         if (op === "force-2fa") {
-          await db.user.update({ where: { id }, data: { totpEnabled: true } });
           const u = await db.user.findUnique({ where: { id } });
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "user.mfa_enforced", resource: `user:${u!.email}`, severity: "WARNING" });
-          return jsonOk({ ok: true, message: "Two-factor enforcement applied" });
+          if (!u) return jsonError("User not found", 404);
+          const memberships = await db.member.findMany({ where: { userId: id, status: "ACTIVE" }, select: { tenantId: true } });
+          const tenantId = String(data.tenantId ?? u.activeTenantId ?? (memberships.length === 1 ? memberships[0].tenantId : ""));
+          if (!tenantId || !memberships.some((m) => m.tenantId === tenantId)) {
+            return jsonError("Select an active workspace membership to enforce its two-factor policy", 409);
+          }
+          // Enforcement is a workspace policy; enrollment requires the user's verified factor.
+          await db.$transaction([
+            db.tenant.update({ where: { id: tenantId }, data: { enforceTwoFactor: true } }),
+            db.session.deleteMany({ where: { userId: id } }),
+          ]);
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "user.mfa_enforced", resource: `user:${u.email}`, severity: "WARNING", detail: `Two-factor policy enabled for workspace ${tenantId}; enrollment remains user-verified` });
+          return jsonOk({ ok: true, message: "Workspace two-factor policy enabled; unenrolled members must complete enrollment" });
         }
         return jsonError("Unsupported operation");
       }
@@ -984,6 +1006,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           const n = await db.dmcaNotice.update({ where: { id }, data: { status: "RESOLVED", resolvedAt: new Date(), resolutionNote: note } });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "dmca.resolved", resource: `dmca:${id}`, severity: "WARNING", detail: note.slice(0, 80) });
           return jsonOk({ ok: true, message: "Notice resolved" });
+        }
+        if (op === "complete-dsar") {
+          const result = await db.dsarRequest.updateMany({
+            where: { id, status: "RUNNING" },
+            data: { status: "COMPLETED", completedAt: new Date() },
+          });
+          if (result.count !== 1) return jsonError("Only a running DSAR request can be completed", 409);
+          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "dsar.completed", resource: `dsar:${id}`, severity: "INFO" });
+          return jsonOk({ ok: true, message: "Request completed" });
         }
         if (op === "run-dsar" || op === "cancel-dsar") {
           const r = await db.dsarRequest.findUnique({ where: { id } });
@@ -1385,16 +1416,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         if (op === "retry-payment") {
           const sub = await db.subscription.findUnique({ where: { id } });
           if (!sub) return jsonError("Subscription not found", 404);
-          await db.subscription.update({ where: { id }, data: { failedPayment: false, status: "ACTIVE" } });
-          await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "billing.payment_retried", resource: `subscription:${id}`, severity: "INFO" });
-          return jsonOk({ ok: true, message: "Payment retried - invoice settled" });
+          return jsonError("Retry payment through the configured billing provider; activation requires a verified settled payment", 409);
         }
         if (op === "payment.approve") {
           // Manual (bank-transfer) checkouts: approving a PENDING payment runs
           // the exact same activation path as a Stripe checkout completion.
           const payment = await db.payment.findUnique({ where: { id } });
           if (!payment) return jsonError("Payment not found", 404);
-          if (payment.status !== "PENDING") return jsonError(`Payment is ${payment.status} — only PENDING payments can be approved`);
+          if (payment.provider !== "manual") return jsonError("Provider-managed payments require verified settlement from their billing provider", 409);
+          if (payment.status !== "PENDING") return jsonError(`Payment is ${payment.status} - only PENDING payments can be approved`);
           const note = String(data.note ?? "").trim();
           if (!note) return jsonError("A confirmation note is required (bank reference or receipt id)");
           const { activateSubscription } = await import("@/lib/payments");
@@ -1425,71 +1455,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "billing.subscription_canceled", resource: `subscription:${id}`, severity: "WARNING", detail: reason });
           return jsonOk({ ok: true, message: "Subscription cancelled at period end" });
         }
-        if (op === "save-plan") {
-          const plan = await db.plan.findUnique({ where: { id } });
-          if (!plan) return jsonError("Plan not found", 404);
-
-          const name = String(data.name ?? plan.name).trim();
-          const monthlyEur = data.monthlyEur !== undefined ? Number(data.monthlyEur) : plan.monthlyEur;
-          const seatLimit = data.seatLimit !== undefined ? Number(data.seatLimit) : plan.seatLimit;
-          const envelopeLimit = data.envelopeLimit !== undefined ? Number(data.envelopeLimit) : plan.envelopeLimit;
-          const storageGb = data.storageGb !== undefined ? Number(data.storageGb) : plan.storageGb;
-          const apiAccess = data.apiAccess !== undefined ? Boolean(data.apiAccess) : plan.apiAccess;
-          const slaUptime = String(data.slaUptime ?? plan.slaUptime);
-          const support = String(data.support ?? plan.support);
-          const features = String(data.features ?? plan.features);
-          const outcomes = data.outcomes !== undefined ? String(data.outcomes) : plan.outcomes;
-          const active = data.active !== undefined ? Boolean(data.active) : plan.active;
-
-          const updated = await db.plan.update({
-            where: { id },
-            data: {
-              name, monthlyEur, seatLimit, envelopeLimit, storageGb,
-              apiAccess, slaUptime, support, features, outcomes, active,
-            },
-          });
-
-          await recordAudit({
-            actor, actorRole: "PLATFORM_ADMIN", action: "billing.plan_updated",
-            resource: `plan:${plan.code}`, severity: "INFO",
-            detail: `Updated plan "${name}" (${plan.code})`,
-          });
-
-          return jsonOk({ ok: true, message: `Plan "${name}" updated`, plan: iso(updated) });
-        }
-
-        if (op === "create-plan") {
-          const code = String(data.code ?? "").trim().toUpperCase();
-          const name = String(data.name ?? "").trim();
-          if (!code || !name) return jsonError("Plan code and name are required");
-
-          const existing = await db.plan.findUnique({ where: { code } });
-          if (existing) return jsonError(`Plan with code "${code}" already exists`);
-
-          const created = await db.plan.create({
-            data: {
-              code,
-              name,
-              monthlyEur: Number(data.monthlyEur ?? 0),
-              seatLimit: Number(data.seatLimit ?? 1),
-              envelopeLimit: Number(data.envelopeLimit ?? 10),
-              storageGb: Number(data.storageGb ?? 5),
-              apiAccess: Boolean(data.apiAccess ?? false),
-              slaUptime: String(data.slaUptime ?? "99.5%"),
-              support: String(data.support ?? "Community"),
-              features: String(data.features ?? "Core signing|Audit trail"),
-              outcomes: data.outcomes ? String(data.outcomes) : null,
-              active: Boolean(data.active ?? true),
-            },
-          });
-
-          await recordAudit({
-            actor, actorRole: "PLATFORM_ADMIN", action: "billing.plan_created",
-            resource: `plan:${code}`, severity: "INFO",
-            detail: `Created new plan "${name}" (${code}) at €${created.monthlyEur}/mo`,
-          });
-
-          return jsonOk({ ok: true, message: `Plan "${name}" created`, plan: iso(created) });
+        if (op === "save-plan" || op === "create-plan") {
+          return jsonError("Plan changes require a reviewed release of the authoritative plan catalog", 409);
         }
 
         return jsonError("Unsupported operation");
@@ -1715,7 +1682,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             tenantName: tenant.name, detail: `Events: ${events}`,
           });
 
-          return jsonOk({ ok: true, message: `Webhook registered for ${tenant.name}`, endpoint: iso(endpoint), rawSecret });
+          return jsonOk({ ok: true, message: `Webhook registered for ${tenant.name}`, endpoint: publicAdminWebhook(endpoint), rawSecret });
         }
         if (op === "revoke-key") {
           const k = await db.apiKey.findUnique({ where: { id } });

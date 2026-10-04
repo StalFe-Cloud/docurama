@@ -1,9 +1,9 @@
 # Docurama — Enterprise e-Signature & Legal Evidence Platform
 
-> **Docurama SAS** · 1 Rue Marguerin, 75014 Paris, France  
-> **Jurisdiction:** French Republic & European Union Law · **Data Residency:** Paris, France (EU-West)  
-> **Cryptographic Standards:** PAdES (ETSI EN 319 142-1/-2), RFC 3161 TSA, SHA-256, RSA-2048/4096  
-> **Compliance Frameworks:** eIDAS (Regulation EU 910/2014), GDPR (Regulation EU 2016/679), FDA 21 CFR Part 11
+> **Historical entity example:** Docurama SAS, Paris; operator verification required
+> **Installation context:** Legal entity, jurisdiction and data residency must be verified by the operator; historical company/location examples below are not independently confirmed
+> **Evidence features:** SHA-256 digests, signed attestations and transparency records; independent PDF/TSA validation is a release gate
+> **Compliance-related configuration:** eIDAS, GDPR and Part 11 features require deployment-specific validation; no certification is claimed
 
 ---
 
@@ -13,12 +13,7 @@
 2. [Production Deployment Architecture](#2-production-deployment-architecture)
 3. [Topology Overview & Network Infrastructure](#3-topology-overview--network-infrastructure)
 4. [Subdomain Matrix & Routing / Redirect Architecture](#4-subdomain-matrix--routing--redirect-architecture)
-5. [Account Logins & Credential Directory](#5-account-logins--credential-directory)
-   - [5.1 Dedicated Enterprise: https://docurama.stalfe.com](#51-dedicated-enterprise-httpsdocuramastalfecom)
-   - [5.2 Platform Administrators (Root Operators)](#52-platform-administrators-root-operators)
-   - [5.3 Enterprise Tenant Accounts Directory](#53-enterprise-tenant-accounts-directory)
-   - [5.4 Self-Service Password Reset System](#54-self-service-password-reset-system)
-   - [5.5 Corporate Domain Auto-Enrollment & Billing Bypass](#55-corporate-domain-auto-enrollment--billing-bypass)
+5. [Administrator provisioning and account policy](#5-administrator-provisioning-and-account-policy)
 6. [Email System: Inboxes, Logic, Routing & Deliverability](#6-email-system-inboxes-logic-routing--deliverability)
 7. [Compliance Certificates, Approvals & Policy Library](#7-compliance-certificates-approvals--policy-library)
 8. [Signature Providers, Authorities & Technical Mechanics](#8-signature-providers-authorities--technical-mechanics)
@@ -32,21 +27,19 @@
 
 ## 1. Executive Summary & Core Value Proposition
 
-Docurama is an EU-native, enterprise-grade electronic signature and document intelligence platform engineered specifically for organizations subject to European statutory compliance and international audit requirements.
-
-Unlike generic signature tools that only insert rasterized signature stamps into PDFs, Docurama creates an **independently verifiable evidence chain**:
-- **Cryptographic PAdES Sealing:** Generates ETSI EN 319 142 conformant signatures (PAdES B-B, B-T, B-LT, and B-LTA) that verify offline in Adobe Acrobat Reader and PDF-XChange without querying Docurama servers.
-- **RFC 3161 Trusted Time-stamps:** Digitally binds every signature step to an independent EU-recognized Timestamp Authority (TSA).
-- **Statutory French Contract Catalog:** Built-in repository of 8 statutory contracts (CDI, CDD, NDA, Bail Commercial, CGV, Prestation de services, Pacte d'associés, Accord de résiliation) draftable and signable in one click.
-- **Document Intelligence (DocIntel):** Deep inspection pipeline utilizing AcroForm extraction, text layer parsing, and bilingual OCR (French & English) to automatically place signature fields, detect risk clauses, and generate audit metadata.
-- **Corporate Auto-Enrollment (Billing Bypass):** Approved corporate email domains (e.g. `@singa.fr`, `@stalfe.com`) automatically route users into their company's shared workspace without requiring credit card details or passing through billing checkout.
-- **True European Data Sovereignty:** 100% processed and stored in Paris, France. Zero international data transfers, strictly governed by GDPR and the CNIL framework.
+Docurama provides document workflows, tenant workspaces, a public signer portal,
+signed evidence exports and transparency records. These features support independent
+verification of recorded digests and attestations; they do not by themselves prove
+embedded PAdES signatures, qualified signatures or valid RFC 3161 timestamps.
+Validate actual completed PDFs and trust chains before making those claims.
+Hosting region, subprocessors and outbound integrations determine data residency.
+See [security posture](docs/SECURITY.md) and the [release gates](docs/GO-LIVE-CHECKLIST.md).
 
 ---
 
 ## 2. Production Deployment Architecture
 
-Docurama supports three deployment configurations: **Multi-Tenant Public Cloud**, **Dedicated Enterprise Cloud**, and **Self-Hosted Air-Gapped Appliance**.
+Docurama supports three deployment configurations: **Multi-Tenant Public Cloud**, **Dedicated Enterprise Cloud**, and **Self-Hosted Installation** (an air gap requires separate network and integration validation).
 
 ### Architectural Layers
 
@@ -96,7 +89,7 @@ Docurama supports three deployment configurations: **Multi-Tenant Public Cloud**
 
 ### Server Fleet Topology
 
-The primary infrastructure is hosted in Paris, France (EU-West) on dedicated, ISO 27001-certified hardware (`nexa-vps`):
+Historical deployment topology follows; verify actual hosting, network boundaries and provider assurances for the selected installation:
 
 | Node / Container | Internal Port | External Binding / Domain | Role |
 |---|---|---|---|
@@ -153,69 +146,15 @@ To prevent broken links across marketing assets, the middleware permanently hand
 
 ---
 
-## 5. Account Logins & Credential Directory
+## 5. Administrator provisioning and account policy
 
-### 5.1 Dedicated Enterprise: https://docurama.stalfe.com
+Use fresh installation data and the reviewed offline administrator bootstrap in
+[INSTALLATION-BOOTSTRAP.md](docs/INSTALLATION-BOOTSTRAP.md). Never use retained
+demo databases or shared fixture accounts for production. Account examples in
+historical receipts are synthetic test data, not operational credentials.
+Store unique credentials in the approved secret manager and enforce administrator
+2FA. Tenant creation and invitations must follow the selected deployment mode.
 
-The dedicated enterprise deployment at **`https://docurama.stalfe.com`** provides an isolated tenant environment for **StålFe Industrial Heavy Engineering**:
-
-| Login Email | Organization | Role | Plan Tier | Initial Password | Capabilities |
-|---|---|---|---|---|---|
-| **`sriram.rajan@stalfe.com`** | StålFe | `WORKSPACE_ADMIN` / `PLATFORM_ADMIN` (Owner) | **ENTERPRISE** | `StalFe2026!Admin` | Full workspace governance, BYO certificate upload, team management, billing, signing |
-
-#### Direct Access Links:
-- **Sign In:** [`https://docurama.stalfe.com/login`](https://docurama.stalfe.com/login)
-- **Password Reset:** [`https://docurama.stalfe.com/login`](https://docurama.stalfe.com/login) (Click *"Forgot password?"*) or direct at [`https://docurama.stalfe.com/reset-password`](https://docurama.stalfe.com/reset-password)
-- **Corporate Registration:** [`https://docurama.stalfe.com/welcome`](https://docurama.stalfe.com/welcome) (Instant onboarding for approved company emails)
-
----
-
-### 5.2 Platform Administrators (Root Operators)
-
-Platform administrators have root oversight across all tenants, global audit logs, and domain management at **`https://admin.docurama.eu`** or **`/admin`**:
-
-| Email | Role | Operator Name | Initial Password | 2FA Status | Permissions |
-|---|---|---|---|---|---|
-| **`admin@docurama.eu`** | `PLATFORM_ADMIN` | Docurama Admin | `StalFe2026!Admin` | Configurable | Root Superadmin: tenant provisioning, domain whitelisting, compliance audits, billing, telemetry |
-
----
-
-### 5.4 Self-Service Password Reset System
-
-Docurama features a complete, secure password recovery pipeline accessible from `/login`:
-
-1. **Requesting a Reset:**
-   - On `/login`, users click **"Forgot password?"**.
-   - A modal allows the user to submit their registered email address.
-   - Endpoint: `POST /api/auth/forgot-password`.
-   - The server generates a high-entropy 32-byte hexadecimal token with a 1-hour expiration timestamp.
-   - A branded email is sent via `notifications@docurama.eu` with the secure link `https://docurama.eu/reset-password?token=<TOKEN>`.
-   - In staging/development environments, the recovery URL and token are also logged directly to the server terminal.
-2. **Setting the New Password:**
-   - The user opens `/reset-password?token=<TOKEN>`.
-   - The page provides a real-time password strength meter and confirm-password verification.
-   - Endpoint: `POST /api/auth/reset-password`.
-   - Validates that the token exists and has not expired, hashes the new password with SHA-256 and workspace salt, invalidates the token, and automatically redirects to `/login` with a success alert.
-
----
-
-### 5.5 Corporate Domain Auto-Enrollment & Billing Bypass
-
-Organizations can enable seamless corporate onboarding where employees join the shared company workspace without entering credit card details or passing through the billing checkout.
-
-#### How It Works:
-1. **Platform Admin Whitelisting:**
-   - Under **Admin → Tenants → Allowed Domains**, the platform administrator registers approved corporate domains (e.g. `singa.fr`, `stalfe.com`) and links them to the designated tenant (e.g. StålFe).
-   - Flag: `autoJoin: true`, `bypassBilling: true`.
-2. **Real-Time Frontend Domain Detection:**
-   - When a user enters their email (e.g. `engineer@singa.fr`) on `/welcome` or `/login`, the frontend queries `GET /api/auth/check-domain?domain=singa.fr`.
-   - The UI immediately surfaces a verified enterprise badge:  
-     *"Recognized company domain: StålFe. You will join the shared company workspace without entering billing information."*
-3. **Zero-Billing Provisioning:**
-   - The registration wizard skips Step 2 (Plan Selection & Payment) completely.
-   - The user account is provisioned with role `MEMBER` directly inside the existing StålFe enterprise workspace.
-
----
 
 ## 6. Email System: Inboxes, Logic, Routing & Deliverability
 
@@ -240,7 +179,7 @@ Docurama specifies 12 official email endpoints adhering to IETF RFC standards an
 
 ### Deliverability & Authentication Records (DNS)
 
-To ensure zero delivery to spam folders and protect brand reputation against spoofing:
+Historical DNS examples follow; verify actual sending-domain alignment and real inbox delivery before rollout:
 
 - **SPF:** `v=spf1 include:_spf.docurama.eu ip4:51.75.124.20 -all`
 - **DKIM:** `v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz...` (Selector: `docurama2026`)
@@ -251,104 +190,25 @@ To ensure zero delivery to spam folders and protect brand reputation against spo
 
 ## 7. Compliance Certificates, Approvals & Policy Library
 
-Docurama is architected to survive comprehensive statutory audits (GDPR CNIL, eIDAS ANSSI, and FDA 21 CFR Part 11).
-
-### Regulatory Compliance Mapping
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        Docurama Compliance Architecture                         │
-├───────────────────────┬─────────────────────────┬───────────────────────────────┤
-│  Regulation / Norm    │ Statutory Requirement   │ Technical Implementation      │
-├───────────────────────┼─────────────────────────┼───────────────────────────────┤
-│ **eIDAS**             │ Art. 25 & 26 (AdES)     │ PAdES cryptographic sealing,  │
-│ (EU Reg 910/2014)     │ Non-repudiation, tamper │ SHA-256 document hashing,     │
-│                       │ evidence, signer link   │ X.509 cert + RFC 3161 TSA.    │
-├───────────────────────┼─────────────────────────┼───────────────────────────────┤
-│ **GDPR**              │ Art. 7 (Consent proof)  │ Versioned consent records,    │
-│ (EU Reg 2016/679)     │ Art. 15-20 (DSAR)       │ 1-click JSON/ZIP DSAR export, │
-│                       │ Art. 44 (Data residency)│ 100% Paris EU residency.      │
-├───────────────────────┼─────────────────────────┼───────────────────────────────┤
-│ **FDA 21 CFR Part 11**│ Electronic signatures   │ Re-authentication on signing, │
-│ (US Life Sciences)    │ in GxP environments     │ manifest of signature intent, │
-│                       │                         │ audit trail with ms precision.│
-├───────────────────────┼─────────────────────────┼───────────────────────────────┤
-│ **ETSI EN 319 142**   │ PAdES profile standards │ ETSI-compliant byte ranges,   │
-│ (European Standards)  │ B-B, B-T, B-LT, B-LTA   │ DSS archive timestamp support.│
-└───────────────────────┴─────────────────────────┴───────────────────────────────┘
-```
-
-### Official Compliance Policy Suite (12 Documents)
-
-The complete policy documentation is stored in `src/lib/compliance-library/` and published under `/docs/legal`:
-
-1. **POL-SEC-01:** Information Security Management Policy (ISO 27001 aligned)
-2. **POL-ACC-02:** Access Control, Authentication & RBAC Policy
-3. **PLN-INC-03:** Security Incident Response Plan (CNIL 72h notification framework)
-4. **PLN-DR-04:** Disaster Recovery & Business Continuity Plan (RPO < 1h, RTO < 4h)
-5. **POL-RET-05:** Data Retention, Archival & Statutory Erasure Policy
-6. **POL-VND-06:** Vendor & Subprocessor Risk Management Policy
-7. **POL-CHG-07:** Production Change Management & CI/CD Verification Policy
-8. **POL-CRY-08:** Cryptographic Controls & Key Management Standard (RSA/AES)
-9. **SOP-DSR-09:** Data Subject Rights (DSAR) Standard Operating Procedure
-10. **POL-VUL-10:** Vulnerability Assessment & Patch Management Policy
-11. **POL-PHY-11:** Physical & Environmental Data Center Security Standard
-12. **POL-AUP-12:** Acceptable Use Policy for Enterprise Workspaces
+The policy library in `src/lib/compliance-library/` and administrative control
+records support operator evidence collection. Policies, configuration labels and
+successful application tests do not establish eIDAS/QES, Part 11, GDPR, ISO 27001
+or SOC 2 certification. Verify the actual implementation, hosting and integrations,
+complete independent artifact validation and obtain applicable legal review.
+Recovery objectives in policies remain targets until a measured restore drill.
+See [security evidence limits](docs/SECURITY.md#5-evidence-chain) and
+[production acceptance limits](docs/PRODUCTION-PLAN.md#6-compliance-related-features-and-acceptance-limits).
 
 ---
 
 ## 8. Signature Providers, Authorities & Technical Mechanics
 
-### How Cryptographic PAdES Sealing Works
-
-```
- 1. Document Upload (PDF)
-    │
-    ▼
- 2. Normalization & AcroForm Analysis
-    │  - Page bounding boxes computed
-    │  - Visual signatures and text fields positioned
-    ▼
- 3. ByteRange Allocation
-    │  - Allocates signature dictionary `/ByteRange [0, offset1, offset2, length2]`
-    │  - Leaves placeholder for PKCS#7 / CMS signature container
-    ▼
- 4. Hash Computation
-    │  - Computes SHA-256 over all bytes excluding the signature container itself
-    ▼
- 5. RFC 3161 TSA Token Acquisition
-    │  - Submits SHA-256 hash to configured Timestamp Authority (DigiCert / Sectigo)
-    │  - TSA signs the token with its qualified private key
-    ▼
- 6. CMS Detached Signature Generation
-    │  - Workspace X.509 certificate signs `(Document SHA-256 + TSA Token)`
-    ▼
- 7. Final Injection & Sealing
-       - Injects hexadecimal CMS blob into the allocated PDF byte range
-       - Final PAdES-sealed PDF is sealed and immutable
-```
-
-### Supported Timestamp Authorities (RFC 3161)
-
-Workspaces can configure preset or custom TSAs via **Settings → eSign**:
-
-- **DigiCert TSA:** `http://timestamp.digicert.com` (Global Trust List / AATL)
-- **Sectigo TSA:** `http://timestamp.sectigo.com` (AATL & EUTL accredited)
-- **GlobalSign TSA:** `http://timestamp.globalsign.com/tsa/r6advanced1`
-- **FreeTSA:** `https://freetsa.org/tsr` (Open testing authority)
-- **Custom Enterprise TSA:** Any RFC 3161 compliant server supporting HTTP POST `application/timestamp-query`.
-
-### SMS & Multi-Channel Verification Providers (14 Providers)
-
-For two-factor signing verification and OTP delivery, Docurama integrates 14 carriers:
-
-- **WhatsApp Cloud API (Meta):** Free tier eligible, interactive template messages
-- **Twilio:** Global SMS & Voice delivery
-- **Infobip:** Enterprise carrier-grade SMS gateway
-- **Brevo (Sendinblue):** European-hosted transactional SMS
-- **MessageBird:** Global omnichannel messaging
-- **OVHcloud SMS:** French sovereign SMS routing
-- **Vonage / Nexmo, Sinch, Plivo, CM.com, Textmagic, ClickSend, Octopush, BulkSMS**
+The implemented path records document and ledger digests, signed attestations and
+transparency entries. TSA and certificate settings require independent integration
+and output testing; a metadata conformance label is insufficient evidence of an
+embedded PDF signature. Rehearse certificate/key rotation, preserve historical
+verification material and record approved trust-service dependencies. The acceptance
+gate includes a completed PDF, TSA response and certificate-chain validation.
 
 ---
 
@@ -357,27 +217,28 @@ For two-factor signing verification and OTP delivery, Docurama integrates 14 car
 | Feature | Platform Cloud (SaaS) | Enterprise Private Cloud | Self-Hosted Appliance |
 |---|---|---|---|
 | **Target URL** | `https://docurama.eu` | `https://docurama.stalfe.com` | `https://docurama.internal.corp` |
-| **Multi-Tenancy** | Shared Multi-Tenant | Dedicated Single-Tenant | Air-Gapped Single-Tenant |
+| **Multi-Tenancy** | Shared multi-tenant | Dedicated mode | Dedicated mode; air-gap validation required |
 | **Port on Host** | `3002` | `3003` | Configurable (`3000` / `80` / `443`) |
 | **Database** | SQLite WAL (`db/custom.db`) | SQLite WAL (dedicated volume) | SQLite or PostgreSQL |
 | **Branding** | Docurama Standard | White-label / StålFe Custom | Fully customizable |
-| **BYO Certificates** | Enterprise Tier only | Full X.509 / PKCS#12 upload | HSM / Local PKI integration |
-| **Updates** | Automatic rolling deploy | Synchronized release branch | Manual Docker pull / git tag |
+| **BYO Certificates** | Configuration by plan | Validate certificate integration | Validate local PKI/HSM integration separately |
+| **Updates** | Reviewed immutable release | Reviewed synchronized release | Reviewed image/revision and migration rehearsal |
 
 ---
 
 ## 10. Platform Enhancements & Architectural Advancements (Cycles 1–11)
 
-Docurama has undergone 11 continuous engineering cycles, graduating from early prototypes to an audited, production-grade e-signature and evidence infrastructure:
+The following feature inventory and receipts describe historical engineering cycles. They do not establish current production readiness or an independent audit:
 
 1. **Quality Hardening Release (Cycle 11, 2026-09-20/21, quality @ `34086af`):**
-   - **Versioned database migrations** replace boot-time schema pushes: the container entrypoint runs `prisma migrate deploy` against reviewed migration trees (SQLite and PostgreSQL, baselined by `release-20260920.prisma`), refuses to start when migrations fail, and only skips schema work with an explicit operator opt-in. The old silent `db push --accept-data-loss` startup is gone.
+   - **Versioned database migrations** replace boot-time schema pushes: the container entrypoint runs `prisma migrate deploy` against reviewed migration trees (SQLite and PostgreSQL, with `release-20260920.prisma` as a baseline reference; existing databases require deliberate offline comparison and reviewed history reconciliation), refuses to start when migrations fail, and only skips schema work with an explicit operator opt-in. The old silent `db push --accept-data-loss` startup is gone.
    - **Delivery reliability:** transactional webhook outbox with fenced leases, stable delivery identities across retries, and an SSRF-pinned transport (`safe-webhook-http.ts`) that validates destinations at registration and blocks private addresses in production.
    - **Billing correctness:** atomic quota reservation at envelope creation, independent UTC monthly periods, serialized rollover accounting, and transactional payment replay guards.
    - **Mail hardening:** leased outbox delivery with an explicit attempt budget, fenced acknowledgements, and stable message identity across retries.
    - **Runtime safety:** bounded database-transaction admission (`transaction-gate.ts`) without blocking the event loop, worker-loop startup/shutdown fencing, versioned salted password hashing, and stable audit identity that no longer fabricates client IPs.
    - **Verification:** new release-verification and webhook-network CI workflows with the recorded evidence pack (`docs/QUALITY-VERIFICATION-20260920.md`); the full matrix (static gates, SQLite e2e incl. browser and SeaweedFS, PostgreSQL tier, production image build/boot/bootstrap) validated locally on Windows via Docker; GitHub Actions validation pending restoration of the account's Actions billing.
-2. **Maestro Browser E2E Automation Suite (Cycle 1):**
+2. **Historical Maestro Browser E2E Automation Suite (Cycle 1):**
+   - Current browser coverage uses Playwright in `e2e/browser/`; see `e2e/README.md` for the safe runner. The cycle receipts below describe historical revisions.
    - 25 end-to-end browser flows verifying the entire user journey: authentication, document drafting, template instantiation, multi-recipient handoffs, decline workflows, and administrative console operations.
    - Deterministic fixtures seeded in `e2e/seed.ts` with strict type gates (`tsc --noEmit`) and visual regression baseline comparisons.
 2. **Public Signer Portal & Core Signing Loop (Cycle 2):**
@@ -400,7 +261,7 @@ Docurama has undergone 11 continuous engineering cycles, graduating from early p
    - Key-authenticated Model Context Protocol (MCP) server at `/api/mcp` for LLM agents to programmatically query envelope status, audit logs, and compliance records.
 8. **Production Deployment Readiness & Hardened Packaging (Cycle 8):**
    - Comprehensive `/api/health` probe evaluating SQLite/PostgreSQL connectivity, object storage readiness, SMTP relay status, webhook dispatch queues, and Rekor connectivity.
-   - Hardened non-root container image (`uid 10001 docurama`), automated boot-time additive schema migrations (`docker-entrypoint.sh`), and enterprise Helm charts (`deploy/helm/docurama`).
+   - Hardened non-root container image (`uid 10001 docurama`), reviewed provider-specific boot-time migrations with fail-closed startup (`docker-entrypoint.sh`), and enterprise Helm charts (`deploy/helm/docurama`).
    - Postfix/SMTP retry daemon with exponential backoff and HMAC-SHA256 signed webhook delivery engine.
 9. **S3-Compatible Scalable Object Storage (Cycle 9):**
    - Native dual-engine document store supporting local POSIX storage or S3-compatible backends (Apache-2.0 SeaweedFS, MinIO, Ceph, AWS S3, Cloudflare R2).
@@ -441,171 +302,26 @@ Everything needed for 100% public launch, on top of cycles 1–10:
 
 ## 12. Action Items & Operator Tasks Checklist (Tasks to Do for You)
 
-The following checklist details the operational and configuration tasks that require action from the domain owner / infrastructure administrator to finalize full production readiness:
-
-### 12.1 DNS Records & Subdomain Routing (Cloudflare / Registrar)
-
-Configure the following records in your DNS manager (Cloudflare or domain registrar):
-
-- [ ] **Apex & Subdomain Routing Records:**
-  - `docurama.eu` → **A Record** pointing to server IP `51.75.124.20` (or Cloudflare proxied)
-  - `www.docurama.eu` → **CNAME** pointing to `docurama.eu`
-  - `app.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `admin.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `verify.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `docs.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `security.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `status.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `api.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `mail.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `mta-sts.docurama.eu` → **A Record** `51.75.124.20` (or CNAME to `docurama.eu`)
-  - `docurama.stalfe.com` → **A Record** `51.75.124.20` (or CNAME pointing to VPS for the dedicated Enterprise stack)
-
-- [ ] **Email Deliverability & Authentication Records:**
-  - **SPF Record (TXT):**
-    ```dns
-    docurama.eu. IN TXT "v=spf1 include:_spf.docurama.eu ip4:51.75.124.20 -all"
-    ```
-  - **DKIM Record (TXT):**
-    ```dns
-    docurama2026._domainkey.docurama.eu. IN TXT "v=DKIM1; k=rsa; p=<YOUR_PUBLIC_KEY>"
-    ```
-  - **DMARC Policy (TXT):**
-    ```dns
-    _dmarc.docurama.eu. IN TXT "v=DMARC1; p=reject; sp=reject; pct=100; rua=mailto:dmarc@docurama.eu; ruf=mailto:abuse@docurama.eu; fo=1; aspf=r; adkim=r"
-    ```
-  - **MX Records:**
-    ```dns
-    docurama.eu. IN MX 10 mail.docurama.eu.
-    ```
-  - **MTA-STS Policy (TXT):**
-    ```dns
-    _mta-sts.docurama.eu. IN TXT "v=STSv1; id=20260916T080000Z"
-    ```
-
----
-
-### 12.2 Production Email System & Mailbox Setup
-
-Set up the following mailboxes and inbound routing at your email host (e.g. Google Workspace, Brevo, OVH, or Proton):
-
-- [ ] **Transactional Outbound SMTP Mailbox:**
-  - Create `notifications@docurama.eu` on your mail server.
-  - Add SMTP credentials into `/opt/docurama-cloud/.env` and `/opt/docurama-enterprise/.env` on `nexa-vps`:
-    ```env
-    SMTP_HOST=mail.docurama.eu
-    SMTP_PORT=587
-    SMTP_USER=notifications@docurama.eu
-    SMTP_PASSWORD=<YOUR_STRONG_SMTP_PASSWORD>
-    SMTP_FROM="Docurama <notifications@docurama.eu>"
-    ```
-  - *Effect:* Enables live delivery of envelope signing invitations, signer OTP verification codes, and password reset links.
-
-- [ ] **Inbound Routing & Aliases:**
-  - `admin@docurama.eu` → Forward to your primary executive inbox (e.g. `docurama@voiria.com`)
-  - `support@docurama.eu` → Forward to customer support helpdesk
-  - `sales@docurama.eu` & `billing@docurama.eu` → Forward to finance / sales lead
-  - `privacy@docurama.eu` → Forward to designated Data Protection Officer (DPO) for GDPR Article 15–20 DSAR intake
-  - `legal@docurama.eu` → Forward to legal counsel
-  - `security@docurama.eu` → Forward to security incident response team (RFC 9116)
-  - `abuse@docurama.eu` & `postmaster@docurama.eu` → Forward to server administrators for bounce/abuse monitoring
-
----
-
-### 12.3 Credentials & Secret Key Rotation
-
-Rotate initial demonstration credentials for production deployment:
-
-- [ ] **Rotate Platform Superadmin Passwords:**
-  - Change default password for `admin@docurama.eu` and `ops@docurama.eu` (default was `admin1234`) via [https://admin.docurama.eu](https://admin.docurama.eu) or direct `/reset-password`.
-  - Configure TOTP Two-Factor Authentication (Google Authenticator / 1Password) on the platform operator account.
-- [ ] **Rotate StålFe Dedicated Enterprise Passwords:**
-  - Change initial password for `sriram.rajan@stalfe.com` (initial: `StalFe2026!Admin`) via [https://docurama.stalfe.com/login](https://docurama.stalfe.com/login).
-- [ ] **Rotate Production Environment Encryption Salts:**
-  - Verify `/opt/docurama-cloud/.env` and `/opt/docurama-enterprise/.env` on `nexa-vps` have unique, random 64-character hex values for `SESSION_SECRET`, `ENCRYPTION_KEY`, and `NEXTAUTH_SECRET`.
-
----
-
-### 12.4 Commercial Certificates, Authorities & Carrier Integrations
-
-To enable legally binding eIDAS seals and two-factor SMS OTPs:
-
-- [ ] **Upload Official X.509 PAdES Sealing Certificate (AATL / eIDAS QES):**
-  - Obtain an organization seal certificate (e.g. from CertEurope, QuoVadis, DigiCert, or SwissSign) in PKCS#12 (`.p12` / `.pfx`) format.
-  - Upload under **Settings → eSign → Custom Certificate** or via Platform Admin for the StålFe tenant.
-- [ ] **Connect Commercial RFC 3161 Timestamp Authority (TSA):**
-  - Current default is FreeTSA (`https://freetsa.org/tsr`).
-  - If contractually requiring qualified timestamps, configure DigiCert (`http://timestamp.digicert.com`), Sectigo, or GlobalSign credentials in **Settings → eSign**.
-- [ ] **Configure SMS / WhatsApp Carrier API Key:**
-  - Select your preferred carrier (e.g. Brevo, Twilio, WhatsApp Cloud API, or OVHcloud SMS).
-  - Enter the API key in **Settings → Channels & Messaging** to activate live SMS OTP delivery for signers.
-
----
-
-### 12.5 Payment Gateway & Corporate Domain Whitelisting
-
-- [ ] **Stripe Live Billing Credentials:**
-  - Replace test Stripe keys with Live Stripe API keys in `/opt/docurama-cloud/.env`:
-    ```env
-    STRIPE_SECRET_KEY=sk_live_...
-    STRIPE_WEBHOOK_SECRET=whsec_...
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
-    ```
-  - Verify webhook endpoint is configured in Stripe Dashboard pointing to `https://docurama.eu/api/billing/webhook`.
-- [ ] **Whitelist Additional Client Corporate Domains:**
-  - In **Platform Admin (`admin.docurama.eu`) → Allowed Domains**, register enterprise customer email domains (like `@singa.fr`) to enable instant zero-billing onboarding for their team members.
-
----
-
-### 12.6 Legal Entity & Compliance Finalization
-
-- [ ] **Confirm Official Corporate Identifiers:**
-  - Verify that SIRET/SIREN, RCS Paris registration number, and VAT numbers in [`src/lib/compliance-library/`](file:///d:/Dev/Under-Development/Docurama/src/lib/compliance-library/) and the website footer match your registered French SAS company details.
-- [ ] **Formalize DPO Notification with CNIL:**
-  - Submit the official Data Protection Officer designation form to CNIL referencing `privacy@docurama.eu`.
+Complete the [go-live checklist](docs/GO-LIVE-CHECKLIST.md) for the pinned candidate
+and chosen edition. Record engineering results separately from DNS/TLS, SMTP,
+IdP/CAPTCHA, payments, legal review and independent PDF/TSA acceptance.
+Provision fresh administrator accounts offline, protect configuration in the
+approved secret store, and exclude fixture accounts and demo mode from production.
+Record backup/restore evidence, migration compatibility, RPO/RTO and release/incident
+owners before cutover. External activation and deployment are separate operator actions.
 
 ---
 
 ## 13. Operational Runbooks & Commands
 
-### Local Development
-
-```bash
-# Clone and install dependencies
-git clone -b quality https://github.com/StalFe-Cloud/docurama.git
-cd docurama
-bun install
-
-# Database initialization
-bunx prisma generate
-bunx prisma db push
-
-# Run development server
-bun run dev           # http://localhost:3000
-```
-
-### Production Build & Type Check
-
-```bash
-# Verify type safety
-bunx tsc --noEmit
-
-# Linting
-bun run lint
-
-# Compile Next.js production bundle
-bunx next build
-```
-
-### Remote Server Deployment (`nexa-vps`)
-
-```bash
-# Deploy Docurama Public Cloud (port 3002)
-ssh nexa-vps "cd /opt/docurama-cloud && git pull origin main && docker compose build && docker compose up -d"
-
-# Deploy Docurama Enterprise (port 3003)
-ssh nexa-vps "cd /opt/docurama-enterprise && git pull origin main && docker compose build && docker compose up -d"
-```
+Use [deployment](docs/DEPLOYMENT.md) for provider-specific build and reviewed
+`migrate deploy`, including the deliberate offline baseline process for existing
+databases. Keep runtime storage outside the checkout and create fresh administrator
+credentials through [offline bootstrap](docs/INSTALLATION-BOOTSTRAP.md).
+Use [E2E guidance](e2e/README.md) for disposable synthetic tests, and
+[operations](docs/OPERATIONS-RUNBOOK.md) for recovery and monitoring.
+Promotion requires an immutable reviewed image/revision, successful migration and
+restore rehearsal, and completed [go-live gates](docs/GO-LIVE-CHECKLIST.md).
 
 ---
 

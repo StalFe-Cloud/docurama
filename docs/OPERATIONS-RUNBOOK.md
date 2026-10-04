@@ -1,6 +1,6 @@
 # Operations Runbook — Docurama
 
-Audience: the on-call operator of a Docurama instance (cloud SaaS at docurama.eu or a self-hosted deployment). Everything here is safe to run against production unless marked otherwise. Companion docs: `DEPLOYMENT.md`, `SECURITY.md`, `PAYMENTS.md`, `docs/PRODUCTION-PLAN.md`.
+Audience: the on-call operator of a Docurama instance (cloud SaaS at docurama.eu or a self-hosted deployment). Read-only health checks can inspect a deployment. Queue mutation, migration, restore and deployment commands require a reviewed target and change procedure; do not run them as discovery steps. Companion docs: `DEPLOYMENT.md`, `SECURITY.md`, `PAYMENTS.md`, `docs/PRODUCTION-PLAN.md`.
 
 ## 1. Health checks
 
@@ -27,7 +27,7 @@ Every system email is a row in `MailOutbox` (QUEUED → SENT/FAILED), journaled 
 | `SENT` | delivered | none |
 | `FAILED` | 5 attempts exhausted (terminal) | resend manually or via console |
 
-Drain/retry commands (safe to re-run; claiming is by status transition, never row locks):
+Drain/retry commands require an approved target and coordination with the worker. Delivery uses leased claims; a manual retry must preserve message identity and account for prior delivery:
 
 ```bash
 # Inspect the queue (scratch read-only)
@@ -73,20 +73,20 @@ Single-instance rule: exactly one replica must run the worker. Multi-replica tie
 # Cron (03:15 nightly, with SQL dump + container fallback):
 15 3 * * * /opt/docurama/scripts/backup.sh --dump-sql --container docurama-cloud >> /var/log/docurama-backup.log 2>&1
 
-# Restore drill (quarterly):
+# Recovery example only after an isolated drill, approved recovery point and stopped writers:
 docker compose -p docurama-cloud stop
 gpg -d db-….sqlite.gpg > /var/lib/docurama/db/custom.db      # if encrypted
-tar xzf storage-….tar.gz -C /var/lib/docurama/storage --strip-components=2
+tar xzf storage-….tar.gz -C /var/lib/docurama/storage
 docker compose -p docurama-cloud up -d && curl -fsS http://127.0.0.1:3002/api/health
 ```
 
-### Zero-risk database decoupling
-To completely eliminate the risk of `git checkout -f` or `git clean` overwriting the live database (as happened on 2026-09-21), decouple the database directory from the git checkout tree by setting in the host's untracked `.env`:
+### Keep runtime data outside the checkout
+To reduce the risk of `git checkout -f` or `git clean` overwriting the live database (as happened on 2026-09-21), decouple the database directory from the git checkout tree by setting in the host's untracked `.env`:
 ```bash
 HOST_DB_DIR=/var/lib/docurama/db
 HOST_STORAGE_DIR=/var/lib/docurama/storage
 ```
-This ensures the live database file resides outside the repository working copy.
+Confirm these mount variables are supported by the selected edition Compose file; otherwise use an explicit protected override. Privately inspect resolved mount targets before starting.
 
 Run the drill against a **copy** first. The standard test trick (used by every E2E suite): copy `db/custom.db` to a scratch path and point `DATABASE_URL` at the copy — tests never mutate the committed seed. S3-backed deployments: snapshot the bucket (versioning/lifecycle) in addition to the DB backup; document bytes are not in the SQLite file.
 

@@ -83,6 +83,12 @@ export function SignDocumentPreview({
   return (
     <Card data-testid="doc-preview">
       <CardContent className="space-y-3 p-4 sm:p-6">
+        {fields && fields.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Highlighted positions show where each signer&apos;s recorded values appear in the completed PDF.
+            The original uploaded PDF remains unchanged.
+          </p>
+        )}
         <div className="flex items-center justify-between gap-2">
           <p className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
             <FileText className="h-3.5 w-3.5" aria-hidden /> Document preview
@@ -123,7 +129,7 @@ export function SignDocumentPreview({
                   return (
                     <div
                       key={f.id}
-                      onClick={() => onFieldClick?.(f)}
+                      onClick={() => { if (isMine) onFieldClick?.(f); }}
                       style={{
                         left: `${f.x}%`,
                         top: `${f.y}%`,
@@ -136,10 +142,10 @@ export function SignDocumentPreview({
                           ? "border-blue-600 bg-blue-500/25 text-blue-700 font-semibold ring-2 ring-blue-400/50 hover:bg-blue-500/35"
                           : "border-slate-400 bg-slate-200/40 text-slate-500 opacity-60"
                       )}
-                      title={isMine ? "Click to sign here" : `Assigned to ${f.recipientName}`}
+                      title={isMine ? `Complete ${f.label || f.type} below` : `Assigned to ${f.recipientName}`}
                     >
                       <span className="truncate text-[11px] font-bold uppercase tracking-tight">
-                        {isMine ? "✍️ Sign Here" : f.label || "Signature"}
+                        {f.label || f.type}
                       </span>
                     </div>
                   );
