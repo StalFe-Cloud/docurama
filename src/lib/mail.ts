@@ -1,3 +1,4 @@
+import { resolveConfiguredMailSender, validateMailSender, MailSenderError } from "@/lib/mail-sender";
 import { createTransport } from "nodemailer";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
@@ -85,6 +86,7 @@ export async function testSmtpConnection(opts: {
   from: string;
   to?: string;
 }): Promise<{ ok: boolean; message: string; latencyMs: number }> {
+  const testSender = validateMailSender(opts.from);
   const t0 = Date.now();
   const secure = opts.port === 465;
   const transporter = createTransport({
@@ -104,7 +106,7 @@ export async function testSmtpConnection(opts: {
     await transporter.verify();
     if (opts.to) {
       await transporter.sendMail({
-        from: opts.from,
+        from: { name: testSender.name, address: testSender.address },
         to: opts.to,
         subject: "Docurama Sign - SMTP Test Message",
         text: `This is an automated test message from Docurama Sign to confirm SMTP connectivity.\n\nTimestamp: ${new Date().toISOString()}\nHost: ${opts.host}:${opts.port}`,
@@ -125,6 +127,7 @@ export type OutboxMessage = { id: string; toEmail: string; fromEmail: string; su
 
 /** A dedicated transport lets a deadline close only this message's connection. */
 export async function sendViaSmtp(mode: Extract<SmtpMode, { configured: true }>, msg: OutboxMessage): Promise<void> {
+  const sender = validateMailSender(msg.fromEmail);
   const secure = mode.url.protocol === "smtps:";
   const transporter = createTransport({
     host: mode.url.hostname, port: Number(mode.url.port || (secure ? 465 : 587)),
@@ -136,7 +139,7 @@ export async function sendViaSmtp(mode: Extract<SmtpMode, { configured: true }>,
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      transporter.sendMail({ from: msg.fromEmail, to: msg.toEmail, subject: msg.subject, text: msg.bodyText, html: msg.bodyHtml || undefined,
+      transporter.sendMail({ from: { name: sender.name, address: sender.address }, envelope: { from: sender.address, to: msg.toEmail }, to: msg.toEmail, subject: msg.subject, text: msg.bodyText, html: msg.bodyHtml || undefined,
         attachments: msg.attachments,
         messageId: `<${msg.id}@outbox.docurama>` }),
       new Promise<never>((_resolve, reject) => {
@@ -178,6 +181,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
     const attempt = row.attempts + 1;
     let lastError: string | null = null;
     try {
+      let senderTenantId: string | null = null;
       if (["SIGN_INVITE", "REMINDER", "SIGN_COMPLETED"].includes(row.template) && !row.envelopeId) {
         const cancelled = await db.mailOutbox.updateMany({ where: { id: row.id, claimToken, status: "QUEUED" },
           data: { status: "CANCELLED", lastError: "Signing notification is missing envelope correlation; review before requeue",
@@ -187,7 +191,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
       }
       if (row.envelopeId && ["SIGN_INVITE", "REMINDER"].includes(row.template)) {
         const envelope = await db.envelope.findUnique({ where: { id: row.envelopeId },
-          select: { status: true, tenant: { select: { status: true } }, recipients: { select: { id: true, role: true, status: true, order: true } } } });
+          select: { tenantId: true, status: true, tenant: { select: { status: true } }, recipients: { select: { id: true, role: true, status: true, order: true } } } });
         const firstPending = envelope?.recipients
           .filter(recipient => recipient.role === "SIGNER" && ["PENDING", "DELIVERED"].includes(recipient.status))
           .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))[0];
@@ -199,6 +203,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
           if (cancelled.count === 1) result.cancelled = (result.cancelled ?? 0) + 1;
           continue;
         }
+        senderTenantId = envelope.tenantId;
       }
       // This check suppresses stale queued invitations. State may still change
       // after the check while SMTP is accepting the message; it is not atomic.
@@ -219,6 +224,7 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
         if (envelope.document && envelope.document.tenantId !== envelope.tenantId) {
           throw new Error("Completed mail document workspace binding is invalid");
         }
+        senderTenantId = envelope.tenantId;
         const final = await buildFinalDocument(envelope);
         const code = envelope.publicCode.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 100) || "document";
         message = { ...row, attachments: [
@@ -226,7 +232,24 @@ export async function processOutbox(limit = 20): Promise<ProcessOutboxResult> {
           { filename: code + "-completion-record.pdf", content: final.recordBytes, contentType: "application/pdf" },
         ] };
       }
-      await sendViaSmtp(mode, message);
+      if (row.envelopeId && !senderTenantId) {
+        const scope = await db.envelope.findUnique({ where: { id: row.envelopeId }, select: { tenantId: true } });
+        if (!scope?.tenantId) throw new MailSenderError("Mail envelope workspace binding is invalid");
+        senderTenantId = scope.tenantId;
+      }
+      const fromEmail = await resolveConfiguredMailSender(db, { tenantId: senderTenantId });
+      if (!fromEmail) throw new MailSenderError("Configured sender is missing at dispatch");
+      // Preparation can outlast the initial claim. An expired owner must not
+      // begin SMTP, even if no successor has reclaimed the row yet. Renew only
+      // the still-current lease, leaving more than the bounded send deadline.
+      const dispatchAt = new Date();
+      const dispatchLeaseUntil = new Date(dispatchAt.getTime() + MAIL_LEASE_MS);
+      const identityBound = await db.mailOutbox.updateMany({
+        where: { id: row.id, claimToken, status: "QUEUED", claimUntil: { gt: dispatchAt } },
+        data: { fromEmail, claimUntil: dispatchLeaseUntil },
+      });
+      if (identityBound.count !== 1 || dispatchLeaseUntil.getTime() - Date.now() <= SEND_DEADLINE_MS) continue;
+      await sendViaSmtp(mode, { ...message, fromEmail });
     } catch (error) {
       lastError = (error instanceof Error ? error.message : "SMTP delivery failed").slice(0, 500);
     }

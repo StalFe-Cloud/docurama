@@ -1,5 +1,5 @@
 # Single-node deployment: hardened image (non-root, HEALTHCHECK, boot-time
-# schema push) behind your own TLS proxy (Caddy/nginx — see PRODUCTION-PLAN).
+# reviewed migrations) behind your own TLS proxy (Caddy/nginx - see PRODUCTION-PLAN).
 #
 #   docker compose up -d                        # app only (local filesystem storage)
 #   docker compose --profile s3 up -d           # + SeaweedFS S3 object storage
@@ -41,13 +41,17 @@ services:
       #   smtp://user:pass@relay.example.com:587 (STARTTLS) or smtps://…:465
       #   URL-encode special characters in user/password (e.g. @ → %40).
       - SMTP_URL=${SMTP_URL:-}
+      # Optional operator-verified sender; blank inherits platform configuration.
+      # SMTP credentials and ROOT_DOMAIN do not select a sending identity.
+      - SMTP_FROM=${SMTP_FROM:-}
       # Base domain for the vanity sub-domain routing (status./docs./verify./…).
       # Unset falls back to the application default (docurama.eu).
       - ROOT_DOMAIN=${ROOT_DOMAIN:-}
       # SMTP delivery (unset = outbox-only mode, mail stays QUEUED + inspectable).
       #   smtp://user:pass@relay.example.com:587 or smtps://…:465
       # With the mail profile below, the one-liner is:
-      #   SMTP_URL=smtp://mailpit:1025?tls=off   (inbox UI: http://127.0.0.1:8025)
+      #   SMTP_URL=smtp://mailpit:1025?tls=off SMTP_FROM=notifications@local.test
+      #   (isolated evaluation only; inbox UI: http://127.0.0.1:8025)
       # - SMTP_URL=smtp://user:pass@relay.example.com:587
       # S3 object storage instead of the local filesystem (multitenant /
       # scale-out path — SeaweedFS, MinIO, Garage, Ceph RGW, AWS S3, R2…).

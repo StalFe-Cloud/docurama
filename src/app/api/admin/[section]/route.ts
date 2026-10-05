@@ -12,7 +12,9 @@ import {
 } from "@/lib/provisioning";
 import { createInvitation, requestOrigin, slugifyOrg } from "@/lib/onboarding";
 import { foldForSearch } from "@/lib/search";
-import { testSmtpConnection, outboxStats, smtpMode } from "@/lib/mail";
+import { testSmtpConnection, outboxStats } from "@/lib/mail";
+import { configuredMailState } from "@/lib/mail-configuration";
+import { MailSenderError, validateMailSender } from "@/lib/mail-sender";
 
 export const dynamic = "force-dynamic";
 
@@ -297,7 +299,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
       case "settings": {
         const settings = await db.platformSetting.findUnique({ where: { id: "singleton" } });
-        return jsonOk({ settings: publicAdminSettings(settings) });
+        return jsonOk({ settings: { ...publicAdminSettings(settings), ...await configuredMailState() } });
       }
 
       // ── Email & DNS provisioning for docurama.eu (brand, mailboxes, zone) ──
@@ -338,32 +340,32 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         const secLast24h = await db.securityEvent.count({ where: { at: { gte: new Date(Date.now() - 86400000) } } });
         const failingHooks = await db.webhookEndpoint.count({ where: { status: "FAILING" } });
 
-        const [t0Db, storageProbe, mailStats] = await Promise.all([
+        const [databaseProbe, storageProbe, mailStats] = await Promise.all([
           (async () => {
             const t0 = Date.now();
-            await db.$queryRaw`SELECT 1`.catch(() => null);
-            return Date.now() - t0;
+            try { await db.$queryRaw`SELECT 1`; return { ok: true, latencyMs: Date.now() - t0 }; }
+            catch { return { ok: false, latencyMs: Date.now() - t0 }; }
           })(),
-          storageHealthProbe().catch(() => ({ ok: true, backend: "local" })),
+          storageHealthProbe().catch(() => ({ ok: false, backend: "unknown" })),
           outboxStats().catch(() => ({ queued: 0, failed: 0, oldestQueuedAt: null })),
         ]);
 
-        const mailConfigured = smtpMode().configured || Boolean(settings?.smtpPassword && settings.smtpHost !== "smtp.eu.mailprovider.io");
+        const mailState = await configuredMailState();
 
         return jsonOk({
           settings: {
-            ...publicAdminSettings(settings),
+            ...publicAdminSettings(settings), ...mailState,
             version: "0.3.0",
           },
           weekStats: isos(stats.reverse()),
           lastAudit: lastAudit ? iso(lastAudit) : null,
           secLast24h, failingHooks,
           services: [
-            { name: "API gateway", status: settings!.maintenanceMode ? "DEGRADED" : "HEALTHY", detail: settings!.maintenanceMode ? "Maintenance mode active" : `2 replicas · DB latency ${t0Db}ms` },
-            { name: "Signing pipeline", status: "HEALTHY", detail: `PAdES ${settings!.signingConformance} · queue depth ${settings!.queueDepth}` },
-            { name: "Timestamp authority", status: settings!.tsaReachable ? "HEALTHY" : "OUTAGE", detail: settings!.tsaUrl },
+            { name: "API gateway", status: !databaseProbe.ok || settings?.maintenanceMode ? "DEGRADED" : "HEALTHY", detail: !databaseProbe.ok ? "Database probe failed" : settings?.maintenanceMode ? "Maintenance mode active" : `Database probe succeeded in ${databaseProbe.latencyMs}ms` },
+            { name: "Signing runtime", status: "PENDING", detail: "Email-link typed signing. Embedded PDF signatures and trusted timestamps require implementation and qualification; production acceptance remains pending." },
+            { name: "Timestamp authority", status: "PENDING", detail: "Not used by this signing runtime. Stored provider settings are not timestamp acceptance evidence." },
             { name: "Document storage", status: storageProbe.ok ? "HEALTHY" : "DEGRADED", detail: `Backend: ${storageProbe.backend}` },
-            { name: "SMTP delivery", status: mailConfigured ? "HEALTHY" : "DEGRADED", detail: `${settings!.smtpHost}:${settings!.smtpPort} (${mailStats.queued} queued)` },
+            { name: "SMTP configuration", status: mailState.deliveryConfigured ? "HEALTHY" : "DEGRADED", detail: mailState.senderError ?? (mailState.transportConfigured ? `${mailState.transportSource}; From ${mailState.configuredFrom}; ${mailStats.queued} queued. Mailbox acceptance remains pending.` : "Outbox only: configure the operator-managed relay before delivery.") },
             { name: "Webhook dispatcher", status: failingHooks > 0 ? "DEGRADED" : "HEALTHY", detail: `${failingHooks} endpoint(s) failing` },
           ],
         });
@@ -1727,53 +1729,53 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       // ── Platform settings ──
       case "settings": {
         if (op === "save-smtp") {
+          const current = await db.platformSetting.findUnique({ where: { id: "singleton" } });
           const host = String(data.smtpHost ?? "").trim();
-          const from = String(data.smtpFrom ?? "").trim();
-          if (!host || !from) return jsonError("SMTP host and from-address are required");
-
-          const updateData: Record<string, unknown> = {
-            smtpHost: host,
-            smtpPort: Number(data.smtpPort ?? 587),
-            smtpUser: String(data.smtpUser ?? ""),
-            smtpFrom: from,
-            smtpTls: data.smtpTls === true,
-            updatedAt: new Date(),
-          };
-
-          if (data.smtpPassword !== undefined && data.smtpPassword !== "") {
-            updateData.smtpPassword = String(data.smtpPassword);
+          const port = Number(data.smtpPort ?? current?.smtpPort ?? 587);
+          if (data.smtpTls !== undefined && typeof data.smtpTls !== "boolean") return jsonError("SMTP TLS must be an explicit boolean", 422);
+          if (!host || /[\x00-\x20\x7f@/:]/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
+            return jsonError("A valid SMTP hostname and port are required", 422);
           }
-
-          await db.platformSetting.update({
-            where: { id: "singleton" },
-            data: updateData,
-          });
-
+          let from: string;
+          try { from = validateMailSender(data.smtpFrom).header; }
+          catch (error) { if (error instanceof MailSenderError) return jsonError(error.message, 422); throw error; }
+          const updateData: Record<string, unknown> = {
+            smtpHost: host, smtpPort: port, smtpFrom: from,
+            ...(data.smtpUser !== undefined ? { smtpUser: String(data.smtpUser ?? "") } : {}),
+            ...(data.smtpTls !== undefined ? { smtpTls: data.smtpTls } : {}), updatedAt: new Date(),
+          };
+          if (data.smtpPassword !== undefined && data.smtpPassword !== "") updateData.smtpPassword = String(data.smtpPassword);
+          await db.platformSetting.update({ where: { id: "singleton" }, data: updateData });
           await recordAudit({ actor, actorRole: "PLATFORM_ADMIN", action: "smtp_settings.updated", resource: "platform:settings", severity: "WARNING" });
-          return jsonOk({ ok: true, message: "SMTP settings saved" });
+          return jsonOk({ ok: true, ...await configuredMailState(), message: "SMTP settings saved; mailbox acceptance remains to be verified" });
         }
 
         if (op === "test-smtp") {
           const s = await db.platformSetting.findUnique({ where: { id: "singleton" } });
-          const host = String(data.smtpHost || s?.smtpHost || "").trim();
-          const port = Number(data.smtpPort || s?.smtpPort || 587);
-          const user = String(data.smtpUser || s?.smtpUser || "").trim();
+          const host = String(data.smtpHost ?? s?.smtpHost ?? "").trim();
+          const port = Number(data.smtpPort ?? s?.smtpPort ?? 587);
+          const user = String(data.smtpUser ?? s?.smtpUser ?? "").trim();
           const pass = String(data.smtpPassword || s?.smtpPassword || "");
-          const from = String(data.smtpFrom || s?.smtpFrom || "Docurama Sign <notifications@docurama.eu>");
-          const tls = data.smtpTls !== undefined ? Boolean(data.smtpTls) : (s?.smtpTls ?? true);
-          const to = data.to ? String(data.to).trim() : admin.email;
-
-          if (!host) return jsonError("SMTP host is required for testing");
-
+          if (data.smtpTls !== undefined && typeof data.smtpTls !== "boolean") return jsonError("SMTP TLS must be an explicit boolean", 422);
+          const tls = data.smtpTls !== undefined ? data.smtpTls : (s?.smtpTls ?? true);
+          let from: string, to: string;
+          try {
+            from = validateMailSender(data.smtpFrom ?? s?.smtpFrom).header;
+            to = validateMailSender(data.to ?? admin.email).address;
+          } catch (error) { if (error instanceof MailSenderError) return jsonError("A valid test sender and recipient mailbox are required", 422); throw error; }
+          if (!host || /[\x00-\x20\x7f@/:]/.test(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
+            return jsonError("A valid SMTP hostname and port are required", 422);
+          }
           const res = await testSmtpConnection({ host, port, user, pass, tls, from, to });
-
+          const message = res.ok ? "SMTP connection verified and test message accepted by the relay; verify the destination mailbox separately"
+            : "SMTP verification failed; review the operator-managed relay configuration";
           await recordAudit({
             actor, actorRole: "PLATFORM_ADMIN", action: res.ok ? "smtp.test_success" : "smtp.test_failed",
             resource: "platform:settings", severity: res.ok ? "INFO" : "WARNING",
-            detail: `${host}:${port} -> ${to}: ${res.message}`,
+            detail: res.ok ? "Relay accepted the explicitly requested SMTP test message" : "SMTP test failed; no mailbox acceptance confirmed",
           });
-
-          return jsonOk({ ok: res.ok, message: res.message, latencyMs: res.latencyMs });
+          if (!res.ok) return jsonError(message, 502);
+          return jsonOk({ ok: true, message, latencyMs: res.latencyMs });
         }
 
         if (op === "save-signing") {
