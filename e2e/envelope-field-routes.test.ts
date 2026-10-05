@@ -11,7 +11,11 @@ const recipients = [
 ];
 const field = { id: "field-1", type: "signature", pageNumber: 1, x: 10, y: 10, width: 25, height: 7, recipientIndex: 0, recipientEmail: "signer@example.test", required: true };
 const db = {
-  tenant: { findUnique: async () => ({ id: "tenant-one", status: "ACTIVE" }) },
+  tenant: { findUnique: async () => ({ id: "tenant-one", status: "ACTIVE", esignPrefs: null }) },
+  // Outbox-only fixture: the real resolver sees no tenant/platform identity.
+  notificationSettings: { findUnique: async () => null },
+  platformSetting: { findUnique: async () => null },
+  domain: { findFirst: async () => null },
   member: { findFirst: async () => ({ id: "member-one" }) },
   document: { findFirst: async () => ({ id: "doc-one", pageCount: 2, sha256: "original-checksum" }) },
   template: { findFirst: async () => null, update: async () => {} },
