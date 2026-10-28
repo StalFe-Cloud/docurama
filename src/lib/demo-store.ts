@@ -421,7 +421,9 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
         tsaReachable: false,
       },
       auditEvents: store.audit,
-      securityEvents: store.audit.filter((a) => a.severity !== "INFO"),
+      securityEvents: store.audit
+        .filter((a) => a.severity !== "INFO")
+        .map((a) => ({ id: a.id, at: a.at, type: a.action, severity: a.severity, actor: a.actor, ip: a.ip, blocked: a.severity === "CRITICAL", detail: a.detail })),
     };
   }
   if (path === "/api/admin/tenants") {
