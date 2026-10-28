@@ -1,14 +1,21 @@
-# Docurama port — roadmap
+# Docurama migration roadmap
 
-Full platform port from Next.js repo to this TanStack Start project. No Lovable Cloud (user decision) → client-side demo data layer instead of Prisma/APIs.
+Full platform port from the GitHub repo (Next.js 16 + Prisma) to this TanStack Start app.
+User decision: no Lovable Cloud / no backend — demo data lives in the browser (localStorage), fictional seeded data.
 
-- [ ] 1. Design tokens + brand assets + fonts (docurama palette into src/styles.css, public/brand)
-- [ ] 2. Copy shadcn UI kit (49 components) + lib/utils, plans, i18n
-- [ ] 3. Marketing site routes: /, /enterprise, /security, /privacy, /terms, /status, /developers, /marketing
-- [ ] 4. Demo data layer (localStorage): users, envelopes, documents, templates, audit events
-- [ ] 5. Auth screens: /login, /reset-password, /welcome (demo sign-in)
-- [ ] 6. User portal: /documents, /templates, /settings, /verify + shells
-- [ ] 7. Admin console: /admin (14 screens)
-- [ ] 8. Signer flow: /sign/$token, /invite/$token
-- [ ] 9. Blog/docs structure with representative content
-- [ ] 10. Verify build + routes end-to-end; handoff notes (data exports, Stripe/SMTP/SSO deferred)
+## Done
+- [x] 1. Copy UI/marketing/portal components, brand assets, i18n messages; install deps
+- [x] 2. Design system: Docurama emerald/mint tokens + fonts into styles.css and root
+- [x] 3. Compatibility shims: next/link, next/navigation, next/script, crypto; type-only auth/consent stubs
+- [x] 4. Demo data layer: src/lib/demo-store.ts + src/lib/client.ts; global /api fetch interceptor for raw fetches in ported components
+- [x] 5. Marketing routes: /, /marketing, /enterprise, /security, /privacy, /terms, /status, /developers, /modeles-de-contrats, /verify
+- [x] 6. Portal shell: /login, /documents, /templates, /settings, /welcome, /reset-password
+- [x] 7. Admin console: /admin (14 screens)
+- [x] 8. Signer flow: /sign/$token, /invite/$token
+- [x] 9. Blog/docs structure with representative content (source's 100k generated corpus not ported)
+- [x] 10. Verified in browser: home, login → portal, documents, templates, admin, settings, sign demo — no console errors
+
+## Deferred (needs a backend decision later)
+- [ ] Real persistence, auth, Stripe billing, SMTP email, SSO/SAML, S3 file storage, API keys, cron sweeps
+- [ ] Import real records (no data export was attached to the repo)
+- [ ] 100k generated blog articles (representative sample ported instead)
