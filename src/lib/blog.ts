@@ -1,5 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
+/**
+ * Browser-safe blog library (ported from the fs-backed Next.js module).
+ * The original 100k-post generated corpus is not portable; a curated set of
+ * representative articles is bundled here behind the same API surface.
+ */
 
 export interface BlogSummary {
   slug: string;
@@ -14,8 +17,7 @@ export interface BlogSummary {
   wordCount: number;
 }
 export interface BlogPost extends BlogSummary { content: string }
-const BLOG_DIR = path.join(process.cwd(), "content", "blog");
-const INDEX_FILE = path.join(BLOG_DIR, "index.json");
+
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const BLOG_PAGE_SIZE = 24;
 
@@ -27,104 +29,149 @@ export function validContentDate(value: string): boolean {
   const d = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
-export function parsePost(slug: string, raw: string): BlogPost | null {
-  if (!validBlogSlug(slug)) return null;
-  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-  if (!match) return null;
-  const meta: Record<string, string> = {};
-  try {
-    for (const line of match[1].split(/\r?\n/)) {
-      const kv = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
-      if (!kv) continue;
-      const v = kv[2].trim();
-      meta[kv[1]] = v.startsWith('"') ? JSON.parse(v) :
-        v.startsWith("'") && v.endsWith("'") ? v.slice(1, -1).replace(/''/g, "'") : v;
-    }
-  } catch { return null; }
-  if (!meta.title || !meta.description || !validContentDate(meta.date ?? "")) return null;
-  if (meta.updated && (!validContentDate(meta.updated) || meta.updated < meta.date)) return null;
-  const tags = (meta.tags ?? "").replace(/^\[|\]$/g, "").split(",")
-    .map((t) => t.trim().replace(/^['"]|['"]$/g, "")).filter((t) => SLUG.test(t));
-  const content = match[2].trim();
-  const wordCount = content ? content.split(/\s+/).length : 0;
+
+function post(slug: string, title: string, description: string, date: string, tags: string[], content: string): BlogPost {
+  const wordCount = content.split(/\s+/).length;
   return {
-    slug, title: meta.title, description: meta.description, date: meta.date,
-    updated: meta.updated || undefined, author: meta.author || "Docurama Team",
-    tags: [...new Set(tags)], draft: meta.draft !== "false", content, wordCount,
-    readingMinutes: Math.max(1, Math.ceil(wordCount / 210)),
+    slug, title, description, date, author: "Docurama Team", tags, draft: false,
+    content, wordCount, readingMinutes: Math.max(1, Math.ceil(wordCount / 210)),
   };
 }
+
+const POSTS: BlogPost[] = [
+  post(
+    "what-makes-an-electronic-signature-legally-valid",
+    "What makes an electronic signature legally valid?",
+    "Consent, intent, attribution and evidence: the four pillars behind an enforceable electronic signature under eIDAS and ESIGN.",
+    "2026-09-18",
+    ["eidas", "esign", "legal-basics"],
+    `An electronic signature is legally valid when four elements come together: the signer's consent to sign electronically, clear intent to sign, reliable attribution of the signature to a person, and a tamper-evident record of what was signed.
+
+Under eIDAS in the European Union, a simple electronic signature cannot be denied legal effect solely because it is electronic. The US ESIGN Act and UETA follow the same principle.
+
+## Consent and intent
+
+The signer must affirmatively agree to conduct the transaction electronically, and the act of signing must be deliberate. Docurama records both as separate, timestamped events.
+
+## Attribution and evidence
+
+Every completed envelope produces an evidence pack: SHA-256 digests of the final document, the consent text version, and an ordered event log. Anyone can verify the digests independently on the verify page.`,
+  ),
+  post(
+    "evidence-packs-explained",
+    "Evidence packs explained: digests, events and attestations",
+    "What goes into a Docurama evidence pack, how the digest chain works, and how to verify a completed document without an account.",
+    "2026-09-02",
+    ["evidence", "verification", "transparency"],
+    `When an envelope completes, Docurama assembles an evidence pack: the final PDF, a canonical JSON manifest of every signing event, and SHA-256 digests that tie them together.
+
+## The digest chain
+
+Each event (invitation sent, document viewed, consent given, signature affixed) is hashed in order. The final digest covers the document bytes and the event manifest, so any later change to either is detectable.
+
+## Independent verification
+
+The public verify page recomputes the digest of an uploaded PDF and compares it with the recorded attestation. No account is needed, and the check works even if you export the evidence pack and verify it years later.`,
+  ),
+  post(
+    "eidas-levels-ses-ades-qes",
+    "SES, AES, QES: choosing the right eIDAS signature level",
+    "A practical guide to the three eIDAS signature levels and when each one is sufficient for your contracts.",
+    "2026-08-21",
+    ["eidas", "compliance", "legal-basics"],
+    `eIDAS defines three signature levels: simple (SES), advanced (AES) and qualified (QES). Most commercial contracts need only SES; regulated or notarized workflows may require AES or QES.
+
+## Simple electronic signature
+
+A typed name or drawn mark, captured with consent and intent. Sufficient for most B2B and B2C agreements.
+
+## Advanced and qualified
+
+AES adds unique linkage to the signer and tamper detection. QES is created by a qualified device and carries a presumption of validity across the EU. Docurama's evidence records support SES workflows today and expose the digests needed to upgrade to AES with an external provider.`,
+  ),
+  post(
+    "gdpr-and-document-signing",
+    "GDPR and document signing: data minimization in practice",
+    "How to collect only the personal data a signature workflow actually needs, and where that data lives.",
+    "2026-08-05",
+    ["gdpr", "privacy", "compliance"],
+    `A signature workflow touches personal data at every step: names, email addresses, IP addresses and the document contents themselves. GDPR's data minimization principle means collecting only what the transaction needs.
+
+## What Docurama stores
+
+Signer name and email, the events required for the evidence record, and the document itself. Retention is configurable per workspace, and signers can request a copy or deletion of their data.
+
+## Data residency
+
+Hosting region and subprocessors determine residency. European workspaces keep documents and evidence records in EU regions.`,
+  ),
+  post(
+    "templates-that-scale",
+    "Contract templates that scale: variables, roles and reuse",
+    "Turn a one-off agreement into a reusable template with signer roles, variable fields and pre-filled content.",
+    "2026-07-22",
+    ["templates", "product", "workflow"],
+    `A good template turns a forty-minute document preparation into a two-minute send. The building blocks are roles, variables and fixed content.
+
+## Roles before people
+
+Define signer roles (client, counterparty, witness) instead of named people. When you send, you only fill in who plays each role.
+
+## Variables and fields
+
+Variable fields merge sender-supplied values into the document at send time; signer fields collect input during signing. Fixed content stays identical across every envelope, which keeps the evidence record comparable.`,
+  ),
+  post(
+    "21-cfr-part-11-signatures",
+    "21 CFR Part 11: electronic signatures in regulated industries",
+    "What FDA-regulated teams need from an e-signature workflow: reauthentication, manifestation and audit trails.",
+    "2026-07-08",
+    ["part-11", "compliance", "life-sciences"],
+    `Teams in life sciences face stricter rules than general commerce. 21 CFR Part 11 requires that electronic signatures be uniquely attributable, that signing manifests the signer's intent, and that a complete audit trail exists.
+
+## Reauthentication at signing time
+
+Part 11 workflows can require the signer to re-enter credentials at the moment of signing. Docurama workspaces can raise the verification floor per envelope.
+
+## Audit trail
+
+Every event is recorded with timestamps and actor identity, and the evidence pack exports the full trail for inspection.`,
+  ),
+];
+
 export function isPublished(post: BlogSummary, today = new Date().toISOString().slice(0, 10)): boolean {
   return !post.draft && validContentDate(post.date) && post.date <= today &&
     (!post.updated || (validContentDate(post.updated) && post.updated >= post.date && post.updated <= today));
 }
-/** Caches live on globalThis, not module scope: Next.js dev compiles each
- * route as its own module instance, so a module-level cache would hold one
- * parsed copy of the 54 MB index per route and OOM small hosts (14 routes
- * import this module; one shared copy keeps dev peak memory flat). Production
- * route bundles can also duplicate this module across chunks, so the sharing
- * is not dev-only. Same pattern as the Prisma client global. */
-type BlogCacheStore = {
-  cached?: { fingerprint: string; posts: BlogSummary[] };
-  publicCache?: { fingerprint: string; day: string; posts: BlogSummary[] };
-  taxonomyCache?: { posts: BlogSummary[]; tags: Map<string, BlogSummary[]>; cloud: { tag: string; count: number }[] };
-  topicCache?: { mtime: number; data: Record<string, BlogTopic> };
-};
-const blogCacheStore: BlogCacheStore = ((globalThis as typeof globalThis & { __docuramaBlogCache?: BlogCacheStore }).__docuramaBlogCache ??= {});
-/** Metadata only. The full corpus is never loaded to render a list or sitemap. */
+
+/** Metadata only, sorted newest first. */
 export function listBlogPosts(): BlogSummary[] {
-  if (!fs.existsSync(BLOG_DIR)) return [];
-  const hasIndex = fs.existsSync(INDEX_FILE);
-  const stat = fs.statSync(hasIndex ? INDEX_FILE : BLOG_DIR);
-  const fingerprint = `${hasIndex}:${stat.mtimeMs}:${stat.size}`;
-  if (!blogCacheStore.cached || blogCacheStore.cached.fingerprint !== fingerprint) {
-    let posts: BlogSummary[];
-    if (hasIndex) {
-      const index = JSON.parse(fs.readFileSync(INDEX_FILE, "utf8"));
-      if (index.version !== 1 || !Array.isArray(index.posts)) throw new Error("Invalid blog index; run content:index");
-      posts = index.posts;
-    } else {
-      // Development/backward compatibility. Production builds create index.json.
-      posts = fs.readdirSync(BLOG_DIR).filter((f) => f.endsWith(".md")).flatMap((f) => {
-        const parsed = parsePost(f.slice(0, -3), fs.readFileSync(path.join(BLOG_DIR, f), "utf8"));
-        if (!parsed) return [];
-        const { content: _content, ...summary } = parsed;
-        return [summary];
-      });
-    }
-    blogCacheStore.cached = { fingerprint, posts: posts.sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug)) };
-  }
-  const day = new Date().toISOString().slice(0, 10);
-  if (!blogCacheStore.publicCache || blogCacheStore.publicCache.fingerprint !== fingerprint || blogCacheStore.publicCache.day !== day) {
-    blogCacheStore.publicCache = { fingerprint, day, posts: blogCacheStore.cached.posts.filter((post) => isPublished(post, day)) };
-  }
-  return blogCacheStore.publicCache.posts;
+  return POSTS.filter((p) => isPublished(p))
+    .map(({ content: _content, ...summary }) => summary)
+    .sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));
 }
+
 export function getBlogPost(slug: string): BlogPost | null {
-  // Reject, rather than normalize, traversal/ambiguous slugs.
   if (!validBlogSlug(slug)) return null;
-  const file = path.join(BLOG_DIR, `${slug}.md`);
-  if (!fs.existsSync(file)) return null;
-  const post = parsePost(slug, fs.readFileSync(file, "utf8"));
-  return post && isPublished(post) ? post : null;
+  const found = POSTS.find((p) => p.slug === slug);
+  return found && isPublished(found) ? found : null;
 }
+
 function taxonomy() {
   const posts = listBlogPosts();
-  if (!blogCacheStore.taxonomyCache || blogCacheStore.taxonomyCache.posts !== posts) {
-    const tags = new Map<string, BlogSummary[]>();
-    for (const post of posts) for (const tag of post.tags) {
-      const items = tags.get(tag);
-      if (items) items.push(post); else tags.set(tag, [post]);
-    }
-    const cloud = [...tags].map(([tag, items]) => ({tag, count:items.length}))
-      .sort((a,b) => b.count-a.count || a.tag.localeCompare(b.tag));
-    blogCacheStore.taxonomyCache = {posts, tags, cloud};
+  const tags = new Map<string, BlogSummary[]>();
+  for (const p of posts) for (const tag of p.tags) {
+    const items = tags.get(tag);
+    if (items) items.push(p); else tags.set(tag, [p]);
   }
-  return blogCacheStore.taxonomyCache;
+  const cloud = [...tags].map(([tag, items]) => ({ tag, count: items.length }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  return { posts, tags, cloud };
 }
-/** Indexed metadata references only; callers must not mutate the returned arrays. */
+
 export function postsForBlogTag(tag: string): BlogSummary[] { return taxonomy().tags.get(tag) ?? []; }
 export function blogTagCloud(): { tag: string; count: number }[] { return taxonomy().cloud; }
+
 export function relatedBlogPosts(post: BlogSummary, limit = 4): BlogSummary[] {
   if (!Number.isSafeInteger(limit) || limit <= 0) return [];
   const tags = taxonomy().tags;
@@ -132,32 +179,28 @@ export function relatedBlogPosts(post: BlogSummary, limit = 4): BlogSummary[] {
   for (const tag of post.tags) for (const candidate of tags.get(tag) ?? []) {
     if (candidate.slug !== post.slug) scores.set(candidate, (scores.get(candidate) ?? 0) + 1);
   }
-  // Keep only the best requested results instead of allocating and sorting the full corpus.
-  const best: {post:BlogSummary;score:number}[] = [];
-  const compare = (a:{post:BlogSummary;score:number},b:{post:BlogSummary;score:number}) =>
-    b.score-a.score || b.post.date.localeCompare(a.post.date) || a.post.slug.localeCompare(b.post.slug);
-  for (const [candidate, score] of scores) {
-    const entry = {post:candidate, score};
-    if (best.length === limit && compare(entry,best[best.length-1]) >= 0) continue;
-    let at = best.findIndex((item) => compare(entry,item)<0);
-    if (at<0) at=best.length;
-    best.splice(at,0,entry);
-    if (best.length>limit) best.pop();
-  }
-  return best.map((entry)=>entry.post);
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0].date.localeCompare(a[0].date) || a[0].slug.localeCompare(b[0].slug))
+    .slice(0, limit)
+    .map(([p]) => p);
 }
+
 export function formatDate(iso: string): string {
   if (!validContentDate(iso)) return iso;
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric", timeZone:"UTC" });
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 export interface BlogTopic { title: string; description: string; kind: string }
+
+const TOPICS: Record<string, BlogTopic> = {
+  eidas: { title: "eIDAS", description: "European electronic signature regulation: levels, requirements and practical guidance.", kind: "regulation" },
+  esign: { title: "ESIGN Act", description: "US electronic signature law and what it means for your contracts.", kind: "regulation" },
+  evidence: { title: "Evidence records", description: "Digests, event logs and attestations that make a signed document verifiable.", kind: "product" },
+  compliance: { title: "Compliance", description: "GDPR, 21 CFR Part 11 and operational compliance for signing workflows.", kind: "topic" },
+  templates: { title: "Templates", description: "Reusable contract templates, roles and variable fields.", kind: "product" },
+};
+
 export function getBlogTopic(tag: string): BlogTopic {
-  const file = path.join(BLOG_DIR, "topics.json");
-  if (fs.existsSync(file)) {
-    const mtime = fs.statSync(file).mtimeMs;
-    if (!blogCacheStore.topicCache || blogCacheStore.topicCache.mtime !== mtime) blogCacheStore.topicCache = {mtime, data: JSON.parse(fs.readFileSync(file, "utf8"))};
-    if (blogCacheStore.topicCache.data[tag]) return blogCacheStore.topicCache.data[tag];
-  }
-  return {title: tag.replace(/-/g, " "), description: `Practical ${tag.replace(/-/g, " ")} guidance and related product documentation.`, kind: "topic"};
+  if (TOPICS[tag]) return TOPICS[tag];
+  return { title: tag.replace(/-/g, " "), description: `Practical ${tag.replace(/-/g, " ")} guidance and related product documentation.`, kind: "topic" };
 }
