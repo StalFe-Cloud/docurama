@@ -284,9 +284,13 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
 
   // ---- Auth ----
   if (path === "/api/auth/me") {
-    const token = window.localStorage.getItem("docurama_token");
-    if (!token) throw new DemoError("Not signed in", 401);
-    return { user: DEMO_USER };
+    let token: string | null = null;
+    try {
+      token = window.localStorage.getItem("docurama_token");
+    } catch {
+      token = null;
+    }
+    return { user: token ? DEMO_USER : null };
   }
   if (path === "/api/auth/login" && method === "POST") {
     const creds = (body ?? {}) as { email?: string; password?: string };
