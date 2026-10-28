@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { FileText, ArrowRight, Shield, Scale, Check, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -7,18 +6,14 @@ import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 
 
 export default function ModelesDeContratsPage() {
-  // Public marketing surface: a database hiccup (wrong DATABASE_URL, locked
-  // SQLite file, pending migration) must degrade to an empty state, never a
-  // 500 (finding F2 in docs/IMPROVEMENT-PLAN.md).
-  let templates: Awaited<ReturnType<typeof db.template.findMany>> = [];
-  try {
-    templates = await db.template.findMany({
-      where: { isBuiltIn: true },
-      orderBy: { name: "asc" },
-    });
-  } catch {
-    // Catalog temporarily unavailable — render the empty state below.
-  }
+  const templates = [
+    { id: "fr-001", name: "Contrat de prestation de services", category: "Services", pages: 8, description: "Prestation intellectuelle ou technique entre professionnels, avec clauses de confidentialite et de propriete intellectuelle.", sourceNotes: "Art. 1710 et 1779 du Code civil", publicSlug: "contrat-prestation-services", fields: '[{"type":"signature"},{"type":"date"}]' },
+    { id: "fr-002", name: "Contrat de travail CDI", category: "RH", pages: 12, description: "Contrat a duree indeterminee avec periode d'essai, remuneration et clause de confidentialite.", sourceNotes: "Code du travail, art. L.1221-1 et suivants", publicSlug: "contrat-travail-cdi", fields: '[{"type":"signature"},{"type":"signature"},{"type":"date"}]' },
+    { id: "fr-003", name: "Accord de confidentialite (NDA)", category: "Juridique", pages: 4, description: "Accord mutuel de non-divulgation pour echanges commerciaux et techniques sensibles.", sourceNotes: "Art. 1112-2 du Code civil", publicSlug: "nda-mutuel", fields: '[{"type":"signature"},{"type":"signature"}]' },
+    { id: "fr-004", name: "Bail commercial", category: "Immobilier", pages: 18, description: "Bail commercial 3/6/9 avec destination des lieux, loyer et charges.", sourceNotes: "Code de commerce, art. L.145-1 et suivants", publicSlug: "bail-commercial", fields: '[{"type":"signature"},{"type":"signature"},{"type":"date"}]' },
+    { id: "fr-005", name: "Contrat de sous-traitance RGPD", category: "Conformite", pages: 9, description: "Annexe de traitement de donnees personnelles entre responsable de traitement et sous-traitant.", sourceNotes: "RGPD, art. 28", publicSlug: "sous-traitance-rgpd", fields: '[{"type":"signature"},{"type":"signature"}]' },
+    { id: "fr-006", name: "Contrat de partenariat commercial", category: "Commercial", pages: 10, description: "Cadre de collaboration commerciale avec repartition des responsabilites et des revenus.", sourceNotes: "Art. 1103 et 1104 du Code civil", publicSlug: "partenariat-commercial", fields: '[{"type":"signature"},{"type":"signature"},{"type":"date"}]' },
+  ];
 
   return (
     <div className="min-h-screen bg-background text-foreground">

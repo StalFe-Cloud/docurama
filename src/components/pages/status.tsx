@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { db } from "@/lib/db";
 import { BrandLogo, BRAND_LEGAL_NAME } from "@/components/brand/logo";
 import { CheckCircle2, AlertTriangle, CircleDashed } from "lucide-react";
 
@@ -14,90 +13,25 @@ interface ServiceRow {
   detail: string;
 }
 
-async function loadStatus() {
-  const services: ServiceRow[] = [];
-  let dbOk = true;
-  let envelopeCount = 0;
-  let sealedCount = 0;
-  let queued = 0;
-  let tsaConfigured = false;
-
-  try {
-    envelopeCount = await db.envelope.count();
-    sealedCount = await db.envelope.count({ where: { status: "COMPLETED", sha256: { not: null } } });
-  } catch {
-    dbOk = false;
-  }
-
-  try {
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    queued = await db.mailOutbox.count({ where: { createdAt: { gte: dayAgo } } });
-  } catch {
-    /* outbox optional */
-  }
-
-  try {
-    const tsa = await db.tsaConfig.findFirst({ where: { enabled: true, lastTestStatus: "OK" } });
-    tsaConfigured = !!tsa;
-  } catch {
-    /* tsa optional */
-  }
-
-  services.push({
-    name: "Signing portal",
-    description: "Web application at app.docurama.eu",
-    state: dbOk ? "operational" : "degraded",
-    detail: dbOk ? `${envelopeCount} envelopes under management` : "Database unreachable from the status probe",
-  });
-  services.push({
-    name: "REST API",
-    description: "api.docurama.eu and /api/v1 endpoints",
-    state: dbOk ? "operational" : "degraded",
-    detail: "Served by the same origin as this page",
-  });
-  services.push({
-    name: "Verification service",
-    description: "Public portal at verify.docurama.eu",
-    state: dbOk && sealedCount > 0 ? "operational" : dbOk ? "info" : "degraded",
-    detail: dbOk ? `${sealedCount} sealed documents verifiable` : "Database unreachable",
-  });
-  services.push({
-    name: "Mail delivery",
-    description: "Transactional invitations and reminders",
-    state: "info",
-    detail: queued > 0 ? `${queued} messages queued in the last 24h` : "No messages queued in the last 24h",
-  });
-  services.push({
-    name: "Timestamp relay",
-    description: "RFC 3161 authority integration",
-    state: tsaConfigured ? "operational" : "info",
-    detail: tsaConfigured ? "Active TSA configured and tested" : "No active TSA configured",
-  });
-
-  let incidents: {
-    title: string; severity: string; status: string; detectedAt: Date; resolvedAt: Date | null;
-  }[] = [];
-  let stats: { date: string; envelopesCreated: number; envelopesSealed: number }[] = [];
-  if (dbOk) {
-    incidents = await db.incident.findMany({
-      orderBy: { detectedAt: "desc" },
-      take: 10,
-      select: { title: true, severity: true, status: true, detectedAt: true, resolvedAt: true },
-    });
-    stats = await db.dailyStat.findMany({
-      orderBy: { date: "desc" },
-      take: 14,
-      select: { date: true, envelopesCreated: true, envelopesSealed: true },
-    });
-    stats.reverse();
-  }
-
-  const overall: ServiceState = dbOk
-    ? services.some((s) => s.state === "degraded")
-      ? "degraded"
-      : "operational"
-    : "degraded";
-
+function loadStatus() {
+  // Demo build: static operational snapshot (the original probes the live database).
+  const day = 86400000;
+  const services: ServiceRow[] = [
+    { name: "Signing portal", description: "Web application at app.docurama.eu", state: "operational", detail: "6 envelopes under management" },
+    { name: "REST API", description: "api.docurama.eu and /api/v1 endpoints", state: "operational", detail: "Served by the same origin as this page" },
+    { name: "Verification service", description: "Public portal at verify.docurama.eu", state: "operational", detail: "2 sealed documents verifiable" },
+    { name: "Mail delivery", description: "Transactional invitations and reminders", state: "operational", detail: "3 messages delivered in the last 24h" },
+    { name: "Timestamp relay", description: "RFC 3161 authority integration", state: "info", detail: "No active TSA configured" },
+  ];
+  const overall: ServiceState = "operational";
+  const incidents = [
+    { title: "Elevated sign-in latency", severity: "MINOR", status: "RESOLVED", detectedAt: new Date(Date.now() - 23 * day), resolvedAt: new Date(Date.now() - 23 * day + 3600000) },
+  ];
+  const stats = Array.from({ length: 14 }, (_, i) => ({
+    date: new Date(Date.now() - (13 - i) * day).toISOString(),
+    envelopesCreated: (i * 7) % 5,
+    envelopesSealed: (i * 5) % 4,
+  }));
   return { services, overall, incidents, stats };
 }
 
@@ -114,7 +48,7 @@ function daysWithIncidents(incidents: { detectedAt: Date; resolvedAt: Date | nul
 }
 
 export default function StatusPage() {
-  const { services, overall, incidents, stats } = await loadStatus();
+  const { services, overall, incidents, stats } = loadStatus();
   const incidentDays = daysWithIncidents(incidents);
   const days: { date: string; hit: boolean }[] = [];
   for (let i = 59; i >= 0; i--) {
