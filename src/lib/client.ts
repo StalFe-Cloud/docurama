@@ -3,10 +3,14 @@
 /**
  * Portal API client.
  *
- * Fix for the original api.ts bug class: every response is checked with
- * `res.ok` BEFORE parsing, so failed mutations can never be reported as
- * successes and 404 lookups can never render as "unsigned document".
+ * Original platform: fetch against Next.js API routes. This port runs
+ * without a backend, so requests are answered by the client-side demo store
+ * (src/lib/demo-store.ts) behind the same function surface. Every response
+ * is checked BEFORE parsing, so failed mutations can never be reported as
+ * successes.
  */
+
+import { demoRequest, DemoError } from "@/lib/demo-store";
 
 export class ApiError extends Error {
   status: number;
@@ -24,7 +28,7 @@ export function setSessionToken(token: string) {
   try {
     window.localStorage.setItem(SESSION_TOKEN_STORE, token);
   } catch {
-    // Storage unavailable (private mode) - cookie flow still applies.
+    // Storage unavailable (private mode).
   }
 }
 
@@ -37,66 +41,29 @@ export function clearSessionToken() {
   }
 }
 
-/** `Authorization` header when a bearer token is stored, else `{}`. */
-function authHeaders(): Record<string, string> {
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   try {
-    const token = window.localStorage.getItem(SESSION_TOKEN_STORE);
-    return token ? { authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
+    return (await demoRequest(method, path, body)) as T;
+  } catch (err) {
+    if (err instanceof DemoError) throw new ApiError(err.message, err.status);
+    throw err;
   }
-}
-
-async function handle<T>(res: Response): Promise<T> {
-  let body: unknown = null;
-  try {
-    body = await res.json();
-  } catch {
-    // Non-JSON body (e.g. empty 500) - fall through to error handling.
-  }
-  if (!res.ok) {
-    const message =
-      body && typeof body === "object" && "error" in body && typeof (body as { error: unknown }).error === "string"
-        ? (body as { error: string }).error
-        : `Request failed (HTTP ${res.status})`;
-    throw new ApiError(message, res.status);
-  }
-  return body as T;
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: "same-origin", headers: authHeaders() });
-  return handle<T>(res);
+  return call<T>("GET", path);
 }
 
 export async function apiPost<T>(path: string, body: { op: string; id?: string; data?: Record<string, unknown> }): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
-    credentials: "same-origin",
-    body: JSON.stringify(body),
-  });
-  return handle<T>(res);
+  return call<T>("POST", path, body);
 }
 
 /** POST an arbitrary JSON body (non-settings routes: billing checkout, etc.). */
 export async function apiJsonPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders() },
-    credentials: "same-origin",
-    body: JSON.stringify(body),
-  });
-  return handle<T>(res);
+  return call<T>("POST", path, body);
 }
 
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { ...authHeaders() },
-    credentials: "same-origin",
-    body: formData,
-  });
-  return handle<T>(res);
+  const file = formData.get("file");
+  return call<T>("POST", path, { fileName: file instanceof File ? file.name : "document.pdf" });
 }
-
