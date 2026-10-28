@@ -71,7 +71,7 @@ type Store = {
   users: { id: string; email: string; firstName: string; lastName: string; role: string; tenantName: string; createdAt: string; lastSignInAt: string | null; status: string }[];
   tenants: { id: string; name: string; slug: string; planCode: string; createdAt: string; members: number; envelopes: number }[];
   domains: { id: string; domain: string; tenantName: string; verified: boolean; createdAt: string }[];
-  audit: { id: string; at: string; actor: string; action: string; target: string; severity: string; detail: string }[];
+  audit: { id: string; at: string; actor: string; actorRole: string; action: string; resource: string; target: string; tenantName: string | null; severity: string; ip: string; detail: string | null }[];
 };
 
 function daysAgo(n: number, hour = 10): string {
@@ -210,11 +210,11 @@ function seed(): Store {
       { id: "d-002", domain: "acme.example", tenantName: "Acme Industries", verified: false, createdAt: daysAgo(12) },
     ],
     audit: [
-      { id: "a-001", at: daysAgo(0, 8), actor: "sriram@docurama.eu", action: "SESSION_CREATED", target: "u-001", severity: "INFO", detail: "Sign-in from Paris, FR" },
-      { id: "a-002", at: daysAgo(1), actor: "sriram@docurama.eu", action: "ENVELOPE_CREATED", target: "env-006", severity: "INFO", detail: "DPA - Cloud hosting addendum" },
-      { id: "a-003", at: daysAgo(2), actor: "system", action: "REMINDER_SENT", target: "env-002", severity: "INFO", detail: "marc@lighthouse.example" },
-      { id: "a-004", at: daysAgo(5), actor: "unknown", action: "LOGIN_FAILED", target: "admin@docurama.eu", severity: "WARNING", detail: "3 failed attempts, throttled" },
-      { id: "a-005", at: daysAgo(12), actor: "claire@acme.example", action: "DOMAIN_ADDED", target: "acme.example", severity: "INFO", detail: "Verification pending" },
+      { id: "a-001", at: daysAgo(0, 8), actor: "sriram@docurama.eu", actorRole: "PLATFORM_ADMIN", action: "SESSION_CREATED", resource: "u-001", target: "u-001", tenantName: "Docurama Demo", severity: "INFO", ip: "90.12.44.201", detail: "Sign-in from Paris, FR" },
+      { id: "a-002", at: daysAgo(1), actor: "sriram@docurama.eu", actorRole: "PLATFORM_ADMIN", action: "ENVELOPE_CREATED", resource: "env-006", target: "env-006", tenantName: "Docurama Demo", severity: "INFO", ip: "90.12.44.201", detail: "DPA - Cloud hosting addendum" },
+      { id: "a-003", at: daysAgo(2), actor: "system", actorRole: "SYSTEM", action: "REMINDER_SENT", resource: "env-002", target: "env-002", tenantName: "Docurama Demo", severity: "INFO", ip: "", detail: "marc@lighthouse.example" },
+      { id: "a-004", at: daysAgo(5), actor: "unknown", actorRole: "ANONYMOUS", action: "LOGIN_FAILED", resource: "admin@docurama.eu", target: "admin@docurama.eu", tenantName: null, severity: "WARNING", ip: "203.0.113.88", detail: "3 failed attempts, throttled" },
+      { id: "a-005", at: daysAgo(12), actor: "claire@acme.example", actorRole: "USER", action: "DOMAIN_ADDED", resource: "acme.example", target: "acme.example", tenantName: "Acme Industries", severity: "INFO", ip: "82.66.10.14", detail: "Verification pending" },
     ],
   };
 }
