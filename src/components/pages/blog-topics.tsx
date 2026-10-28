@@ -2,7 +2,6 @@ import Link from "next/link";
 import { BlogLayout } from "@/components/blog/blog-layout";
 import { blogTagCloud, getBlogTopic } from "@/lib/blog";
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Browse document and workflow topics | Docurama",description:"Find practical guides by document type, workflow task or operating situation.",alternates:{canonical:"/blog/topics"},robots:{index:true,follow:true}};
 export default function Topics(){
  const topics=blogTagCloud().map((t)=>({...t,...getBlogTopic(t.tag)}));
  const groups=[["task","Workflow tasks"],["situation","Operating situations"],["document","Document types"],["category","Business areas"],["topic","More topics"]];

@@ -12,6 +12,36 @@
 
 import { demoRequest, DemoError } from "@/lib/demo-store";
 
+// Route every /api/* fetch through the demo store, including the raw
+// fetch() calls in ported components that bypass this client.
+if (typeof window !== "undefined" && !(window as unknown as { __docuramaDemoFetch?: boolean }).__docuramaDemoFetch) {
+  (window as unknown as { __docuramaDemoFetch?: boolean }).__docuramaDemoFetch = true;
+  const original = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const path = url.startsWith("http") ? new URL(url).pathname + new URL(url).search : url;
+    if (path.startsWith("/api/")) {
+      let body: unknown;
+      if (typeof init?.body === "string") {
+        try {
+          body = JSON.parse(init.body);
+        } catch {
+          body = undefined;
+        }
+      }
+      try {
+        const data = await demoRequest(init?.method ?? "GET", path, body);
+        return new Response(JSON.stringify(data), { status: 200, headers: { "content-type": "application/json" } });
+      } catch (err) {
+        const status = err instanceof DemoError ? err.status : 500;
+        const message = err instanceof Error ? err.message : "Request failed";
+        return new Response(JSON.stringify({ error: message }), { status, headers: { "content-type": "application/json" } });
+      }
+    }
+    return original(input, init);
+  };
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {

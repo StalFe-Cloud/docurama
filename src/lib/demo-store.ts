@@ -9,7 +9,7 @@
 
 import type { SessionUser } from "@/lib/auth";
 
-const STORE_KEY = "docurama_demo_v1";
+const STORE_KEY = "docurama_demo_v2";
 
 export class DemoError extends Error {
   status: number;
@@ -71,7 +71,7 @@ type Store = {
   users: { id: string; email: string; firstName: string; lastName: string; role: string; tenantName: string; createdAt: string; lastSignInAt: string | null; status: string }[];
   tenants: { id: string; name: string; slug: string; planCode: string; createdAt: string; members: number; envelopes: number }[];
   domains: { id: string; domain: string; tenantName: string; verified: boolean; createdAt: string }[];
-  audit: { id: string; at: string; actor: string; action: string; target: string; severity: string; detail: string }[];
+  audit: { id: string; at: string; actor: string; actorRole: string; action: string; resource: string; target: string; tenantName: string | null; severity: string; ip: string; detail: string | null }[];
 };
 
 function daysAgo(n: number, hour = 10): string {
@@ -210,11 +210,11 @@ function seed(): Store {
       { id: "d-002", domain: "acme.example", tenantName: "Acme Industries", verified: false, createdAt: daysAgo(12) },
     ],
     audit: [
-      { id: "a-001", at: daysAgo(0, 8), actor: "sriram@docurama.eu", action: "SESSION_CREATED", target: "u-001", severity: "INFO", detail: "Sign-in from Paris, FR" },
-      { id: "a-002", at: daysAgo(1), actor: "sriram@docurama.eu", action: "ENVELOPE_CREATED", target: "env-006", severity: "INFO", detail: "DPA - Cloud hosting addendum" },
-      { id: "a-003", at: daysAgo(2), actor: "system", action: "REMINDER_SENT", target: "env-002", severity: "INFO", detail: "marc@lighthouse.example" },
-      { id: "a-004", at: daysAgo(5), actor: "unknown", action: "LOGIN_FAILED", target: "admin@docurama.eu", severity: "WARNING", detail: "3 failed attempts, throttled" },
-      { id: "a-005", at: daysAgo(12), actor: "claire@acme.example", action: "DOMAIN_ADDED", target: "acme.example", severity: "INFO", detail: "Verification pending" },
+      { id: "a-001", at: daysAgo(0, 8), actor: "sriram@docurama.eu", actorRole: "PLATFORM_ADMIN", action: "SESSION_CREATED", resource: "u-001", target: "u-001", tenantName: "Docurama Demo", severity: "INFO", ip: "90.12.44.201", detail: "Sign-in from Paris, FR" },
+      { id: "a-002", at: daysAgo(1), actor: "sriram@docurama.eu", actorRole: "PLATFORM_ADMIN", action: "ENVELOPE_CREATED", resource: "env-006", target: "env-006", tenantName: "Docurama Demo", severity: "INFO", ip: "90.12.44.201", detail: "DPA - Cloud hosting addendum" },
+      { id: "a-003", at: daysAgo(2), actor: "system", actorRole: "SYSTEM", action: "REMINDER_SENT", resource: "env-002", target: "env-002", tenantName: "Docurama Demo", severity: "INFO", ip: "", detail: "marc@lighthouse.example" },
+      { id: "a-004", at: daysAgo(5), actor: "unknown", actorRole: "ANONYMOUS", action: "LOGIN_FAILED", resource: "admin@docurama.eu", target: "admin@docurama.eu", tenantName: null, severity: "WARNING", ip: "203.0.113.88", detail: "3 failed attempts, throttled" },
+      { id: "a-005", at: daysAgo(12), actor: "claire@acme.example", actorRole: "USER", action: "DOMAIN_ADDED", resource: "acme.example", target: "acme.example", tenantName: "Acme Industries", severity: "INFO", ip: "82.66.10.14", detail: "Verification pending" },
     ],
   };
 }
@@ -253,8 +253,8 @@ export const DEMO_USER: SessionUser = {
   workspaceRole: "OWNER",
   sessionId: "sess-demo-001",
   orgs: [
-    { tenantId: "t-001", tenantName: "Docurama Demo", tenantSlug: "demo", tenantPlan: "BUSINESS", workspaceRole: "OWNER" },
-    { tenantId: "t-002", tenantName: "Acme Industries", tenantSlug: "acme", tenantPlan: "STARTER", workspaceRole: "MEMBER" },
+    { id: "t-001", name: "Docurama Demo", slug: "demo", plan: "BUSINESS", role: "OWNER" },
+    { id: "t-002", name: "Acme Industries", slug: "acme", plan: "STARTER", role: "MEMBER" },
   ],
 };
 
@@ -284,9 +284,13 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
 
   // ---- Auth ----
   if (path === "/api/auth/me") {
-    const token = window.localStorage.getItem("docurama_token");
-    if (!token) throw new DemoError("Not signed in", 401);
-    return { user: DEMO_USER };
+    let token: string | null = null;
+    try {
+      token = window.localStorage.getItem("docurama_token");
+    } catch {
+      token = null;
+    }
+    return { user: token ? DEMO_USER : null };
   }
   if (path === "/api/auth/login" && method === "POST") {
     const creds = (body ?? {}) as { email?: string; password?: string };
@@ -363,8 +367,9 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
     };
   }
   if (path === "/api/workspace/sso") return { sso: null, providers: [] };
-  if (path === "/api/workspace/verify") {
-    const code = params.get("code") ?? "";
+  if (path === "/api/auth/sso/lookup") return { sso: null };
+  if (path === "/api/workspace/verify" || path.startsWith("/api/v1/verify/")) {
+    const code = params.get("code") ?? decodeURIComponent(path.split("/").pop() ?? "");
     const envelope = store.envelopes.find((e) => e.publicCode.toLowerCase() === code.toLowerCase() || e.sha256 === code);
     if (!envelope || !envelope.sha256) throw new DemoError("No attestation found for that code", 404);
     return {
@@ -391,9 +396,13 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
         tenants: store.tenants.length,
         users: store.users.length,
         envelopes: store.envelopes.length,
+        sealed: store.envelopes.filter((e) => e.status === "COMPLETED").length,
         mrr: 847,
         activeToday: 2,
         completionRate: 0.82,
+        dsarOpen: 1,
+        dmcaOpen: 0,
+        incidentsOpen: 0,
       },
       stats: Array.from({ length: 14 }, (_, i) => ({ date: daysAgo(13 - i).slice(0, 10), envelopes: (i * 7) % 5, signups: (i * 3) % 2 })),
       planDist: [
@@ -401,7 +410,20 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
         { planCode: "STARTER", _count: 1 },
         { planCode: "BUSINESS", _count: 1 },
       ],
-      health: { certExpiryAt: daysAgo(-180), dbOk: true, storageOk: true, mailOk: true },
+      health: {
+        certExpiryAt: daysAgo(-180),
+        dbOk: true,
+        storageOk: true,
+        mailOk: true,
+        queueDepth: 0,
+        signingConformance: "SES",
+        sweeperLastRunAt: daysAgo(0, 6),
+        tsaReachable: false,
+      },
+      auditEvents: store.audit,
+      securityEvents: store.audit
+        .filter((a) => a.severity !== "INFO")
+        .map((a) => ({ id: a.id, at: a.at, type: a.action, severity: a.severity, actor: a.actor, ip: a.ip, blocked: a.severity === "CRITICAL", detail: a.detail })),
     };
   }
   if (path === "/api/admin/tenants") {

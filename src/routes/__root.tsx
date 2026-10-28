@@ -9,6 +9,21 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { ThemeProvider } from "next-themes";
+import { Toaster } from "@/components/ui/sonner";
+import { I18nProvider } from "@/lib/i18n";
+
+// Handwriting signature fonts are bundled locally (no CDN) so that the
+// signature a signer sees is exactly the signature that gets affixed.
+import "@fontsource/geist/400.css";
+import "@fontsource/geist/500.css";
+import "@fontsource/geist/600.css";
+import "@fontsource/geist/700.css";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/caveat/400.css";
+import "@fontsource/caveat/600.css";
+import "@fontsource/dancing-script/500.css";
+import "@fontsource/great-vibes/400.css";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -78,21 +93,28 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Docurama: Enterprise Portal and Admin Console" },
+      {
+        name: "description",
+        content:
+          "Docurama platform console by Docurama SAS (Paris, France): document signing, cryptographic verification, tenant administration, compliance operations and trust analytics.",
+      },
+      { name: "author", content: "Docurama SAS" },
+      { property: "og:title", content: "Docurama: Sign, Seal, Verify" },
+      {
+        property: "og:description",
+        content:
+          "The enterprise portal for signed, sealed and verifiable documents. Docurama SAS, 1 Rue Marguerin, 75014 Paris, France.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/brand/docurama-mark.svg", type: "image/svg+xml" },
     ],
   }),
   shellComponent: RootShell,
@@ -103,7 +125,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -120,8 +142,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <I18nProvider>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+          <Toaster position="bottom-right" richColors closeButton />
+        </I18nProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
