@@ -253,8 +253,8 @@ export const DEMO_USER: SessionUser = {
   workspaceRole: "OWNER",
   sessionId: "sess-demo-001",
   orgs: [
-    { tenantId: "t-001", tenantName: "Docurama Demo", tenantSlug: "demo", tenantPlan: "BUSINESS", workspaceRole: "OWNER" },
-    { tenantId: "t-002", tenantName: "Acme Industries", tenantSlug: "acme", tenantPlan: "STARTER", workspaceRole: "MEMBER" },
+    { id: "t-001", name: "Docurama Demo", slug: "demo", plan: "BUSINESS", role: "OWNER" },
+    { id: "t-002", name: "Acme Industries", slug: "acme", plan: "STARTER", role: "MEMBER" },
   ],
 };
 

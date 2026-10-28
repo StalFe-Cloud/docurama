@@ -4,11 +4,11 @@
  */
 
 export type SessionOrg = {
-  tenantId: string;
-  tenantName: string;
-  tenantSlug: string;
-  tenantPlan: string;
-  workspaceRole: string;
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  role: string;
 };
 
 export type SessionUser = {
