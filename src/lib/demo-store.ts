@@ -9,7 +9,7 @@
 
 import type { SessionUser } from "@/lib/auth";
 
-const STORE_KEY = "docurama_demo_v1";
+const STORE_KEY = "docurama_demo_v2";
 
 export class DemoError extends Error {
   status: number;
