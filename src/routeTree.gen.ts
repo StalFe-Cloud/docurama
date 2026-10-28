@@ -10,33 +10,369 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as BlogRouteImport } from './routes/blog'
+import { Route as DevelopersRouteImport } from './routes/developers'
+import { Route as DocsRouteImport } from './routes/docs'
+import { Route as DocumentsRouteImport } from './routes/documents'
+import { Route as EnterpriseRouteImport } from './routes/enterprise'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MarketingRouteImport } from './routes/marketing'
+import { Route as ModelesDeContratsRouteImport } from './routes/modeles-de-contrats'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SecurityRouteImport } from './routes/security'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as StatusRouteImport } from './routes/status'
+import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as VerifyRouteImport } from './routes/verify'
+import { Route as WelcomeRouteImport } from './routes/welcome'
+import { Route as AdminSectionRouteImport } from './routes/admin.$section'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
+import { Route as BlogTopicsRouteImport } from './routes/blog.topics'
+import { Route as DocsSplatRouteImport } from './routes/docs.$'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as SettingsTabRouteImport } from './routes/settings.$tab'
+import { Route as SignTokenRouteImport } from './routes/sign.$token'
+import { Route as BlogTopicsTagRouteImport } from './routes/blog.topics.$tag'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogRoute = BlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopersRoute = DevelopersRouteImport.update({
+  id: '/developers',
+  path: '/developers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentsRoute = DocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EnterpriseRoute = EnterpriseRouteImport.update({
+  id: '/enterprise',
+  path: '/enterprise',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingRoute = MarketingRouteImport.update({
+  id: '/marketing',
+  path: '/marketing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelesDeContratsRoute = ModelesDeContratsRouteImport.update({
+  id: '/modeles-de-contrats',
+  path: '/modeles-de-contrats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyRoute = VerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSectionRoute = AdminSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => AdminRoute,
+} as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => BlogRoute,
+} as any)
+const BlogTopicsRoute = BlogTopicsRouteImport.update({
+  id: '/topics',
+  path: '/topics',
+  getParentRoute: () => BlogRoute,
+} as any)
+const DocsSplatRoute = DocsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => DocsRoute,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsTabRoute = SettingsTabRouteImport.update({
+  id: '/$tab',
+  path: '/$tab',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SignTokenRoute = SignTokenRouteImport.update({
+  id: '/sign/$token',
+  path: '/sign/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogTopicsTagRoute = BlogTopicsTagRouteImport.update({
+  id: '/$tag',
+  path: '/$tag',
+  getParentRoute: () => BlogTopicsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
+  '/developers': typeof DevelopersRoute
+  '/docs': typeof DocsRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/enterprise': typeof EnterpriseRoute
+  '/login': typeof LoginRoute
+  '/marketing': typeof MarketingRoute
+  '/modeles-de-contrats': typeof ModelesDeContratsRoute
+  '/privacy': typeof PrivacyRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/security': typeof SecurityRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/status': typeof StatusRoute
+  '/templates': typeof TemplatesRoute
+  '/terms': typeof TermsRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/admin/$section': typeof AdminSectionRoute
+  '/blog/$slug': typeof BlogSlugRoute
+  '/blog/topics': typeof BlogTopicsRouteWithChildren
+  '/docs/$': typeof DocsSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/settings/$tab': typeof SettingsTabRoute
+  '/sign/$token': typeof SignTokenRoute
+  '/blog/topics/$tag': typeof BlogTopicsTagRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
+  '/developers': typeof DevelopersRoute
+  '/docs': typeof DocsRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/enterprise': typeof EnterpriseRoute
+  '/login': typeof LoginRoute
+  '/marketing': typeof MarketingRoute
+  '/modeles-de-contrats': typeof ModelesDeContratsRoute
+  '/privacy': typeof PrivacyRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/security': typeof SecurityRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/status': typeof StatusRoute
+  '/templates': typeof TemplatesRoute
+  '/terms': typeof TermsRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/admin/$section': typeof AdminSectionRoute
+  '/blog/$slug': typeof BlogSlugRoute
+  '/blog/topics': typeof BlogTopicsRouteWithChildren
+  '/docs/$': typeof DocsSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/settings/$tab': typeof SettingsTabRoute
+  '/sign/$token': typeof SignTokenRoute
+  '/blog/topics/$tag': typeof BlogTopicsTagRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
+  '/developers': typeof DevelopersRoute
+  '/docs': typeof DocsRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/enterprise': typeof EnterpriseRoute
+  '/login': typeof LoginRoute
+  '/marketing': typeof MarketingRoute
+  '/modeles-de-contrats': typeof ModelesDeContratsRoute
+  '/privacy': typeof PrivacyRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/security': typeof SecurityRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/status': typeof StatusRoute
+  '/templates': typeof TemplatesRoute
+  '/terms': typeof TermsRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/admin/$section': typeof AdminSectionRoute
+  '/blog/$slug': typeof BlogSlugRoute
+  '/blog/topics': typeof BlogTopicsRouteWithChildren
+  '/docs/$': typeof DocsSplatRoute
+  '/invite/$token': typeof InviteTokenRoute
+  '/settings/$tab': typeof SettingsTabRoute
+  '/sign/$token': typeof SignTokenRoute
+  '/blog/topics/$tag': typeof BlogTopicsTagRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/blog'
+    | '/developers'
+    | '/docs'
+    | '/documents'
+    | '/enterprise'
+    | '/login'
+    | '/marketing'
+    | '/modeles-de-contrats'
+    | '/privacy'
+    | '/reset-password'
+    | '/security'
+    | '/settings'
+    | '/status'
+    | '/templates'
+    | '/terms'
+    | '/verify'
+    | '/welcome'
+    | '/admin/$section'
+    | '/blog/$slug'
+    | '/blog/topics'
+    | '/docs/$'
+    | '/invite/$token'
+    | '/settings/$tab'
+    | '/sign/$token'
+    | '/blog/topics/$tag'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/admin'
+    | '/blog'
+    | '/developers'
+    | '/docs'
+    | '/documents'
+    | '/enterprise'
+    | '/login'
+    | '/marketing'
+    | '/modeles-de-contrats'
+    | '/privacy'
+    | '/reset-password'
+    | '/security'
+    | '/settings'
+    | '/status'
+    | '/templates'
+    | '/terms'
+    | '/verify'
+    | '/welcome'
+    | '/admin/$section'
+    | '/blog/$slug'
+    | '/blog/topics'
+    | '/docs/$'
+    | '/invite/$token'
+    | '/settings/$tab'
+    | '/sign/$token'
+    | '/blog/topics/$tag'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/blog'
+    | '/developers'
+    | '/docs'
+    | '/documents'
+    | '/enterprise'
+    | '/login'
+    | '/marketing'
+    | '/modeles-de-contrats'
+    | '/privacy'
+    | '/reset-password'
+    | '/security'
+    | '/settings'
+    | '/status'
+    | '/templates'
+    | '/terms'
+    | '/verify'
+    | '/welcome'
+    | '/admin/$section'
+    | '/blog/$slug'
+    | '/blog/topics'
+    | '/docs/$'
+    | '/invite/$token'
+    | '/settings/$tab'
+    | '/sign/$token'
+    | '/blog/topics/$tag'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
+  BlogRoute: typeof BlogRouteWithChildren
+  DevelopersRoute: typeof DevelopersRoute
+  DocsRoute: typeof DocsRouteWithChildren
+  DocumentsRoute: typeof DocumentsRoute
+  EnterpriseRoute: typeof EnterpriseRoute
+  LoginRoute: typeof LoginRoute
+  MarketingRoute: typeof MarketingRoute
+  ModelesDeContratsRoute: typeof ModelesDeContratsRoute
+  PrivacyRoute: typeof PrivacyRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  SecurityRoute: typeof SecurityRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
+  StatusRoute: typeof StatusRoute
+  TemplatesRoute: typeof TemplatesRoute
+  TermsRoute: typeof TermsRoute
+  VerifyRoute: typeof VerifyRoute
+  WelcomeRoute: typeof WelcomeRoute
+  InviteTokenRoute: typeof InviteTokenRoute
+  SignTokenRoute: typeof SignTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +384,269 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog': {
+      id: '/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof BlogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/developers': {
+      id: '/developers'
+      path: '/developers'
+      fullPath: '/developers'
+      preLoaderRoute: typeof DevelopersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documents': {
+      id: '/documents'
+      path: '/documents'
+      fullPath: '/documents'
+      preLoaderRoute: typeof DocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/enterprise': {
+      id: '/enterprise'
+      path: '/enterprise'
+      fullPath: '/enterprise'
+      preLoaderRoute: typeof EnterpriseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing': {
+      id: '/marketing'
+      path: '/marketing'
+      fullPath: '/marketing'
+      preLoaderRoute: typeof MarketingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modeles-de-contrats': {
+      id: '/modeles-de-contrats'
+      path: '/modeles-de-contrats'
+      fullPath: '/modeles-de-contrats'
+      preLoaderRoute: typeof ModelesDeContratsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify': {
+      id: '/verify'
+      path: '/verify'
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/$section': {
+      id: '/admin/$section'
+      path: '/$section'
+      fullPath: '/admin/$section'
+      preLoaderRoute: typeof AdminSectionRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof BlogRoute
+    }
+    '/blog/topics': {
+      id: '/blog/topics'
+      path: '/topics'
+      fullPath: '/blog/topics'
+      preLoaderRoute: typeof BlogTopicsRouteImport
+      parentRoute: typeof BlogRoute
+    }
+    '/docs/$': {
+      id: '/docs/$'
+      path: '/$'
+      fullPath: '/docs/$'
+      preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/$tab': {
+      id: '/settings/$tab'
+      path: '/$tab'
+      fullPath: '/settings/$tab'
+      preLoaderRoute: typeof SettingsTabRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/sign/$token': {
+      id: '/sign/$token'
+      path: '/sign/$token'
+      fullPath: '/sign/$token'
+      preLoaderRoute: typeof SignTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/topics/$tag': {
+      id: '/blog/topics/$tag'
+      path: '/$tag'
+      fullPath: '/blog/topics/$tag'
+      preLoaderRoute: typeof BlogTopicsTagRouteImport
+      parentRoute: typeof BlogTopicsRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminSectionRoute: typeof AdminSectionRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminSectionRoute: AdminSectionRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface BlogTopicsRouteChildren {
+  BlogTopicsTagRoute: typeof BlogTopicsTagRoute
+}
+
+const BlogTopicsRouteChildren: BlogTopicsRouteChildren = {
+  BlogTopicsTagRoute: BlogTopicsTagRoute,
+}
+
+const BlogTopicsRouteWithChildren = BlogTopicsRoute._addFileChildren(
+  BlogTopicsRouteChildren,
+)
+
+interface BlogRouteChildren {
+  BlogSlugRoute: typeof BlogSlugRoute
+  BlogTopicsRoute: typeof BlogTopicsRouteWithChildren
+}
+
+const BlogRouteChildren: BlogRouteChildren = {
+  BlogSlugRoute: BlogSlugRoute,
+  BlogTopicsRoute: BlogTopicsRouteWithChildren,
+}
+
+const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
+
+interface DocsRouteChildren {
+  DocsSplatRoute: typeof DocsSplatRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsSplatRoute: DocsSplatRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
+interface SettingsRouteChildren {
+  SettingsTabRoute: typeof SettingsTabRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsTabRoute: SettingsTabRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
+  BlogRoute: BlogRouteWithChildren,
+  DevelopersRoute: DevelopersRoute,
+  DocsRoute: DocsRouteWithChildren,
+  DocumentsRoute: DocumentsRoute,
+  EnterpriseRoute: EnterpriseRoute,
+  LoginRoute: LoginRoute,
+  MarketingRoute: MarketingRoute,
+  ModelesDeContratsRoute: ModelesDeContratsRoute,
+  PrivacyRoute: PrivacyRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  SecurityRoute: SecurityRoute,
+  SettingsRoute: SettingsRouteWithChildren,
+  StatusRoute: StatusRoute,
+  TemplatesRoute: TemplatesRoute,
+  TermsRoute: TermsRoute,
+  VerifyRoute: VerifyRoute,
+  WelcomeRoute: WelcomeRoute,
+  InviteTokenRoute: InviteTokenRoute,
+  SignTokenRoute: SignTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

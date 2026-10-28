@@ -12,4 +12,15 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    resolve: {
+      alias: {
+        // Compatibility shims for code ported from the Next.js source app.
+        "next/link": "/src/lib/compat/next-link.tsx",
+        "next/navigation": "/src/lib/compat/next-navigation.ts",
+        "next/script": "/src/lib/compat/next-script.tsx",
+        crypto: "/src/lib/compat/crypto.ts",
+      },
+    },
+  },
 });
