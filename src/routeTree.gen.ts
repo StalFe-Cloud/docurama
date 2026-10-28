@@ -10,33 +10,152 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as DocumentsRouteImport } from './routes/documents'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MarketingRouteImport } from './routes/marketing'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as VerifyRouteImport } from './routes/verify'
+import { Route as AdminSectionRouteImport } from './routes/admin.$section'
+import { Route as SettingsTabRouteImport } from './routes/settings.$tab'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocumentsRoute = DocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketingRoute = MarketingRouteImport.update({
+  id: '/marketing',
+  path: '/marketing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyRoute = VerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSectionRoute = AdminSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => AdminRoute,
+} as any)
+const SettingsTabRoute = SettingsTabRouteImport.update({
+  id: '/$tab',
+  path: '/$tab',
+  getParentRoute: () => SettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/login': typeof LoginRoute
+  '/marketing': typeof MarketingRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/templates': typeof TemplatesRoute
+  '/verify': typeof VerifyRoute
+  '/admin/$section': typeof AdminSectionRoute
+  '/settings/$tab': typeof SettingsTabRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/login': typeof LoginRoute
+  '/marketing': typeof MarketingRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/templates': typeof TemplatesRoute
+  '/verify': typeof VerifyRoute
+  '/admin/$section': typeof AdminSectionRoute
+  '/settings/$tab': typeof SettingsTabRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/login': typeof LoginRoute
+  '/marketing': typeof MarketingRoute
+  '/settings': typeof SettingsRouteWithChildren
+  '/templates': typeof TemplatesRoute
+  '/verify': typeof VerifyRoute
+  '/admin/$section': typeof AdminSectionRoute
+  '/settings/$tab': typeof SettingsTabRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/documents'
+    | '/login'
+    | '/marketing'
+    | '/settings'
+    | '/templates'
+    | '/verify'
+    | '/admin/$section'
+    | '/settings/$tab'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/admin'
+    | '/documents'
+    | '/login'
+    | '/marketing'
+    | '/settings'
+    | '/templates'
+    | '/verify'
+    | '/admin/$section'
+    | '/settings/$tab'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/documents'
+    | '/login'
+    | '/marketing'
+    | '/settings'
+    | '/templates'
+    | '/verify'
+    | '/admin/$section'
+    | '/settings/$tab'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
+  DocumentsRoute: typeof DocumentsRoute
+  LoginRoute: typeof LoginRoute
+  MarketingRoute: typeof MarketingRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
+  TemplatesRoute: typeof TemplatesRoute
+  VerifyRoute: typeof VerifyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +167,103 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documents': {
+      id: '/documents'
+      path: '/documents'
+      fullPath: '/documents'
+      preLoaderRoute: typeof DocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketing': {
+      id: '/marketing'
+      path: '/marketing'
+      fullPath: '/marketing'
+      preLoaderRoute: typeof MarketingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify': {
+      id: '/verify'
+      path: '/verify'
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/$section': {
+      id: '/admin/$section'
+      path: '/$section'
+      fullPath: '/admin/$section'
+      preLoaderRoute: typeof AdminSectionRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/settings/$tab': {
+      id: '/settings/$tab'
+      path: '/$tab'
+      fullPath: '/settings/$tab'
+      preLoaderRoute: typeof SettingsTabRouteImport
+      parentRoute: typeof SettingsRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminSectionRoute: typeof AdminSectionRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminSectionRoute: AdminSectionRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface SettingsRouteChildren {
+  SettingsTabRoute: typeof SettingsTabRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsTabRoute: SettingsTabRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
+  DocumentsRoute: DocumentsRoute,
+  LoginRoute: LoginRoute,
+  MarketingRoute: MarketingRoute,
+  SettingsRoute: SettingsRouteWithChildren,
+  TemplatesRoute: TemplatesRoute,
+  VerifyRoute: VerifyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
