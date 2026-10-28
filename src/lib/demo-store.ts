@@ -522,7 +522,7 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
     const severity = params.get("severity") ?? "ALL";
     let rows = store.audit;
     if (severity !== "ALL") rows = rows.filter((a) => a.severity === severity);
-    if (q) rows = rows.filter((a) => matches(a.action, q) || matches(a.actor ?? "", q) || matches(a.detail, q));
+    if (q) rows = rows.filter((a) => matches(a.action, q) || matches(a.actor ?? "", q) || matches(a.detail ?? "", q));
     return {
       ...paged(rows, page, perPage),
       events: rows,
