@@ -396,9 +396,13 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
         tenants: store.tenants.length,
         users: store.users.length,
         envelopes: store.envelopes.length,
+        sealed: store.envelopes.filter((e) => e.status === "COMPLETED").length,
         mrr: 847,
         activeToday: 2,
         completionRate: 0.82,
+        dsarOpen: 1,
+        dmcaOpen: 0,
+        incidentsOpen: 0,
       },
       stats: Array.from({ length: 14 }, (_, i) => ({ date: daysAgo(13 - i).slice(0, 10), envelopes: (i * 7) % 5, signups: (i * 3) % 2 })),
       planDist: [
@@ -406,7 +410,18 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
         { planCode: "STARTER", _count: 1 },
         { planCode: "BUSINESS", _count: 1 },
       ],
-      health: { certExpiryAt: daysAgo(-180), dbOk: true, storageOk: true, mailOk: true },
+      health: {
+        certExpiryAt: daysAgo(-180),
+        dbOk: true,
+        storageOk: true,
+        mailOk: true,
+        queueDepth: 0,
+        signingConformance: "SES",
+        sweeperLastRunAt: daysAgo(0, 6),
+        tsaReachable: false,
+      },
+      auditEvents: store.audit,
+      securityEvents: store.audit.filter((a) => a.severity !== "INFO"),
     };
   }
   if (path === "/api/admin/tenants") {
