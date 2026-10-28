@@ -30,7 +30,11 @@
     "exactOptionalPropertyTypes": true,
     "noUncheckedSideEffectImports": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "next/link": ["./src/lib/compat/next-link.tsx"],
+      "next/navigation": ["./src/lib/compat/next-navigation.ts"],
+      "next/script": ["./src/lib/compat/next-script.tsx"],
+      "crypto": ["./src/lib/compat/crypto.ts"]
     }
   }
 }
