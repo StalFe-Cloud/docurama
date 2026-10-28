@@ -367,8 +367,9 @@ export async function demoRequest(method: string, rawPath: string, body?: unknow
     };
   }
   if (path === "/api/workspace/sso") return { sso: null, providers: [] };
-  if (path === "/api/workspace/verify") {
-    const code = params.get("code") ?? "";
+  if (path === "/api/auth/sso/lookup") return { sso: null };
+  if (path === "/api/workspace/verify" || path.startsWith("/api/v1/verify/")) {
+    const code = params.get("code") ?? decodeURIComponent(path.split("/").pop() ?? "");
     const envelope = store.envelopes.find((e) => e.publicCode.toLowerCase() === code.toLowerCase() || e.sha256 === code);
     if (!envelope || !envelope.sha256) throw new DemoError("No attestation found for that code", 404);
     return {
