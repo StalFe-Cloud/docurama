@@ -16,7 +16,7 @@ type Props = {
 };
 
 
-export default function DocArticlePage({ slug }: { slug: string[] })
+export default function DocArticlePage({ slug }: { slug: string[] }) {
     const doc = getDocArticle(slug);
   if (!doc) notFound();
 

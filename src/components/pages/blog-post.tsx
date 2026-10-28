@@ -5,7 +5,7 @@ import { articleSchema, safeJsonLd, BLOG_AUTHOR, AUTHOR_PATH, SITE_URL } from "@
 import { MarkdownBody } from "@/components/docs/markdown-body";
 import { BlogLayout } from "@/components/blog/blog-layout";
 type Props = { params: Promise<{ slug: string }> };
-export default function BlogPostPage({ slug }: { slug: string })
+export default function BlogPostPage({ slug }: { slug: string }) {
   const {slug}=await params;
   const post=getBlogPost(slug);
   if(!post) notFound();
