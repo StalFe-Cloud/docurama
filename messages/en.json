@@ -1,0 +1,91 @@
+{
+  "brand": {
+    "name": "Docurama",
+    "tagline": "Sign, Seal, Verify",
+    "legalName": "Docurama SAS",
+    "address": "1 Rue Marguerin, 75014 Paris, France",
+    "euDataResidency": "Confirm data location for the selected deployment."
+  },
+  "nav": {
+    "product": "Product",
+    "examples": "Examples",
+    "compliance": "Assurance",
+    "pricing": "Pricing",
+    "developers": "Developers",
+    "faq": "FAQ",
+    "templates": "Contract Templates",
+    "docs": "Documentation",
+    "status": "Status",
+    "security": "Security",
+    "signIn": "Sign in",
+    "startTrial": "Start free trial",
+    "verifyDocument": "Verify a document"
+  },
+  "hero": {
+    "title": "Send contracts, capture consent, review the completed record",
+    "subtitle": "Email-link signing with frozen contract terms, typed-name adoption and completion evidence built for review.",
+    "startFree": "Start free trial",
+    "verifyDoc": "Verify a document",
+    "caption": "An illustrative workspace shows a mill certificate sent for signing, adopted by name and completed with an evidence record. Synthetic values demonstrate the flow."
+  },
+  "trust": {
+    "summary": "Email-link signing, captured consent and private completion records. Hosting, delivery and assurance scope require acceptance for the selected installation."
+  },
+  "features": {
+    "bentoTitle": "Completed documents and recorded signing evidence",
+    "bentoSubtitle": "Frozen terms, recipient-bound values and captured consent accompany a completed PDF and a separate completion record.",
+    "sendAndSign": "Send and eSign",
+    "sendAndSignDesc": "Multi-signer envelopes with routing order, carbon copies and reminders. Signers never need an account.",
+    "certsAndSealing": "Completed documents and evidence",
+    "certsAndSealingDesc": "Download a completed document and a separate completion record containing captured signer values and frozen terms.",
+    "timestamps": "Recorded signing times",
+    "timestampsDesc": "Signing events and completion evidence record application times. Independent trusted timestamping is outside this release."
+  },
+  "pricing": {
+    "title": "Predictable pricing with no envelope surprise bills",
+    "subtitle": "Choose a plan for your team size and sending volume; confirm provider integrations and assurance scope before launch.",
+    "solo": "Solo",
+    "starter": "Starter",
+    "smart": "Smart Team",
+    "business": "Business",
+    "enterprise": "Enterprise",
+    "soloBlurb": "One seat and 30 envelopes per month.",
+    "starterBlurb": "Three seats and 100 envelopes per month.",
+    "smartBlurb": "For teams signing at volume with their own domain and API.",
+    "businessBlurb": "For departments and multi-team operations at scale.",
+    "enterpriseBlurb": "Discuss deployment and assurance requirements.",
+    "perMonth": "/mo",
+    "monthlyNoEngagement": "Monthly — no engagement, cancel anytime",
+    "termDiscount": "−{pct}% for a {months}-month term",
+    "rollover": "Unused envelopes roll over on renewal",
+    "startTrial": "Start 14-day trial",
+    "contactSales": "Contact enterprise sales"
+  },
+  "compliance": {
+    "title": "Review the supported signing scope",
+    "subtitle": "Data location and integration acceptance depend on the approved installation. Stronger signing services and regulated-use qualification are separate requirements.",
+    "eidas": "Signing assurance",
+    "gdpr": "Privacy controls",
+    "part11": "Regulated-use review",
+    "legalHub": "Compliance & Legal Hub",
+    "frenchTemplates": "French Legal Templates"
+  },
+  "common": {
+    "language": "Language",
+    "english": "English",
+    "french": "Français",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "search": "Search",
+    "sendForSignature": "Send for signature",
+    "uploadPdf": "Upload PDF document",
+    "download": "Download",
+    "status": "Status",
+    "completed": "Completed",
+    "draft": "Draft",
+    "sent": "Sent",
+    "partiallySigned": "Partially signed"
+  }
+}
