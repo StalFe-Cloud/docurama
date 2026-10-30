@@ -2,21 +2,117 @@
   "source": "github:StalFe-Cloud/docurama (Next.js 16 + Prisma + next-auth)",
   "target": "TanStack Start (Lovable), no Lovable Cloud per user decision",
   "capabilities": [
-    { "capability": "Marketing site (/, /enterprise, /security, /privacy, /terms, /status, /developers)", "source": "src/app + src/components/marketing", "outcome": "port", "status": "in_progress", "next_action": "Port components to TanStack routes" },
-    { "capability": "Brand assets & design tokens", "source": "public/brand, src/app/globals.css", "outcome": "port", "status": "in_progress", "next_action": "Copy assets, merge tokens into src/styles.css" },
-    { "capability": "shadcn UI kit (49 components)", "source": "src/components/ui", "outcome": "port", "status": "in_progress", "next_action": "Copy as-is" },
-    { "capability": "User portal (documents, templates, settings, verify)", "source": "src/components/portal/user", "outcome": "port", "status": "pending", "next_action": "Adapt /api fetch calls to client-side demo data layer (no backend)" },
-    { "capability": "Admin console (14 screens)", "source": "src/components/portal/admin", "outcome": "port", "status": "pending", "next_action": "Adapt to demo data layer" },
-    { "capability": "Sign-in / auth", "source": "next-auth + Prisma", "outcome": "replace", "status": "pending", "next_action": "Demo sign-in (localStorage); user declined Lovable Cloud" },
-    { "capability": "Signer portal (/sign/[token], /invite/[token])", "source": "src/app/sign, src/app/invite", "outcome": "port", "status": "pending", "next_action": "Demo-token driven signing flow" },
-    { "capability": "Blog & docs content", "source": "content/ (1.1GB generated), src/components/blog,docs", "outcome": "partial", "status": "pending", "next_action": "Port structure with representative articles; 100k generated posts not portable" },
-    { "capability": "Database (Prisma, ~30 tables)", "source": "prisma/schema.prisma", "outcome": "replace", "status": "pending", "next_action": "Client-side demo store; user declined Lovable Cloud" },
-    { "capability": "Stripe billing", "source": "src/lib/payments.ts, /api/billing", "outcome": "defer", "status": "blocked", "next_action": "Needs backend + Stripe keys; show plan catalog UI only" },
-    { "capability": "Email (SMTP outbox)", "source": "src/lib/mail*.ts", "outcome": "defer", "status": "blocked", "next_action": "Needs backend; simulate in demo layer" },
-    { "capability": "SSO/SAML/OIDC", "source": "src/lib/sso.ts", "outcome": "defer", "status": "blocked", "next_action": "Needs backend" },
-    { "capability": "S3 document storage", "source": "src/lib/object-store.ts", "outcome": "replace", "status": "pending", "next_action": "In-browser storage for demo uploads" },
-    { "capability": "Transparency log / evidence (Rekor-style)", "source": "src/lib/transparency.ts, rekor.ts", "outcome": "port-ui", "status": "pending", "next_action": "Port verify UI with demo digests" },
-    { "capability": "i18n (en/fr)", "source": "messages/, src/lib/i18n.tsx", "outcome": "port", "status": "pending", "next_action": "Copy provider + message files" },
-    { "capability": "Record exports / existing users", "source": "none in repo", "outcome": "pending", "status": "blocked", "next_action": "Request Postgres exports (CSV/JSON) after preview" }
+    {
+      "capability": "Marketing site (/, /enterprise, /security, /privacy, /terms, /status, /developers)",
+      "source": "src/app + src/components/marketing",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "Routes live; status page uses static demo data"
+    },
+    {
+      "capability": "Brand assets & design tokens",
+      "source": "public/brand, src/app/globals.css",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "Docurama emerald/mint tokens + fonts merged into styles.css and root"
+    },
+    {
+      "capability": "shadcn UI kit (49 components)",
+      "source": "src/components/ui",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "Copied; unused toaster/toast/resizable removed after build errors"
+    },
+    {
+      "capability": "User portal (documents, templates, settings, verify)",
+      "source": "src/components/portal/user",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "Demo-backed via localStorage store"
+    },
+    {
+      "capability": "Admin console (14 screens)",
+      "source": "src/components/portal/admin",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "Demo-backed via localStorage store"
+    },
+    {
+      "capability": "Sign-in / auth",
+      "source": "next-auth + Prisma",
+      "outcome": "replace",
+      "status": "ported",
+      "next_action": "Demo sign-in only: browser token, seeded accounts; no real auth"
+    },
+    {
+      "capability": "Signer portal (/sign/[token], /invite/[token])",
+      "source": "src/app/sign, src/app/invite",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "Demo signing flow"
+    },
+    {
+      "capability": "Blog & docs content",
+      "source": "content/ (1.1GB generated), src/components/blog,docs",
+      "outcome": "partial",
+      "status": "ported",
+      "next_action": "Representative sample; source's ~100k generated corpus not ported"
+    },
+    {
+      "capability": "Database (Prisma, ~30 tables)",
+      "source": "prisma/schema.prisma",
+      "outcome": "replace",
+      "status": "replaced",
+      "next_action": "Browser demo store stands in; no database connected"
+    },
+    {
+      "capability": "Stripe billing",
+      "source": "src/lib/payments.ts, /api/billing",
+      "outcome": "defer",
+      "status": "blocked",
+      "next_action": "No backend decision: needs real payments"
+    },
+    {
+      "capability": "Email (SMTP outbox)",
+      "source": "src/lib/mail*.ts",
+      "outcome": "defer",
+      "status": "blocked",
+      "next_action": "No backend decision: needs real mail delivery"
+    },
+    {
+      "capability": "SSO/SAML/OIDC",
+      "source": "src/lib/sso.ts",
+      "outcome": "defer",
+      "status": "blocked",
+      "next_action": "No backend decision: needs identity provider"
+    },
+    {
+      "capability": "S3 document storage",
+      "source": "src/lib/object-store.ts",
+      "outcome": "replace",
+      "status": "blocked",
+      "next_action": "No backend decision: needs real file storage"
+    },
+    {
+      "capability": "Transparency log / evidence (Rekor-style)",
+      "source": "src/lib/transparency.ts, rekor.ts",
+      "outcome": "port-ui",
+      "status": "ported",
+      "next_action": "Demo evidence records only; not real attestation"
+    },
+    {
+      "capability": "i18n (en/fr)",
+      "source": "messages/, src/lib/i18n.tsx",
+      "outcome": "port",
+      "status": "ported",
+      "next_action": "en/fr messages + provider wired"
+    },
+    {
+      "capability": "Record exports / existing users",
+      "source": "none in repo",
+      "outcome": "pending",
+      "status": "blocked",
+      "next_action": "No data export was attached to the repo"
+    }
   ]
 }
