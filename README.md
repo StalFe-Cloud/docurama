@@ -1,8 +1,6 @@
-# Docurama Incremental Sync
+# Docurama
 
 https://github.com/StalFe-Cloud/docurama.git
-
-Check this and add only the missing or incremental without downgrading existing
 
 This project was built with [Lovable](https://lovable.dev).
 
