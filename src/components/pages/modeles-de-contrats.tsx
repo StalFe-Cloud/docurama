@@ -67,7 +67,7 @@ export default function ModelesDeContratsPage() {
         ) : (
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((t) => {
-            const fieldsCount = t.fields ? (JSON.parse(t.fields) as any[]).length : 2;
+            const fieldsCount = t.fields ? (JSON.parse(t.fields) as unknown[]).length : 2;
             return (
               <div
                 key={t.id}

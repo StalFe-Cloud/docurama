@@ -8,6 +8,7 @@ export type SigningEmailInput = {
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[char]!));
+// eslint-disable-next-line no-control-regex
 const singleLine = (value: string) => value.replace(/[\r\n\u0000-\u001f\u007f]+/g, " ").trim();
 
 /** Presentation only: callers must authorize this private link and the envelope state. */

@@ -6,9 +6,9 @@ import frMessages from "../../messages/fr.json";
 
 export type Locale = "en" | "fr";
 
-const dictionaries: Record<Locale, any> = {
-  en: enMessages,
-  fr: frMessages,
+const dictionaries: Record<Locale, Record<string, unknown>> = {
+  en: enMessages as Record<string, unknown>,
+  fr: frMessages as Record<string, unknown>,
 };
 
 interface I18nContextType {
@@ -62,17 +62,17 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const t = (path: string, fallback?: string): string => {
     const dict = dictionaries[locale] || dictionaries.en;
     const parts = path.split(".");
-    let current: any = dict;
+    let current: unknown = dict;
 
     for (const part of parts) {
-      if (current && typeof current === "object" && part in current) {
-        current = current[part];
+      if (current && typeof current === "object" && part in (current as Record<string, unknown>)) {
+        current = (current as Record<string, unknown>)[part];
       } else {
         // Fallback to English dict if available
-        let fb: any = dictionaries.en;
+        let fb: unknown = dictionaries.en;
         for (const p of parts) {
-          if (fb && typeof fb === "object" && p in fb) {
-            fb = fb[p];
+          if (fb && typeof fb === "object" && p in (fb as Record<string, unknown>)) {
+            fb = (fb as Record<string, unknown>)[p];
           } else {
             return fallback || path;
           }

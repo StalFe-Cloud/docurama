@@ -44,7 +44,7 @@ function Code({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DocsIndexPage({  }) {
+export default function DocsIndexPage() {
   const nav = getDocsNav();
   const searchItems = nav.flatMap((group) =>
     group.items.map((item) => ({ ...item, group: group.name }))

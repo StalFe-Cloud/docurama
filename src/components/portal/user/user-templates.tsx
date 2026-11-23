@@ -43,7 +43,7 @@ export function UserTemplates() {
 
   const act = useMutation({
     mutationFn: (vars: { op: string; id?: string; data?: Record<string, unknown> }) =>
-      apiPost<{ ok: boolean; message: string; template?: any }>("/api/workspace/templates", vars),
+      apiPost<{ ok: boolean; message: string; template?: unknown }>("/api/workspace/templates", vars),
     onSuccess: (res, vars) => {
       toast.success(res.message);
       queryClient.invalidateQueries({ queryKey: ["workspace", "templates"] });
