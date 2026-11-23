@@ -16,6 +16,12 @@ Full platform port from the GitHub repo (Next.js 16 + Prisma) to this TanStack S
 - [x] 11. Real database persistence: Prisma client (v6.19.3) + SQLite/PostgreSQL schema with 40+ models
 - [x] 12. Server-side API routing: /api/auth/*, /api/documents/*, /api/admin/* wired directly into server.ts
 - [x] 13. Persistent session authentication: Scrypt password hashing, session tokens, audit event logging, and database bootstrap seeder
+- [x] 14. Remote verification & public go-live preparation: CI/CD checks, ESLint clean, TypeScript clean, Vitest passing, production build green, and StalFe-Cloud ecosystem alignment ([docurama-enterprise](https://github.com/StalFe-Cloud/docurama-enterprise) & [docurama-private-cloud](https://github.com/StalFe-Cloud/docurama-private-cloud))
+
+## Production Ecosystem
+- **Cloud SaaS Platform**: [https://github.com/StalFe-Cloud/docurama](https://github.com/StalFe-Cloud/docurama)
+- **Enterprise Self-Hosted**: [https://github.com/StalFe-Cloud/docurama-enterprise](https://github.com/StalFe-Cloud/docurama-enterprise)
+- **Private Cloud AWS Blueprint**: [https://github.com/StalFe-Cloud/docurama-private-cloud](https://github.com/StalFe-Cloud/docurama-private-cloud)
 
 ## Deferred / Production Enhancements
 - [ ] Connect production SMTP provider (Postmark/SendGrid) for external email dispatch

@@ -1,10 +1,27 @@
 # Docurama
 
-https://github.com/StalFe-Cloud/docurama.git
+**EU-Native, Audit-Grade Electronic Signature & Document Intelligence Platform**
 
-This project was built with [Lovable](https://lovable.dev).
+* **Repository:** [https://github.com/StalFe-Cloud/docurama.git](https://github.com/StalFe-Cloud/docurama.git)
+* **Organization:** [StalFe Cloud](https://github.com/StalFe-Cloud)
+
+---
+
+## StalFe Cloud Ecosystem
+
+Docurama is delivered across three editions designed for different compliance, infrastructure, and sovereign data residency requirements:
+
+| Edition | Repository | Purpose & Deployment Target |
+| :--- | :--- | :--- |
+| **Docurama Cloud (SaaS)** | [StalFe-Cloud/docurama](https://github.com/StalFe-Cloud/docurama) | Multi-tenant cloud SaaS powered by TanStack Start, Nitro, and Cloudflare Pages/Workers edge runtime. |
+| **Docurama Enterprise** | [StalFe-Cloud/docurama-enterprise](https://github.com/StalFe-Cloud/docurama-enterprise) | Sovereign on-premises and self-hosted edition running on Docker Compose and Kubernetes (Helm) with native SeaweedFS/S3 storage. |
+| **Docurama Private Cloud** | [StalFe-Cloud/docurama-private-cloud](https://github.com/StalFe-Cloud/docurama-private-cloud) | Dedicated AWS tenant VPC infrastructure blueprint, Terraform 1.11 modules, KMS customer-managed encryption, and SSM-managed EC2 provisioning. |
+
+---
 
 ## Build with Lovable
+
+This repository is connected to [Lovable](https://lovable.dev).
 
 Continue developing this project in the [Lovable editor](https://lovable.dev/projects/c8cf2745-9aaa-4500-a89e-91289068f7d5).
 
@@ -12,13 +29,57 @@ Continue developing this project in the [Lovable editor](https://lovable.dev/pro
 - **Stay in sync**: every change made in Lovable is committed straight to this repository.
 - **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
+---
+
+## Architecture & Tech Stack
+
+- **Framework**: [TanStack Start](https://tanstack.com/start) with [TanStack Router](https://tanstack.com/router)
+- **UI & Styling**: React 19, Tailwind CSS v4, Lucide Icons, Radix UI primitives
+- **Database & ORM**: Prisma v6 with dual SQLite (embedded / local) and PostgreSQL (cloud production) support
+- **Server Engine**: Nitro server runtime with Cloudflare module deployment target
+- **Security & Cryptography**: RFC 6238 TOTP 2FA, Scrypt password hashing, SHA-256 seal manifests, PAdES-ready envelope signatures
+
+---
+
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Prefer working locally? You need Node.js (or Bun):
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+# Install dependencies
+bun install   # or: npm install
+
+# Run development server
+bun run dev   # or: npm run dev
+
+# Run test suite
+bun run test  # or: npm test
+
+# Run typecheck and lint
+bunx tsc --noEmit
+bun run lint
+
+# Production build
+bun run build
+```
+
+---
+
+## Production Deployment & Go-Live
+
+Refer to `roadmap.md` and the environment template in `.env.example`:
+
+```env
+DATABASE_URL="postgresql://user:password@host:5432/docurama?sslmode=require"
+SESSION_SECRET="<generate-random-high-entropy-secret-min-32-chars>"
+DOCURAMA_BOOTSTRAP_EMAIL="admin@yourdomain.com"
+DOCURAMA_BOOTSTRAP_PASSWORD="<strong-initial-password>"
+APP_URL="https://yourdomain.com"
+STORAGE_DIR="./storage"
+```
+
+To deploy pre-built bundles:
+```sh
+bun run build
+npx nitro deploy --prebuilt
 ```
