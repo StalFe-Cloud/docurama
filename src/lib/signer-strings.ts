@@ -148,7 +148,7 @@ export type SignerStrings = {
 export const SIGNER_STRINGS: Record<SignerLocale, SignerStrings> = {
   en: {
     secureSigning: "Secure signing",
-    residency: "Docurama SAS · Paris, France · EU data residency",
+    residency: "VOIRIA SASU (Docurama) · Paris, France · EU data residency",
     verifyAnother: "Verify another document",
     language: "Language",
     downloadCompleted: "Download completed PDF",
@@ -254,7 +254,7 @@ export const SIGNER_STRINGS: Record<SignerLocale, SignerStrings> = {
   },
   fr: {
     secureSigning: "Signature sécurisée",
-    residency: "Docurama SAS · Paris, France · hébergement dans l'UE",
+    residency: "VOIRIA SASU (Docurama) · Paris, France · hébergement dans l'UE",
     verifyAnother: "Vérifier un autre document",
     language: "Langue",
     downloadCompleted: "Télécharger le PDF signé",

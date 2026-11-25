@@ -2,7 +2,8 @@
   "brand": {
     "name": "Docurama",
     "tagline": "Sign, Seal, Verify",
-    "legalName": "Docurama SAS",
+    "legalName": "VOIRIA SASU",
+    "companyNotice": "Docurama is a product of VOIRIA (VOIRIA SASU · SIREN 131 914 012 · RCS Paris)",
     "address": "1 Rue Marguerin, 75014 Paris, France",
     "euDataResidency": "Confirm data location for the selected deployment."
   },

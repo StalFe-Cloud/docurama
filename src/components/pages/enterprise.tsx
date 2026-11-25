@@ -186,7 +186,7 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Building2 className="h-4 w-4" aria-hidden /> {BRAND_LEGAL_NAME} · {BRAND_ADDRESS}
+              <Building2 className="h-4 w-4" aria-hidden /> Docurama is a product of VOIRIA ({BRAND_LEGAL_NAME} · {BRAND_ADDRESS} · SIREN 131 914 012)
             </p>
             <div className="flex gap-4 text-sm">
               <Link className="text-muted-foreground hover:text-foreground" href="/docs">Documentation</Link>

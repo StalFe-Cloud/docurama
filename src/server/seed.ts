@@ -19,8 +19,8 @@ export async function seedDatabase() {
   // 1. Create Default Tenant / Workspace
   const tenant = await db.tenant.create({
     data: {
-      name: "Docurama SAS",
-      slug: "docurama-sas",
+      name: "VOIRIA SASU (Docurama)",
+      slug: "voiria-docurama",
       planCode: "BUSINESS",
       status: "ACTIVE",
     },

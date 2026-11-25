@@ -147,7 +147,7 @@ export default function SecurityPage() {
         </section>
 
         <footer className="mt-14 border-t pt-6 text-xs leading-relaxed text-muted-foreground">
-          <p>{BRAND_LEGAL_NAME}. {BRAND_ADDRESS}.</p>
+          <p>Docurama is a product of VOIRIA ({BRAND_LEGAL_NAME}, {BRAND_ADDRESS}, SIREN 131 914 012, RCS Paris).</p>
           <p className="mt-2">
             See also <Link className="underline underline-offset-2" href="/status">platform status</Link> and{" "}
             <Link className="underline underline-offset-2" href="/docs">product documentation</Link>.

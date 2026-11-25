@@ -97,14 +97,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Docurama platform console by Docurama SAS (Paris, France): document signing, cryptographic verification, tenant administration, compliance operations and trust analytics.",
+          "Docurama platform console by VOIRIA SASU (Paris, France): document signing, cryptographic verification, tenant administration, compliance operations and trust analytics. Docurama is a product of VOIRIA.",
       },
-      { name: "author", content: "Docurama SAS" },
+      { name: "author", content: "VOIRIA SASU" },
       { property: "og:title", content: "Docurama: Sign, Seal, Verify" },
       {
         property: "og:description",
         content:
-          "The enterprise portal for signed, sealed and verifiable documents. Docurama SAS, 1 Rue Marguerin, 75014 Paris, France.",
+          "The enterprise portal for signed, sealed and verifiable documents — a product of VOIRIA (VOIRIA SASU, 1 Rue Marguerin, 75014 Paris, France, SIREN 131 914 012).",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

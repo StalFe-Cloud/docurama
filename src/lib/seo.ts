@@ -18,7 +18,7 @@ export function articleSchema(post: BlogSummary) {
     "@context": "https://schema.org", "@graph": [
       { "@type":"BlogPosting", "@id":`${url}#article`, headline:post.title, description:post.description,
         datePublished:post.date, ...(post.updated ? {dateModified:post.updated} : {}),
-        author:authorSchema(post.author), publisher:{"@type":"Organization",name:"Docurama SAS",url:SITE_URL},
+        author:authorSchema(post.author), publisher:{"@type":"Organization",name:"VOIRIA SASU",alternateName:"Docurama",url:SITE_URL},
         mainEntityOfPage:{"@type":"WebPage","@id":url}, url, inLanguage:"en", wordCount:post.wordCount,
         isPartOf:{"@type":"Blog","@id":`${SITE_URL}/blog#blog`,name:"Docurama Knowledge",url:`${SITE_URL}/blog`} },
       { "@type":"BreadcrumbList", itemListElement:[

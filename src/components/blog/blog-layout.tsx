@@ -15,7 +15,7 @@ export function BlogLayout({ children }: { children: ReactNode }) {
     </header>
     <main id="knowledge-main" className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">{children}</main>
     <footer className="border-t bg-muted/20"><div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-5 px-4 py-8 text-sm sm:px-6">
-      <p>Docurama SAS</p><nav aria-label="Footer" className="flex flex-wrap gap-4">
+      <p>VOIRIA SASU · Docurama is a product of VOIRIA</p><nav aria-label="Footer" className="flex flex-wrap gap-4">
         <Link href="/blog">All articles</Link><Link href="/authors/sriram-rajan">Sriram Rajan</Link>
         <Link href="/feed.xml">RSS</Link><Link href="/llms.txt">Text index</Link>
         <Link href="/security">Security</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link>

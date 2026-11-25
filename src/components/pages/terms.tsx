@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { BRAND_LEGAL_NAME, BRAND_ADDRESS, BRAND_PRODUCT_NOTICE, BRAND_SIREN, BRAND_RCS_LINE, BRAND_TVA } from "@/components/brand/logo";
 
 
 const UPDATED = "18 September 2026";
@@ -27,7 +27,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold tracking-tight">1. The service</h2>
             <p className="mt-3">
-              Docurama is a document and electronic signature platform operated by {BRAND_LEGAL_NAME}.
+              {BRAND_PRODUCT_NOTICE}. Docurama is a sovereign document and electronic signature platform operated by {BRAND_LEGAL_NAME} ({BRAND_RCS_LINE}, SIREN {BRAND_SIREN}, VAT {BRAND_TVA}, {BRAND_ADDRESS}).
               It lets organizations prepare documents, collect signatures through personal signing
               links, seal completed documents with cryptographic digests and timestamps, and produce
               evidence records and public verification. These terms govern your use of the platform.

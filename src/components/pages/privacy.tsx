@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND_LEGAL_NAME, BRAND_ADDRESS } from "@/components/brand/logo";
+import { BRAND_LEGAL_NAME, BRAND_ADDRESS, BRAND_PRODUCT_NOTICE, BRAND_SIREN, BRAND_RCS_LINE, BRAND_TVA } from "@/components/brand/logo";
 
 
 const UPDATED = "18 September 2026";
@@ -27,9 +27,9 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold tracking-tight">1. Who is responsible</h2>
             <p className="mt-3">
-              {BRAND_LEGAL_NAME} ({`"`}Docurama{`"`}, {`"`}we{`"`}), registered at {BRAND_ADDRESS}, France, is the
+              {BRAND_PRODUCT_NOTICE}. {BRAND_LEGAL_NAME} ({BRAND_RCS_LINE}, SIREN {BRAND_SIREN}, VAT {BRAND_TVA}), registered at {BRAND_ADDRESS}, is the
               data controller for the Docurama electronic signature platform. You can reach our Data
-              Protection Officer at <a className="underline underline-offset-2" href="mailto:privacy@docurama.eu">privacy@docurama.eu</a>.
+              Protection Officer at <a className="underline underline-offset-2" href="mailto:privacy@docurama.eu">privacy@docurama.eu</a> or <a className="underline underline-offset-2" href="mailto:legal@voiria.com">legal@voiria.com</a>.
             </p>
           </section>
 

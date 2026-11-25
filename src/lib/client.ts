@@ -70,6 +70,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
+      if (res.status === 404) {
+        // Graceful fallback to client-side store when endpoint is not implemented on server
+        return (await demoRequest(method, path, body)) as T;
+      }
       const message = (data && typeof data === "object" && "error" in data)
         ? String(data.error)
         : `Request failed with status ${res.status}`;

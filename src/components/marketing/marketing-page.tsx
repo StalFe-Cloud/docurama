@@ -541,7 +541,7 @@ export function MarketingPage() {
           <div className="space-y-4">
             <BrandLogo tagline size="sm" />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {BRAND_LEGAL_NAME}<br />{BRAND_ADDRESS}<br />Deployment data location is operator-selected.
+              Docurama is a product of VOIRIA ({BRAND_LEGAL_NAME})<br />{BRAND_ADDRESS}<br />SIREN 131 914 012 · R.C.S. Paris · TVA FR90131914012
             </p>
           </div>
           <nav aria-label="Product">
@@ -576,7 +576,7 @@ export function MarketingPage() {
         </div>
         <div className="border-t">
           <p className="mx-auto max-w-6xl px-4 py-5 text-[11px] leading-relaxed text-muted-foreground sm:px-6">
-            © 2026 {BRAND_LEGAL_NAME}, {BRAND_ADDRESS}. All transactional mail
+            © 2026 {BRAND_LEGAL_NAME}, {BRAND_ADDRESS}. Docurama is a product of VOIRIA (SIREN 131 914 012 · R.C.S. Paris). All transactional mail
             uses the configured sending identity. This release supports
             email-link typed signing and completion records. It provides no
             Advanced/Qualified signing, embedded PAdES, trusted timestamps
