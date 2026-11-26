@@ -2,6 +2,11 @@
 
 **EU-Native, Audit-Grade Electronic Signature & Document Intelligence Platform**
 
+> **Docurama** is engineered and operated by **VOIRIA** (**VOIRIA SASU** · 1 Rue Marguerin, 75014 Paris, France · SIREN 131 914 012 · R.C.S. Paris · TVA FR90131914012)  
+> **Jurisdiction:** French Republic & European Union Law · **Data Residency:** Paris, France (EU-West)  
+> **Cryptographic Standards:** PAdES (ETSI EN 319 142-1/-2), RFC 3161 TSA, SHA-256, RSA-2048/4096  
+> **Compliance Frameworks:** eIDAS (Regulation EU 910/2014), GDPR (Regulation EU 2016/679), FDA 21 CFR Part 11
+
 * **Repository:** [https://github.com/StalFe-Cloud/docurama.git](https://github.com/StalFe-Cloud/docurama.git)
 * **Organization:** [StalFe Cloud](https://github.com/StalFe-Cloud)
 
@@ -83,3 +88,14 @@ To deploy pre-built bundles:
 bun run build
 npx nitro deploy --prebuilt
 ```
+
+---
+
+## License & Security
+
+- **License:** [Business Source License 1.1 (BUSL-1.1)](LICENSE) — converts to Apache 2.0 on 2030-01-01. Commercial production inquiries: `legal@voiria.com`.
+- **Security Disclosures:** See [SECURITY.md](SECURITY.md) or write to `security@docurama.eu`.
+
+---
+
+*© 2024–2026 VOIRIA SASU (Docurama is a product of VOIRIA) · 1 Rue Marguerin, 75014 Paris, France · SIREN 131 914 012 · All rights reserved.*

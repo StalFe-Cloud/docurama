@@ -1,0 +1,7 @@
+Contact: mailto:security@docurama.eu
+Contact: mailto:technology@voiria.com
+Expires: 2027-12-31T23:59:59.000Z
+Encryption: https://docurama.eu/security
+Preferred-Languages: en, fr
+Canonical: https://docurama.eu/.well-known/security.txt
+Policy: https://docurama.eu/security

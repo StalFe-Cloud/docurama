@@ -49,6 +49,32 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const url = new URL(request.url);
+      if (url.pathname === "/.well-known/security.txt") {
+        const body = [
+          "Contact: mailto:security@docurama.eu",
+          "Contact: mailto:technology@voiria.com",
+          "Expires: 2027-12-31T23:59:59.000Z",
+          "Encryption: https://docurama.eu/security",
+          "Preferred-Languages: en, fr",
+          "Canonical: https://docurama.eu/.well-known/security.txt",
+          "Policy: https://docurama.eu/security",
+          "",
+        ].join("\n");
+        return new Response(body, {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        });
+      }
+      if (url.pathname === "/.well-known/mta-sts.txt") {
+        const body = ["version: STSv1", "mode: enforce", "mx: mail.docurama.eu", "max_age: 604800", ""].join("\n");
+        return new Response(body, {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+            "cache-control": "public, max-age=604800",
+          },
+        });
+      }
       // Route API requests directly to persistent backend router
       if (url.pathname.startsWith("/api/")) {
         return await handleApiRequest(request);
